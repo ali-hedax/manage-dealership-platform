@@ -130,7 +130,7 @@ async function main() {
   ok("تاریخ گزارش داخل ردیف‌ها نوشته نشد",
     rep1.records.every((r) => !Object.values(r).includes("1405/06/28")));
   eq("زمان پذیرش ردیف دست‌نخورده است", rep1.records[0].receptionTime, "08:10");
-  ok("زمان ورود به هداکس ثبت شد", rep1.receivedAt === meta1.receivedAt);
+  ok("زمان ورود به منیج ثبت شد", rep1.receivedAt === meta1.receivedAt);
   ok("نام فایل و شناسهٔ محتوا ذخیره شد", rep1.fileName === "nobat-sample.xlsx" && rep1.contentHash === meta1.contentHash);
 
   section("۱۱. جلوگیری از بارگذاری تکراری و نسخه‌بندی");
@@ -284,7 +284,7 @@ async function main() {
       ok("تاریخ گزارش نمایش داده شد", out.includes(rep3.dateKey));
       ok("فیلتر وضعیت مراجعه نمایش داده شد", out.includes("فیلتر وضعیت مراجعه"));
       ok("سالن تعمیرات نمایش داده شد", out.includes("سالن تعمیرات"));
-      ok("زمان ورود فایل به هداکس نمایش داده شد", out.includes("زمان ورود فایل به هداکس"));
+      ok("زمان ورود فایل به منیج نمایش داده شد", out.includes("زمان ورود فایل به منیج"));
       ok("نام فایل نمایش داده شد", out.includes(rep3.fileName));
       ok("محدودیت زمان تقریبی ترخیص نوشته شده", out.includes("زمان تقریبی ترخیص") && out.includes("تخمین است"));
       ok("هشدار دربارهٔ ستون جایگاه نوشته شده", out.includes("جایگاه تعمیرگاهی نیستند"));
