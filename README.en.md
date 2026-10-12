@@ -6,7 +6,7 @@
 
 ## Status
 
-An in-development Persian RTL HTML prototype. The repository contains `index (4).html`; production backend integration, authentication and server-side authorization have not been verified from this repository.
+An in-development Persian RTL HTML prototype. The repository contains `index.html`; production backend integration, authentication and server-side authorization have not been verified from this repository.
 
 ## Product focus
 
@@ -19,7 +19,7 @@ These are product goals and scope, not a claim that every integration is complet
 
 ## Preview locally
 
-Open [index (4).html](index%20%284%29.html) in a browser. The prototype references Google Fonts, so font loading needs internet access. Use synthetic data when reviewing or sharing screenshots.
+Open [index.html](index.html) in a browser. The prototype references Google Fonts, so font loading needs internet access. Use synthetic data when reviewing or sharing screenshots.
 
 No deployment, package installation or production database change is required to inspect the existing prototype.
 
