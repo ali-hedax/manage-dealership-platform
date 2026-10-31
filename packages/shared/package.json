@@ -1,0 +1,23 @@
+{
+  "name": "@manage/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Domain contracts shared by API and web: enums, labels, permissions, validation schemas, Persian utilities",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/__tests__/"
+  },
+  "dependencies": {
+    "jalaali-js": "^1.2.8",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/jalaali-js": "^1.2.0",
+    "@types/node": "^22.18.0",
+    "typescript": "~5.9.3"
+  }
+}

@@ -1,0 +1,115 @@
+import {
+  DynamicModule,
+  RequestMethod,
+  Global,
+  Inject,
+  Injectable,
+  Logger,
+  Module,
+  OnApplicationBootstrap,
+  OnApplicationShutdown,
+} from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'node:crypto';
+import { AccidentModule } from './accident/accident.module';
+import { AuditService } from './audit/audit.service';
+import { AuthController } from './auth/auth.controller';
+import { AuthService } from './auth/auth.service';
+import { SessionGuard } from './auth/session.guard';
+import { HttpExceptionFilter } from './common/http-exception.filter';
+import { IdempotencyInterceptor } from './common/idempotency.interceptor';
+import { APP_CONFIG, type AppConfig } from './config';
+import { DATABASE, openDatabase, type DatabaseHandle } from './db/database';
+import { DemoSeedService } from './demo/demo-seed.service';
+import { HealthController } from './health/health.controller';
+import { ReferenceController } from './reference/reference.controller';
+
+@Injectable()
+class Lifecycle implements OnApplicationBootstrap, OnApplicationShutdown {
+  private readonly logger = new Logger('Lifecycle');
+  constructor(
+    @Inject(DATABASE) private readonly handle: DatabaseHandle,
+    @Inject(APP_CONFIG) private readonly cfg: AppConfig,
+    private readonly seeder: DemoSeedService,
+  ) {}
+
+  // Local development with an empty database gets the synthetic demo
+  // dealership automatically, so `pnpm dev` is immediately usable.
+  async onApplicationBootstrap() {
+    if (this.cfg.APP_ENV === 'development' && !(await this.seeder.isSeeded())) {
+      const password = await this.seeder.seed();
+      this.seeder.writeCredentials(password);
+      this.logger.log('Empty development database: synthetic demo dealership created');
+    }
+  }
+
+  async onApplicationShutdown() {
+    await this.handle.close();
+  }
+}
+
+/** Configuration, database, audit and authentication shared by all modules. */
+@Global()
+@Module({})
+export class CoreModule {
+  static forRoot(cfg: AppConfig): DynamicModule {
+    return {
+      module: CoreModule,
+      providers: [
+        { provide: APP_CONFIG, useValue: cfg },
+        {
+          provide: DATABASE,
+          useFactory: async () => {
+            const handle = openDatabase(cfg);
+            // Production applies migrations as an explicit, backed-up deploy step.
+            if (cfg.APP_ENV !== 'production') await handle.migrate();
+            return handle;
+          },
+        },
+        AuditService,
+        AuthService,
+      ],
+      exports: [APP_CONFIG, DATABASE, AuditService, AuthService],
+    };
+  }
+}
+
+@Module({})
+export class AppModule {
+  static forRoot(cfg: AppConfig): DynamicModule {
+    return {
+      module: AppModule,
+      imports: [
+        CoreModule.forRoot(cfg),
+        LoggerModule.forRoot({
+          // Named wildcard: Express 5 / path-to-regexp v8 rejects a bare "*".
+          forRoutes: [{ path: '{*splat}', method: RequestMethod.ALL }],
+          pinoHttp: {
+            level: cfg.APP_ENV === 'test' ? 'silent' : 'info',
+            genReqId: (req, res) => {
+              const incoming = req.headers['x-request-id'];
+              const id = typeof incoming === 'string' && incoming.length <= 64 ? incoming : randomUUID();
+              res.setHeader('x-request-id', id);
+              return id;
+            },
+            redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
+            autoLogging: { ignore: (req) => req.url?.endsWith('/health') ?? false },
+          },
+        }),
+        ThrottlerModule.forRoot([{ ttl: 60_000, limit: cfg.APP_ENV === 'test' ? 10_000 : 600 }]),
+        AccidentModule,
+      ],
+      controllers: [AuthController, HealthController, ReferenceController],
+      providers: [
+        DemoSeedService,
+        Lifecycle,
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
+        { provide: APP_GUARD, useClass: SessionGuard },
+        { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+        { provide: APP_FILTER, useClass: HttpExceptionFilter },
+      ],
+    };
+  }
+}

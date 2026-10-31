@@ -1,0 +1,38 @@
+import { config as loadDotenv } from 'dotenv';
+import { resolve } from 'node:path';
+import { z } from 'zod';
+
+// .env lives at the repository root; apps/api/.env may override for local work.
+loadDotenv({ path: resolve(__dirname, '../../../.env'), quiet: true });
+loadDotenv({ path: resolve(process.cwd(), '.env'), quiet: true });
+
+const envSchema = z.object({
+  APP_ENV: z.enum(['development', 'test', 'preview', 'production']).default('development'),
+  API_PORT: z.coerce.number().int().default(4000),
+  API_ALLOWED_ORIGINS: z.string().default(''),
+  DB_DRIVER: z.enum(['pglite', 'postgres']).default('pglite'),
+  PGLITE_DATA_DIR: z.string().default('.data/pglite'),
+  DATABASE_URL: z.string().optional(),
+  SESSION_TTL_HOURS: z.coerce.number().positive().default(12),
+  COOKIE_SECURE: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  NODE_ID: z.string().min(1).default('dev-local'),
+  SEED_DEMO_PASSWORD: z.string().optional(),
+});
+
+export type AppConfig = z.infer<typeof envSchema>;
+
+export function loadConfig(overrides: Partial<Record<keyof AppConfig, string>> = {}): AppConfig {
+  const cfg = envSchema.parse({ ...process.env, ...overrides });
+  if (cfg.DB_DRIVER === 'postgres' && !cfg.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required when DB_DRIVER=postgres');
+  }
+  if (cfg.APP_ENV === 'production' && cfg.DB_DRIVER === 'pglite') {
+    throw new Error('PGlite is for development and demo only; use DB_DRIVER=postgres in production');
+  }
+  return cfg;
+}
+
+export const APP_CONFIG = Symbol('APP_CONFIG');
