@@ -67,6 +67,27 @@ API tests (`apps/api/test/parts-finance.e2e-spec.ts`): acceptance 2, 3, 4, 8 (ab
 
 E2E (`apps/web/e2e/parts-finance.spec.ts`): manager approves the advance, cashier confirms receipt, parts clerk orders (approved price prefilled), receives, hands over to a unit, imports the sample .xlsx (preview → 4 rows), manager sees the steps in the history.
 
+## Pre-merge review of PRs #16, #17, #18 (2026-11-01)
+
+| Check | Result |
+| --- | --- |
+| Merge conflicts | None: #16 → main (main has no commits missing from #16), #17 → #16, #18 → #17 |
+| Authorization | Every domain endpoint carries `@RequirePermissions`; only login, logout, me and health are outside it (by design). Separation of duties enforced in services |
+| Tenant isolation | New queries (assessments, parts, finance) filter by the actor's tenant or by ids already loaded under it |
+| Secrets | No credential or key files tracked; no secret literals in code; gitleaks clean |
+| Dependencies | `pnpm audit --prod`: no known vulnerabilities (fflate 0.8.3) |
+| Session/passwords | httpOnly + SameSite=Lax cookie, Secure behind HTTPS; scrypt with per-user salt, constant-time compare |
+| CI | All 5 jobs green on #16, #17 and #18 after the fixes below |
+
+Found and fixed during the review:
+
+| PR | Finding | Fix |
+| --- | --- | --- |
+| #16 | Web proxy forwarded the client's `X-Forwarded-For` verbatim, so a client reaching Next.js directly could bypass the per-address login rate limit | Forwarded only with `TRUST_PROXY_HEADERS=true` (behind Caddy/Nginx, which overwrite it) |
+| #16 | Malformed or oversized JSON answered with a generic code and English text | Stable codes `INVALID_BODY` / `PAYLOAD_TOO_LARGE` with Persian messages (test added) |
+| #18 | JSON body limit was the 100 KB default while the import accepts ~1 MB files: real sheets above ~75 KB failed | Limit 2 MB; test with a 1500-row sheet (~270 KB) |
+| #18 | An .xlsx is a ZIP: a small upload could expand to gigabytes in memory | Only needed parts inflated; declared sizes capped (16 MB per entry, 32 MB total); decompression-bomb test |
+
 ## QC, closes and delivery (issue #12)
 
 API tests (`apps/api/test/qc-delivery.e2e-spec.ts`): acceptance 9 end-to-end on a personal case; invalidation of both closes after later changes (golden card); balance-due close (cashier 403, manager without reason 400, manager with reason → accepted amount recorded); permissions (expert / parts clerk cannot record QC, QC inspector cannot close or hand over, expert cannot close financially, cashier cannot hand over; QC inspector reads the completion state).
@@ -110,3 +131,19 @@ With the assessment flow (branch `feature/assessment-parts`, 2026-11-01): 6 pass
 With parts and finance (branch `feature/parts-finance`, 2026-11-01, after the two E2E fixes above): 7 passed in 49.6 s, 48.7 s and 49.1 s.
 
 With QC and delivery (branch `feature/qc-delivery`, 2026-11-01): 8 passed in 1.1 min, 1.2 min and 1.4 min (desktop + mobile, Edge).
+
+## Live isolated Preview verification — 2026-11-01
+
+See [deployment record](PREVIEW_DEPLOYMENT_20261101.md) for checks actually run, application SHA, limitations and recovery. HTTPS, password gate, PostgreSQL health, manager login, Secure/HttpOnly cookie, synthetic dashboard, port isolation and effective SSH policy passed. Both images rebuilt successfully. Modified setup script passed bash syntax and ShellCheck. Browser E2E on this host was not run; application CI passed on the deployed SHA.
+
+## Browser compatibility follow-up — 2026-11-01
+
+The in-app browser rejected the native Basic authentication challenge with ERR_INVALID_AUTH_CREDENTIALS. The Preview now uses the additional `docker-compose.form-gate.yml` overlay: Caddy proxies through an internal, non-root Node gate. Unauthenticated page requests redirect to a Persian HTML sign-in form; API requests receive 401 without a browser challenge. The same existing Preview password is retained, stored as a salted scrypt digest. Successful sign-in sets a signed, expiring, Secure/HttpOnly/SameSite=Strict host-only cookie. The gate checks login Origin, limits attempts and request size, and does not publish an additional host port. The old Basic header remains supported for smoke-test clients without a WWW-Authenticate challenge.
+
+`setup-server.sh` configures form-gate secrets without printing them. `deploy.sh` includes the form overlay when PREVIEW_GATE_HASH exists in `.env`. Always include all three Compose files on this VM; using only the original two would restore the legacy browser challenge. No password, domain, DNS or production resource changed.
+
+Verification: Node integration tests passed locally and in the Node 22 container (valid/invalid login, Origin rejection, rate limiting, Secure/HttpOnly cookie, tampered/expired token rejection and upstream credential stripping); shell syntax and ShellCheck passed. The actual in-app browser completed both login steps and displayed the manager dashboard with five synthetic cases. Screenshot evidence and access details were delivered privately to the owner. Earlier statements about anonymous `/login` returning 401 and no host browser test are superseded by this follow-up: anonymous pages now redirect, and in-app browser login was verified.
+
+## Live Preview after QC and delivery — 2026-11-01
+
+Deployed SHA `88e1f6d` (merge of PR #20 into the Preview branch). 49/49 live checks over HTTPS through the form gate (gate, 6 role logins, dashboard, the five demo cases, full case flow from creation through finance gate, parts, QC with corrective work, both closes and handover) and a real-browser check on desktop and phone passed. Details: [deployment record](PREVIEW_DEPLOYMENT_20261101.md).

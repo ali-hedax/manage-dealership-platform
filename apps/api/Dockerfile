@@ -2,6 +2,9 @@
 #   docker build -f apps/api/Dockerfile -t manage-api .
 FROM node:22-alpine AS build
 WORKDIR /repo
+# npm registry for pnpm itself and the packages (a mirror where npmjs.org is slow or unreachable).
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ENV npm_config_registry=$NPM_REGISTRY COREPACK_NPM_REGISTRY=$NPM_REGISTRY
 RUN corepack enable
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/

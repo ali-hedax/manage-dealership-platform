@@ -10,6 +10,9 @@ next-env.d.ts
 .data/
 apps/*/.data/
 
+# Preview site password hash, generated on the server
+deploy/preview/auth.caddy
+
 # Environment files — only .env.example is committed
 .env
 .env.*

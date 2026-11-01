@@ -1,0 +1,4 @@
+# Throwaway CI-only gate password ("ci-only-gate") in the first version of the
+# Preview overlay test; replaced by a random per-run value in bb1c7ec. Not a secret.
+872fda193f96f780bb75196e52acb85e6198e3f8:.github/workflows/ci.yml:curl-auth-user:141
+872fda193f96f780bb75196e52acb85e6198e3f8:.github/workflows/ci.yml:curl-auth-user:148

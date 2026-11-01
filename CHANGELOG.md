@@ -15,6 +15,13 @@ All notable changes. Versions follow semantic versioning once releases start.
 - The stage selector can no longer set "آماده تحویل" or "تحویل‌شده"; they come from the technical close and the handover. Moving a closed case back into the workflow cancels its technical close.
 - Demo case 5 shows a failed QC round, the corrective work, a passed round and the technical close; settlement and handover are left to try.
 
+## [Unreleased] — isolated Preview deployment (2026-11-01)
+
+- Preview updated with QC, corrective work, technical/financial close and handover (merge of PR #20 into the Preview branch only); demo data recreated.
+
+- Dedicated ArvanCloud Preview with trusted HTTPS, password gate and synthetic data is available; see docs/PREVIEW_DEPLOYMENT_20261101.md. Source and Production remain unchanged.
+- Fix Arvan SSH configuration precedence and socket-activated service startup; explicitly install Buildx, normalize application file umask, and keep generated credentials out of command logs.
+
 ## [Unreleased] — branch `feature/parts-finance`
 
 ### Added
@@ -55,3 +62,8 @@ All notable changes. Versions follow semantic versioning once releases start.
 
 ### Security
 - `drizzle-orm` raised to 0.45.x and `multer` overridden to ≥ 2.5.0 to clear high-severity advisories reported by `pnpm audit`.
+
+
+## Preview browser sign-in compatibility — 2026-11-01
+
+- Replace the native browser password challenge with an accessible Persian sign-in form and a signed secure cookie, preserving the Preview password and isolation. Actual in-app browser login to the manager dashboard was verified.

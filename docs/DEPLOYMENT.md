@@ -1,6 +1,6 @@
 # Deployment
 
-**Current state:** runs locally (`pnpm dev`) and as a Docker Compose stack. No Preview, staging or production host is provisioned yet. Arvan Cloud access for Manage has not been granted to the agent, and the final domain is not chosen. **Nothing in this repository changes DNS, firewalls or production automatically.**
+**Current state:** isolated ArvanCloud Preview deployed on 2026-11-01 after owner approval. URL, exact application SHA, security settings, installation fixes and verification: [deployment record](PREVIEW_DEPLOYMENT_20261101.md). Production and Source by HEDAX remain unchanged; final domain/DNS is not approved.
 
 ## Local Preview (available now)
 
@@ -18,6 +18,21 @@ pnpm preview --lan      # also reachable from phones on the same network
 - Ports 3100 (web) and 4100 (API) so a running `pnpm dev` (3000/4000) is not disturbed; override with `PREVIEW_WEB_PORT` / `PREVIEW_API_PORT`.
 - `--lan` listens on all interfaces; Windows may ask to allow Node.js through the firewall. That is the owner's decision; by default the Preview listens on localhost only.
 - Nothing is published to the internet. A public link needs either an isolated host (#5) or an approved tunnel service — both are owner decisions.
+
+## Preview on an isolated ArvanCloud VM (prepared, awaiting owner approval)
+
+Plan, resources, cost estimate and approval points: [PREVIEW_ARVAN_FA.md](PREVIEW_ARVAN_FA.md). Files: `deploy/preview/`.
+
+```bash
+# on the new VM, as root (once)
+PREVIEW_HOST=<host> bash setup-server.sh        # firewall, key-only SSH, Docker + Arvan mirror, secrets
+# then, as the manage user (every update)
+bash /opt/manage/deploy/preview/deploy.sh <git-ref>
+```
+
+- Caddy is the only published service (80/443): automatic HTTPS, a site-wide password gate (bcrypt hash generated on the server, never committed), `X-Robots-Tag: noindex`, real client address passed on (`TRUST_PROXY_HEADERS=true`).
+- API and PostgreSQL are internal; the API runs migrations and seeds the synthetic dealership on an empty database.
+- CI runs the same overlay on every PR (HTTPS via Caddy's internal CA for `localhost`, 401 without the gate password, login, Secure cookie, web port not published) and shellchecks the scripts.
 
 ## Isolation from Source by HEDAX
 
@@ -78,3 +93,8 @@ On the LAN without a public domain: an internal CA certificate or a reverse prox
 | Date | Environment | Commit | Operator | Migrations | Result |
 | --- | --- | --- | --- | --- | --- |
 | — | — | — | — | — | No deployment yet |
+
+
+## In-app browser compatible Preview gate
+
+The live VM also uses deploy/preview/docker-compose.form-gate.yml after the original Preview overlay. Setup creates its hashed-password/session-key configuration and deploy.sh selects it when configured. See the browser follow-up in PREVIEW_DEPLOYMENT_20261101.md. Keep all three Compose files when operating this VM.

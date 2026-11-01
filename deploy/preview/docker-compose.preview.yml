@@ -1,0 +1,51 @@
+# Preview overlay for an isolated VM (synthetic data only). Used together with
+# the root compose file by deploy/preview/deploy.sh:
+#   docker compose -f docker-compose.yml -f deploy/preview/docker-compose.preview.yml up -d --build
+#
+# Caddy is the only service published to the internet (80/443): automatic
+# HTTPS, a password gate in front of the whole site (on top of Manage's own
+# login), no indexing by search engines. Web, API and PostgreSQL stay on the
+# internal network.
+services:
+  api:
+    build:
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    environment:
+      APP_ENV: preview
+      COOKIE_SECURE: "true"
+      NODE_ID: preview-arvan
+      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:?set SEED_DEMO_PASSWORD in .env}
+
+  web:
+    build:
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    environment:
+      TRUST_PROXY_HEADERS: "true"
+    # Reached only through Caddy.
+    ports: !reset []
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PREVIEW_HOST: ${PREVIEW_HOST:?set PREVIEW_HOST in .env}
+    volumes:
+      - ./deploy/preview/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Generated on the server by setup-server.sh (never committed).
+      - ./deploy/preview/auth.caddy:/etc/caddy/auth.caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
