@@ -64,6 +64,17 @@ describe('authentication and HTTP hardening', () => {
     expect(res.body.code).toBe('UNAUTHENTICATED');
   });
 
+  it('answers malformed JSON with 400, not an internal error', async () => {
+    const res = await request(h.app.getHttpServer())
+      .post('/api/v1/cases')
+      .set('Cookie', expert.cookie)
+      .set('x-manage-client', 'test')
+      .set('content-type', 'application/json')
+      .send('{"admittedAt": ');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_BODY');
+  });
+
   it('rejects state-changing requests without the client header (CSRF)', async () => {
     const res = await request(h.app.getHttpServer())
       .post('/api/v1/cases')
