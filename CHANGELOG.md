@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — isolated Preview deployment (2026-11-01)
+
+- Dedicated ArvanCloud Preview with trusted HTTPS, password gate and synthetic data is available; see docs/PREVIEW_DEPLOYMENT_20261101.md. Source and Production remain unchanged.
+- Fix Arvan SSH configuration precedence and socket-activated service startup; explicitly install Buildx, normalize application file umask, and keep generated credentials out of command logs.
+
 ## [Unreleased] — branch `feature/parts-finance`
 
 ### Added

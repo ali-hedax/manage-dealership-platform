@@ -1,6 +1,6 @@
 # Deployment
 
-**Current state:** runs locally (`pnpm dev`) and as a Docker Compose stack. No Preview, staging or production host is provisioned yet. Arvan Cloud access for Manage has not been granted to the agent, and the final domain is not chosen. **Nothing in this repository changes DNS, firewalls or production automatically.**
+**Current state:** isolated ArvanCloud Preview deployed on 2026-11-01 after owner approval. URL, exact application SHA, security settings, installation fixes and verification: [deployment record](PREVIEW_DEPLOYMENT_20261101.md). Production and Source by HEDAX remain unchanged; final domain/DNS is not approved.
 
 ## Local Preview (available now)
 

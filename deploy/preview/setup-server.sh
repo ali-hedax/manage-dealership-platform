@@ -8,8 +8,8 @@
 # Does: updates and automatic security updates, 2 GB swap, firewall (SSH, 80,
 # 443 only), key-only SSH, Docker from the Ubuntu archive with the ArvanCloud
 # registry mirror, a `manage` user, the repository in /opt/manage, and
-# generated secrets in /opt/manage/.env (mode 600). Prints the site password
-# once; it is not stored in clear text anywhere.
+# generated secrets in /opt/manage/.env (mode 600). Stores the site password
+# and demo password in /root/manage-preview-credentials.txt (mode 600).
 set -euo pipefail
 
 : "${PREVIEW_HOST:?set PREVIEW_HOST (e.g. 185-1-2-3.sslip.io or preview.example.ir)}"
@@ -18,11 +18,13 @@ REPO_REF="${REPO_REF:-feature/preview-deploy}"
 DOCKER_MIRROR="${DOCKER_MIRROR:-https://docker.arvancloud.ir}"
 APP_DIR=/opt/manage
 export DEBIAN_FRONTEND=noninteractive
+# Keep checked-out application files readable by the non-root container user.
+umask 022
 
 echo "== packages"
 apt-get update -q
 apt-get -yq upgrade
-apt-get -yq install ca-certificates curl git ufw unattended-upgrades fail2ban docker.io docker-compose-v2
+apt-get -yq install ca-certificates curl git ufw unattended-upgrades fail2ban docker.io docker-compose-v2 docker-buildx
 dpkg-reconfigure -f noninteractive unattended-upgrades
 
 echo "== swap (image builds need more than 4 GB at peak)"
@@ -42,12 +44,14 @@ ufw --force enable
 
 echo "== SSH: keys only"
 install -d -m 755 /etc/ssh/sshd_config.d
-cat > /etc/ssh/sshd_config.d/10-manage-preview.conf <<'EOF'
+cat > /etc/ssh/sshd_config.d/00-manage-preview.conf <<'EOF'
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password
 EOF
-systemctl reload ssh || systemctl reload sshd
+sshd -t
+systemctl enable --now ssh
+systemctl reload ssh
 
 echo "== docker"
 install -d /etc/docker
@@ -94,9 +98,9 @@ EOF
   chmod 600 "$APP_DIR/.env"
   chmod 644 "$APP_DIR/deploy/preview/auth.caddy"
   echo
-  echo "Site gate      user: preview   password: ${SITE_PASSWORD}"
-  echo "Demo accounts  password (all): ${DEMO_PASSWORD}"
-  echo "Keep both in a password manager; they are not shown again."
+  printf "Site gate user: preview\nSite gate password: %s\nDemo accounts password: %s\n" "$SITE_PASSWORD" "$DEMO_PASSWORD" > /root/manage-preview-credentials.txt
+  chmod 600 /root/manage-preview-credentials.txt
+  echo "Credentials saved in root-only credentials file."
 fi
 
 echo "== done. Next: sudo -u manage bash $APP_DIR/deploy/preview/deploy.sh"
