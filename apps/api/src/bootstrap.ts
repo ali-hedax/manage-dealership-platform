@@ -13,7 +13,9 @@ export function configureApp(app: INestApplication, cfg: AppConfig): void {
   // Behind one reverse proxy (Caddy/Nginx or the Next.js server) in every environment.
   express.set('trust proxy', 1);
   express.disable('x-powered-by');
-  express.set('loginRateLimit', cfg.APP_ENV === 'test' ? 1000 : 10);
+  express.set('loginRateLimit', cfg.LOGIN_RATE_LIMIT ?? (cfg.APP_ENV === 'test' ? 1000 : 10));
+  // JSON bodies up to 2 MB: the parts import sends an .xlsx (≤ ~1 MB) as base64.
+  express.useBodyParser('json', { limit: '2mb' });
   app.use(helmet());
   app.use(cookieParser());
 

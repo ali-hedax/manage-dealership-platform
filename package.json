@@ -12,6 +12,7 @@
     "build:shared": "pnpm --filter @manage/shared build",
     "dev": "pnpm build:shared && pnpm --parallel --filter @manage/api --filter @manage/web dev",
     "start": "pnpm --parallel --filter @manage/api --filter @manage/web start",
+    "preview": "node scripts/preview.mjs",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm build:shared && pnpm -r typecheck",
     "test": "pnpm build:shared && pnpm -r test",

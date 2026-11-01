@@ -2,6 +2,23 @@
 
 **Current state:** runs locally (`pnpm dev`) and as a Docker Compose stack. No Preview, staging or production host is provisioned yet. Arvan Cloud access for Manage has not been granted to the agent, and the final domain is not chosen. **Nothing in this repository changes DNS, firewalls or production automatically.**
 
+## Local Preview (available now)
+
+Until an isolated Preview host exists (issue #5), the Preview runs on the owner's computer:
+
+```bash
+pnpm install
+pnpm preview            # builds if needed, then http://localhost:3100
+pnpm preview --reset    # fresh synthetic demo data
+pnpm preview --lan      # also reachable from phones on the same network
+```
+
+- Production build with `APP_ENV=preview`, embedded PostgreSQL (PGlite) persisted in `apps/api/.data/preview/`, synthetic demo dealership seeded into an empty database.
+- One password for all demo accounts, generated once and kept in `apps/api/.data/preview/credentials.local.txt` (git-ignored).
+- Ports 3100 (web) and 4100 (API) so a running `pnpm dev` (3000/4000) is not disturbed; override with `PREVIEW_WEB_PORT` / `PREVIEW_API_PORT`.
+- `--lan` listens on all interfaces; Windows may ask to allow Node.js through the firewall. That is the owner's decision; by default the Preview listens on localhost only.
+- Nothing is published to the internet. A public link needs either an isolated host (#5) or an approved tunnel service — both are owner decisions.
+
 ## Isolation from Source by HEDAX
 
 Manage must not share the Source by HEDAX server's processes, database, credentials, deploy keys or domain configuration. If an existing Arvan server must be reused for cost, first measure free CPU/RAM/disk, then run Manage as a separate Compose project (own network, own PostgreSQL volume, own reverse-proxy site, own secrets) and document the capacity check. Preferred: a separate small VM.

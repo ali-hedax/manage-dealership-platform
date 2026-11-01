@@ -6,7 +6,13 @@ import type {
   AuthorizationSource,
   AuthorizationStatus,
   BlockerReason,
+  FinanceApprovalKind,
+  FinanceApprovalStatus,
+  FinanceGateReason,
   ItemApprovalStatus,
+  PartInspection,
+  PartSource,
+  PartStatus,
   CaseStage,
   CaseStatus,
   CoverageType,
@@ -96,6 +102,7 @@ export interface Blocker {
   resolvedAt: string | null;
   resolvedBy: UserRef | null;
   resolutionNote: string | null;
+  partRequestId: string | null;
 }
 
 export interface AssessmentItem {
@@ -160,6 +167,113 @@ export interface Assessment {
   version: number;
 }
 
+export interface Part {
+  id: string;
+  caseId: string;
+  assessmentItemId: string | null;
+  description: string;
+  partNumber: string | null;
+  quantity: number;
+  source: PartSource;
+  status: PartStatus;
+  inStock: boolean | null;
+  stockCheckedAt: string | null;
+  reservedAt: string | null;
+  approvedUnitPriceRial: number | null;
+  unitPriceRial: number | null;
+  priceApprovalRef: string | null;
+  priceApprovedBy: string | null;
+  supplier: string | null;
+  orderRef: string | null;
+  orderedAt: string | null;
+  etaAt: string | null;
+  firstEtaAt: string | null;
+  receivedAt: string | null;
+  receiptDocNo: string | null;
+  inspection: PartInspection | null;
+  inspectionNote: string | null;
+  handedOverAt: string | null;
+  handedOverDepartment: { id: string; name: string } | null;
+  recipientName: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  /** Why the purchase was allowed when it was ordered. */
+  financeBasis: FinanceGateReason | 'not_purchase' | null;
+  notes: string | null;
+  createdAt: string;
+  createdBy: UserRef;
+  /** Ordered and past its expected arrival. */
+  overdue: boolean;
+  version: number;
+}
+
+export interface PartImportRow {
+  row: number;
+  description: string;
+  partNumber: string | null;
+  quantity: number;
+  source: PartSource;
+  approvedUnitPriceRial: number | null;
+  notes: string | null;
+}
+
+export interface PartImportResult {
+  dryRun: boolean;
+  rows: PartImportRow[];
+  errors: { row: number; message: string }[];
+  created: number;
+}
+
+export interface FinanceApproval {
+  id: string;
+  kind: FinanceApprovalKind;
+  status: FinanceApprovalStatus;
+  amountRial: number;
+  /** Estimate the approval was given for; a larger estimate needs a new approval. */
+  coversEstimateRial: number;
+  /** Exceptions: amount already spent on purchases under this exception. */
+  spentRial: number;
+  reason: string;
+  proposedAt: string;
+  proposedBy: UserRef;
+  decidedAt: string | null;
+  decidedBy: UserRef | null;
+  decisionNote: string | null;
+  paidAt: string | null;
+  paymentRef: string | null;
+  paymentConfirmedBy: UserRef | null;
+  version: number;
+}
+
+export interface FinanceGate {
+  open: boolean;
+  reason: FinanceGateReason;
+  message: string;
+}
+
+export interface CaseFinance {
+  caseId: string;
+  /** Approved amount of the current assessment version (0 without one). */
+  estimateRial: number;
+  shares: {
+    customerShareRial: number | null;
+    insurerShareRial: number | null;
+    companyShareRial: number | null;
+    note: string | null;
+    version: number | null;
+  };
+  /** Customer share used by the gate: recorded, or derived from the coverage type. */
+  customerShareRial: number | null;
+  customerShareDerived: boolean;
+  paidRial: number;
+  /** Customer share still to collect. */
+  balanceRial: number | null;
+  /** Committed purchases (ordered parts). */
+  purchasesRial: number;
+  gate: FinanceGate;
+  approvals: FinanceApproval[];
+}
+
 export interface TimelineEvent {
   id: string;
   action: string;
@@ -213,6 +327,10 @@ export interface DashboardSummary {
   byCoverage: { coverage: CoverageType; count: number }[];
   openBlockersByReason: { reason: BlockerReason; count: number }[];
   staleBlockers: number;
+  awaitingAuthorization: number;
+  partsOverdue: number;
+  partsToOrder: number;
+  financePending: number;
   departments: { id: string; name: string; inProgress: number; blocked: number; pending: number }[];
 }
 

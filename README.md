@@ -24,7 +24,9 @@ Manage پرونده هر خودروی تصادفی را از پذیرش تا ت�
 | داشبورد مدیر متصل به فهرست‌های فیلترشده | فعال |
 | تاریخچه غیرقابل‌حذف (Audit) | فعال |
 | کارشناسی و الحاقیه با نسخه‌بندی، ثبت مجوز رسمی، تأیید جزئی اقلام | فعال (شاخه `feature/assessment-parts`) |
-| قطعات، گیت مالی، QC، گزارش و PDF | تحویل دوم و سوم |
+| قطعات: نیاز از کارشناسی، ورود از اکسل، سفارش، ETA، رسید و کنترل، تحویل به واحد | فعال (شاخه `feature/parts-finance`) |
+| گیت مالی: سهم پرداخت‌کنندگان، پیش‌پرداخت با تأیید مدیر و صندوق، استثنا با سقف | فعال (شاخه `feature/parts-finance`) |
+| QC کامل، تسویه، گزارش و PDF | تحویل دوم و سوم |
 | سرور محلی + همگام‌سازی ابری، حالت آفلاین | پس از بررسی سرور نمایندگی |
 
 ## اجرای محلی (بدون Docker و بدون نصب PostgreSQL)
@@ -39,6 +41,16 @@ pnpm dev
 - وب: <http://localhost:3000> و API: <http://localhost:4000/api/v1/health>
 - در اولین اجرا یک نمایندگی نمونه با داده کاملاً ساختگی ساخته می‌شود. نام‌های کاربری (`expert`، `supervisor`، `manager`، `parts`، `cashier`، `qc`، `admin`) و رمز مشترک در فایل `apps/api/.data/demo-credentials.local.txt` نوشته می‌شود؛ این فایل در Git ثبت نمی‌شود.
 - پایگاه داده محلی PGlite (PostgreSQL تعبیه‌شده) در `apps/api/.data/` است. برای شروع دوباره: `pnpm --filter @manage/api build && pnpm db:reset-demo`.
+
+## نسخه Preview محلی (برای آزمایش با مرورگر)
+
+```bash
+pnpm install
+pnpm preview
+```
+
+- نشانی: <http://localhost:3100> (نسخه build‌شده، داده ساختگی ماندگار). رمز حساب‌های نمونه در `apps/api/.data/preview/credentials.local.txt` است.
+- `pnpm preview --reset` داده نمونه را از نو می‌سازد؛ `pnpm preview --lan` برای باز کردن با گوشی در همان شبکه است.
 
 ## اجرای کامل با PostgreSQL (Docker)
 

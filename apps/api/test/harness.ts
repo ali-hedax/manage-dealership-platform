@@ -6,7 +6,12 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { loadConfig } from '../src/config';
 import { DATABASE, type DatabaseHandle } from '../src/db/database';
-import { DemoSeedService } from '../src/demo/demo-seed.service';
+import { DEMO_TENANT_CODE, DemoSeedService } from '../src/demo/demo-seed.service';
+import { eq } from 'drizzle-orm';
+import type { Role } from '@manage/shared';
+import { hashPassword } from '../src/auth/password';
+import { newId } from '../src/common/ids';
+import { tenants, users } from '../src/db/schema';
 
 export const TEST_PASSWORD = 'test-only-password-1';
 
@@ -15,6 +20,8 @@ export interface Harness {
   db: DatabaseHandle;
   seeder: DemoSeedService;
   login(username: string, tenantCode?: string): Promise<Client>;
+  /** Adds a synthetic user to the demo dealership and logs in (e.g. a second manager). */
+  loginAs(username: string, roles: Role[]): Promise<Client>;
   close(): Promise<void>;
 }
 
@@ -37,6 +44,9 @@ export class Client {
   patch(url: string, body: object) {
     return this.withAuth(request(this.app.getHttpServer()).patch(`/api/v1${url}`)).send(body);
   }
+  put(url: string, body: object) {
+    return this.withAuth(request(this.app.getHttpServer()).put(`/api/v1${url}`)).send(body);
+  }
 }
 
 export async function createHarness(opts: { withCases?: boolean } = {}): Promise<Harness> {
@@ -48,18 +58,34 @@ export async function createHarness(opts: { withCases?: boolean } = {}): Promise
   const seeder = app.get(DemoSeedService);
   await seeder.seed({ password: TEST_PASSWORD, withCases: opts.withCases ?? false });
 
+  async function login(username: string, tenantCode?: string): Promise<Client> {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('x-manage-client', 'test')
+      .send({ username, password: TEST_PASSWORD, tenantCode });
+    if (res.status !== 200) throw new Error(`login ${username} failed: ${res.status} ${JSON.stringify(res.body)}`);
+    const setCookie = res.headers['set-cookie'] as unknown as string[];
+    return new Client(app, setCookie.map((c) => c.split(';')[0]).join('; '));
+  }
+
   return {
     app,
     db: app.get<DatabaseHandle>(DATABASE),
     seeder,
-    async login(username: string, tenantCode?: string) {
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/auth/login')
-        .set('x-manage-client', 'test')
-        .send({ username, password: TEST_PASSWORD, tenantCode });
-      if (res.status !== 200) throw new Error(`login ${username} failed: ${res.status} ${JSON.stringify(res.body)}`);
-      const setCookie = res.headers['set-cookie'] as unknown as string[];
-      return new Client(app, setCookie.map((c) => c.split(';')[0]).join('; '));
+    login,
+    async loginAs(username: string, roles: Role[]) {
+      const db = app.get<DatabaseHandle>(DATABASE).db;
+      const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.code, DEMO_TENANT_CODE));
+      await db.insert(users).values({
+        id: newId(),
+        tenantId: tenant!.id,
+        username,
+        displayName: `کاربر آزمون ${username}`,
+        passwordHash: await hashPassword(TEST_PASSWORD),
+        roles,
+        isTest: true,
+      });
+      return login(username);
     },
     async close() {
       await app.close();

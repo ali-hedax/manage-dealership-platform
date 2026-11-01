@@ -8,6 +8,8 @@ import { AssessmentsService } from '../assessments/assessments.service';
 import { hashPassword } from '../auth/password';
 import type { Actor } from '../auth/auth.types';
 import { BlockersService } from '../blockers/blockers.service';
+import { FinanceService } from '../finance/finance.service';
+import { PartsService } from '../parts/parts.service';
 import { CasesService } from '../cases/cases.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { newId } from '../common/ids';
@@ -50,6 +52,8 @@ export class DemoSeedService {
     private readonly tasks: TasksService,
     private readonly blockers: BlockersService,
     private readonly assessments: AssessmentsService,
+    private readonly parts: PartsService,
+    private readonly finance: FinanceService,
   ) {}
 
   async isSeeded(): Promise<boolean> {
@@ -140,6 +144,7 @@ export class DemoSeedService {
   private async seedCases(tenantId: string): Promise<void> {
     const expert = await this.actorFor(tenantId, 'expert');
     const supervisor = await this.actorFor(tenantId, 'supervisor');
+    const partsClerk = await this.actorFor(tenantId, 'parts');
     const depts = await this.handle.db.select().from(departments).where(eq(departments.tenantId, tenantId));
     const dept = (code: string) => depts.find((d) => d.code === code)!.id;
 
@@ -199,6 +204,26 @@ export class DemoSeedService {
       at: ago(2 * DAY + 4 * HOUR),
       rejectedItemIds: [],
     });
+    // Parts of the approved lines: bumper ordered from the company, headlight from stock.
+    const [bumper, light] = await this.parts.fromAssessment(expert, c1.id, { source: 'company' });
+    await this.parts.act(partsClerk, bumper!.id, {
+      action: 'order',
+      expectedVersion: 1,
+      at: ago(2 * DAY + 2 * HOUR),
+      supplier: 'شرکت ایران‌خودرو (نمونه)',
+      orderRef: 'ORD-TEST-1001',
+      unitPriceRial: 42_000_000,
+      etaAt: ahead(1 * DAY),
+    });
+    await this.parts.act(partsClerk, light!.id, { action: 'check_stock', expectedVersion: 1, inStock: true, at: ago(2 * DAY + 3 * HOUR) });
+    await this.parts.act(partsClerk, light!.id, { action: 'reserve', expectedVersion: 2, at: ago(2 * DAY + 3 * HOUR) });
+    await this.parts.act(partsClerk, light!.id, {
+      action: 'hand_over',
+      expectedVersion: 3,
+      at: ago(2 * DAY),
+      departmentId: dept('electrical'),
+      recipientName: 'تکنسین نمونه د',
+    });
     await this.tasks.act(supervisor, body1.id, { action: 'start', expectedVersion: 1, at: ago(2 * DAY) });
     let s1 = await this.assessments.create(expert, c1.id, {
       kind: 'supplement',
@@ -241,20 +266,81 @@ export class DemoSeedService {
       technicianCode: 'T-03',
       weight: 1,
     });
+    const trunkLid = await this.parts.create(partsClerk, c2.id, {
+      description: 'درب صندوق عقب',
+      partNumber: 'TEST-PN-2001',
+      quantity: 1,
+      source: 'insurer_supplier',
+      approvedUnitPriceRial: 36_000_000,
+      notes: null,
+    });
+    await this.parts.act(partsClerk, trunkLid.id, {
+      action: 'order',
+      expectedVersion: 1,
+      at: ago(5 * DAY),
+      supplier: 'تأمین‌کننده معرفی‌شده بیمه (نمونه)',
+      orderRef: 'ORD-TEST-2001',
+      unitPriceRial: 36_000_000,
+      etaAt: ago(1 * DAY),
+    });
     await this.blockers.create(supervisor, c2.id, {
       reason: 'part_not_arrived',
       description: 'درب صندوق سفارش داده شده، هنوز به انبار نرسیده است.',
       taskId: t2.id,
+      partRequestId: trunkLid.id,
       occurredAt: ago(4 * DAY),
     });
 
-    // 3. Personal payment, just received; contact details still unknown.
-    await this.cases.create(expert, {
+    // 3. Personal payment, received today; contact details still unknown. The
+    // customer approved the estimate; parts wait for the advance payment.
+    const c3 = await this.cases.create(expert, {
       customer: { fullName: 'مشتری نمونه سه' },
       vehicle: { brand: 'ایران‌خودرو', model: 'تارا', plate: '۳۳ د ۳۳۳ - ۳۰' },
       admittedAt: ago(5 * HOUR),
       coverageType: 'personal',
       vehicleLocation: 'پارکینگ پذیرش',
+    });
+    let a3 = await this.assessments.create(expert, c3.id, {
+      kind: 'initial',
+      assessorName: 'کارشناس نمونه',
+      assessorOrg: 'نمایندگی',
+      assessedAt: ago(4 * HOUR),
+    });
+    a3 = await this.assessments.addItem(expert, a3.id, {
+      action: 'replace',
+      description: 'آینه بغل چپ',
+      partNumber: 'TEST-PN-3001',
+      quantity: 1,
+      unitPriceRial: 14_000_000,
+      labourDepartmentId: dept('assembly'),
+      labourRial: 1_500_000,
+      evidence: null,
+      expectedVersion: a3.version,
+    });
+    a3 = await this.assessments.addItem(expert, a3.id, {
+      action: 'repair',
+      description: 'رنگ درب جلو چپ',
+      quantity: 1,
+      unitPriceRial: 0,
+      labourDepartmentId: dept('paint'),
+      labourRial: 6_000_000,
+      evidence: null,
+      expectedVersion: a3.version,
+    });
+    a3 = await this.assessments.finalize(expert, a3.id, { expectedVersion: a3.version });
+    await this.assessments.recordAuthorization(expert, a3.id, {
+      expectedVersion: a3.version,
+      decision: 'approved',
+      source: 'customer',
+      method: 'in_person',
+      at: ago(3 * HOUR),
+      rejectedItemIds: [],
+    });
+    await this.parts.fromAssessment(expert, c3.id, { source: 'external' });
+    await this.finance.propose(expert, c3.id, {
+      kind: 'advance',
+      amountRial: 15_000_000,
+      reason: 'پیش‌پرداخت قطعه و نیمی از اجرت',
     });
 
     // 4. Vehicle already in the workshop before Manage: legacy entry, overdue.

@@ -13,6 +13,8 @@ import {
 } from '@manage/shared';
 import { AssessmentPanel } from '@/components/AssessmentPanel';
 import { BlockersPanel } from '@/components/BlockersPanel';
+import { FinancePanel } from '@/components/FinancePanel';
+import { PartsPanel } from '@/components/PartsPanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
 import { Plate } from '@/components/Plate';
 import { TasksPanel } from '@/components/TasksPanel';
@@ -49,8 +51,9 @@ export default function CaseDetailPage() {
   const tone = deadlineTone(commitment, active);
   const refresh = () => {
     void mutate();
-    // Assessment changes do not touch the case version the timeline key uses.
-    void mutateKey((key) => typeof key === 'string' && key.startsWith(`/cases/${id}/timeline`));
+    // Assessment, parts and finance depend on each other and do not touch the
+    // case version: refresh every view of this case (timeline included).
+    void mutateKey((key) => typeof key === 'string' && key.startsWith(`/cases/${id}/`));
   };
 
   async function changeStage(stage: CaseStage) {
@@ -159,6 +162,7 @@ export default function CaseDetailPage() {
       <div className="grid-3" style={{ alignItems: 'start' }}>
         <div className="stack span-2">
           <AssessmentPanel kase={kase} onChange={refresh} />
+          <PartsPanel kase={kase} onChange={refresh} />
           <TasksPanel kase={kase} onChange={refresh} />
           <BlockersPanel kase={kase} onChange={refresh} />
         </div>
@@ -213,6 +217,8 @@ export default function CaseDetailPage() {
               </p>
             </div>
           </section>
+
+          <FinancePanel kase={kase} onChange={refresh} />
 
           {can('audit.read') && (
             <section className="panel">

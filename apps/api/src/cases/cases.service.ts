@@ -87,6 +87,27 @@ export const flagConditions: Record<string, () => SQL> = {
   unassigned: () => and(caseSql.active, isNull(cases.responsibleUserId))!,
   ready: () => and(eq(cases.status, 'open'), eq(cases.stage, 'ready_for_delivery'))!,
   legacy: () => and(caseSql.active, eq(cases.isLegacyEntry, true))!,
+  awaiting_authorization: () =>
+    and(
+      caseSql.active,
+      sql`exists (select 1 from assessments a where a.case_id = ${cases.id} and a.status = 'final' and a.authorization_status = 'pending')`,
+    )!,
+  parts_overdue: () =>
+    and(
+      caseSql.active,
+      sql`exists (select 1 from part_requests p where p.case_id = ${cases.id} and p.status = 'ordered' and p.eta_at < now())`,
+    )!,
+  parts_to_order: () =>
+    and(
+      caseSql.active,
+      sql`exists (select 1 from part_requests p where p.case_id = ${cases.id} and p.status in ('needed', 'rejected'))`,
+    )!,
+  // Waiting for the manager's decision or for the cashier to confirm an approved advance.
+  finance_pending: () =>
+    and(
+      caseSql.active,
+      sql`exists (select 1 from financial_approvals f where f.case_id = ${cases.id} and (f.status = 'proposed' or (f.kind = 'advance' and f.status = 'approved')))`,
+    )!,
 };
 
 @Injectable()
@@ -489,6 +510,7 @@ export class CasesService {
       resolvedAt: iso(b.resolvedAt),
       resolvedBy: b.resolvedBy ? { id: b.resolvedBy, displayName: resolvedByName! } : null,
       resolutionNote: b.resolutionNote,
+      partRequestId: b.partRequestId,
     }));
   }
 

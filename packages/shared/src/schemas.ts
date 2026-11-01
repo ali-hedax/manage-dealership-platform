@@ -6,6 +6,10 @@ import {
   AUTHORIZATION_METHODS,
   AUTHORIZATION_SOURCES,
   BLOCKER_REASONS,
+  FINANCE_APPROVAL_KINDS,
+  PART_ACTIONS,
+  PART_INSPECTIONS,
+  PART_SOURCES,
   CASE_STAGES,
   CASE_STATUSES,
   COVERAGE_TYPES,
@@ -102,6 +106,10 @@ export const CASE_FLAGS = [
   'unassigned',
   'ready',
   'legacy',
+  'awaiting_authorization',
+  'parts_overdue',
+  'parts_to_order',
+  'finance_pending',
 ] as const;
 export type CaseFlag = (typeof CASE_FLAGS)[number];
 
@@ -161,6 +169,8 @@ export const createBlockerSchema = z.object({
   occurredAt: optionalIsoDate,
   // Optimistic-lock version of the task when blocking a task.
   expectedTaskVersion: z.number().int().min(1).optional(),
+  // "Part not arrived": the part request it waits for; handover resolves it.
+  partRequestId: uuid.nullish(),
 });
 export type CreateBlockerInput = z.infer<typeof createBlockerSchema>;
 
@@ -267,3 +277,104 @@ export const recordAuthorizationSchema = z
     path: ['note'],
   });
 export type RecordAuthorizationInput = z.infer<typeof recordAuthorizationSchema>;
+
+export const createPartSchema = z.object({
+  description: z.string().trim().min(1).max(300),
+  partNumber: optionalText(64),
+  quantity: z.number().int().min(1).max(999).default(1),
+  source: z.enum(PART_SOURCES),
+  // Price accepted by the payer (assessment line); purchases above it need approval.
+  approvedUnitPriceRial: rial.nullish(),
+  notes: optionalText(1000),
+});
+export type CreatePartInput = z.infer<typeof createPartSchema>;
+
+export const partsFromAssessmentSchema = z.object({
+  source: z.enum(PART_SOURCES).optional(),
+});
+export type PartsFromAssessmentInput = z.infer<typeof partsFromAssessmentSchema>;
+
+export const importPartsSchema = z.object({
+  // .xlsx file as base64 (max ~1 MB).
+  fileBase64: z.string().min(1).max(1_400_000),
+  dryRun: z.boolean().default(true),
+});
+export type ImportPartsInput = z.infer<typeof importPartsSchema>;
+
+export const partActionSchema = z
+  .object({
+    action: z.enum(PART_ACTIONS),
+    expectedVersion: z.number().int().min(1),
+    at: optionalIsoDate,
+    note: optionalText(1000),
+    // check_stock
+    inStock: z.boolean().optional(),
+    // order
+    source: z.enum(PART_SOURCES).optional(),
+    supplier: optionalText(120),
+    orderRef: optionalText(64),
+    unitPriceRial: rial.optional(),
+    etaAt: optionalIsoDate,
+    priceApprovalRef: optionalText(64),
+    priceApprovedBy: optionalText(120),
+    // receive
+    receiptDocNo: optionalText(64),
+    inspection: z.enum(PART_INSPECTIONS).optional(),
+    // hand_over
+    departmentId: uuid.nullish(),
+    recipientName: optionalText(120),
+  })
+  .refine((v) => v.action !== 'check_stock' || v.inStock !== undefined, {
+    message: 'نتیجه بررسی موجودی را مشخص کنید',
+    path: ['inStock'],
+  })
+  .refine((v) => v.action !== 'update_eta' || !!v.etaAt, { message: 'زمان جدید رسیدن قطعه الزامی است', path: ['etaAt'] })
+  .refine((v) => v.action !== 'receive' || !!v.inspection, {
+    message: 'نتیجه کنترل قطعه هنگام رسید الزامی است',
+    path: ['inspection'],
+  })
+  .refine((v) => v.action !== 'receive' || v.inspection === 'ok' || !!v.note, {
+    message: 'برای قطعه اشتباه یا معیوب توضیح الزامی است',
+    path: ['note'],
+  })
+  .refine((v) => v.action !== 'hand_over' || !!v.recipientName, {
+    message: 'نام تحویل‌گیرنده در واحد تعمیر الزامی است',
+    path: ['recipientName'],
+  })
+  .refine((v) => v.action !== 'cancel' || !!v.note, { message: 'برای لغو ذکر دلیل الزامی است', path: ['note'] });
+export type PartActionInput = z.infer<typeof partActionSchema>;
+
+export const financeSharesSchema = z.object({
+  // Payer split of the estimate; null = not decided yet.
+  customerShareRial: rial.nullable(),
+  insurerShareRial: rial.nullable(),
+  companyShareRial: rial.nullable(),
+  note: optionalText(1000),
+  // Omit when the case has no shares recorded yet.
+  expectedVersion: z.number().int().min(1).optional(),
+});
+export type FinanceSharesInput = z.infer<typeof financeSharesSchema>;
+
+export const proposeFinanceSchema = z.object({
+  kind: z.enum(FINANCE_APPROVAL_KINDS),
+  // Advance amount, or the spending limit of an exception.
+  amountRial: rial.refine((v) => v > 0, 'مبلغ باید بیشتر از صفر باشد'),
+  reason: z.string().trim().min(1).max(1000),
+});
+export type ProposeFinanceInput = z.infer<typeof proposeFinanceSchema>;
+
+export const financeDecisionSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    expectedVersion: z.number().int().min(1),
+    note: optionalText(1000),
+  })
+  .refine((v) => v.decision === 'approve' || !!v.note, { message: 'برای رد ذکر دلیل الزامی است', path: ['note'] });
+export type FinanceDecisionInput = z.infer<typeof financeDecisionSchema>;
+
+export const financePaymentSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  paymentRef: z.string().trim().min(1).max(64),
+  at: optionalIsoDate,
+});
+export type FinancePaymentInput = z.infer<typeof financePaymentSchema>;

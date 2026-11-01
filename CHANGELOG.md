@@ -2,6 +2,19 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — branch `feature/parts-finance`
+
+### Added
+- Parts lifecycle (issue #9): needs from authorized assessment lines, manual entry or .xlsx import with preview (synthetic sample download); stock check, reservation, order with supplier/price/ETA (first ETA kept), receipt with inspection (wrong/defective → re-order), handover to the repair unit, cancel — each with its time.
+- Ordering requires the assessment line's authorization; a price above the approved price needs the assessor's approval reference.
+- "Part not arrived" blockers can name the part; its handover resolves them and returns the activity to work.
+- Financial gate (issue #10): payer shares, advance proposed by the expert, approved by the service manager (never their own proposal), receipt confirmed by the cashier; exceptions with a spending limit. Only part purchases are held; a supplement raising the estimate needs a new approval.
+- Dashboard and case-list filters: waiting for authorization, overdue parts, parts not ordered, pending finance decision/receipt.
+- Local Preview: `pnpm preview` (production build, persistent synthetic data, http://localhost:3100).
+
+### Changed
+- Login rate limit can be set with `LOGIN_RATE_LIMIT` (default unchanged: 10 per minute); the E2E suite raises it.
+
 ## [Unreleased] — branch `feature/assessment-parts`
 
 ### Added

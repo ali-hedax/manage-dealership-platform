@@ -45,6 +45,8 @@ export default defineConfig({
         SEED_DEMO_PASSWORD: E2E_PASSWORD,
         API_PORT: String(API_PORT),
         NODE_ID: 'e2e',
+        // The suite logs in as several roles from one address within a minute.
+        LOGIN_RATE_LIMIT: '200',
       },
     },
     {

@@ -33,6 +33,19 @@ test('documentation screenshots', async ({ page }, info) => {
   await page.getByTestId('assessment-version').first().waitFor();
   await page.getByTestId('assessment-panel').screenshot({ path: out('assessment-demo', project) });
 
+  // Demo case 2: overdue part named by the "part not arrived" blocker.
+  await page.goto('/cases');
+  await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه دو' }).click();
+  await page.getByTestId('part').first().waitFor();
+  await page.getByTestId('parts-panel').screenshot({ path: out('parts-demo', project) });
+
+  // Demo case 3: personal payment, advance waiting for the manager.
+  await page.goto('/cases');
+  await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه سه' }).click();
+  await page.getByTestId('finance-approval').first().waitFor();
+  await page.getByTestId('finance-panel').screenshot({ path: out('finance-demo', project) });
+  await page.screenshot({ path: out('case-personal', project), fullPage: true });
+
   await page.goto('/cases/new');
   await page.getByLabel('پلاک').waitFor();
   await page.screenshot({ path: out('case-new', project), fullPage: true });

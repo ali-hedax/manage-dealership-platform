@@ -32,7 +32,9 @@ A modular monolith: one API process with domain modules, one web process, one da
 | Audit | `apps/api/src/audit` + DB trigger | Implemented |
 | Sync | `change_log`, idempotency keys, `version` columns | Foundations only |
 | Assessments & supplements (versioned, authorization recording) | `apps/api/src/assessments` | Implemented |
-| Parts, finance, QC, documents, reports, notifications, integrations, AI, settings UI | `MODULES` in `packages/shared/src/enums.ts` | Planned; navigation shows "در دست توسعه" |
+| Parts lifecycle, Excel import | `apps/api/src/parts` (minimal .xlsx on `fflate`) | Implemented |
+| Financial gate (shares, advance, exceptions) | `apps/api/src/finance` | Implemented |
+| Advanced finance, QC, documents, reports, notifications, integrations, AI, settings UI | `MODULES` in `packages/shared/src/enums.ts` | Planned; navigation shows "در دست توسعه" |
 
 ## Request path and cross-cutting concerns
 

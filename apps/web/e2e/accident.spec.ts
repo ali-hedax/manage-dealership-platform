@@ -104,7 +104,9 @@ test('parts clerk: read-only view with masked customer phone and no create actio
   await page.waitForURL(/q=09000000001/);
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await page.locator('tbody tr').first().click();
-  await expect(page.locator('dl')).toContainText('***');
+  // Details panel (the finance panel has its own list).
+  const details = page.locator('section').filter({ has: page.getByRole('heading', { name: 'مشخصات' }) });
+  await expect(details.locator('dl')).toContainText('***');
   await expect(page.getByRole('button', { name: 'افزودن فعالیت' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'ویرایش پرونده' })).toHaveCount(0);
 });

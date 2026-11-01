@@ -836,6 +836,34 @@ textarea.input {
   padding-block-start: 8px;
   border-block-start: 1px dashed var(--silver);
 }
+.part,
+.finance-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 18px;
+  border-block-end: 1px solid var(--silver-2);
+}
+.part:last-child {
+  border-block-end: 0;
+}
+.part .meta,
+.finance-item .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+.part.is-late {
+  background: linear-gradient(to left, var(--red) 0 3px, transparent 3px);
+}
+.finance-item {
+  padding: 10px 0 0;
+  border-block-start: 1px solid var(--silver-2);
+  border-block-end: 0;
+}
+.parts-gate {
+  margin: 12px 18px 0;
+}
 .table-scroll {
   overflow-x: auto;
 }
