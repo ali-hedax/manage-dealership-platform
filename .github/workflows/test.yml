@@ -1,0 +1,22 @@
+# Runs the synthetic Node tests only. They use generated fixtures and stubbed
+# browsers: no Chrome, no B2B, no credentials, no customer data.
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test

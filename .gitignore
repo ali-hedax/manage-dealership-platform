@@ -4,6 +4,7 @@
 *.xlsx
 *.xlsm
 *.xlsb
+*.ods
 *.csv
 *.tsv
 
@@ -18,6 +19,8 @@
 # --- رمزها و توکن‌ها ---
 .env
 .env.*
+# الگوی بدون مقدار واقعی؛ باید در مخزن بماند
+!.env.example
 *.pem
 *.key
 *.pfx
@@ -31,7 +34,12 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
-.vscode/
+# فقط پیکربندی مشترک VS Code در مخزن؛ تنظیمات شخصی بیرون می‌ماند
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.tmp
 *.bak
@@ -42,3 +50,8 @@ desktop.ini
 *.log
 playwright-report/
 test-results/
+coverage/
+.nyc_output/
+# ردگیری شبکه و Playwright ممکن است کوکی نشست B2B داشته باشد
+*.har
+trace*.zip

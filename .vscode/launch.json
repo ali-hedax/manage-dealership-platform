@@ -1,0 +1,46 @@
+// Debugging the Node.js companion. Normal use is start-hedax.cmd (a hidden
+// background process); these configurations run companion/server.cjs under the
+// debugger instead. They do not open the dashboard or B2B: open the printed
+// address yourself. Opening the dashboard starts any due automatic report
+// fetches, which launch the dedicated Chrome window.
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "HEDAX: Debug companion (port 5173)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/companion/server.cjs",
+      "cwd": "${workspaceFolder}",
+      "env": { "HEDAX_PORT": "5173" },
+      // Refuses to start while another companion owns 5173. Stop it first with
+      // the task "HEDAX: Stop running companion (verified)".
+      "preLaunchTask": "HEDAX: Check port 5173 is free",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Runs beside a normal companion. http://localhost:5174/ is a different
+      // origin, so the dashboard there starts with empty IndexedDB data. The
+      // Chrome profile (.local/b2b-profile-chrome) is shared: B2B cannot be
+      // opened from here while the normal companion's Chrome window is open.
+      "name": "HEDAX: Debug companion (alternate port 5174)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/companion/server.cjs",
+      "cwd": "${workspaceFolder}",
+      "env": { "HEDAX_PORT": "5174" },
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "HEDAX: Debug current test file",
+      "type": "node",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
