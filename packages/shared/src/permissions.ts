@@ -17,7 +17,11 @@ export const PERMISSIONS = [
   'part.manage', // stock, reservation, order, receipt, handover
   'finance.propose', // customer/insurer shares, propose advance or exception
   'finance.approve', // approve spending (never one's own proposal)
-  'finance.payment', // confirm receipt of an advance
+  'finance.payment', // confirm receipt of an advance, record settlement payments
+  'finance.close', // financial close; closing with a balance due also needs finance.approve
+  'qc.inspect', // record a QC round; failed items open corrective work
+  'case.technical_close', // technical close after a passed QC round
+  'case.deliver', // vehicle handover to the recipient
   'dashboard.read',
   'audit.read',
   'user.manage',
@@ -36,6 +40,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'assessment.authorize',
     'part.request',
     'finance.propose',
+    'case.deliver',
     'dashboard.read',
     'audit.read',
   ],
@@ -53,6 +58,9 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'part.request',
     'part.manage',
     'finance.propose',
+    'qc.inspect',
+    'case.technical_close',
+    'case.deliver',
     'dashboard.read',
     'audit.read',
   ],
@@ -71,14 +79,18 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'part.manage',
     'finance.propose',
     'finance.approve',
+    'finance.close',
+    'qc.inspect',
+    'case.technical_close',
+    'case.deliver',
     'dashboard.read',
     'audit.read',
     'settings.manage',
   ],
   // Support roles see cases without customer contact details.
   parts_clerk: ['case.read', 'blocker.report', 'part.request', 'part.manage', 'dashboard.read'],
-  cashier: ['case.read', 'customer.pii.read', 'finance.payment', 'dashboard.read'],
-  qc_inspector: ['case.read', 'blocker.report', 'dashboard.read'],
+  cashier: ['case.read', 'customer.pii.read', 'finance.payment', 'finance.close', 'dashboard.read'],
+  qc_inspector: ['case.read', 'blocker.report', 'qc.inspect', 'dashboard.read'],
   // Least privilege: administers accounts, does not read customer cases.
   system_admin: ['user.manage', 'settings.manage'],
 };

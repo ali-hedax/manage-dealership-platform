@@ -261,27 +261,19 @@ export class CasesService {
       if (current.stage === 'delivered') {
         throw badRequest('CASE_DELIVERED', 'پرونده تحویل‌شده را نمی‌توان به مرحله قبل برگرداند');
       }
-      const patch: Partial<CaseRow> & { stage: CaseStage } = { stage: input.stage };
+      // Handover and "ready for delivery" have their own gates (CompletionService).
       if (input.stage === 'delivered') {
-        const pending = await tx
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(and(eq(tasks.caseId, id), ne(tasks.status, 'approved')));
-        const open = await tx
-          .select({ id: blockers.id })
-          .from(blockers)
-          .where(and(eq(blockers.caseId, id), isNull(blockers.resolvedAt)));
-        if (pending.length || open.length) {
-          throw badRequest(
-            'DELIVERY_GATE',
-            'تحویل فقط وقتی ممکن است که همه فعالیت‌ها تأیید سرپرست گرفته و مانع بازی نمانده باشد',
-            { unapprovedTasks: pending.length, openBlockers: open.length },
-          );
-        }
-        const now = new Date();
-        patch.actualDeliveryAt = now;
-        patch.technicalClosedAt = current.technicalClosedAt ?? now;
+        throw badRequest(
+          'DELIVERY_GATE',
+          'تحویل خودرو فقط از بخش «کنترل کیفیت و تحویل» و پس از بستن فنی و بستن مالی ثبت می‌شود',
+        );
       }
+      if (input.stage === 'ready_for_delivery') {
+        throw badRequest('TECHNICAL_CLOSE_REQUIRED', 'پرونده با «بستن فنی» پس از قبولی کنترل کیفیت آماده تحویل می‌شود');
+      }
+      const patch: Partial<CaseRow> & { stage: CaseStage } = { stage: input.stage };
+      // Moving a technically closed case back into the workflow reopens it.
+      if (current.technicalClosedAt) Object.assign(patch, { technicalClosedAt: null, technicalClosedBy: null, technicalCloseNote: null });
       await this.applyStage(tx, actor, current, patch, input.note ?? null);
     });
     return this.detail(actor, id);
@@ -309,6 +301,42 @@ export class CasesService {
       reason,
       before: { stage: current.stage },
       after: { stage: updated.stage },
+      snapshot: { version: updated.version, row: updated },
+    });
+    return updated;
+  }
+
+  /**
+   * Used by CompletionService: technical/financial close and handover. Audits
+   * the changed fields under `action`; `stage` in the patch is audited too.
+   */
+  async applyPatch(
+    tx: DbOrTx,
+    actor: Actor,
+    current: CaseRow,
+    patch: Partial<CaseRow>,
+    action: string,
+    reason: string | null,
+    occurredAt?: Date,
+  ): Promise<CaseRow> {
+    const [updated] = await tx
+      .update(cases)
+      .set({ ...patch, updatedAt: new Date(), updatedBy: actor.user.id, version: current.version + 1 })
+      .where(and(eq(cases.id, current.id), eq(cases.version, current.version)))
+      .returning();
+    if (!updated) throw versionConflict();
+    const fields = Object.keys(patch) as (keyof CaseRow)[];
+    const pick = (r: CaseRow) => Object.fromEntries(fields.map((k) => [k, r[k]]));
+    const changes = diff(pick(current), pick(updated));
+    await this.audit.record(tx, actor, {
+      entityType: 'case',
+      entityId: current.id,
+      caseId: current.id,
+      action,
+      reason,
+      occurredAt,
+      before: changes?.before ?? null,
+      after: changes?.after ?? null,
       snapshot: { version: updated.version, row: updated },
     });
     return updated;
@@ -478,6 +506,7 @@ export class CasesService {
       approvedAt: iso(t.approvedAt),
       approvedBy: t.approvedBy ? { id: t.approvedBy, displayName: approvedByName! } : null,
       dependsOn: deps.filter((x) => x.taskId === t.id).map((x) => x.dependsOnTaskId),
+      qcInspectionId: t.qcInspectionId,
       weight: t.weight,
       notes: t.notes,
       version: t.version,

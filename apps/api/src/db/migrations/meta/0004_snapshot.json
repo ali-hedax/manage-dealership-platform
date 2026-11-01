@@ -1,5 +1,5 @@
 {
-  "id": "2d27334e-3766-48b1-8571-6e9f87feafb7",
+  "id": "a98b0722-f8c5-4b77-b250-cfa16d80aef5",
   "prevId": "a402cbc7-7a99-477f-b9c4-9081339100d9",
   "version": "7",
   "dialect": "postgresql",
@@ -696,142 +696,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.auth_challenges": {
-      "name": "auth_challenges",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "purpose": {
-          "name": "purpose",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "secret_hash": {
-          "name": "secret_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "proof_hash": {
-          "name": "proof_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "password_hash": {
-          "name": "password_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "encrypted_totp_secret": {
-          "name": "encrypted_totp_secret",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consumed_at": {
-          "name": "consumed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "auth_challenges_user_idx": {
-          "name": "auth_challenges_user_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "purpose",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "auth_challenges_tenant_id_tenants_id_fk": {
-          "name": "auth_challenges_tenant_id_tenants_id_fk",
-          "tableFrom": "auth_challenges",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "auth_challenges_user_id_users_id_fk": {
-          "name": "auth_challenges_user_id_users_id_fk",
-          "tableFrom": "auth_challenges",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.blockers": {
       "name": "blockers",
       "schema": "",
@@ -1243,6 +1107,137 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.case_payments": {
+      "name": "case_payments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "case_id": {
+          "name": "case_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_rial": {
+          "name": "amount_rial",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payment_ref": {
+          "name": "payment_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "paid_at": {
+          "name": "paid_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_test": {
+          "name": "is_test",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "case_payments_case_idx": {
+          "name": "case_payments_case_idx",
+          "columns": [
+            {
+              "expression": "case_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "case_payments_tenant_id_tenants_id_fk": {
+          "name": "case_payments_tenant_id_tenants_id_fk",
+          "tableFrom": "case_payments",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "case_payments_case_id_cases_id_fk": {
+          "name": "case_payments_case_id_cases_id_fk",
+          "tableFrom": "case_payments",
+          "tableTo": "cases",
+          "columnsFrom": [
+            "case_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "case_payments_recorded_by_users_id_fk": {
+          "name": "case_payments_recorded_by_users_id_fk",
+          "tableFrom": "case_payments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recorded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.cases": {
       "name": "cases",
       "schema": "",
@@ -1386,6 +1381,72 @@
         "financial_closed_at": {
           "name": "financial_closed_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "technical_closed_by": {
+          "name": "technical_closed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "technical_close_note": {
+          "name": "technical_close_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "financial_closed_by": {
+          "name": "financial_closed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "financial_close_note": {
+          "name": "financial_close_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "financial_close_estimate_rial": {
+          "name": "financial_close_estimate_rial",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "financial_close_share_rial": {
+          "name": "financial_close_share_rial",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "financial_close_waived_rial": {
+          "name": "financial_close_waived_rial",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivered_by": {
+          "name": "delivered_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recipient_name": {
+          "name": "recipient_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recipient_relation": {
+          "name": "recipient_relation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_note": {
+          "name": "delivery_note",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -1562,6 +1623,45 @@
           "tableTo": "users",
           "columnsFrom": [
             "responsible_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "cases_technical_closed_by_users_id_fk": {
+          "name": "cases_technical_closed_by_users_id_fk",
+          "tableFrom": "cases",
+          "tableTo": "users",
+          "columnsFrom": [
+            "technical_closed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "cases_financial_closed_by_users_id_fk": {
+          "name": "cases_financial_closed_by_users_id_fk",
+          "tableFrom": "cases",
+          "tableTo": "users",
+          "columnsFrom": [
+            "financial_closed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "cases_delivered_by_users_id_fk": {
+          "name": "cases_delivered_by_users_id_fk",
+          "tableFrom": "cases",
+          "tableTo": "users",
+          "columnsFrom": [
+            "delivered_by"
           ],
           "columnsTo": [
             "id"
@@ -2584,6 +2684,149 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.qc_inspections": {
+      "name": "qc_inspections",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "case_id": {
+          "name": "case_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round": {
+          "name": "round",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checks": {
+          "name": "checks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inspected_at": {
+          "name": "inspected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inspected_by": {
+          "name": "inspected_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_test": {
+          "name": "is_test",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "qc_inspections_case_round_uq": {
+          "name": "qc_inspections_case_round_uq",
+          "columns": [
+            {
+              "expression": "case_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "round",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "qc_inspections_tenant_id_tenants_id_fk": {
+          "name": "qc_inspections_tenant_id_tenants_id_fk",
+          "tableFrom": "qc_inspections",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "qc_inspections_case_id_cases_id_fk": {
+          "name": "qc_inspections_case_id_cases_id_fk",
+          "tableFrom": "qc_inspections",
+          "tableTo": "cases",
+          "columnsFrom": [
+            "case_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "qc_inspections_inspected_by_users_id_fk": {
+          "name": "qc_inspections_inspected_by_users_id_fk",
+          "tableFrom": "qc_inspections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "inspected_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.sessions": {
       "name": "sessions",
       "schema": "",
@@ -2611,13 +2854,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "verified_with_totp": {
-          "name": "verified_with_totp",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         },
         "created_at": {
           "name": "created_at",
@@ -2892,6 +3128,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "qc_inspection_id": {
+          "name": "qc_inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_test": {
           "name": "is_test",
           "type": "boolean",
@@ -3031,6 +3273,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "tasks_qc_inspection_id_qc_inspections_id_fk": {
+          "name": "tasks_qc_inspection_id_qc_inspections_id_fk",
+          "tableFrom": "tasks",
+          "tableTo": "qc_inspections",
+          "columnsFrom": [
+            "qc_inspection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "tasks_created_by_users_id_fk": {
           "name": "tasks_created_by_users_id_fk",
           "tableFrom": "tasks",
@@ -3132,31 +3387,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "activated_at": {
-          "name": "activated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "encrypted_totp_secret": {
-          "name": "encrypted_totp_secret",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "totp_last_step": {
-          "name": "totp_last_step",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": -1
-        },
         "display_name": {
           "name": "display_name",
           "type": "text",
@@ -3242,21 +3472,6 @@
             },
             {
               "expression": "username",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "users_email_uq": {
-          "name": "users_email_uq",
-          "columns": [
-            {
-              "expression": "email",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

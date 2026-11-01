@@ -6,6 +6,7 @@ import type {
   AuthorizationSource,
   AuthorizationStatus,
   BlockerReason,
+  CompletionIssueCode,
   FinanceApprovalKind,
   FinanceApprovalStatus,
   FinanceGateReason,
@@ -13,6 +14,10 @@ import type {
   PartInspection,
   PartSource,
   PartStatus,
+  QcCheckItem,
+  QcOutcome,
+  QcResult,
+  RecipientRelation,
   CaseStage,
   CaseStatus,
   CoverageType,
@@ -84,6 +89,8 @@ export interface Task {
   approvedAt: string | null;
   approvedBy: UserRef | null;
   dependsOn: string[];
+  /** QC round whose failed item opened this corrective activity. */
+  qcInspectionId: string | null;
   weight: number;
   notes: string | null;
   version: number;
@@ -273,6 +280,17 @@ export interface CaseFinance {
   purchasesRial: number;
   gate: FinanceGate;
   approvals: FinanceApproval[];
+  /** Settlement payments recorded by the cashier (advances are in approvals). */
+  payments: SettlementPayment[];
+}
+
+export interface SettlementPayment {
+  id: string;
+  amountRial: number;
+  paymentRef: string;
+  paidAt: string;
+  note: string | null;
+  recordedBy: UserRef;
 }
 
 export interface TimelineEvent {
@@ -347,4 +365,62 @@ export interface ApiError {
   code: string;
   message: string;
   details?: unknown;
+}
+
+export interface QcCheck {
+  item: QcCheckItem;
+  result: QcResult;
+  note: string | null;
+  departmentId: string | null;
+  /** Corrective activity opened for a failed item. */
+  correctiveTaskId: string | null;
+}
+
+export interface QcInspection {
+  id: string;
+  round: number;
+  outcome: QcOutcome;
+  checks: QcCheck[];
+  note: string | null;
+  inspectedAt: string;
+  inspectedBy: UserRef;
+}
+
+export interface CompletionIssue {
+  code: CompletionIssueCode;
+  message: string;
+  /** Number of activities, blockers, parts or lines concerned. */
+  count?: number;
+  amountRial?: number;
+  /** Shown but does not block the close. */
+  warning?: boolean;
+}
+
+export interface CloseState {
+  closedAt: string | null;
+  closedBy: UserRef | null;
+  note: string | null;
+  /** Closed and still consistent with the case (nothing changed since). */
+  valid: boolean;
+  /** Blocking issues and warnings evaluated now. */
+  issues: CompletionIssue[];
+}
+
+export interface CaseCompletion {
+  caseId: string;
+  qc: QcInspection[];
+  technical: CloseState;
+  financial: CloseState & {
+    /** Customer balance accepted as unpaid at the close (manager waiver). */
+    waivedRial: number | null;
+  };
+  delivery: {
+    deliveredAt: string;
+    recipientName: string;
+    recipientRelation: RecipientRelation;
+    note: string | null;
+    deliveredBy: UserRef;
+  } | null;
+  /** Issues that still prevent the handover. */
+  deliveryIssues: CompletionIssue[];
 }

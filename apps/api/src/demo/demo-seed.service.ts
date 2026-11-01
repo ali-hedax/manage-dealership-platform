@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { DEFAULT_DEPARTMENTS, permissionsFor, ROLE_LABELS, type Role } from '@manage/shared';
+import { DEFAULT_DEPARTMENTS, permissionsFor, QC_CHECK_ITEMS, ROLE_LABELS, type Role } from '@manage/shared';
 import { AssessmentsService } from '../assessments/assessments.service';
 import { hashPassword } from '../auth/password';
 import type { Actor } from '../auth/auth.types';
@@ -11,6 +11,7 @@ import { BlockersService } from '../blockers/blockers.service';
 import { FinanceService } from '../finance/finance.service';
 import { PartsService } from '../parts/parts.service';
 import { CasesService } from '../cases/cases.service';
+import { CompletionService } from '../completion/completion.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle } from '../db/database';
@@ -54,6 +55,7 @@ export class DemoSeedService {
     private readonly assessments: AssessmentsService,
     private readonly parts: PartsService,
     private readonly finance: FinanceService,
+    private readonly completion: CompletionService,
   ) {}
 
   async isSeeded(): Promise<boolean> {
@@ -145,6 +147,7 @@ export class DemoSeedService {
     const expert = await this.actorFor(tenantId, 'expert');
     const supervisor = await this.actorFor(tenantId, 'supervisor');
     const partsClerk = await this.actorFor(tenantId, 'parts');
+    const qc = await this.actorFor(tenantId, 'qc');
     const depts = await this.handle.db.select().from(departments).where(eq(departments.tenantId, tenantId));
     const dept = (code: string) => depts.find((d) => d.code === code)!.id;
 
@@ -366,7 +369,9 @@ export class DemoSeedService {
     });
     await this.tasks.act(supervisor, t4.id, { action: 'start', expectedVersion: 1, at: ago(10 * DAY) });
 
-    // 5. Ready for delivery: all work approved.
+    // 5. Ready for delivery: personal repair approved by the customer. QC round 1
+    // failed (paint), the corrective activity was approved, round 2 passed and
+    // the supervisor closed it technically. Settlement and handover are open.
     const c5 = await this.cases.create(expert, {
       customer: { fullName: 'مشتری نمونه پنج', phone: '09000000005' },
       vehicle: { brand: 'ایران‌خودرو', model: 'رانا پلاس', modelYear: 1401, plate: '۵۵ ص ۵۵۵ - ۵۰', vin: 'TESTVIN0000000005' },
@@ -377,6 +382,31 @@ export class DemoSeedService {
       responsibleUserId: supervisor.user.id,
       forecastDeliveryAt: ahead(6 * HOUR),
     });
+    let a5 = await this.assessments.create(expert, c5.id, {
+      kind: 'initial',
+      assessorName: 'کارشناس نمونه',
+      assessorOrg: 'نمایندگی',
+      assessedAt: ago(9 * DAY - HOUR),
+    });
+    a5 = await this.assessments.addItem(expert, a5.id, {
+      action: 'repair',
+      description: 'رنگ درب جلو راست',
+      quantity: 1,
+      unitPriceRial: 0,
+      labourDepartmentId: dept('paint'),
+      labourRial: 8_000_000,
+      evidence: null,
+      expectedVersion: a5.version,
+    });
+    a5 = await this.assessments.finalize(expert, a5.id, { expectedVersion: a5.version });
+    await this.assessments.recordAuthorization(expert, a5.id, {
+      expectedVersion: a5.version,
+      decision: 'approved',
+      source: 'customer',
+      method: 'in_person',
+      at: ago(8 * DAY),
+      rejectedItemIds: [],
+    });
     const t5 = await this.tasks.create(supervisor, c5.id, {
       departmentId: dept('paint'),
       title: 'رنگ درب جلو راست',
@@ -385,9 +415,26 @@ export class DemoSeedService {
       weight: 1,
     });
     await this.tasks.act(supervisor, t5.id, { action: 'start', expectedVersion: 1, at: ago(3 * DAY) });
-    await this.tasks.act(supervisor, t5.id, { action: 'complete', expectedVersion: 2, at: ago(1 * DAY) });
-    await this.tasks.act(supervisor, t5.id, { action: 'approve', expectedVersion: 3, at: ago(20 * HOUR) });
-    const fresh = await this.cases.detail(supervisor, c5.id);
-    await this.cases.changeStage(supervisor, c5.id, { stage: 'ready_for_delivery', expectedVersion: fresh.version });
+    await this.tasks.act(supervisor, t5.id, { action: 'complete', expectedVersion: 2, at: ago(2 * DAY) });
+    await this.tasks.act(supervisor, t5.id, { action: 'approve', expectedVersion: 3, at: ago(2 * DAY - HOUR) });
+    const allOk = QC_CHECK_ITEMS.map((item) => ({ item, result: 'ok' as const }));
+    let k5 = await this.cases.detail(supervisor, c5.id);
+    const round1 = await this.completion.recordQc(qc, c5.id, {
+      expectedVersion: k5.version,
+      at: ago(2 * DAY - 2 * HOUR),
+      checks: allOk.map((c) =>
+        c.item === 'paint'
+          ? { item: 'paint', result: 'fail', note: 'پوست‌پرتقالی روی لبه درب', departmentId: dept('paint') }
+          : c,
+      ),
+    });
+    const fixId = round1.qc[0]!.checks.find((c) => c.item === 'paint')!.correctiveTaskId!;
+    await this.tasks.act(supervisor, fixId, { action: 'start', expectedVersion: 1, at: ago(DAY + 4 * HOUR) });
+    await this.tasks.act(supervisor, fixId, { action: 'complete', expectedVersion: 2, at: ago(DAY) });
+    await this.tasks.act(supervisor, fixId, { action: 'approve', expectedVersion: 3, at: ago(22 * HOUR) });
+    k5 = await this.cases.detail(supervisor, c5.id);
+    await this.completion.recordQc(qc, c5.id, { expectedVersion: k5.version, at: ago(20 * HOUR), checks: allOk });
+    k5 = await this.cases.detail(supervisor, c5.id);
+    await this.completion.technicalClose(supervisor, c5.id, { expectedVersion: k5.version });
   }
 }

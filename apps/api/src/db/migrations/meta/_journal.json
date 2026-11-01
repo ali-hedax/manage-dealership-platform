@@ -33,8 +33,15 @@
     {
       "idx": 4,
       "version": "7",
-      "when": 1793526492698,
-      "tag": "0004_daily_tombstone",
+      "when": 1793525071430,
+      "tag": "0004_qc_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793527798746,
+      "tag": "0005_personal_auth",
       "breakpoints": true
     }
   ]
