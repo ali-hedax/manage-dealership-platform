@@ -20,7 +20,7 @@ Manage tracks every accident-repair vehicle from admission to delivery, so the s
 - Manager dashboard whose counts link to the exact filtered lists
 - Append-only audit trail (database trigger)
 
-Versioned assessment and supplements, the parts lifecycle (with Excel import) and the financial purchase gate are implemented (branches `feature/assessment-parts`, `feature/parts-finance`). Local Preview: `pnpm preview` → http://localhost:3100. Next deliveries: financial gate, QC and delivery, reports and Persian PDF, then LAN server + cloud sync.
+Versioned assessment and supplements, the parts lifecycle (with Excel import), the financial purchase gate, and QC with corrective work, technical and financial close and the vehicle handover are implemented (branches `feature/assessment-parts`, `feature/parts-finance`, `feature/qc-delivery`). Local Preview: `pnpm preview` → http://localhost:3100. Next deliveries: part-discrepancy review queue, reports and Persian PDF, then LAN server + cloud sync.
 
 ## Run locally (no Docker, no PostgreSQL install)
 

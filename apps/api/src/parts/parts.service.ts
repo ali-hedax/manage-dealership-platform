@@ -364,7 +364,7 @@ export class PartsService {
    * Lines of the current final assessment with their root line id (first
    * version) and whether they are authorized; null without a final version.
    */
-  private async authorizedLines(tx: DbOrTx, tenantId: string, caseId: string) {
+  async authorizedLines(tx: DbOrTx, tenantId: string, caseId: string) {
     const versions = await tx
       .select({ id: assessments.id, status: assessments.status })
       .from(assessments)

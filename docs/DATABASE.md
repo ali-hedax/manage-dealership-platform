@@ -31,6 +31,8 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 | `part_requests` | Parts of a case | Source, status, `assessment_item_id` (root line), stock check / reservation / order / ETA (+ first ETA) / receipt + inspection / handover / cancel times, approved vs purchase unit price with price-approval reference, `finance_basis` and `finance_exception_id` recorded at order |
 | `case_finance` | Payer shares per case | One row per case (customer / insurer / company share in Rials, nullable = not decided), `version` |
 | `financial_approvals` | Advances and spending exceptions | `kind`, `status` proposed → approved / rejected → paid (advance), amount or limit, `covers_estimate_rial`, proposer / decider / payment confirmer with times |
+| `case_payments` | Settlement payments of the customer share (cashier) | amount, receipt reference, `paid_at`, recorder; never more than the balance; not edited |
+| `qc_inspections` | QC rounds | `round` (unique per case), `outcome` passed / failed, `checks` (jsonb: item, result, note, unit, corrective task id), inspector, `inspected_at`; immutable. `tasks.qc_inspection_id` marks corrective activities |
 | `audit_events` | Who changed what, when, why | **Append-only**: trigger `audit_events_immutable` rejects UPDATE and DELETE (DELETE allowed only for `is_test` rows inside the demo-purge transaction) |
 | `change_log` | Outbox of entity snapshots | Same transaction as the change; `node_id`, `entity_version`, `synced_at` for future sync |
 | `idempotency_keys` | Replay protection | Per tenant + user + key |
@@ -51,5 +53,6 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 | `0001_audit_immutable` | Append-only trigger on `audit_events` | `down/0001_audit_immutable.down.sql` |
 | `0002_assessments` | `assessments`, `assessment_items` | `down/0002_assessments.down.sql` (drops both tables; audit rows remain) |
 | `0003_parts_finance` | `part_requests`, `case_finance`, `financial_approvals`, `blockers.part_request_id` | `down/0003_parts_finance.down.sql` |
+| `0004_qc_delivery` | `qc_inspections`, `case_payments`, `tasks.qc_inspection_id`; on `cases`: who closed technically/financially with notes, estimate / customer share / accepted balance at the financial close, handover recipient, relation, note and recorder | `down/0004_qc_delivery.down.sql` |
 
 Workflow for a change: edit `schema.ts` → `pnpm --filter @manage/api db:generate` → review the SQL → write the down script → run tests → document here. Production: back up first, then `pnpm db:migrate` ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).

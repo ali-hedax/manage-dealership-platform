@@ -4,10 +4,12 @@ import {
   financePaymentSchema,
   financeSharesSchema,
   proposeFinanceSchema,
+  settlementPaymentSchema,
   type FinanceDecisionInput,
   type FinancePaymentInput,
   type FinanceSharesInput,
   type ProposeFinanceInput,
+  type SettlementPaymentInput,
 } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
@@ -43,6 +45,16 @@ export class FinanceController {
     @Body(new ZodPipe(proposeFinanceSchema)) body: ProposeFinanceInput,
   ) {
     return this.finance.propose(actor, id, body);
+  }
+
+  @Post('cases/:id/finance/payments')
+  @RequirePermissions('finance.payment')
+  recordPayment(
+    @CurrentActor() actor: Actor,
+    @IdParam() id: string,
+    @Body(new ZodPipe(settlementPaymentSchema)) body: SettlementPaymentInput,
+  ) {
+    return this.finance.recordPayment(actor, id, body);
   }
 
   @Post('financial-approvals/:id/decision')

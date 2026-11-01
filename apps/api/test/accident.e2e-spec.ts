@@ -266,13 +266,14 @@ describe('acceptance 6: multiple departments, parallel and dependent work', () =
     expect(cur.status).toBe('approved');
     expect(cur.approvedBy?.displayName).toBe('سرپرست نمونه');
 
+    // Even with all work approved the stage selector cannot deliver or skip QC:
+    // both go through QC, technical/financial close and handover (qc-delivery spec).
     kase = (await supervisor.get(`/cases/${c.id}`)).body;
-    const delivered = await supervisor.post(`/cases/${c.id}/stage`, {
-      stage: 'delivered',
-      expectedVersion: kase.version,
-    });
-    expect(delivered.status).toBe(201);
-    expect(delivered.body.actualDeliveryAt).toBeTruthy();
+    const delivered = await supervisor.post(`/cases/${c.id}/stage`, { stage: 'delivered', expectedVersion: kase.version });
+    expect(delivered.body.code).toBe('DELIVERY_GATE');
+    const ready = await supervisor.post(`/cases/${c.id}/stage`, { stage: 'ready_for_delivery', expectedVersion: kase.version });
+    expect(ready.body.code).toBe('TECHNICAL_CLOSE_REQUIRED');
+    expect(((await supervisor.get(`/cases/${c.id}`)).body as CaseDetail).actualDeliveryAt).toBeNull();
   });
 });
 

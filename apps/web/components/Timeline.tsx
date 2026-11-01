@@ -9,6 +9,10 @@ import {
   PART_SOURCE_LABELS,
   PART_STATUS_LABELS,
   BLOCKER_REASON_LABELS,
+  CASE_STATUS_LABELS,
+  QC_CHECK_LABELS,
+  QC_OUTCOME_LABELS,
+  RECIPIENT_RELATION_LABELS,
   COVERAGE_LABELS,
   STAGE_LABELS,
   TASK_STATUS_LABELS,
@@ -68,6 +72,12 @@ const FIELD_LABELS: Record<string, string> = {
   insurerShareRial: 'سهم بیمه',
   companyShareRial: 'سهم شرکت',
   paymentRef: 'شماره دریافت',
+  round: 'دور',
+  outcome: 'نتیجه کنترل کیفیت',
+  failed: 'موارد رد',
+  actualDeliveryAt: 'تحویل واقعی',
+  recipientRelation: 'نسبت تحویل‌گیرنده',
+  financialCloseWaivedRial: 'مانده پذیرفته‌شده',
 };
 
 function show(field: string, v: unknown, action: string): string {
@@ -78,6 +88,16 @@ function show(field: string, v: unknown, action: string): string {
   }
   if (field === 'status' && action.startsWith('finance.')) {
     return FINANCE_APPROVAL_STATUS_LABELS[v as keyof typeof FINANCE_APPROVAL_STATUS_LABELS] ?? String(v);
+  }
+  if (field === 'status' && action.startsWith('case.')) {
+    return CASE_STATUS_LABELS[v as keyof typeof CASE_STATUS_LABELS] ?? String(v);
+  }
+  if (field === 'outcome') return QC_OUTCOME_LABELS[v as keyof typeof QC_OUTCOME_LABELS] ?? String(v);
+  if (field === 'failed' && Array.isArray(v)) {
+    return v.length ? v.map((i) => QC_CHECK_LABELS[i as keyof typeof QC_CHECK_LABELS] ?? String(i)).join('، ') : '—';
+  }
+  if (field === 'recipientRelation') {
+    return RECIPIENT_RELATION_LABELS[v as keyof typeof RECIPIENT_RELATION_LABELS] ?? String(v);
   }
   if (field === 'status') return TASK_STATUS_LABELS[v as keyof typeof TASK_STATUS_LABELS] ?? String(v);
   if (field === 'source' && action.startsWith('assessment.')) {

@@ -3,6 +3,8 @@ import { AssessmentsController } from '../assessments/assessments.controller';
 import { AssessmentsService } from '../assessments/assessments.service';
 import { BlockersService } from '../blockers/blockers.service';
 import { CasesService } from '../cases/cases.service';
+import { CompletionController } from '../completion/completion.controller';
+import { CompletionService } from '../completion/completion.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { FinanceController } from '../finance/finance.controller';
 import { FinanceService } from '../finance/finance.service';
@@ -16,7 +18,7 @@ import {
   TasksController,
 } from './accident.controllers';
 
-/** Phase-1 module: accident repair cases, assessments, parts, finance gate, repair activities, blockers, dashboard. */
+/** Phase-1 module: accident repair cases, assessments, parts, finance gate, repair activities, blockers, QC and delivery, dashboard. */
 @Module({
   controllers: [
     CasesController,
@@ -26,6 +28,7 @@ import {
     AssessmentsController,
     PartsController,
     FinanceController,
+    CompletionController,
   ],
   providers: [
     CasesService,
@@ -35,7 +38,8 @@ import {
     AssessmentsService,
     PartsService,
     FinanceService,
+    CompletionService,
   ],
-  exports: [CasesService, TasksService, BlockersService, AssessmentsService, PartsService, FinanceService],
+  exports: [CasesService, TasksService, BlockersService, AssessmentsService, PartsService, FinanceService, CompletionService],
 })
 export class AccidentModule {}
