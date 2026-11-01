@@ -1,6 +1,6 @@
 # Test report
 
-Last full run: **2026-11-01**, branch `feature/assessment-parts` (issue #8 on top of `feature/accident-mvp`), Windows 10 / Node 26.8 locally (CI targets Node 22 on Ubuntu). All data synthetic.
+Last full run: **2026-11-01**, branch `feature/parts-finance` (issues #9, #10 on top of `feature/assessment-parts`), Windows 10 / Node 26.8 locally (CI targets Node 22 on Ubuntu). All data synthetic.
 
 ## Summary
 
@@ -9,11 +9,12 @@ Last full run: **2026-11-01**, branch `feature/assessment-parts` (issue #8 on to
 | Lint (ESLint on API, tsc on shared/web) | `pnpm lint` | ✅ pass |
 | Typecheck | `pnpm typecheck` | ✅ pass |
 | Shared unit tests (Jalali, digits, plates, phones, RBAC, schemas) | `pnpm --filter @manage/shared test` | ✅ 9 / 9 |
-| API unit + integration (Jest + supertest, real HTTP, embedded PostgreSQL) | `pnpm --filter @manage/api test` | ✅ 41 / 41 (4 suites; +6 assessment tests) |
+| API unit + integration (Jest + supertest, real HTTP, embedded PostgreSQL) | `pnpm --filter @manage/api test` | ✅ 50 / 50 (5 suites; +9 parts/finance tests) |
 | Production build (API + web) | `pnpm build` | ✅ pass |
-| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 6 / 6 locally on Edge in three consecutive runs (incl. new assessment flow); ✅ on CI Chromium (PR #17, run 41279034901) |
+| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 7 / 7 locally on Edge in three consecutive runs (incl. parts/finance flow); CI: see PR #18 |
 | Dependency audit (prod, high) + gitleaks secret scan | `pnpm audit`, CI `security` | ✅ no known vulnerabilities; no secrets found. Dependency review is non-blocking until the repo's Dependency graph is enabled (#4) |
 | `pnpm dev` from an empty database | manual | ✅ API healthy, demo auto-seeded, web proxy 200 |
+| Local Preview `pnpm preview` | manual smoke | ✅ production build on :3100, login via web proxy 200, dashboard counts (5 active, 2 blocked, 1 awaiting authorization, 1 overdue part, 1 part to order, 1 pending finance), sample .xlsx served; restart without `--reset` keeps data and accounts |
 | Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (run 41276167117; with migration `0002_assessments` and the new demo seed: run 41279034901) |
 | Docker images + compose smoke test (health via web proxy, login, dashboard) | CI job `docker` | ✅ pass (run 41276167117). Not verifiable on the dev machine: 8 GB RAM, 5.6 GB free disk, Docker daemon crashed twice during builds |
 
@@ -22,13 +23,13 @@ Last full run: **2026-11-01**, branch `feature/assessment-parts` (issue #8 on to
 | # | Scenario | Status | Evidence |
 | --- | --- | --- | --- |
 | 1 | Create a case and search it | ✅ | API: "creates a case … finds it by plate, VIN, name, phone and number"; E2E: supervisor flow ends with plate search |
-| 2 | Golden card with official deadline, waiting for company part | ◐ | API: deadline separate from forecast, reason required to change, `part_not_arrived` blocker on the activity. Parts lifecycle itself: issue #9 |
-| 3 | Body insurance with price change and assessor approval | ◐ | API: price change in a supplement is audited (before/after), insurer decision with official reference, partial approval per line. Parts price workflow: issue #9 |
-| 4 | Personal case with advance payment and customer approval | ○ | Needs financial gate (issue #10) |
+| 2 | Golden card with official deadline, waiting for company part | ✅ | API "acceptance 2": part from the authorized line, gate open (no customer share), order with ETA, blocker on the activity names the part, ETA moved (first ETA kept), receipt, handover resolves the blocker and returns the activity to work, official deadline unchanged, "not arrived" after handover refused; wrong part rejected at receipt and re-ordered |
+| 3 | Body insurance with price change and assessor approval | ✅ | API "acceptance 3": purchase above the approved price refused without assessor name + approval reference, accepted with them (stored); a line re-priced by a pending supplement cannot be ordered until the insurer's decision is recorded |
+| 4 | Personal case with advance payment and customer approval | ✅ | API: customer authorization in person, gate "no estimate" → "advance missing"; expert proposes, expert cannot approve (403), cashier cannot confirm before approval, manager approves, cashier confirms → gate open, order recorded with basis "advance paid". E2E: manager → cashier → parts clerk in the browser on demo case 3 |
 | 5 | Supplement after hidden damage | ✅ | API "acceptance 5": in-repair case, supplement with discovery time copies approved lines, new line + re-priced line, finalize → previous version superseded and unchanged (prices, total), delta +34 M Rial, financial re-review flag, forecast moved / official deadline unchanged, «مجوز» blocker from discovery time blocks delivery, partial approval excludes rejected line. E2E: same flow in the browser incl. superseded v1 total |
 | 6 | Multiple departments and technicians, parallel and dependent work | ✅ | API: dependencies enforced, parallel start, weighted progress 50 %, cycle rejected; E2E: dependency-aware start button |
-| 7 | "Part not arrived" while handover is recorded → reviewable discrepancy | ○ | Needs parts module (issue #11) |
-| 8 | Block costly purchase without financial approval, allow no-cost work | ○ | Issue #10 |
+| 7 | "Part not arrived" while handover is recorded → reviewable discrepancy | ◐ | API: a "not arrived" blocker naming a handed-over part is refused with a discrepancy message. Review queue for the manager: issue #11 |
+| 8 | Block costly purchase without financial approval, allow no-cost work | ✅ | API: purchase refused (`FINANCE_GATE`) while stock check, reservation and starting an activity succeed; a supplement raising the estimate closes the gate ("re-approval required"); exception with limit: proposer cannot approve, purchase within limit allowed, beyond limit refused, spending tracked |
 | 9 | QC, corrective work, settlement, delivery | ◐ | API: delivery gate (all approved, no open blockers), reopen requires reason, actual delivery time. QC/settlement: issue #12 |
 | 10 | Roles and denial of unauthorized access | ✅ | API: unauthenticated 401, CSRF 403, support roles 403 on create/tasks, expert cannot block activities, admin cannot read cases, masked phone, tenant isolation 404, lockout; E2E: parts clerk read-only view |
 | 11 | Old vehicles with past admission date | ✅ | API: past admission + current stage + overdue/legacy filters; E2E: legacy entry form |
@@ -59,6 +60,12 @@ API tests (`apps/api/test/assessment.e2e-spec.ts`, real HTTP on embedded Postgre
 
 Demo seed test: demo case 1 now carries an approved assessment and a supplement waiting for authorization (blocked cases 1 → 2).
 
+## Parts and financial gate (issues #9, #10)
+
+API tests (`apps/api/test/parts-finance.e2e-spec.ts`): acceptance 2, 3, 4, 8 (above); payer shares for a mixed case (blocked until recorded, stale version → 409); Excel import (preview with per-row errors, file with errors imports nothing, valid file imports all rows, non-.xlsx rejected); permissions (cashier cannot create parts, expert cannot run part steps, parts clerk cannot propose finance); dashboard counts equal the new case-list filters.
+
+E2E (`apps/web/e2e/parts-finance.spec.ts`): manager approves the advance, cashier confirms receipt, parts clerk orders (approved price prefilled), receives, hands over to a unit, imports the sample .xlsx (preview → 4 rows), manager sees the steps in the history.
+
 ## Defects found by tests and fixed
 
 | Found by | Defect | Fix |
@@ -71,6 +78,10 @@ Demo seed test: demo case 1 now carries an approved assessment and a supplement 
 | Screenshot review | Signed delta "+25,000,000" rendered with the sign on the wrong side in RTL | Shown as «افزایش/کاهش …» |
 | Screenshot review (phone) | Assessment line table cramped, status column off-screen | Lines become stacked cards under 860 px |
 | Writing the demo seed | Authorization recorded afterwards was rejected because it predated finalization in Manage | Lower bound is the assessment time; regression test added |
+| `pnpm audit` | fflate 0.8.2 (Excel import) can loop forever on a malformed ZIP64 upload (GHSA-px8p-9vwx-vf98) | Pinned fflate 0.8.3 |
+| E2E (full suite) | Several role logins within a minute hit the login rate limit (10/min) | `LOGIN_RATE_LIMIT` setting; default unchanged, E2E uses 200 |
+| E2E (3rd run, intermittent) | After clearing cookies, the old page's background 401 redirect aborted the next navigation | Test leaves the page before switching user |
+| Screenshot review | History showed the authorization source as "part source" and numbers in Latin digits | Labels per event type, Persian digits |
 
 ## E2E consecutive runs (flakiness check)
 
@@ -83,3 +94,5 @@ After the date-input fix, on 2026-11-01 (desktop + mobile projects, Edge):
 | 3 | 5 passed | 57.8 s |
 
 With the assessment flow (branch `feature/assessment-parts`, 2026-11-01): 6 passed in 38.5 s, 39.3 s and 39.8 s.
+
+With parts and finance (branch `feature/parts-finance`, 2026-11-01, after the two E2E fixes above): 7 passed in 49.6 s, 48.7 s and 49.1 s.

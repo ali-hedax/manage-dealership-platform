@@ -9,12 +9,14 @@ Status key: **✅ implemented and tested** · **◐ partial** · **○ planned**
 - Vehicles already in the workshop: tick "خودرو از قبل در تعمیرگاه است", enter the past admission time and current stage. Delivered cases cannot be created directly.
 - Unknown fields stay empty and the case is flagged "نیازمند تکمیل" with the list of missing items.
 
-## 2. Payment and coverage — ◐
+## 2. Payment and coverage — ✅ (basic)
 
 - Types: golden card / roadside, body insurance, personal, mixed, initially unknown.
 - Implemented: golden card file number, insurer and claim number, free-text coverage notes; golden card without file number or official deadline is flagged incomplete.
 - Official approval exists only when recorded in the official system; Manage stores the reference, it does not approve.
-- ○ Approved items/labour, insurer vs customer share, price differences, phone/written approvals, supplier introduced by insurer, advance payment and customer approval for personal cases (delivery 2).
+- ✅ Approved items and labour and phone/written/in-person approvals (assessment authorization, §3); customer approval for personal cases is an authorization with source "customer".
+- ✅ Payer shares per case (customer / insurer / company), supplier introduced by the insurer as a part source, price differences on parts (§6), advance payment (§7).
+- ○ Invoicing, settlement and accounting export (financial close, issue #12 / later finance module).
 
 ## 3. Assessment and supplements — ✅
 
@@ -40,13 +42,23 @@ Status key: **✅ implemented and tested** · **◐ partial** · **○ planned**
 - ✅ Three independent times on every case: official deadline / commitment, internal forecast, actual delivery. Changing the official deadline or admission time requires a reason (audited). The forecast never overwrites the official deadline.
 - ○ Rule-based forecast from capacity, dependencies, parts and working hours (delivery 3); AI forecasting only after real data exists.
 
-## 6. Parts and supply — ○ (delivery 2)
+## 6. Parts and supply — ✅
 
-Need → stock check → reservation → authorized source → price → request/authorization → order → ETA → receipt → quality check → handover to the repair unit, with times. Manual entry and Excel import first.
+- **Need**: from the authorized "replace" lines of the current assessment («ثبت از کارشناسی»; each line once, followed across supplements), manually, or by **Excel import** (.xlsx, first row = column titles: شرح قطعه، شماره فنی، تعداد، منبع، قیمت تأییدشده واحد (ریال)، توضیح). Import always shows a preview; a file with any error imports nothing. A synthetic sample is downloadable from the import dialog.
+- **Source**: company part (Iran Khodro), dealership stock, authorized external purchase, supplier introduced by the insurer, customer-supplied.
+- **Steps, each with its own time**: stock check → reservation (stock) or order (supplier, order number, unit price, ETA; the first ETA is kept when it moves) → receipt with inspection (correct / wrong / defective; wrong or defective requires a note and goes back to re-order) → handover to the repair unit (unit and recipient) or cancel (reason).
+- **Controls when ordering**: the assessment line must be authorized (a line changed by a pending supplement cannot be ordered); a price above the approved unit price needs the assessor's name and approval reference (or a supplement); purchases pass the financial gate (§7). Stock reservation and customer-supplied parts are not purchases.
+- **Link to delays**: a "part not arrived" / "wrong or defective part" blocker can name the part. Recording its handover resolves the blocker and returns the activity to work. Reporting "not arrived" for a part whose handover is recorded is refused with a discrepancy message (full discrepancy review: issue #11).
+- Dashboard and case list: overdue parts (ETA passed) and parts not yet ordered.
 
-## 7. Financial control — ○ (delivery 2)
+## 7. Financial control — ✅ (purchase gate)
 
-Expert proposes advance payment → service manager approves spending → cashier confirms receipt. Missing advance blocks only parts purchase and costly work; documentation and planning continue. Exceptions need a recorded approval with limit and reason. No user approves their own proposal.
+- **Estimate** = approved amount of the current final assessment version. **Customer share** is recorded per case, or derived: personal = whole estimate, golden card / insurance = 0, mixed / unknown = must be recorded.
+- **Advance**: expert (or supervisor/manager) proposes amount and reason → **service manager approves** → **cashier confirms receipt** with a payment reference. The approver is never the proposer (enforced by the API, not only hidden in the UI).
+- **Exception**: purchases without the advance up to a recorded limit, with reason, approved by a service manager other than the proposer; spending against it is tracked.
+- **Gate**: only **part purchases** are held. Documentation, planning, stock reservation, customer-supplied parts and repair activities continue. Open when: no customer share, or a paid advance covers the current estimate, or an approved exception has enough limit left. A supplement that raises the estimate closes the gate again ("re-approval required").
+- Finance panel: estimate, shares, received, balance, committed purchases, approvals with who/when.
+- ○ Costly *labour* gating needs labour cost per activity (later); invoicing and settlement: issue #12.
 
 ## 8. Delay accountability — ◐
 

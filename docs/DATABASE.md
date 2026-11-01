@@ -25,9 +25,12 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 | `cases` | Accident cases | `admitted_at` (real) vs `created_at` (entered in Manage); `official_deadline_at`, `forecast_delivery_at`, `actual_delivery_at`; `technical_closed_at`, `financial_closed_at` (two independent gates); `missing_fields`, `search_text` derived |
 | `tasks` | Repair activities | Department, technician name/code (no account in phase 1), planned/actual times, status, `weight` for progress |
 | `task_dependencies` | Task → prerequisite task | Same case only; cycles rejected |
-| `blockers` | Delay causes | `occurred_at`, `recorded_at`, `last_follow_up_at`, `follow_up_count`, `resolved_at` — separates late reporting and slow follow-up from the blocker itself |
+| `blockers` | Delay causes | optional `part_request_id` (handover resolves it); `occurred_at`, `recorded_at`, `last_follow_up_at`, `follow_up_count`, `resolved_at` — separates late reporting and slow follow-up from the blocker itself |
 | `assessments` | Assessment versions per case | `version_no` 1 = initial, >1 = supplement (`previous_id`); `status` draft → final → superseded; at most one draft per case (partial unique index); totals frozen at finalize; authorization decision fields and `blocker_id` of the waiting blocker |
 | `assessment_items` | Lines of a version | Replace/repair, part number, qty, unit price and labour in whole Rials (`bigint`), labour department, evidence, `approval_status`; `origin_item_id` + `changed` link supplement lines to the previous version |
+| `part_requests` | Parts of a case | Source, status, `assessment_item_id` (root line), stock check / reservation / order / ETA (+ first ETA) / receipt + inspection / handover / cancel times, approved vs purchase unit price with price-approval reference, `finance_basis` and `finance_exception_id` recorded at order |
+| `case_finance` | Payer shares per case | One row per case (customer / insurer / company share in Rials, nullable = not decided), `version` |
+| `financial_approvals` | Advances and spending exceptions | `kind`, `status` proposed → approved / rejected → paid (advance), amount or limit, `covers_estimate_rial`, proposer / decider / payment confirmer with times |
 | `audit_events` | Who changed what, when, why | **Append-only**: trigger `audit_events_immutable` rejects UPDATE and DELETE (DELETE allowed only for `is_test` rows inside the demo-purge transaction) |
 | `change_log` | Outbox of entity snapshots | Same transaction as the change; `node_id`, `entity_version`, `synced_at` for future sync |
 | `idempotency_keys` | Replay protection | Per tenant + user + key |
@@ -37,6 +40,7 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 - Case stage: `reception → assessment → awaiting_approval → awaiting_parts → in_repair → quality_control → ready_for_delivery → delivered`. Status: `open | closed | cancelled`.
 - Task status: `pending → in_progress → done → approved`, with `blocked` (via blockers) and reopen (`done|approved → in_progress`, reason required).
 - Blocker reasons: see `BLOCKER_REASONS` in `packages/shared/src/enums.ts`.
+- Part status: `needed → reserved | ordered → received | rejected → handed_over`, or `cancelled`. Finance approval: `proposed → approved | rejected`, advance `approved → paid`.
 - Assessment status: `draft → final → superseded`. Authorization: `pending | not_required | approved | partially_approved | rejected`. Item approval: `pending | approved | rejected`.
 
 ## Migrations
@@ -46,5 +50,6 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 | `0000_init` | All tables and indexes | `down/0000_init.down.sql` (drops everything — disposable DBs only) |
 | `0001_audit_immutable` | Append-only trigger on `audit_events` | `down/0001_audit_immutable.down.sql` |
 | `0002_assessments` | `assessments`, `assessment_items` | `down/0002_assessments.down.sql` (drops both tables; audit rows remain) |
+| `0003_parts_finance` | `part_requests`, `case_finance`, `financial_approvals`, `blockers.part_request_id` | `down/0003_parts_finance.down.sql` |
 
 Workflow for a change: edit `schema.ts` → `pnpm --filter @manage/api db:generate` → review the SQL → write the down script → run tests → document here. Production: back up first, then `pnpm db:migrate` ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
