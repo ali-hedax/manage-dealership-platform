@@ -3,11 +3,13 @@
 import useSWR from 'swr';
 import {
   AUDIT_ACTION_LABELS,
+  AUTHORIZATION_STATUS_LABELS,
   BLOCKER_REASON_LABELS,
   COVERAGE_LABELS,
   STAGE_LABELS,
   TASK_STATUS_LABELS,
   formatJalali,
+  toPersianDigits,
   type TimelineEvent,
 } from '@manage/shared';
 import { fetcher } from '@/lib/api';
@@ -37,6 +39,18 @@ const FIELD_LABELS: Record<string, string> = {
   plannedEndAt: 'پایان برنامه‌ای',
   dependsOn: 'پیش‌نیازها',
   reason: 'علت',
+  versionNo: 'نسخه',
+  discoveredAt: 'کشف آسیب',
+  description: 'قلم',
+  quantity: 'تعداد',
+  unitPriceRial: 'قیمت واحد',
+  labourRial: 'اجرت',
+  totalRial: 'جمع کل',
+  deltaRial: 'تغییر نسبت به نسخه قبل',
+  approvedRial: 'مبلغ تأییدشده',
+  authorizationStatus: 'مجوز',
+  decision: 'تصمیم مجوز',
+  reference: 'شماره ثبت رسمی',
 };
 
 function show(field: string, v: unknown): string {
@@ -44,6 +58,10 @@ function show(field: string, v: unknown): string {
   if (field === 'stage') return STAGE_LABELS[v as keyof typeof STAGE_LABELS] ?? String(v);
   if (field === 'status') return TASK_STATUS_LABELS[v as keyof typeof TASK_STATUS_LABELS] ?? String(v);
   if (field === 'coverageType') return COVERAGE_LABELS[v as keyof typeof COVERAGE_LABELS] ?? String(v);
+  if (field === 'authorizationStatus' || field === 'decision') {
+    return AUTHORIZATION_STATUS_LABELS[v as keyof typeof AUTHORIZATION_STATUS_LABELS] ?? String(v);
+  }
+  if (field.endsWith('Rial') && typeof v === 'number') return `${toPersianDigits(v.toLocaleString('en-US'))} ریال`;
   if (field === 'reason') return BLOCKER_REASON_LABELS[v as keyof typeof BLOCKER_REASON_LABELS] ?? String(v);
   if (field.endsWith('At') && typeof v === 'string') return formatJalali(v, { time: true });
   if (field === 'responsibleUserId' || field === 'dependsOn') return 'تغییر کرد';
@@ -58,7 +76,9 @@ export function Timeline({ caseId, version }: { caseId: string; version: number 
       {data.map((e) => {
         const before = (e.summary?.before ?? {}) as Record<string, unknown>;
         const after = (e.summary?.after ?? {}) as Record<string, unknown>;
-        const fields = e.action === 'case.created' ? [] : Object.keys(after).filter((k) => k in FIELD_LABELS);
+        // Removals carry only "before"; everything else is shown from "after".
+        const shown = Object.keys(after).length ? after : before;
+        const fields = e.action === 'case.created' ? [] : Object.keys(shown).filter((k) => k in FIELD_LABELS);
         return (
           <li key={e.id}>
             <div>
@@ -67,8 +87,8 @@ export function Timeline({ caseId, version }: { caseId: string; version: number 
             </div>
             {fields.map((k) => (
               <div key={k} className="xs muted">
-                {FIELD_LABELS[k]}: {k in before ? `${show(k, before[k])} ← ` : ''}
-                {show(k, after[k])}
+                {FIELD_LABELS[k]}: {k in before && k in after ? `${show(k, before[k])} ← ` : ''}
+                {show(k, shown[k])}
               </div>
             ))}
             {e.reason && <div className="xs">{e.reason}</div>}

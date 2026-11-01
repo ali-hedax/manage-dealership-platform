@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   bigserial,
   boolean,
   index,
@@ -285,6 +286,92 @@ export const blockers = pgTable(
     version: integer('version').notNull().default(1),
   },
   (t) => [index('blockers_case_idx').on(t.caseId), index('blockers_tenant_open_idx').on(t.tenantId, t.resolvedAt)],
+);
+
+// One row per assessment version of a case: version 1 is the initial
+// assessment, later versions are supplements (hidden damage). Items of a final
+// version never change; a supplement copies them and the previous version is
+// marked superseded when the supplement is finalized.
+export const assessments = pgTable(
+  'assessments',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    versionNo: smallint('version_no').notNull(),
+    kind: text('kind').notNull(),
+    status: text('status').notNull().default('draft'),
+    previousId: uuid('previous_id'),
+    assessorName: text('assessor_name').notNull(),
+    assessorOrg: text('assessor_org'),
+    assessedAt: ts('assessed_at').notNull(),
+    reason: text('reason'),
+    discoveredAt: ts('discovered_at'),
+    notes: text('notes'),
+    finalizedAt: ts('finalized_at'),
+    finalizedBy: uuid('finalized_by').references(() => users.id),
+    // Totals are frozen at finalization so later price lists cannot alter them.
+    partsRial: bigint('parts_rial', { mode: 'number' }).notNull().default(0),
+    labourRial: bigint('labour_rial', { mode: 'number' }).notNull().default(0),
+    approvedRial: bigint('approved_rial', { mode: 'number' }),
+    authorizationStatus: text('authorization_status').notNull().default('pending'),
+    authorizationSource: text('authorization_source'),
+    authorizationMethod: text('authorization_method'),
+    authorizationRef: text('authorization_ref'),
+    authorizationAt: ts('authorization_at'),
+    authorizationNote: text('authorization_note'),
+    authorizationRecordedBy: uuid('authorization_recorded_by').references(() => users.id),
+    blockerId: uuid('blocker_id').references(() => blockers.id),
+    isTest: boolean('is_test').notNull().default(false),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    uniqueIndex('assessments_case_version_uq').on(t.caseId, t.versionNo),
+    // At most one draft per case.
+    uniqueIndex('assessments_case_draft_uq')
+      .on(t.caseId)
+      .where(sql`${t.status} = 'draft'`),
+    index('assessments_tenant_auth_idx').on(t.tenantId, t.authorizationStatus),
+  ],
+);
+
+export const assessmentItems = pgTable(
+  'assessment_items',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    assessmentId: uuid('assessment_id')
+      .notNull()
+      .references(() => assessments.id),
+    lineNo: smallint('line_no').notNull(),
+    action: text('action').notNull(),
+    description: text('description').notNull(),
+    partNumber: text('part_number'),
+    quantity: smallint('quantity').notNull().default(1),
+    unitPriceRial: bigint('unit_price_rial', { mode: 'number' }).notNull().default(0),
+    labourDepartmentId: uuid('labour_department_id').references(() => departments.id),
+    labourRial: bigint('labour_rial', { mode: 'number' }).notNull().default(0),
+    evidence: text('evidence'),
+    approvalStatus: text('approval_status').notNull().default('pending'),
+    originItemId: uuid('origin_item_id'),
+    // Copied lines start unchanged; any edit in the supplement sets this.
+    changed: boolean('changed').notNull().default(true),
+    isTest: boolean('is_test').notNull().default(false),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('assessment_items_assessment_idx').on(t.assessmentId, t.lineNo)],
 );
 
 // Append-only. A database trigger rejects UPDATE and DELETE (see migration

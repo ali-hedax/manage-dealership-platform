@@ -11,6 +11,8 @@ export const PERMISSIONS = [
   'task.approve', // supervisor approval of completed work
   'blocker.report',
   'blocker.manage', // acknowledge / resolve
+  'assessment.manage', // draft and finalize assessments and supplements
+  'assessment.authorize', // record an external authorization decision
   'dashboard.read',
   'audit.read',
   'user.manage',
@@ -25,6 +27,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'case.update',
     'customer.pii.read',
     'blocker.report',
+    'assessment.manage',
+    'assessment.authorize',
     'dashboard.read',
     'audit.read',
   ],
@@ -37,6 +41,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'task.approve',
     'blocker.report',
     'blocker.manage',
+    'assessment.manage',
+    'assessment.authorize',
     'dashboard.read',
     'audit.read',
   ],
@@ -49,6 +55,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'task.approve',
     'blocker.report',
     'blocker.manage',
+    'assessment.manage',
+    'assessment.authorize',
     'dashboard.read',
     'audit.read',
     'settings.manage',

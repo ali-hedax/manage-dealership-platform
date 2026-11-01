@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DEFAULT_DEPARTMENTS, permissionsFor, ROLE_LABELS, type Role } from '@manage/shared';
+import { AssessmentsService } from '../assessments/assessments.service';
 import { hashPassword } from '../auth/password';
 import type { Actor } from '../auth/auth.types';
 import { BlockersService } from '../blockers/blockers.service';
@@ -48,6 +49,7 @@ export class DemoSeedService {
     private readonly cases: CasesService,
     private readonly tasks: TasksService,
     private readonly blockers: BlockersService,
+    private readonly assessments: AssessmentsService,
   ) {}
 
   async isSeeded(): Promise<boolean> {
@@ -172,7 +174,51 @@ export class DemoSeedService {
       dependsOn: [body1.id],
       weight: 2,
     });
+    // Assessment approved in the golden-card system, then hidden damage found
+    // during body work: the supplement waits for a new authorization.
+    let a1 = await this.assessments.create(expert, c1.id, {
+      kind: 'initial',
+      assessorName: 'کارشناس امداد نمونه',
+      assessorOrg: 'امداد خودرو (نمونه)',
+      assessedAt: ago(3 * DAY - 2 * HOUR),
+    });
+    for (const item of [
+      { action: 'replace' as const, description: 'سپر جلو', partNumber: 'TEST-PN-1001', quantity: 1, unitPriceRial: 42_000_000, labourDepartmentId: dept('assembly'), labourRial: 4_000_000 },
+      { action: 'replace' as const, description: 'چراغ جلو راست', partNumber: 'TEST-PN-1002', quantity: 1, unitPriceRial: 31_000_000, labourDepartmentId: dept('electrical'), labourRial: 2_500_000 },
+      { action: 'repair' as const, description: 'صافکاری و نقاشی گلگیر جلو راست', quantity: 1, unitPriceRial: 0, labourDepartmentId: dept('body'), labourRial: 18_000_000 },
+    ]) {
+      a1 = await this.assessments.addItem(expert, a1.id, { ...item, evidence: null, expectedVersion: a1.version });
+    }
+    a1 = await this.assessments.finalize(expert, a1.id, { expectedVersion: a1.version });
+    await this.assessments.recordAuthorization(expert, a1.id, {
+      expectedVersion: a1.version,
+      decision: 'approved',
+      source: 'golden_card',
+      method: 'official_system',
+      reference: 'GC-AUTH-TEST-1001',
+      at: ago(2 * DAY + 4 * HOUR),
+      rejectedItemIds: [],
+    });
     await this.tasks.act(supervisor, body1.id, { action: 'start', expectedVersion: 1, at: ago(2 * DAY) });
+    let s1 = await this.assessments.create(expert, c1.id, {
+      kind: 'supplement',
+      assessorName: 'کارشناس امداد نمونه',
+      assessorOrg: 'امداد خودرو (نمونه)',
+      reason: 'پس از باز کردن سپر، ترک در سینی جلو و شکستگی براکت چراغ دیده شد.',
+      discoveredAt: ago(5 * HOUR),
+    });
+    s1 = await this.assessments.addItem(expert, s1.id, {
+      action: 'replace',
+      description: 'سینی جلو',
+      partNumber: 'TEST-PN-1003',
+      quantity: 1,
+      unitPriceRial: 27_000_000,
+      labourDepartmentId: dept('body'),
+      labourRial: 9_000_000,
+      evidence: 'عکس نمونه ۳ و ۴',
+      expectedVersion: s1.version,
+    });
+    await this.assessments.finalize(expert, s1.id, { expectedVersion: s1.version });
 
     // 2. Body insurance, waiting for a part: blocker recorded a day after it occurred.
     const c2 = await this.cases.create(expert, {

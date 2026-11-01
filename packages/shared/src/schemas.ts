@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import {
+  ASSESSMENT_ITEM_ACTIONS,
+  ASSESSMENT_KINDS,
+  AUTHORIZATION_DECISIONS,
+  AUTHORIZATION_METHODS,
+  AUTHORIZATION_SOURCES,
   BLOCKER_REASONS,
   CASE_STAGES,
   CASE_STATUSES,
@@ -170,3 +175,95 @@ export const resolveBlockerSchema = z.object({
   at: optionalIsoDate,
 });
 export type ResolveBlockerInput = z.infer<typeof resolveBlockerSchema>;
+
+// Amounts are whole Rials (no decimals), safely below Number.MAX_SAFE_INTEGER.
+const rial = z.number().int().min(0).max(1_000_000_000_000);
+
+export const createAssessmentSchema = z
+  .object({
+    kind: z.enum(ASSESSMENT_KINDS),
+    // External assessor (insurer / golden card expert) or the dealership expert.
+    assessorName: z.string().trim().min(1).max(120),
+    assessorOrg: optionalText(120),
+    assessedAt: optionalIsoDate,
+    // Supplement only: what was found and when it was discovered.
+    reason: optionalText(2000),
+    discoveredAt: optionalIsoDate,
+    notes: optionalText(2000),
+  })
+  .refine((v) => v.kind !== 'supplement' || !!v.reason, {
+    message: 'برای الحاقیه شرح آسیب پنهان الزامی است',
+    path: ['reason'],
+  });
+export type CreateAssessmentInput = z.infer<typeof createAssessmentSchema>;
+
+const assessmentItemFields = {
+  action: z.enum(ASSESSMENT_ITEM_ACTIONS),
+  description: z.string().trim().min(1).max(300),
+  partNumber: optionalText(64),
+  quantity: z.number().int().min(1).max(999).default(1),
+  unitPriceRial: rial.default(0),
+  labourDepartmentId: uuid.nullish(),
+  labourRial: rial.default(0),
+  // References to photos or documents until file upload exists (issue #13).
+  evidence: optionalText(1000),
+};
+
+export const assessmentItemSchema = z.object({
+  ...assessmentItemFields,
+  expectedVersion: z.number().int().min(1),
+});
+export type AssessmentItemInput = z.infer<typeof assessmentItemSchema>;
+
+export const updateAssessmentItemSchema = z.object({
+  action: assessmentItemFields.action.optional(),
+  description: assessmentItemFields.description.optional(),
+  partNumber: assessmentItemFields.partNumber,
+  quantity: z.number().int().min(1).max(999).optional(),
+  unitPriceRial: rial.optional(),
+  labourDepartmentId: assessmentItemFields.labourDepartmentId,
+  labourRial: rial.optional(),
+  evidence: assessmentItemFields.evidence,
+  expectedVersion: z.number().int().min(1),
+});
+export type UpdateAssessmentItemInput = z.infer<typeof updateAssessmentItemSchema>;
+
+export const removeAssessmentItemSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+});
+export type RemoveAssessmentItemInput = z.infer<typeof removeAssessmentItemSchema>;
+
+export const finalizeAssessmentSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  // A supplement usually moves the internal forecast; the official deadline
+  // is changed only through the case form with a reason.
+  forecastDeliveryAt: optionalIsoDate,
+  note: optionalText(1000),
+});
+export type FinalizeAssessmentInput = z.infer<typeof finalizeAssessmentSchema>;
+
+export const recordAuthorizationSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    decision: z.enum(AUTHORIZATION_DECISIONS),
+    source: z.enum(AUTHORIZATION_SOURCES),
+    method: z.enum(AUTHORIZATION_METHODS),
+    // Reference number in the official system (golden card / insurer).
+    reference: optionalText(64),
+    at: optionalIsoDate,
+    rejectedItemIds: z.array(uuid).max(200).default([]),
+    note: optionalText(1000),
+  })
+  .refine((v) => v.source === 'customer' || !!v.reference, {
+    message: 'تأیید کارت طلایی یا بیمه فقط با شماره ثبت در سامانه رسمی معتبر است',
+    path: ['reference'],
+  })
+  .refine((v) => v.decision !== 'partially_approved' || v.rejectedItemIds.length > 0, {
+    message: 'برای تأیید جزئی، اقلام ردشده را مشخص کنید',
+    path: ['rejectedItemIds'],
+  })
+  .refine((v) => v.decision === 'approved' || !!v.note, {
+    message: 'برای رد یا تأیید جزئی ذکر توضیح الزامی است',
+    path: ['note'],
+  });
+export type RecordAuthorizationInput = z.infer<typeof recordAuthorizationSchema>;

@@ -1,16 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, ne } from 'drizzle-orm';
-import type { Blocker, BlockerFollowUpInput, CreateBlockerInput, ResolveBlockerInput } from '@manage/shared';
+import type { Blocker, BlockerFollowUpInput, BlockerReason, CreateBlockerInput, ResolveBlockerInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { blockers } from '../db/schema';
+import { assessments, blockers } from '../db/schema';
 import { TasksService } from '../tasks/tasks.service';
 
-type BlockerRow = typeof blockers.$inferSelect;
+export type BlockerRow = typeof blockers.$inferSelect;
 
 // A blocker records three moments: when the problem occurred, when it was
 // recorded in Manage, and each follow-up / the resolution. Comparing them
@@ -58,31 +58,49 @@ export class BlockersService {
           });
         }
       }
-      const [row] = await tx
-        .insert(blockers)
-        .values({
-          id,
-          tenantId,
-          caseId,
-          taskId: input.taskId ?? null,
-          reason: input.reason,
-          description: input.description ?? null,
-          occurredAt,
-          recordedBy: actor.user.id,
-          isTest: actor.user.isTestTenant,
-        })
-        .returning();
-      await this.audit.record(tx, actor, {
-        entityType: 'blocker',
-        entityId: id,
-        caseId,
-        action: 'blocker.created',
-        reason: input.description ?? null,
-        after: { reason: input.reason, taskId: input.taskId ?? null, occurredAt: occurredAt.toISOString() },
-        snapshot: { version: 1, row: row! },
+      await this.insert(tx, actor, caseId, {
+        id,
+        taskId: input.taskId ?? null,
+        reason: input.reason,
+        description: input.description ?? null,
+        occurredAt,
       });
     });
     return this.get(actor, caseId, id);
+  }
+
+  /** Inserts a blocker inside the caller's transaction (also used for authorization waits). */
+  async insert(
+    tx: DbOrTx,
+    actor: Actor,
+    caseId: string,
+    b: { id?: string; taskId: string | null; reason: BlockerReason; description: string | null; occurredAt: Date },
+  ): Promise<BlockerRow> {
+    const id = b.id ?? newId();
+    const [row] = await tx
+      .insert(blockers)
+      .values({
+        id,
+        tenantId: actor.user.tenantId,
+        caseId,
+        taskId: b.taskId,
+        reason: b.reason,
+        description: b.description,
+        occurredAt: b.occurredAt,
+        recordedBy: actor.user.id,
+        isTest: actor.user.isTestTenant,
+      })
+      .returning();
+    await this.audit.record(tx, actor, {
+      entityType: 'blocker',
+      entityId: id,
+      caseId,
+      action: 'blocker.created',
+      reason: b.description,
+      after: { reason: b.reason, taskId: b.taskId, occurredAt: b.occurredAt.toISOString() },
+      snapshot: { version: 1, row: row! },
+    });
+    return row!;
   }
 
   async followUp(actor: Actor, id: string, input: BlockerFollowUpInput): Promise<Blocker> {
@@ -112,24 +130,17 @@ export class BlockersService {
     assertNotFuture(at, 'زمان رفع مانع نمی‌تواند در آینده باشد');
     const blocker = await this.db.transaction(async (tx) => {
       const b = await this.loadOpen(tx, tenantId, id);
+      const [managed] = await tx
+        .select({ id: assessments.id })
+        .from(assessments)
+        .where(and(eq(assessments.blockerId, id), eq(assessments.authorizationStatus, 'pending')));
+      if (managed) {
+        throw badRequest('BLOCKER_MANAGED', 'این مانع با ثبت تصمیم مجوز در بخش کارشناسی رفع می‌شود');
+      }
       if (at.getTime() < b.occurredAt.getTime() - MINUTE_TOLERANCE_MS) {
         throw badRequest('INVALID_TIME', 'زمان رفع نمی‌تواند قبل از بروز مانع باشد');
       }
-      const resolvedAt = at < b.occurredAt ? b.occurredAt : at;
-      const updated = await this.save(tx, b, {
-        resolvedAt,
-        resolvedBy: actor.user.id,
-        resolutionNote: input.note,
-      });
-      await this.audit.record(tx, actor, {
-        entityType: 'blocker',
-        entityId: id,
-        caseId: b.caseId,
-        action: 'blocker.resolved',
-        reason: input.note,
-        occurredAt: resolvedAt,
-        snapshot: { version: updated.version, row: updated },
-      });
+      const updated = await this.close(tx, actor, b, at, input.note);
 
       // Unblock the task once its last open blocker is resolved.
       if (b.taskId) {
@@ -156,6 +167,26 @@ export class BlockersService {
       return updated;
     });
     return this.get(actor, blocker.caseId, id);
+  }
+
+  /** Marks an open blocker resolved inside the caller's transaction. */
+  async close(tx: DbOrTx, actor: Actor, b: BlockerRow, at: Date, note: string): Promise<BlockerRow> {
+    const resolvedAt = at < b.occurredAt ? b.occurredAt : at;
+    const updated = await this.save(tx, b, {
+      resolvedAt,
+      resolvedBy: actor.user.id,
+      resolutionNote: note,
+    });
+    await this.audit.record(tx, actor, {
+      entityType: 'blocker',
+      entityId: b.id,
+      caseId: b.caseId,
+      action: 'blocker.resolved',
+      reason: note,
+      occurredAt: resolvedAt,
+      snapshot: { version: updated.version, row: updated },
+    });
+    return updated;
   }
 
   private async get(actor: Actor, caseId: string, id: string): Promise<Blocker> {

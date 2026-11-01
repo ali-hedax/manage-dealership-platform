@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AssessmentsController } from '../assessments/assessments.controller';
+import { AssessmentsService } from '../assessments/assessments.service';
 import { BlockersService } from '../blockers/blockers.service';
 import { CasesService } from '../cases/cases.service';
 import { DashboardService } from '../dashboard/dashboard.service';
@@ -10,10 +12,10 @@ import {
   TasksController,
 } from './accident.controllers';
 
-/** Phase-1 module: accident repair cases, repair activities, blockers, dashboard. */
+/** Phase-1 module: accident repair cases, assessments, repair activities, blockers, dashboard. */
 @Module({
-  controllers: [CasesController, TasksController, BlockersController, DashboardController],
-  providers: [CasesService, TasksService, BlockersService, DashboardService],
-  exports: [CasesService, TasksService, BlockersService],
+  controllers: [CasesController, TasksController, BlockersController, DashboardController, AssessmentsController],
+  providers: [CasesService, TasksService, BlockersService, DashboardService, AssessmentsService],
+  exports: [CasesService, TasksService, BlockersService, AssessmentsService],
 })
 export class AccidentModule {}

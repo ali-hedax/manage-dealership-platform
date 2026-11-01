@@ -273,7 +273,7 @@ export class CasesService {
     current: CaseRow,
     patch: Partial<CaseRow> & { stage: CaseStage },
     reason: string | null,
-  ): Promise<void> {
+  ): Promise<CaseRow> {
     const [updated] = await tx
       .update(cases)
       .set({ ...patch, updatedAt: new Date(), updatedBy: actor.user.id, version: current.version + 1 })
@@ -290,6 +290,35 @@ export class CasesService {
       after: { stage: updated.stage },
       snapshot: { version: updated.version, row: updated },
     });
+    return updated;
+  }
+
+  /** Used by AssessmentsService: a supplement moves the internal forecast (never the official deadline). */
+  async applyForecast(
+    tx: DbOrTx,
+    actor: Actor,
+    current: CaseRow,
+    forecastDeliveryAt: Date,
+    reason: string,
+  ): Promise<CaseRow> {
+    if (iso(forecastDeliveryAt) === iso(current.forecastDeliveryAt)) return current;
+    const [updated] = await tx
+      .update(cases)
+      .set({ forecastDeliveryAt, updatedAt: new Date(), updatedBy: actor.user.id, version: current.version + 1 })
+      .where(and(eq(cases.id, current.id), eq(cases.version, current.version)))
+      .returning();
+    if (!updated) throw versionConflict();
+    await this.audit.record(tx, actor, {
+      entityType: 'case',
+      entityId: current.id,
+      caseId: current.id,
+      action: 'case.updated',
+      reason,
+      before: { forecastDeliveryAt: iso(current.forecastDeliveryAt) },
+      after: { forecastDeliveryAt: iso(updated.forecastDeliveryAt) },
+      snapshot: { version: updated.version, row: updated },
+    });
+    return updated;
   }
 
   // ----------------------------------------------------------------- queries

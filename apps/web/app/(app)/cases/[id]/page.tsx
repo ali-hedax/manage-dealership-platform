@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   CASE_STAGES,
   MISSING_FIELD_LABELS,
@@ -11,6 +11,7 @@ import {
   type CaseDetail,
   type CaseStage,
 } from '@manage/shared';
+import { AssessmentPanel } from '@/components/AssessmentPanel';
 import { BlockersPanel } from '@/components/BlockersPanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
 import { Plate } from '@/components/Plate';
@@ -30,6 +31,7 @@ export default function CaseDetailPage() {
   const { can } = useAuth();
   const toast = useToast();
   const { data: kase, error, mutate } = useSWR<CaseDetail>(`/cases/${id}`, fetcher);
+  const { mutate: mutateKey } = useSWRConfig();
   const [stageBusy, setStageBusy] = useState(false);
 
   if (error) {
@@ -45,7 +47,11 @@ export default function CaseDetailPage() {
   const active = kase.status === 'open' && kase.stage !== 'delivered';
   const commitment = kase.officialDeadlineAt ?? kase.forecastDeliveryAt;
   const tone = deadlineTone(commitment, active);
-  const refresh = () => void mutate();
+  const refresh = () => {
+    void mutate();
+    // Assessment changes do not touch the case version the timeline key uses.
+    void mutateKey((key) => typeof key === 'string' && key.startsWith(`/cases/${id}/timeline`));
+  };
 
   async function changeStage(stage: CaseStage) {
     if (!kase || stage === kase.stage) return;
@@ -152,6 +158,7 @@ export default function CaseDetailPage() {
 
       <div className="grid-3" style={{ alignItems: 'start' }}>
         <div className="stack span-2">
+          <AssessmentPanel kase={kase} onChange={refresh} />
           <TasksPanel kase={kase} onChange={refresh} />
           <BlockersPanel kase={kase} onChange={refresh} />
         </div>
