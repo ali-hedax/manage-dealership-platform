@@ -19,6 +19,21 @@ pnpm preview --lan      # also reachable from phones on the same network
 - `--lan` listens on all interfaces; Windows may ask to allow Node.js through the firewall. That is the owner's decision; by default the Preview listens on localhost only.
 - Nothing is published to the internet. A public link needs either an isolated host (#5) or an approved tunnel service — both are owner decisions.
 
+## Preview on an isolated ArvanCloud VM (prepared, awaiting owner approval)
+
+Plan, resources, cost estimate and approval points: [PREVIEW_ARVAN_FA.md](PREVIEW_ARVAN_FA.md). Files: `deploy/preview/`.
+
+```bash
+# on the new VM, as root (once)
+PREVIEW_HOST=<host> bash setup-server.sh        # firewall, key-only SSH, Docker + Arvan mirror, secrets
+# then, as the manage user (every update)
+bash /opt/manage/deploy/preview/deploy.sh <git-ref>
+```
+
+- Caddy is the only published service (80/443): automatic HTTPS, a site-wide password gate (bcrypt hash generated on the server, never committed), `X-Robots-Tag: noindex`, real client address passed on (`TRUST_PROXY_HEADERS=true`).
+- API and PostgreSQL are internal; the API runs migrations and seeds the synthetic dealership on an empty database.
+- CI runs the same overlay on every PR (HTTPS via Caddy's internal CA for `localhost`, 401 without the gate password, login, Secure cookie, web port not published) and shellchecks the scripts.
+
 ## Isolation from Source by HEDAX
 
 Manage must not share the Source by HEDAX server's processes, database, credentials, deploy keys or domain configuration. If an existing Arvan server must be reused for cost, first measure free CPU/RAM/disk, then run Manage as a separate Compose project (own network, own PostgreSQL volume, own reverse-proxy site, own secrets) and document the capacity check. Preferred: a separate small VM.

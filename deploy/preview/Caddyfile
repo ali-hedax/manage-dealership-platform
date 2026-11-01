@@ -1,0 +1,21 @@
+# Manage by HEDAX — Preview reverse proxy (synthetic data only).
+# Certificates: Let's Encrypt (ZeroSSL as fallback), obtained automatically for
+# PREVIEW_HOST; "localhost" uses Caddy's internal CA (CI).
+
+{$PREVIEW_HOST} {
+	encode zstd gzip
+
+	# Site-wide password gate (user + bcrypt hash generated on the server).
+	import /etc/caddy/auth.caddy
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Strict-Transport-Security "max-age=31536000"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	# Caddy overwrites X-Forwarded-For with the real client address, so the
+	# web server may pass it on to the API (TRUST_PROXY_HEADERS=true).
+	reverse_proxy web:3000
+}
