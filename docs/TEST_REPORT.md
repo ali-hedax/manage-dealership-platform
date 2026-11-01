@@ -154,3 +154,5 @@ Two added Playwright tests exercise Persian personal-login and QR-enrollment UI 
 ## Live Preview after QC and delivery — 2026-11-01
 
 Deployed SHA `88e1f6d` (merge of PR #20 into the Preview branch). 49/49 live checks over HTTPS through the form gate (gate, 6 role logins, dashboard, the five demo cases, full case flow from creation through finance gate, parts, QC with corrective work, both closes and handover) and a real-browser check on desktop and phone passed. Details: [deployment record](PREVIEW_DEPLOYMENT_20261101.md).
+
+CI follow-up: secret scan identified only the public RFC 6238 Appendix B vector in the synthetic test, not an application credential. `.gitleaksignore` records that exact historical commit/path/rule/line fingerprint, preserving every other secret check. Deployment health checks now accept HTTP 200 for personal-login mode while retaining 401/302 for legacy mode. Current code integrates the already-deployed QC/hand-over changes; personal migration is **0005_personal_auth**, following 0004_qc_delivery. Final CI rerun pending.

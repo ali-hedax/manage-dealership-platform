@@ -33,11 +33,16 @@ host="$(grep '^PREVIEW_HOST=' .env | cut -d= -f2)"
 for _ in $(seq 1 60); do
   if "${COMPOSE[@]}" exec -T api node -e "fetch('http://localhost:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
     code="$(curl -s -o /dev/null -w '%{http_code}' "https://${host}/login" || true)"
-    if [ "$code" != 401 ] && [ "$code" != 302 ]; then
+    if grep -qx 'TOTP_AUTH_ENABLED=true' .env; then
+      expected_code=200
+    else
+      expected_code='401|302'
+    fi
+    if ! [[ "$code" =~ ^($expected_code)$ ]]; then
       echo "Preview gate check failed: unexpected HTTP ${code}" >&2
       exit 1
     fi
-    echo "API healthy; https://${host}/login answers ${code} (401 = legacy gate, 302 = form gate)"
+    echo "API healthy; https://${host}/login answers ${code} (200 = personal login, 401 = legacy gate, 302 = form gate)"
     "${COMPOSE[@]}" ps
     exit 0
   fi
