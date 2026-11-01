@@ -11,11 +11,11 @@ Last full run: **2026-11-01**, branch `feature/qc-delivery` (issue #12 on top of
 | Shared unit tests (Jalali, digits, plates, phones, RBAC, schemas) | `pnpm --filter @manage/shared test` | ✅ 9 / 9 |
 | API unit + integration (Jest + supertest, real HTTP, embedded PostgreSQL) | `pnpm --filter @manage/api test` | ✅ 56 / 56 (6 suites; new `qc-delivery` suite with 4 tests, delivery test in `accident` updated to the new gates) |
 | Production build (API + web) | `pnpm build` | ✅ pass |
-| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 8 / 8 locally on Edge in three consecutive runs (incl. QC/settlement/handover flow; 2 documentation-screenshot tests skipped by design); CI: see PR of `feature/qc-delivery` |
+| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 8 / 8 locally on Edge in three consecutive runs (incl. QC/settlement/handover flow; 2 documentation-screenshot tests skipped by design); ✅ on CI Chromium (PR #20, run 41294515754) |
 | Dependency audit (prod, high) + gitleaks secret scan | `pnpm audit`, CI `security` | ✅ no known vulnerabilities; no secrets found. Dependency review is non-blocking until the repo's Dependency graph is enabled (#4) |
 | `pnpm dev` from an empty database | manual | ✅ API healthy, demo auto-seeded, web proxy 200 |
 | Local Preview `pnpm preview` | manual smoke | ✅ production build on :3100, login via web proxy 200, dashboard counts (5 active, 2 blocked, 1 awaiting authorization, 1 overdue part, 1 part to order, 1 pending finance), sample .xlsx served; restart without `--reset` keeps data and accounts |
-| Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (run 41276167117; with migration `0002_assessments` and the new demo seed: run 41279034901; with `0003_parts_finance`: run 41284274194) |
+| Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (run 41276167117; with migration `0002_assessments` and the new demo seed: run 41279034901; with `0003_parts_finance`: run 41284274194; with `0004_qc_delivery`: run 41294515754) |
 | Docker images + compose smoke test (health via web proxy, login, dashboard) | CI job `docker` | ✅ pass (run 41276167117). Not verifiable on the dev machine: 8 GB RAM, 5.6 GB free disk, Docker daemon crashed twice during builds |
 
 ## Acceptance scenarios (brief §11)
@@ -73,7 +73,7 @@ API tests (`apps/api/test/qc-delivery.e2e-spec.ts`): acceptance 9 end-to-end on 
 
 E2E (`apps/web/e2e/qc-delivery.spec.ts`, demo case 5): QC inspector sees two rounds and the corrective activity, no handover button; cashier sees the balance blocking the close, records the settlement (balance prefilled), closes financially; expert hands over (submit disabled until the recipient's confirmation) → "تحویل‌شده", archived, no edit link. Screenshots of the panel and the QC form (desktop and phone) reviewed: `docs/screenshots/*-completion-demo.png`, `*-qc-form.png`.
 
-Not covered yet: migration `0004_qc_delivery` on PostgreSQL 16 and the Docker smoke test run in CI only (dev machine limits); no printable delivery form or invoice (issue #13 / finance module).
+CI (PR #20, run 41294515754): all 5 jobs green, incl. migration `0004_qc_delivery` + demo seed on PostgreSQL 16 and the Docker smoke test. Not covered yet: no printable delivery form or invoice (issue #13 / finance module).
 
 ## Defects found by tests and fixed
 
