@@ -1,0 +1,73 @@
+// HEDAX tasks. Run them from Terminal > Run Task. None of them runs on folder
+// open. Commands go through cmd.exe so npm.cmd and start-hedax.cmd behave the
+// same regardless of the user's default terminal; the project path contains a
+// space, so every command runs from ${workspaceFolder} with relative paths.
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}",
+    "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] }
+  },
+  "tasks": [
+    {
+      "label": "HEDAX: Install dependencies",
+      "detail": "npm install (uses package-lock.json; Playwright is pinned).",
+      "type": "shell",
+      "command": "npm install",
+      "problemMatcher": []
+    },
+    {
+      "label": "HEDAX: Start (normal launcher)",
+      "detail": "start-hedax.cmd: reuses a current companion, replaces an outdated one after verifying it, starts one in the background, then opens http://localhost:5173/.",
+      "type": "shell",
+      "command": "start-hedax.cmd",
+      "problemMatcher": []
+    },
+    {
+      "label": "HEDAX: Run companion in this terminal (npm start)",
+      "detail": "node companion/server.cjs in the foreground on 5173 (HEDAX_PORT). Fails with 'Port is already in use' if a companion is already running.",
+      "type": "shell",
+      "command": "npm start",
+      "problemMatcher": []
+    },
+    {
+      "label": "HEDAX: Stop running companion (verified)",
+      "detail": "Stops the companion on 5173 only if the listener is this project's node companion/server.cjs (companion/restart.ps1); otherwise refuses and stops nothing.",
+      "type": "process",
+      "command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "args": ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\companion\\restart.ps1"],
+      "options": {
+        "env": { "HEDAX_RESTART_ROOT": "${workspaceFolder}", "HEDAX_RESTART_PORT": "5173" }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "HEDAX: Check port 5173 is free",
+      "detail": "Used before debugging on 5173. Fails if any program, including a HEDAX companion, is listening there.",
+      "type": "process",
+      "command": "node",
+      "args": [
+        "-e",
+        "require('./companion/start.cjs').probe(5173).then(s=>{if(s==='offline'){console.log('Port 5173 is free.');}else{console.error('Port 5173 is in use ('+s+'). Run the task \"HEDAX: Stop running companion (verified)\" or debug on the alternate port.');process.exitCode=1;}})"
+      ],
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "revealProblems": "never", "close": false }
+    },
+    {
+      "label": "HEDAX: Test (npm test)",
+      "detail": "All Node tests with synthetic data. No Chrome, no B2B.",
+      "type": "shell",
+      "command": "npm test",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "HEDAX: Browser tests (synthetic, needs Chrome)",
+      "detail": "npm run test:browser: headless Chrome with a throwaway profile; no B2B connection.",
+      "type": "shell",
+      "command": "npm run test:browser",
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

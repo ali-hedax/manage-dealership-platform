@@ -1,0 +1,15 @@
+# The repository stores text with LF. Checkout follows each user's Git setting,
+# except Windows scripts, which cmd.exe and PowerShell expect with CRLF.
+* text=auto
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Never diffed or converted (real reports are also ignored; see .gitignore).
+*.xls binary
+*.xlsx binary
+*.xlsm binary
+*.xlsb binary
+*.png binary
+*.jpg binary
+*.ico binary

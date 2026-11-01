@@ -1,0 +1,16 @@
+{
+  // Sources and Persian text are UTF-8 without BOM.
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": false,
+  // The code has its own compact style; a formatter would rewrite
+  // "index (4).html" (~4300 lines) on the first save.
+  "editor.formatOnSave": false,
+  // .local holds the Chrome profile, report archive and logs: private and noisy.
+  "files.watcherExclude": {
+    "**/.local/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/.local": true
+  }
+}

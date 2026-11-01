@@ -1,0 +1,15 @@
+# Matches the existing files: UTF-8 without BOM, 2-space indentation.
+# Line endings are left to Git (.gitattributes) except for Windows scripts.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 2
+
+[*.{cmd,bat}]
+end_of_line = crlf
+
+[*.ps1]
+end_of_line = crlf
+indent_size = 4
