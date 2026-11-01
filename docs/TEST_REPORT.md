@@ -66,6 +66,27 @@ API tests (`apps/api/test/parts-finance.e2e-spec.ts`): acceptance 2, 3, 4, 8 (ab
 
 E2E (`apps/web/e2e/parts-finance.spec.ts`): manager approves the advance, cashier confirms receipt, parts clerk orders (approved price prefilled), receives, hands over to a unit, imports the sample .xlsx (preview → 4 rows), manager sees the steps in the history.
 
+## Pre-merge review of PRs #16, #17, #18 (2026-11-01)
+
+| Check | Result |
+| --- | --- |
+| Merge conflicts | None: #16 → main (main has no commits missing from #16), #17 → #16, #18 → #17 |
+| Authorization | Every domain endpoint carries `@RequirePermissions`; only login, logout, me and health are outside it (by design). Separation of duties enforced in services |
+| Tenant isolation | New queries (assessments, parts, finance) filter by the actor's tenant or by ids already loaded under it |
+| Secrets | No credential or key files tracked; no secret literals in code; gitleaks clean |
+| Dependencies | `pnpm audit --prod`: no known vulnerabilities (fflate 0.8.3) |
+| Session/passwords | httpOnly + SameSite=Lax cookie, Secure behind HTTPS; scrypt with per-user salt, constant-time compare |
+| CI | All 5 jobs green on #16, #17 and #18 after the fixes below |
+
+Found and fixed during the review:
+
+| PR | Finding | Fix |
+| --- | --- | --- |
+| #16 | Web proxy forwarded the client's `X-Forwarded-For` verbatim, so a client reaching Next.js directly could bypass the per-address login rate limit | Forwarded only with `TRUST_PROXY_HEADERS=true` (behind Caddy/Nginx, which overwrite it) |
+| #16 | Malformed or oversized JSON answered with a generic code and English text | Stable codes `INVALID_BODY` / `PAYLOAD_TOO_LARGE` with Persian messages (test added) |
+| #18 | JSON body limit was the 100 KB default while the import accepts ~1 MB files: real sheets above ~75 KB failed | Limit 2 MB; test with a 1500-row sheet (~270 KB) |
+| #18 | An .xlsx is a ZIP: a small upload could expand to gigabytes in memory | Only needed parts inflated; declared sizes capped (16 MB per entry, 32 MB total); decompression-bomb test |
+
 ## Defects found by tests and fixed
 
 | Found by | Defect | Fix |
