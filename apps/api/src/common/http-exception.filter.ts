@@ -2,6 +2,24 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@n
 import type { Request, Response } from 'express';
 import type { ApiError } from '@manage/shared';
 
+function isBodyParserError(e: unknown): e is { type: string; status: number } {
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    typeof (e as { type?: unknown }).type === 'string' &&
+    (e as { type: string }).type.startsWith('entity.') &&
+    typeof (e as { status?: unknown }).status === 'number'
+  );
+}
+
+// Errors raised by Nest or Express themselves, without a domain code.
+const GENERIC: Record<number, { code: string; message: string }> = {
+  400: { code: 'INVALID_BODY', message: 'اطلاعات ارسالی قابل خواندن نیست' },
+  404: { code: 'NOT_FOUND', message: 'مسیر درخواستی وجود ندارد' },
+  413: { code: 'PAYLOAD_TOO_LARGE', message: 'حجم اطلاعات ارسالی بیش از حد مجاز است' },
+  429: { code: 'RATE_LIMITED', message: 'تعداد درخواست‌ها بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.' },
+};
+
 // Every error leaves the API as { statusCode, code, message, details? }.
 // Unexpected errors are logged with the request id and never leak internals.
 @Catch()
@@ -20,17 +38,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof payload === 'object' && payload && 'code' in payload) {
         body = payload as ApiError;
       } else {
-        body = {
-          statusCode: status,
-          code: status === 429 ? 'RATE_LIMITED' : status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR',
-          message:
-            status === 429
-              ? 'تعداد درخواست‌ها بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.'
-              : status === 404
-                ? 'مسیر درخواستی وجود ندارد'
-                : exception.message,
-        };
+        body = { statusCode: status, ...(GENERIC[status] ?? { code: 'HTTP_ERROR', message: exception.message }) };
       }
+    } else if (isBodyParserError(exception)) {
+      // Raw error of the JSON body parser (thrown before any route runs).
+      const status = exception.type === 'entity.too.large' ? 413 : 400;
+      body = { statusCode: status, ...GENERIC[status]! };
     } else {
       this.logger.error({ err: exception, requestId: req.id }, 'Unhandled error');
       body = { statusCode: 500, code: 'INTERNAL_ERROR', message: 'خطای داخلی سرور' };
