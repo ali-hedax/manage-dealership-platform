@@ -72,6 +72,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   // Search by plate in loose form finds the case.
   await page.getByRole('link', { name: 'پرونده‌های تصادفی' }).click();
   await page.getByLabel('جست‌وجوی پرونده').fill('68ط421');
+  await page.waitForURL(/q=/);
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await expect(page.locator('tbody')).toContainText(caseNumber);
 });
@@ -100,6 +101,8 @@ test('parts clerk: read-only view with masked customer phone and no create actio
   await expect(page.getByRole('heading', { name: 'پرونده‌های تصادفی' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'ثبت پرونده' })).toHaveCount(0);
   await page.getByLabel('جست‌وجوی پرونده').fill('09000000001');
+  await page.waitForURL(/q=09000000001/);
+  await expect(page.locator('tbody tr')).toHaveCount(1);
   await page.locator('tbody tr').first().click();
   await expect(page.locator('dl')).toContainText('***');
   await expect(page.getByRole('button', { name: 'افزودن فعالیت' })).toHaveCount(0);

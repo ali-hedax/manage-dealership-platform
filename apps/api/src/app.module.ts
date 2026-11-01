@@ -35,14 +35,15 @@ class Lifecycle implements OnApplicationBootstrap, OnApplicationShutdown {
     private readonly seeder: DemoSeedService,
   ) {}
 
-  // Local development with an empty database gets the synthetic demo
-  // dealership automatically, so `pnpm dev` is immediately usable.
+  // Development and Preview hold synthetic data only: an empty database gets
+  // the demo dealership automatically, so the stack is immediately usable.
   async onApplicationBootstrap() {
-    if (this.cfg.APP_ENV === 'development' && !(await this.seeder.isSeeded())) {
+    const synthetic = this.cfg.APP_ENV === 'development' || this.cfg.APP_ENV === 'preview';
+    if (synthetic && !(await this.seeder.isSeeded())) {
       const password = await this.seeder.seed();
       // A password given via SEED_DEMO_PASSWORD is already known; only generated ones are written.
       if (!this.cfg.SEED_DEMO_PASSWORD) this.seeder.writeCredentials(password);
-      this.logger.log('Empty development database: synthetic demo dealership created');
+      this.logger.log(`Empty ${this.cfg.APP_ENV} database: synthetic demo dealership created`);
     }
   }
 

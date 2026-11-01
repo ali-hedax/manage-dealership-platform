@@ -7,7 +7,7 @@ import { defineConfig, devices } from '@playwright/test';
 export const E2E_PASSWORD = 'e2e-only-password';
 const API_PORT = 4400;
 const WEB_PORT = 3400;
-const channel = process.env.PW_CHANNEL ?? (process.platform === 'win32' ? 'msedge' : undefined);
+const channel = process.env.PW_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined);
 
 export default defineConfig({
   testDir: './e2e',

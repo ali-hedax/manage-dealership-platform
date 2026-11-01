@@ -1,0 +1,157 @@
+name: CI
+
+# Checks only. There is deliberately no deploy job: production deployment
+# requires a manual, approved step (docs/DEPLOYMENT.md).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, build, unit + integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:shared
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build
+          retention-days: 3
+          path: |
+            apps/api/dist
+            apps/web/.next
+            packages/shared/dist
+          include-hidden-files: true
+
+  postgres:
+    name: Migrations and demo seed on PostgreSQL 16
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: manage
+          POSTGRES_USER: manage
+          POSTGRES_PASSWORD: ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U manage" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      APP_ENV: test
+      DB_DRIVER: postgres
+      DATABASE_URL: postgres://manage:ci-only@localhost:5432/manage
+      SEED_DEMO_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:shared && pnpm --filter @manage/api build
+      - run: pnpm db:migrate
+      - run: pnpm db:seed-demo
+      - name: Audit trail is append-only on real PostgreSQL
+        run: |
+          if PGPASSWORD=ci-only psql -h localhost -U manage -d manage -c "delete from audit_events" 2>&1 | grep -q "append-only"; then
+            echo "trigger active"
+          else
+            echo "audit_events delete was not rejected" && exit 1
+          fi
+      - run: pnpm db:reset-demo
+
+  e2e:
+    name: End-to-end (Playwright, Chromium)
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 20
+    env:
+      PW_CHANNEL: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @manage/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  docker:
+    name: Docker images build and compose smoke test
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the stack (synthetic preview data)
+        run: |
+          printf 'APP_ENV=preview\nPOSTGRES_PASSWORD=ci-only-db\nSEED_DEMO_PASSWORD=ci-only-demo\nWEB_PORT=3000\n' > .env
+          docker compose up -d --build --wait --wait-timeout 180
+      - name: Health through the web proxy and login
+        run: |
+          curl -fsS http://localhost:3000/api/v1/health | tee /dev/stderr | grep -q '"db":"ok"'
+          curl -fsS -c jar -H 'content-type: application/json' -H 'x-manage-client: ci' \
+            -d '{"username":"manager","password":"ci-only-demo"}' http://localhost:3000/api/v1/auth/login > /dev/null
+          curl -fsS -b jar http://localhost:3000/api/v1/dashboard | grep -q '"activeCases":5'
+      - if: always()
+        run: docker compose logs --no-color api web | tail -100
+      - if: always()
+        run: docker compose down -v
+
+  security:
+    name: Dependency audit and secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Known vulnerabilities in production dependencies
+        run: pnpm audit --prod --audit-level high
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

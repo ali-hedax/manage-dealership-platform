@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   formatJalaliDateInput,
   formatTimeInput,
@@ -29,8 +29,13 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
   const [dateText, setDateText] = useState('');
   const [timeText, setTimeText] = useState('');
   const [invalid, setInvalid] = useState(false);
+  // Value this component emitted itself; re-syncing the text on our own commit
+  // would overwrite a time the user is still typing.
+  const emitted = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
+    if (value === emitted.current) return;
+    emitted.current = undefined;
     if (!value) {
       setDateText('');
       setTimeText('');
@@ -44,6 +49,7 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
   function commit(nextDate: string, nextTime: string) {
     if (!nextDate.trim()) {
       setInvalid(!!required);
+      emitted.current = null;
       onChange(null);
       return;
     }
@@ -57,7 +63,10 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
         : formatJalaliDateInput(current) === formatJalaliDateInput(parsed);
       if (same) return;
     }
-    if (parsed) onChange(parsed.toISOString());
+    if (parsed) {
+      emitted.current = parsed.toISOString();
+      onChange(emitted.current);
+    }
   }
 
   return (

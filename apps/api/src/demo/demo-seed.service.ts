@@ -91,7 +91,6 @@ export class DemoSeedService {
   }
 
   writeCredentials(password: string): void {
-    mkdirSync(dirname(CREDENTIALS_FILE), { recursive: true });
     const lines = [
       'Manage by HEDAX — demo accounts (synthetic data only). Do not share or commit.',
       `tenant code: ${DEMO_TENANT_CODE}`,
@@ -100,8 +99,16 @@ export class DemoSeedService {
       ...DEMO_USERS.map((u) => `${u.username.padEnd(12)} ${u.roles.map((r) => ROLE_LABELS[r]).join('، ')}`),
       '',
     ];
-    writeFileSync(CREDENTIALS_FILE, lines.join('\n'), { encoding: 'utf8', mode: 0o600 });
-    this.logger.log(`Demo credentials written to ${CREDENTIALS_FILE}`);
+    try {
+      mkdirSync(dirname(CREDENTIALS_FILE), { recursive: true });
+      writeFileSync(CREDENTIALS_FILE, lines.join('\n'), { encoding: 'utf8', mode: 0o600 });
+      this.logger.log(`Demo credentials written to ${CREDENTIALS_FILE}`);
+    } catch (err) {
+      // e.g. a read-only container filesystem. The password itself is never logged.
+      this.logger.warn(
+        `Could not write ${CREDENTIALS_FILE} (${(err as Error).message}); set SEED_DEMO_PASSWORD and run db:reset-demo`,
+      );
+    }
   }
 
   private async actorFor(tenantId: string, username: string): Promise<Actor> {
