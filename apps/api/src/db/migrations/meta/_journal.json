@@ -43,6 +43,13 @@
       "when": 1793527798746,
       "tag": "0005_personal_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793544830101,
+      "tag": "0006_staff_invitation_email",
+      "breakpoints": true
     }
   ]
 }

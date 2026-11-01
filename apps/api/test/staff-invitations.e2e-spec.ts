@@ -1,0 +1,74 @@
+import request from 'supertest';
+import {eq} from 'drizzle-orm';
+import {createHarness,type Harness} from './harness';
+import {auditEvents,authChallenges,users} from '../src/db/schema';
+import {InvitationMailService} from '../src/auth/invitation-mail.service';
+import {APP_CONFIG,type AppConfig} from '../src/config';
+import {authenticator} from '../src/auth/totp';
+
+const mailConfig={SMTP_HOST:'smtp.example.test',SMTP_USER:'sender@example.test',SMTP_PASSWORD:'synthetic-smtp-password',SMTP_FROM:'sender@example.test',AUTH_TOKEN_SECRET:'synthetic-test-authenticator-key-32-characters',PUBLIC_APP_URL:'https://manage.example.test'};
+const employee={email:'employee@example.test',displayName:'همکار آزمون',roles:['parts_clerk']};
+describe('Staff invitation email',()=>{
+  let h:Harness;
+  beforeEach(async()=>{h=await createHarness({config:mailConfig});});
+  afterEach(async()=>{jest.restoreAllMocks();await h.close();});
+  it('requires account-management permission on email, readiness and list routes',async()=>{
+    const manager=await h.login('manager');const mail=jest.spyOn(h.app.get(InvitationMailService),'send').mockResolvedValue();
+    expect((await manager.post('/auth/invitations/email',employee)).status).toBe(403);
+    expect((await manager.get('/auth/invitations/email/status')).status).toBe(403);
+    expect((await manager.get('/auth/invitations')).status).toBe(403);
+    expect(mail).not.toHaveBeenCalled();
+  });
+  it('rejects an unconfigured sender before creating any pending account',async()=>{
+    h.app.get<AppConfig>(APP_CONFIG).SMTP_PASSWORD='';const admin=await h.login('admin');
+    expect((await admin.get('/auth/invitations/email/status')).body).toEqual({configured:false});
+    const r=await admin.post('/auth/invitations/email',employee);
+    expect(r.status).toBe(503);expect(r.body.code).toBe('INVITATION_MAIL_NOT_CONFIGURED');
+    expect(await h.db.db.select().from(users).where(eq(users.email,employee.email))).toHaveLength(0);
+  });
+  it('sends a private activation link, persists delivery, and never returns or audits its secret',async()=>{
+    const mail=jest.spyOn(h.app.get(InvitationMailService),'send').mockResolvedValue();const admin=await h.login('admin');
+    const r=await admin.post('/auth/invitations/email',employee).set('idempotency-key','mail-response');
+    expect(r.status).toBe(201);expect(r.body.emailDelivery).toBe('sent');expect(r.body.invitationUrl).toBeUndefined();
+    const sent=mail.mock.calls[0]![0];expect(sent.email).toBe(employee.email);
+    const token=new URLSearchParams(new URL(sent.invitationUrl).hash.slice(1)).get('token')!;
+    expect(sent.invitationUrl).toMatch(/^https:\/\/manage.example.test\/activate#token=/);
+    const list=await admin.get('/auth/invitations');expect(list.body[0]).toMatchObject({email:employee.email,invitationDelivery:'sent',isActive:false});
+    expect(list.body[0].invitationSentAt).toBeTruthy();
+    const [challenge]=await h.db.db.select().from(authChallenges).where(eq(authChallenges.id,token.split('.')[0]!));
+    expect(challenge.secretHash).not.toContain(token.split('.')[1]);
+    const audit=await h.db.db.select().from(auditEvents);expect(JSON.stringify(audit)).not.toContain(token);
+    expect(JSON.stringify(audit)).not.toContain(mailConfig.SMTP_PASSWORD);
+    expect(JSON.stringify(list.body)).not.toContain(token);
+    expect(r.headers['cache-control']).toBe('no-store');
+  });
+  it('records a failed send and permits explicit resend without duplicating the employee',async()=>{
+    const mail=jest.spyOn(h.app.get(InvitationMailService),'send').mockRejectedValueOnce(new Error('private SMTP diagnostic must not escape')).mockResolvedValue();
+    const admin=await h.login('admin');const failed=await admin.post('/auth/invitations/email',employee);
+    expect(failed.status).toBe(201);expect(failed.body.emailDelivery).toBe('failed');
+    expect(JSON.stringify(failed.body)).not.toContain('diagnostic');
+    expect((await admin.get('/auth/invitations')).body[0].invitationDelivery).toBe('failed');
+    const firstUrl=mail.mock.calls[0]![0].invitationUrl;
+    const retry=await admin.post('/auth/invitations/email',employee);expect(retry.body.emailDelivery).toBe('sent');expect(retry.body.id).toBe(failed.body.id);
+    const oldToken=new URLSearchParams(new URL(firstUrl).hash.slice(1)).get('token')!;
+    const r=await request(h.app.getHttpServer()).post('/api/v1/auth/invitations/accept').set('x-manage-client','test').send({token:oldToken,password:'synthetic-worker-password'});
+    expect(r.status).toBe(401);
+    expect(await h.db.db.select().from(users).where(eq(users.email,employee.email))).toHaveLength(1);
+  });
+  it('completes emailed invitation, own password and real TOTP enrollment/login',async()=>{
+    const mail=jest.spyOn(h.app.get(InvitationMailService),'send').mockResolvedValue();const admin=await h.login('admin');
+    await admin.post('/auth/invitations/email',employee);
+    const token=new URLSearchParams(new URL(mail.mock.calls[0]![0].invitationUrl).hash.slice(1)).get('token')!;
+    const post=(path:string,body:object)=>request(h.app.getHttpServer()).post('/api/v1/auth'+path).set('x-manage-client','test').send(body);
+    const password='synthetic-worker-password';const e=await post('/invitations/accept',{token,password});expect(e.status).toBe(201);
+    const firstCode=authenticator(e.body.secret).generate();
+    expect((await post('/invitations/confirm',{challengeId:e.body.challengeId,proof:e.body.proof,code:firstCode})).status).toBe(201);
+    const reject=await admin.post('/auth/invitations/email',employee);expect(reject.status).toBe(409);expect(mail).toHaveBeenCalledTimes(1);
+    h.app.get<AppConfig>(APP_CONFIG).TOTP_AUTH_ENABLED=true;
+    const challenge=await post('/email/login',{email:employee.email,password});expect(challenge.status).toBe(201);
+    const code=authenticator(e.body.secret).generate({timestamp:Date.now()+30000});
+    const session=await post('/email/verify',{...challenge.body,code});expect(session.status).toBe(201);
+    expect(session.body.roles).toEqual(['parts_clerk']);expect(session.body.authentication).toBe('totp');
+    expect(session.headers['set-cookie']).toBeTruthy();
+  });
+});

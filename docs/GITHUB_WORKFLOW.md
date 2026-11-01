@@ -2,7 +2,7 @@
 
 ## Current model
 
-Code is developed in independent branches and reviewed through draft PRs. main still contains the prototype because platform integration requires owner approval. For new platform work, branch from the latest reviewed platform head (currently feature/personal-auth-totp or the documentation descendant), record its base, and open a stacked PR. Branching from main today will not include the platform.
+Code is developed in independent branches and reviewed through PRs. The owner approved integration of #16 → #17 → #18 → #20 → #19 → #21 → #23, now merged into main at eaa7c66. Branch new platform work from current main. Legacy prototype branches remain separate.
 
 See [audit](GITHUB_AUDIT.md) for the exact stack and hashes. Never merge to main, force-push, delete branches or close old PRs without owner approval. Prefer preserving divergent work in a separate branch over replacing it.
 

@@ -19,6 +19,7 @@ import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { EmailAuthController } from './auth/email-auth.controller';
 import { EmailAuthService } from './auth/email-auth.service';
+import { InvitationMailService } from './auth/invitation-mail.service';
 import { SessionGuard } from './auth/session.guard';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { IdempotencyInterceptor } from './common/idempotency.interceptor';
@@ -75,8 +76,9 @@ export class CoreModule {
         AuditService,
         AuthService,
         EmailAuthService,
+        InvitationMailService,
       ],
-      exports: [APP_CONFIG, DATABASE, AuditService, AuthService, EmailAuthService],
+      exports: [APP_CONFIG, DATABASE, AuditService, AuthService, EmailAuthService, InvitationMailService],
     };
   }
 }

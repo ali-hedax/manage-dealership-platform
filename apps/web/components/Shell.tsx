@@ -17,7 +17,7 @@ export function Shell({ children }: { children: ReactNode }) {
     { href: '/', label: 'داشبورد', show: can('dashboard.read') },
     { href: '/cases', label: 'پرونده‌های تصادفی', show: can('case.read') },
     { href: '/cases/new', label: 'ثبت پرونده', show: can('case.create') },
-    { href: '/users', label: 'کاربران و دعوت‌نامه‌ها', show: can('user.manage') },
+    { href: '/users', label: 'کارکنان', show: can('user.manage') },
   ];
   const current = (href: string) =>
     href === '/' ? pathname === '/' : href === '/cases' ? pathname === '/cases' || /^\/cases\/(?!new)/.test(pathname) : pathname.startsWith(href);

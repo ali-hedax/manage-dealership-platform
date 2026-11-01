@@ -4,7 +4,7 @@
 
 [English](README.en.md) · [API](docs/API.md) · [گردش‌کار GitHub](docs/GITHUB_WORKFLOW.md) · [معماری](docs/ARCHITECTURE.md) · [راهنمای کاربر](docs/USER_GUIDE_FA.md) · [وضعیت پیشرفت](PROGRESS.md) · [نقشه راه](docs/ROADMAP.md)
 
-> **شاخه‌ها:** این راهنما مربوط به پلتفرم TypeScript در زنجیره PRهای #16 تا #21 و شاخه مستندات بعد از آن است. `main` تا تأیید ادغام مالک هنوز نمونه قدیمی را دارد. [ممیزی شاخه‌ها و CI](docs/GITHUB_AUDIT.md).
+> **شاخه اصلی:** PRهای پلتفرم #16 تا #21 و مستندات #23 با تأیید مالک در `main` ادغام شده‌اند. قابلیت دعوت ایمیلی کارکنان در شاخه مستقل و PR تازه بررسی می‌شود. [ممیزی شاخه‌ها و CI](docs/GITHUB_AUDIT.md).
 >
 > **وضعیت: Preview مستقل با ورود شخصی.** مالک تأیید کرده خودش وارد شده است. فقط با داده ساختگی اجرا شده است. هنوز روی سرور نمایندگی نصب نشده، به سامانه‌های رسمی (خودروساز، امداد، بیمه، انبار، حسابداری) وصل نیست و حالت آفلاین/همگام‌سازی هنوز فعال نشده است. جزئیات دقیق در [PROGRESS.md](PROGRESS.md).
 
@@ -34,7 +34,7 @@ Manage پرونده هر خودروی تصادفی را از پذیرش تا ت�
 
 ## ورود به Preview میزبانی‌شده
 
-دعوت خصوصی → انتخاب رمز شخصی → اتصال Google Authenticator → ورود با ایمیل، رمز و کد. رمز مشترک demo مربوط به اجرای محلی است و در حالت شخصی Preview معتبر نیست. [راهنمای ورود و محدودیت بازیابی](docs/PERSONAL_AUTH_FA.md). ایمیل فقط شناسه است؛ ارسال خودکار ایمیل وجود ندارد.
+دعوت خصوصی → انتخاب رمز شخصی → اتصال Google Authenticator → ورود با ایمیل، رمز و کد. رمز مشترک demo مربوط به اجرای محلی است و در حالت شخصی Preview معتبر نیست. [راهنمای ورود و محدودیت بازیابی](docs/PERSONAL_AUTH_FA.md). ورود با کد Authenticator است؛ ایمیل دعوت کارکنان از مسیر جدا ارسال می‌شود. [بخش کارکنان و وضعیت استقرار قابلیت](docs/STAFF_FA.md).
 
 ## اجرای محلی (بدون Docker و بدون نصب PostgreSQL)
 
@@ -43,7 +43,7 @@ Manage پرونده هر خودروی تصادفی را از پذیرش تا ت�
 ```bash
 git clone https://github.com/ali-hedax/manage-dealership-platform.git
 cd manage-dealership-platform
-git switch feature/personal-auth-totp  # main هنوز پلتفرم جدید را ندارد
+git switch main
 pnpm install --frozen-lockfile
 pnpm dev
 ```

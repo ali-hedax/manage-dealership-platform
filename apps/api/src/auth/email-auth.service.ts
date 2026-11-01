@@ -1,5 +1,5 @@
 import {Inject,Injectable} from '@nestjs/common';
-import {and,eq,isNotNull,isNull,sql} from 'drizzle-orm';
+import {and,desc,eq,isNotNull,isNull,sql} from 'drizzle-orm';
 import {createHmac,randomBytes,timingSafeEqual} from 'node:crypto';
 import QRCode from 'qrcode';
 import {permissionsFor,type Role} from '@manage/shared';
@@ -15,6 +15,7 @@ import type {Actor} from './auth.types';
 import type {EmailLoginInput,EmailVerifyInput,InvitationInput,PasswordSetInput} from './email.contracts';
 import {hashPassword,verifyPassword} from './password';
 import {authenticator,decryptTotp,encryptTotp,newTotpSeed,totpStep} from './totp';
+import {InvitationMailService} from './invitation-mail.service';
 
 type Meta={ip?:string;requestId?:string;userAgent?:string};
 const invalid=()=>new AppError(401,'INVALID_CREDENTIALS','ایمیل، رمز یا کد تأیید معتبر نیست');
@@ -23,7 +24,7 @@ const equal=(a:string,b:string)=>a.length===b.length&&timingSafeEqual(Buffer.fro
 export class EmailAuthService {
   private readonly dummy=hashPassword(randomBytes(32).toString('hex'));
   constructor(@Inject(DATABASE) private readonly handle:DatabaseHandle,@Inject(APP_CONFIG) private readonly cfg:AppConfig,
-    private readonly auth:AuthService,private readonly audit:AuditService){}
+    private readonly auth:AuthService,private readonly audit:AuditService,private readonly mail:InvitationMailService){}
   private get db(){return this.handle.db;}
   private key(){if(!this.cfg.AUTH_TOKEN_SECRET)throw new AppError(503,'AUTH_NOT_CONFIGURED','ورود شخصی هنوز فعال نشده است');return this.cfg.AUTH_TOKEN_SECRET;}
   private hash(purpose:string,id:string,value:string){return createHmac('sha256',this.key()).update(`${purpose}:${id}:${value}`).digest('hex');}
@@ -79,8 +80,13 @@ export class EmailAuthService {
     if(!result)throw invalid();return result;
   }
 
-  async invite(actor:Actor,input:InvitationInput){
+  mailStatus(actor:Actor){
     if(!actor.user.permissions.has('user.manage'))throw forbidden();
+    return {configured:this.mail.configured};
+  }
+  async invite(actor:Actor,input:InvitationInput,delivery:'manual'|'email'='manual'){
+    if(!actor.user.permissions.has('user.manage'))throw forbidden();
+    if(delivery==='email')this.mail.assertConfigured();
     const id=newId(),raw=randomBytes(32).toString('base64url'),passwordHash=await hashPassword(randomBytes(32).toString('hex'));
     const userId=await this.db.transaction(async tx=>{
       const [existing]=await tx.select().from(users).where(and(eq(users.email,input.email),eq(users.tenantId,actor.user.tenantId))).for('update');
@@ -89,14 +95,26 @@ export class EmailAuthService {
       if(existing)await tx.update(users).set({displayName:input.displayName,roles:input.roles,version:sql`${users.version}+1`,updatedAt:new Date()}).where(eq(users.id,uid));
       else await tx.insert(users).values({id:uid,tenantId:actor.user.tenantId,username:`email-${uid}`,email:input.email,displayName:input.displayName,passwordHash,roles:input.roles,isActive:false,isTest:actor.user.isTestTenant});
       await tx.update(authChallenges).set({consumedAt:new Date()}).where(and(eq(authChallenges.userId,uid),isNull(authChallenges.consumedAt)));
-      await tx.insert(authChallenges).values({id,userId:uid,tenantId:actor.user.tenantId,purpose:'invite',secretHash:this.hash('invite',id,raw),expiresAt:new Date(Date.now()+24*3600000)});
+      await tx.insert(authChallenges).values({id,userId:uid,tenantId:actor.user.tenantId,purpose:'invite',secretHash:this.hash('invite',id,raw),expiresAt:new Date(Date.now()+24*3600000),invitationDelivery:delivery==='email'?'sending':'manual'});
       await this.audit.record(tx,actor,{entityType:'user',entityId:uid,action:'user.invited',after:{roles:input.roles}});return uid;
     }).catch((error:unknown)=>{
       const e=error as {code?:string;cause?:{code?:string}};
       if(e.code==='23505'||e.cause?.code==='23505')throw new AppError(409,'INVITE_EXISTS','ساخت دعوت‌نامه برای این ایمیل ممکن نیست');
       throw error;
     });
-    return {id:userId,invitationUrl:`${this.cfg.PUBLIC_APP_URL.replace(/\/$/,'')}/activate#token=${id}.${raw}`,status:'invited'};
+    const invitationUrl=`${this.cfg.PUBLIC_APP_URL.replace(/\/$/,'')}/activate#token=${id}.${raw}`;
+    if(delivery==='manual')return {id:userId,invitationUrl,status:'invited'};
+    let emailDelivery:'sent'|'failed'='failed';
+    try{await this.mail.send({email:input.email,displayName:input.displayName,invitationUrl});emailDelivery='sent';}catch{
+      // Never log SMTP errors: they can include credentials, recipients or links.
+      // The persisted failure lets the owner explicitly resend without a retry loop.
+    }
+    await this.db.transaction(async tx=>{
+      await tx.update(authChallenges).set({invitationDelivery:emailDelivery,invitationSentAt:emailDelivery==='sent'?new Date():null})
+        .where(and(eq(authChallenges.id,id),eq(authChallenges.tenantId,actor.user.tenantId)));
+      await this.audit.record(tx,actor,{entityType:'user',entityId:userId,action:`user.invitation_email_${emailDelivery}`,after:{challengeId:id,delivery:emailDelivery}});
+    });
+    return {id:userId,status:'invited',emailDelivery};
   }
 
   async enroll(input:PasswordSetInput,meta:Meta){
@@ -132,8 +150,16 @@ export class EmailAuthService {
     });
     if(!ok)throw invalid();return {status:'ok'};
   }
-  async list(actor:Actor){return this.db.select({id:users.id,email:users.email,displayName:users.displayName,roles:users.roles,isActive:users.isActive})
-    .from(users).where(and(eq(users.tenantId,actor.user.tenantId),isNotNull(users.email)));}
+  async list(actor:Actor){
+    if(!actor.user.permissions.has('user.manage'))throw forbidden();
+    const people=await this.db.select({id:users.id,email:users.email,displayName:users.displayName,roles:users.roles,isActive:users.isActive})
+      .from(users).where(and(eq(users.tenantId,actor.user.tenantId),isNotNull(users.email)));
+    const invitations=await this.db.selectDistinctOn([authChallenges.userId],{userId:authChallenges.userId,delivery:authChallenges.invitationDelivery,sentAt:authChallenges.invitationSentAt,expiresAt:authChallenges.expiresAt})
+      .from(authChallenges).where(and(eq(authChallenges.tenantId,actor.user.tenantId),eq(authChallenges.purpose,'invite')))
+      .orderBy(authChallenges.userId,desc(authChallenges.createdAt),desc(authChallenges.id));
+    const latest=new Map(invitations.map(i=>[i.userId,i]));
+    return people.map(u=>({...u,invitationDelivery:latest.get(u.id)?.delivery??'manual',invitationSentAt:latest.get(u.id)?.sentAt??null,invitationExpiresAt:latest.get(u.id)?.expiresAt??null}));
+  }
   async bootstrapOwner(email:string){
     if(!['development','preview'].includes(this.cfg.APP_ENV))throw forbidden();
     const [existing]=await this.db.select().from(users).where(isNotNull(users.email)).limit(1);

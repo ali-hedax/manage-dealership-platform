@@ -23,6 +23,12 @@ const envSchema = z.object({
   TOTP_AUTH_ENABLED: z.string().default('false').transform((v) => v === 'true'),
   PUBLIC_APP_URL: z.url().default('http://localhost:3000'),
   AUTH_TOKEN_SECRET: z.preprocess((v)=>v===''?undefined:v,z.string().min(32).optional()),
+  SMTP_HOST: z.string().trim().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+  SMTP_SECURE: z.string().default('true').transform((v) => v === 'true'),
+  SMTP_USER: z.string().trim().default(''),
+  SMTP_PASSWORD: z.string().default(''),
+  SMTP_FROM: z.string().trim().refine((v) => !/[\r\n]/.test(v), 'Invalid mail sender').default(''),
   // Login attempts per minute per client address (default 10).
   LOGIN_RATE_LIMIT: z.preprocess((v) => (v === '' ? undefined : v), z.coerce.number().int().positive().optional()),
 });

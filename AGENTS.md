@@ -44,4 +44,4 @@ Update [PROGRESS.md](PROGRESS.md) with: last commit, test status, unfinished wor
 
 ## Current branch boundary
 
-Until the platform stack is integrated, main remains the legacy prototype. Use the latest reviewed platform branch for platform changes; consult docs/GITHUB_AUDIT.md and PROGRESS.md before choosing a base. Keep legacy prototype work in its own branch. Documentation links and API inventory: node scripts/check-docs.mjs (CI enforced). Read-only server inspection is not deployment approval; never run the existing deploy script against unpreserved changes.
+The platform stack (#16–#21 and #23) is integrated into main with owner approval. Branch new platform work from current main; consult docs/GITHUB_AUDIT.md and PROGRESS.md before choosing a base. Keep legacy prototype work in its own branch. Documentation links and API inventory: node scripts/check-docs.mjs (CI enforced). Read-only server inspection is not deployment approval; never run the existing deploy script against unpreserved changes.
