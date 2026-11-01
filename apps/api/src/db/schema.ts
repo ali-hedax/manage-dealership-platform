@@ -42,6 +42,10 @@ export const users = pgTable(
       .notNull()
       .references(() => tenants.id),
     username: text('username').notNull(),
+    email: text('email'),
+    activatedAt: ts('activated_at'),
+    encryptedTotpSecret: text('encrypted_totp_secret'),
+    totpLastStep: integer('totp_last_step').notNull().default(-1),
     displayName: text('display_name').notNull(),
     passwordHash: text('password_hash').notNull(),
     roles: text('roles').array().notNull(),
@@ -54,7 +58,7 @@ export const users = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
   },
-  (t) => [uniqueIndex('users_tenant_username_uq').on(t.tenantId, t.username)],
+  (t) => [uniqueIndex('users_tenant_username_uq').on(t.tenantId, t.username), uniqueIndex('users_email_uq').on(t.email)],
 );
 
 export const sessions = pgTable(
@@ -68,6 +72,7 @@ export const sessions = pgTable(
       .notNull()
       .references(() => tenants.id),
     tokenHash: text('token_hash').notNull().unique(),
+    verifiedWithTotp: boolean('verified_with_totp').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
     expiresAt: ts('expires_at').notNull(),
     lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
@@ -77,6 +82,22 @@ export const sessions = pgTable(
   },
   (t) => [index('sessions_user_idx').on(t.userId)],
 );
+
+// Codes and invitation/reset tokens are stored only as keyed hashes.
+export const authChallenges = pgTable('auth_challenges', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  purpose: text('purpose').notNull(),
+  secretHash: text('secret_hash').notNull(),
+  proofHash: text('proof_hash'),
+  passwordHash: text('password_hash'),
+  encryptedTotpSecret: text('encrypted_totp_secret'),
+  attempts: integer('attempts').notNull().default(0),
+  expiresAt: ts('expires_at').notNull(),
+  consumedAt: ts('consumed_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('auth_challenges_user_idx').on(t.userId, t.purpose)]);
 
 export const departments = pgTable(
   'departments',

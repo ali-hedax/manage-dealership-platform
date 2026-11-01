@@ -26,6 +26,7 @@ import type { Permission } from './permissions';
 
 export interface Me {
   id: string;
+  authentication?: 'password' | 'totp';
   username: string;
   displayName: string;
   roles: Role[];

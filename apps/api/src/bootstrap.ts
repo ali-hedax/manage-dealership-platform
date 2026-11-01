@@ -18,6 +18,10 @@ export function configureApp(app: INestApplication, cfg: AppConfig): void {
   express.useBodyParser('json', { limit: '2mb' });
   app.use(helmet());
   app.use(cookieParser());
+  app.use((req:Request,res:Response,next:NextFunction)=>{
+    if(req.path.startsWith('/api/v1/auth/'))res.setHeader('Cache-Control','no-store');
+    next();
+  });
 
   // CSRF defence: state-changing requests must carry a custom header, which a
   // cross-site form or image cannot set and which CORS blocks for other origins.

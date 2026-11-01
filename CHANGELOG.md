@@ -2,6 +2,12 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — personal Preview authentication (2026-11-01)
+
+- Email identifier and personal password followed by Google Authenticator, with private invitation links, QR enrollment and administrator invitation management. No SMTP or Google account configuration is needed.
+- Encrypted TOTP seeds, one-use challenges and codes, rate limits, account lockout, tenant isolation and audited activation. Personal mode rejects shared-gate and password-only sessions.
+- Protect personal Preview accounts from demo reset. Automatic password/factor recovery is not yet available; see docs/PERSONAL_AUTH_FA.md.
+
 ## [Unreleased] — isolated Preview deployment (2026-11-01)
 
 - Dedicated ArvanCloud Preview with trusted HTTPS, password gate and synthetic data is available; see docs/PREVIEW_DEPLOYMENT_20261101.md. Source and Production remain unchanged.

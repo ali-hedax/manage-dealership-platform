@@ -29,6 +29,13 @@
       "when": 1793514791937,
       "tag": "0003_parts_finance",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793526492698,
+      "tag": "0004_daily_tombstone",
+      "breakpoints": true
     }
   ]
 }

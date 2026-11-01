@@ -1,5 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { and, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/database';
+import {users} from '../db/schema';
 
 /**
  * Deletes every synthetic tenant (tenants.is_test = true) and all of its rows.
@@ -11,6 +12,10 @@ export async function purgeTestTenants(db: Database): Promise<number> {
     await tx.execute(sql`select set_config('manage.audit_purge', 'on', true)`);
     const rows = await tx.execute<{ id: string }>(sql`select id from tenants where is_test = true`);
     const ids = ((rows as any).rows ?? rows) as { id: string }[];
+    if(ids.length){
+      const personal=await tx.select({id:users.id}).from(users).where(and(inArray(users.tenantId,ids.map(x=>x.id)),isNotNull(users.email))).limit(1);
+      if(personal.length)throw new Error('Refusing to purge a Preview tenant with personal accounts; preserve identities and use an explicitly reviewed reset procedure.');
+    }
     for (const { id } of ids) {
       await tx.execute(sql`delete from idempotency_keys where tenant_id = ${id}`);
       await tx.execute(sql`delete from change_log where tenant_id = ${id}`);

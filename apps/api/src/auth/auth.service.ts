@@ -6,7 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { AppError } from '../common/errors';
 import { newId } from '../common/ids';
-import { DATABASE, type DatabaseHandle } from '../db/database';
+import { DATABASE, type DatabaseHandle, type Tx } from '../db/database';
 import { sessions, tenants, users } from '../db/schema';
 import type { AuthUser } from './auth.types';
 import { hashPassword, verifyPassword } from './password';
@@ -41,6 +41,9 @@ export class AuthService {
     input: LoginInput,
     meta: { ip?: string; userAgent?: string; requestId?: string },
   ): Promise<{ token: string; expiresAt: Date }> {
+    if (this.cfg.TOTP_AUTH_ENABLED) {
+      throw new AppError(403, 'EMAIL_LOGIN_REQUIRED', 'با ایمیل و کد تأیید وارد شوید');
+    }
     const conditions = [eq(users.username, input.username.toLowerCase())];
     if (input.tenantCode) conditions.push(eq(tenants.code, input.tenantCode.toLowerCase()));
     const candidates = await this.db
@@ -60,6 +63,7 @@ export class AuthService {
       throw invalidCredentials();
     }
     const { user, tenant } = found;
+    if (user.email) throw new AppError(403, 'EMAIL_LOGIN_REQUIRED', 'با ایمیل و کد تأیید وارد شوید');
     const now = new Date();
 
     if (user.lockedUntil && user.lockedUntil > now) {
@@ -136,6 +140,7 @@ export class AuthService {
       .limit(1);
     const row = rows[0];
     if (!row || !row.user.isActive) return null;
+    if (this.cfg.TOTP_AUTH_ENABLED && !row.session.verifiedWithTotp) return null;
 
     if (now.getTime() - row.session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
       await this.db
@@ -146,13 +151,14 @@ export class AuthService {
         })
         .where(eq(sessions.id, row.session.id));
     }
-    return this.toAuthUser(row.user, row.tenant, row.session.id);
+    return {...this.toAuthUser(row.user, row.tenant, row.session.id),verifiedWithTotp:row.session.verifiedWithTotp};
   }
 
   me(user: AuthUser): Me {
     return {
       id: user.id,
       username: user.username,
+      authentication: user.verifiedWithTotp ? 'totp' : 'password',
       displayName: user.displayName,
       roles: user.roles,
       permissions: [...user.permissions],
@@ -167,6 +173,22 @@ export class AuthService {
       .update(sessions)
       .set({ revokedAt: sql`now()` })
       .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+  }
+
+  /** Called only after consuming an Authenticator challenge in the same transaction. */
+  async issueTotpSession(tx: Tx, userId: string, meta: { ip?: string; requestId?: string; userAgent?: string }) {
+    const [found] = await tx.select({ user: users, tenant: tenants }).from(users)
+      .innerJoin(tenants, eq(tenants.id, users.tenantId)).where(eq(users.id, userId));
+    if (!found?.user.isActive || !found.user.activatedAt) throw invalidCredentials();
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + this.cfg.SESSION_TTL_HOURS * 3_600_000);
+    const sessionId = newId();
+    await tx.insert(sessions).values({ id: sessionId, userId, tenantId: found.tenant.id, tokenHash: sha256(token),
+      verifiedWithTotp: true, expiresAt, ip: meta.ip ?? null, userAgent: meta.userAgent?.slice(0,300) ?? null });
+    await tx.update(users).set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() }).where(eq(users.id,userId));
+    await this.audit.record(tx, { user: this.toAuthUser(found.user,found.tenant,sessionId), ip: meta.ip, requestId:meta.requestId },
+      { entityType:'user',entityId:userId,action:'auth.totp_login' });
+    return { token, expiresAt };
   }
 
   private toAuthUser(

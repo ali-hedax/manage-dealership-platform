@@ -34,3 +34,31 @@ test('form gate preserves authentication without browser challenge dialogs', asy
   for(let i=0;i<8;i++) await login('wrong','https://preview.test','rate-limited');
   assert.equal((await login('test-password','https://preview.test','rate-limited')).status,429);
 });
+
+test('personal mode requires an application session and cannot use the shared gate cookie',async t=>{
+  const target=http.createServer((req,res)=>{
+    if(req.url==='/auth/me'){
+      const verified=String(req.headers.cookie).includes('manage_session=verified');
+      res.statusCode=verified||String(req.headers.cookie).includes('manage_session=password')?200:401;
+      res.end(JSON.stringify({authentication:verified?'totp':'password'}));
+    }
+    else res.end('app');
+  });
+  await new Promise(r=>target.listen(0,'127.0.0.1',r));
+  const baseTarget=`http://127.0.0.1:${target.address().port}`;
+  const salt='a'.repeat(32),sessionKey='t'.repeat(64);
+  const gate=createGate({host:'preview.test',passwordHash:salt+':'+scryptSync('test-only-password',salt,64).toString('hex'),sessionKey,totpAuth:true,upstream:baseTarget,authApi:baseTarget+'/auth/me'});
+  await new Promise(r=>gate.listen(0,'127.0.0.1',r));
+  t.after(async()=>{await new Promise(r=>gate.close(r));await new Promise(r=>target.close(r));});
+  const base=`http://127.0.0.1:${gate.address().port}`;
+  assert.equal((await fetch(base+'/login')).status,200);
+  assert.equal((await fetch(base+'/activate')).status,200);
+  assert.equal((await fetch(base+'/api/v1/auth/email/login',{method:'POST'})).status,200);
+  let response=await fetch(base+'/cases',{redirect:'manual'});assert.equal(response.status,302);assert.equal(response.headers.get('location'),'/login');
+  const payload=`${Math.floor(Date.now()/1000)+3600}.${'a'.repeat(32)}`;
+  const legacy=payload+'.'+createHmac('sha256',sessionKey).update(payload).digest('base64url');
+  response=await fetch(base+'/cases',{redirect:'manual',headers:{Cookie:'__Host-manage_preview='+legacy}});assert.equal(response.status,302);
+  assert.equal((await fetch(base+'/api/v1/dashboard')).status,401);
+  assert.equal((await fetch(base+'/cases',{redirect:'manual',headers:{Cookie:'manage_session=password'}})).status,302);
+  assert.equal((await fetch(base+'/cases',{headers:{Cookie:'manage_session=verified'}})).status,200);
+});

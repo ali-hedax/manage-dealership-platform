@@ -10,6 +10,7 @@ services:
     command: [node, /gate/gate.mjs]
     environment:
       PREVIEW_HOST: ${PREVIEW_HOST:?set PREVIEW_HOST}
+      TOTP_AUTH_ENABLED: ${TOTP_AUTH_ENABLED:-false}
       PREVIEW_GATE_HASH: ${PREVIEW_GATE_HASH:?set PREVIEW_GATE_HASH}
       PREVIEW_GATE_KEY: ${PREVIEW_GATE_KEY:?set PREVIEW_GATE_KEY}
     volumes:

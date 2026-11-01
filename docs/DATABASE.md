@@ -51,5 +51,6 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 | `0001_audit_immutable` | Append-only trigger on `audit_events` | `down/0001_audit_immutable.down.sql` |
 | `0002_assessments` | `assessments`, `assessment_items` | `down/0002_assessments.down.sql` (drops both tables; audit rows remain) |
 | `0003_parts_finance` | `part_requests`, `case_finance`, `financial_approvals`, `blockers.part_request_id` | `down/0003_parts_finance.down.sql` |
+| `0004_daily_tombstone` | Unique optional user email, activation time, encrypted TOTP seed and replay step; verified session flag; expiring, hashed auth challenges | `down/0004_daily_tombstone.sql` (destroys personal authentication data; disposable DB only) |
 
 Workflow for a change: edit `schema.ts` → `pnpm --filter @manage/api db:generate` → review the SQL → write the down script → run tests → document here. Production: back up first, then `pnpm db:migrate` ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).

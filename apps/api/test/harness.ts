@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
-import { loadConfig } from '../src/config';
+import { loadConfig, type AppConfig } from '../src/config';
 import { DATABASE, type DatabaseHandle } from '../src/db/database';
 import { DEMO_TENANT_CODE, DemoSeedService } from '../src/demo/demo-seed.service';
 import { eq } from 'drizzle-orm';
@@ -49,8 +49,8 @@ export class Client {
   }
 }
 
-export async function createHarness(opts: { withCases?: boolean } = {}): Promise<Harness> {
-  const cfg = loadConfig({ APP_ENV: 'test', DB_DRIVER: 'pglite', PGLITE_DATA_DIR: 'memory://', NODE_ID: 'test' });
+export async function createHarness(opts: { withCases?: boolean; config?:Partial<Record<keyof AppConfig,string>> } = {}): Promise<Harness> {
+  const cfg = loadConfig({ APP_ENV: 'test', DB_DRIVER: 'pglite', PGLITE_DATA_DIR: 'memory://', NODE_ID: 'test', ...opts.config });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(cfg)] }).compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app, cfg);
