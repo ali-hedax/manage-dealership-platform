@@ -93,3 +93,8 @@ On the LAN without a public domain: an internal CA certificate or a reverse prox
 | Date | Environment | Commit | Operator | Migrations | Result |
 | --- | --- | --- | --- | --- | --- |
 | — | — | — | — | — | No deployment yet |
+
+
+## In-app browser compatible Preview gate
+
+The live VM also uses deploy/preview/docker-compose.form-gate.yml after the original Preview overlay. Setup creates its hashed-password/session-key configuration and deploy.sh selects it when configured. See the browser follow-up in PREVIEW_DEPLOYMENT_20261101.md. Keep all three Compose files when operating this VM.

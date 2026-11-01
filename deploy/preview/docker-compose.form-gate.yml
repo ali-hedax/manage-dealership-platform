@@ -1,0 +1,29 @@
+# Applied after the existing Preview overlay. No new public ports.
+services:
+  gate:
+    image: node:22-alpine
+    user: node
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: [node, /gate/gate.mjs]
+    environment:
+      PREVIEW_HOST: ${PREVIEW_HOST:?set PREVIEW_HOST}
+      PREVIEW_GATE_HASH: ${PREVIEW_GATE_HASH:?set PREVIEW_GATE_HASH}
+      PREVIEW_GATE_KEY: ${PREVIEW_GATE_KEY:?set PREVIEW_GATE_KEY}
+    volumes:
+      - ./deploy/preview/gate.mjs:/gate/gate.mjs:ro
+      - ./deploy/preview/gate.html:/gate/gate.html:ro
+      - ./deploy/preview/gate.css:/gate/gate.css:ro
+    expose: ["8080"]
+    depends_on: [web]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/__preview/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+  caddy:
+    depends_on: [web, gate]
+    volumes:
+      - ./deploy/preview/Caddyfile.form-gate:/etc/caddy/Caddyfile:ro

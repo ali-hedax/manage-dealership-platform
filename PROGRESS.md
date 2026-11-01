@@ -64,3 +64,8 @@ git checkout feature/preview-deploy && git pull
 pnpm install && pnpm build && pnpm test
 # AGENTS.md و این فایل را بخوانید؛ از «گام بعدی دقیق» ادامه دهید.
 ```
+
+
+## آخرین رفع ایراد ورود Preview
+
+ورود در مرورگر داخلی با صفحهٔ فارسی محافظ سایت اصلاح و با حساب manager تا داشبورد واقعی آزمایش شد. رمزها عوض نشدند. برای مدیریت این VM هر سه فایل Compose (اصلی، preview و form-gate) را استفاده کنید؛ جزئیات و آزمون‌ها در گزارش استقرار آمده است. Production و Source تغییر نکردند.

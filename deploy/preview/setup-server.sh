@@ -24,7 +24,7 @@ umask 022
 echo "== packages"
 apt-get update -q
 apt-get -yq upgrade
-apt-get -yq install ca-certificates curl git ufw unattended-upgrades fail2ban docker.io docker-compose-v2 docker-buildx
+apt-get -yq install ca-certificates curl git python3 ufw unattended-upgrades fail2ban docker.io docker-compose-v2 docker-buildx
 dpkg-reconfigure -f noninteractive unattended-upgrades
 
 echo "== swap (image builds need more than 4 GB at peak)"
@@ -103,4 +103,5 @@ EOF
   echo "Credentials saved in root-only credentials file."
 fi
 
+python3 "$APP_DIR/deploy/preview/configure-form-gate.py"
 echo "== done. Next: sudo -u manage bash $APP_DIR/deploy/preview/deploy.sh"

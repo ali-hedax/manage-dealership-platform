@@ -122,3 +122,11 @@ With parts and finance (branch `feature/parts-finance`, 2026-11-01, after the tw
 ## Live isolated Preview verification — 2026-11-01
 
 See [deployment record](PREVIEW_DEPLOYMENT_20261101.md) for checks actually run, application SHA, limitations and recovery. HTTPS, password gate, PostgreSQL health, manager login, Secure/HttpOnly cookie, synthetic dashboard, port isolation and effective SSH policy passed. Both images rebuilt successfully. Modified setup script passed bash syntax and ShellCheck. Browser E2E on this host was not run; application CI passed on the deployed SHA.
+
+## Browser compatibility follow-up — 2026-11-01
+
+The in-app browser rejected the native Basic authentication challenge with ERR_INVALID_AUTH_CREDENTIALS. The Preview now uses the additional `docker-compose.form-gate.yml` overlay: Caddy proxies through an internal, non-root Node gate. Unauthenticated page requests redirect to a Persian HTML sign-in form; API requests receive 401 without a browser challenge. The same existing Preview password is retained, stored as a salted scrypt digest. Successful sign-in sets a signed, expiring, Secure/HttpOnly/SameSite=Strict host-only cookie. The gate checks login Origin, limits attempts and request size, and does not publish an additional host port. The old Basic header remains supported for smoke-test clients without a WWW-Authenticate challenge.
+
+`setup-server.sh` configures form-gate secrets without printing them. `deploy.sh` includes the form overlay when PREVIEW_GATE_HASH exists in `.env`. Always include all three Compose files on this VM; using only the original two would restore the legacy browser challenge. No password, domain, DNS or production resource changed.
+
+Verification: Node integration tests passed locally and in the Node 22 container (valid/invalid login, Origin rejection, rate limiting, Secure/HttpOnly cookie, tampered/expired token rejection and upstream credential stripping); shell syntax and ShellCheck passed. The actual in-app browser completed both login steps and displayed the manager dashboard with five synthetic cases. Screenshot evidence and access details were delivered privately to the owner. Earlier statements about anonymous `/login` returning 401 and no host browser test are superseded by this follow-up: anonymous pages now redirect, and in-app browser login was verified.

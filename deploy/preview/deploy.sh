@@ -9,6 +9,9 @@ APP_DIR=/opt/manage
 REF="${1:-$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)}"
 COMPOSE=(docker compose -f docker-compose.yml -f deploy/preview/docker-compose.preview.yml)
 cd "$APP_DIR"
+if grep -q '^PREVIEW_GATE_HASH=' .env 2>/dev/null; then
+  COMPOSE+=(-f deploy/preview/docker-compose.form-gate.yml)
+fi
 
 test -f .env || { echo ".env missing: run setup-server.sh first" >&2; exit 1; }
 test -f deploy/preview/auth.caddy || { echo "auth.caddy missing: run setup-server.sh first" >&2; exit 1; }
@@ -30,7 +33,11 @@ host="$(grep '^PREVIEW_HOST=' .env | cut -d= -f2)"
 for _ in $(seq 1 60); do
   if "${COMPOSE[@]}" exec -T api node -e "fetch('http://localhost:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
     code="$(curl -s -o /dev/null -w '%{http_code}' "https://${host}/login" || true)"
-    echo "API healthy; https://${host}/login answers ${code} (401 = password gate active)"
+    if [ "$code" != 401 ] && [ "$code" != 302 ]; then
+      echo "Preview gate check failed: unexpected HTTP ${code}" >&2
+      exit 1
+    fi
+    echo "API healthy; https://${host}/login answers ${code} (401 = legacy gate, 302 = form gate)"
     "${COMPOSE[@]}" ps
     exit 0
   fi

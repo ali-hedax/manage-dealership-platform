@@ -1,0 +1,36 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import {scryptSync,createHmac} from 'node:crypto';
+import {createGate} from './gate.mjs';
+
+test('form gate preserves authentication without browser challenge dialogs', async t => {
+  const upstream = http.createServer((req,res)=> {res.setHeader('Content-Type','application/json');res.end(JSON.stringify({url:req.url,cookie:req.headers.cookie,authorization:req.headers.authorization}));});
+  await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
+  const salt='0123456789abcdef0123456789abcdef';
+  const config={host:'preview.test',passwordHash:salt+':'+scryptSync('test-password',salt,64).toString('hex'),sessionKey:'s'.repeat(64),upstream:`http://127.0.0.1:${upstream.address().port}`};
+  const gate=createGate(config); await new Promise(r=>gate.listen(0,'127.0.0.1',r));
+  t.after(async()=>{await new Promise(r=>gate.close(r));await new Promise(r=>upstream.close(r));});
+  const base=`http://127.0.0.1:${gate.address().port}`;
+  let response=await fetch(base+'/login',{redirect:'manual'});
+  assert.equal(response.status,302); assert.equal(response.headers.get('www-authenticate'),null);
+  response=await fetch(base+'/api/v1/health');assert.equal(response.status,401);
+  response=await fetch(base+'/__preview/login');assert.equal(response.status,200);
+  assert.match(await response.text(),/autocomplete="current-password"/);
+  const login=(password,origin='https://preview.test',ip='test-client')=>fetch(base+'/__preview/login',{method:'POST',redirect:'manual',headers:{Origin:origin,'Content-Type':'application/x-www-form-urlencoded','X-Forwarded-For':ip},body:new URLSearchParams({username:'preview',password})});
+  assert.equal((await login('test-password','https://attacker.test')).status,403);
+  response=await login('wrong');assert.equal(response.headers.get('location'),'/__preview/login?error=1');
+  response=await login('test-password');assert.equal(response.status,303);
+  const setCookie=response.headers.get('set-cookie');
+  assert.match(setCookie,/Secure; HttpOnly; SameSite=Strict/);assert.doesNotMatch(setCookie,/Domain=/i);
+  const cookie=setCookie.split(';')[0];
+  response=await fetch(base+'/api/v1/health',{headers:{Cookie:cookie}});assert.equal(response.status,200);
+  assert.equal((await response.json()).cookie,'');
+  response=await fetch(base+'/api/v1/health',{headers:{Cookie:cookie+'tampered'}});assert.equal(response.status,401);
+  const expired=`${Math.floor(Date.now()/1000)-1}.${'a'.repeat(32)}`;
+  const signature=createHmac('sha256',config.sessionKey).update(expired).digest('base64url');
+  response=await fetch(base+'/api/v1/health',{headers:{Cookie:`__Host-manage_preview=${expired}.${signature}`}});assert.equal(response.status,401);
+  response=await fetch(base+'/api/v1/health',{headers:{Authorization:'Basic '+Buffer.from('preview:test-password').toString('base64')}});assert.equal(response.status,200);assert.equal((await response.json()).authorization,undefined);
+  for(let i=0;i<8;i++) await login('wrong','https://preview.test','rate-limited');
+  assert.equal((await login('test-password','https://preview.test','rate-limited')).status,429);
+});

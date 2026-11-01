@@ -150,6 +150,7 @@ jobs:
           ! curl -s -o /dev/null --max-time 3 http://localhost:3000/login
       - name: Deployment scripts
         run: |
+          node --test deploy/preview/gate.test.mjs
           bash -n deploy/preview/setup-server.sh deploy/preview/deploy.sh
           shellcheck deploy/preview/setup-server.sh deploy/preview/deploy.sh
       - if: always()

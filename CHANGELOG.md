@@ -47,3 +47,8 @@ All notable changes. Versions follow semantic versioning once releases start.
 
 ### Security
 - `drizzle-orm` raised to 0.45.x and `multer` overridden to ≥ 2.5.0 to clear high-severity advisories reported by `pnpm audit`.
+
+
+## Preview browser sign-in compatibility — 2026-11-01
+
+- Replace the native browser password challenge with an accessible Persian sign-in form and a signed secure cookie, preserving the Preview password and isolation. Actual in-app browser login to the manager dashboard was verified.
