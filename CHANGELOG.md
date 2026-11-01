@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — personal Preview authentication (2026-11-01)
+
+- Email identifier and personal password followed by Google Authenticator, with private invitation links, QR enrollment and administrator invitation management. No SMTP or Google account configuration is needed.
+- Encrypted TOTP seeds, one-use challenges and codes, rate limits, account lockout, tenant isolation and audited activation. Personal mode rejects shared-gate and password-only sessions.
+- Protect personal Preview accounts from demo reset. Automatic password/factor recovery is not yet available; see docs/PERSONAL_AUTH_FA.md.
 ## [Unreleased] — branch `feature/qc-delivery`
 
 ### Added

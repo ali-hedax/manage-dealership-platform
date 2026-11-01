@@ -17,6 +17,8 @@ import { AccidentModule } from './accident/accident.module';
 import { AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { EmailAuthController } from './auth/email-auth.controller';
+import { EmailAuthService } from './auth/email-auth.service';
 import { SessionGuard } from './auth/session.guard';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { IdempotencyInterceptor } from './common/idempotency.interceptor';
@@ -72,8 +74,9 @@ export class CoreModule {
         },
         AuditService,
         AuthService,
+        EmailAuthService,
       ],
-      exports: [APP_CONFIG, DATABASE, AuditService, AuthService],
+      exports: [APP_CONFIG, DATABASE, AuditService, AuthService, EmailAuthService],
     };
   }
 }
@@ -103,7 +106,7 @@ export class AppModule {
         ThrottlerModule.forRoot([{ ttl: 60_000, limit: cfg.APP_ENV === 'test' ? 10_000 : 600 }]),
         AccidentModule,
       ],
-      controllers: [AuthController, HealthController, ReferenceController],
+      controllers: [AuthController, EmailAuthController, HealthController, ReferenceController],
       providers: [
         DemoSeedService,
         Lifecycle,

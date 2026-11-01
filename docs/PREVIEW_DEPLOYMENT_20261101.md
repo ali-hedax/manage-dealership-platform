@@ -66,3 +66,9 @@ Verification actually run, over public HTTPS through the form gate (secrets read
 - Full flow on a new synthetic case: create and find by VIN → assessment, finalize, customer authorization → purchase blocked by the finance gate → advance (expert cannot approve; manager approves; cashier confirms) → order, receipt, handover of the part → activity approved → QC fail with corrective activity → QC pass → technical close → financial close refused while the balance is due → settlement payment → financial close → handover → delivered and archived; history contains every step.
 - Afterwards the demo data was recreated again, so the owner starts with exactly the five demo cases.
 - Real browser (Edge, desktop 1366×860 and phone 412×915): gate form → Manage login → dashboard (no horizontal scroll) → demo case 5 completion panel. Screenshots kept privately (not committed; they show the live host).
+
+## Personal login follow-up — 2026-11-01
+
+Preview now runs `58ad08c9ccb427de74ce2d2c2f008a29e043b972` from draft PR #21, retaining QC and hand-over. All five CI jobs passed (run 41297169933). Additive migration 0005 follows QC migration 0004. Private pre-deploy DB/config backup and post-invitation backup exist on the Manage VM; the persistent authentication encryption key stays private and must be preserved with DB backups.
+
+Personal mode uses email + a user-chosen password + Google Authenticator. It replaces shared/demo access on this Preview. No SMTP or Gmail setup is used. HTTP checks confirmed public login 200, unauthenticated private routes denied/redirected, legacy password login 403, API/gate/web/db health and NTP. Owner invitation was saved privately and the empty activation form opened in the in-app browser. Owner password, QR enrollment and first personal login are still pending the owner's actions; do not report them as completed. Source, Production and owner DNS remain unchanged. For next steps see PROGRESS and PERSONAL_AUTH_FA.

@@ -18,7 +18,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const res = ctx.switchToHttp().getResponse<Response>();
     const key = req.headers['idempotency-key'];
-    if (typeof key !== 'string' || !req.user || !['POST', 'PATCH'].includes(req.method)) {
+    // Authentication responses can contain invitation/enrollment secrets.
+    // Never persist them in the generic response replay cache.
+    if (req.originalUrl.startsWith('/api/v1/auth/') || typeof key !== 'string' || !req.user || !['POST', 'PATCH'].includes(req.method)) {
       return next.handle();
     }
     if (key.length > 100) throw badRequest('INVALID_IDEMPOTENCY_KEY', 'کلید تکرار نامعتبر است');

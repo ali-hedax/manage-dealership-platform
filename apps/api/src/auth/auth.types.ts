@@ -12,6 +12,7 @@ export interface AuthUser {
   roles: Role[];
   permissions: Set<Permission>;
   sessionId: string;
+  verifiedWithTotp?: boolean;
 }
 
 /** Who did something, from where — attached to every audited change. */

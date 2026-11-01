@@ -20,6 +20,9 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   NODE_ID: z.string().min(1).default('dev-local'),
   SEED_DEMO_PASSWORD: z.string().optional(),
+  TOTP_AUTH_ENABLED: z.string().default('false').transform((v) => v === 'true'),
+  PUBLIC_APP_URL: z.url().default('http://localhost:3000'),
+  AUTH_TOKEN_SECRET: z.preprocess((v)=>v===''?undefined:v,z.string().min(32).optional()),
   // Login attempts per minute per client address (default 10).
   LOGIN_RATE_LIMIT: z.preprocess((v) => (v === '' ? undefined : v), z.coerce.number().int().positive().optional()),
 });
@@ -28,6 +31,12 @@ export type AppConfig = z.infer<typeof envSchema>;
 
 export function loadConfig(overrides: Partial<Record<keyof AppConfig, string>> = {}): AppConfig {
   const cfg = envSchema.parse({ ...process.env, ...overrides });
+  if (cfg.TOTP_AUTH_ENABLED && !cfg.AUTH_TOKEN_SECRET) {
+    throw new Error('Personal sign-in requires AUTH_TOKEN_SECRET');
+  }
+  if (cfg.TOTP_AUTH_ENABLED && cfg.APP_ENV !== 'test' && !cfg.PUBLIC_APP_URL.startsWith('https://')) {
+    throw new Error('Email sign-in requires an HTTPS PUBLIC_APP_URL');
+  }
   if (cfg.DB_DRIVER === 'postgres' && !cfg.DATABASE_URL) {
     throw new Error('DATABASE_URL is required when DB_DRIVER=postgres');
   }

@@ -2,3 +2,6 @@
 # Preview overlay test; replaced by a random per-run value in bb1c7ec. Not a secret.
 872fda193f96f780bb75196e52acb85e6198e3f8:.github/workflows/ci.yml:curl-auth-user:141
 872fda193f96f780bb75196e52acb85e6198e3f8:.github/workflows/ci.yml:curl-auth-user:148
+# Public RFC 6238 Appendix B test vector (ASCII 12345678901234567890,
+# encoded as base32), never used as an application credential.
+491588b980751ebfa64aa17d5601c74c88a087e2:apps/api/test/personal-auth.e2e-spec.ts:generic-api-key:26

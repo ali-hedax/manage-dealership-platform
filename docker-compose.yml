@@ -36,6 +36,9 @@ services:
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       NODE_ID: ${NODE_ID:-compose}
+      TOTP_AUTH_ENABLED: ${TOTP_AUTH_ENABLED:-false}
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
       SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
     # Not published: only the web container reaches the API.
     expose:

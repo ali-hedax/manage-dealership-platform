@@ -38,11 +38,30 @@ export function createGate(config) {
   }
   const html = readFileSync(new URL('./gate.html', import.meta.url));
   const css = readFileSync(new URL('./gate.css', import.meta.url));
+  function proxy(req,res,send) {
+    const headers={...req.headers};delete headers.authorization;
+    headers.cookie=String(req.headers.cookie??'').split(';').filter(x=>!x.trim().startsWith(`${COOKIE}=`)).join(';');
+    const upstream=http.request(new URL(config.upstream),{path:req.url,method:req.method,headers},response=>{
+      res.writeHead(response.statusCode,{...response.headers,'X-Robots-Tag':'noindex, nofollow'});response.pipe(res);
+    });
+    upstream.setTimeout(30000,()=>upstream.destroy());
+    upstream.on('error',()=>{if(!res.headersSent)send(502,'سرویس در حال آماده شدن است. دوباره تلاش کنید.');else res.destroy();});
+    req.on('aborted',()=>upstream.destroy());req.pipe(upstream);
+  }
   const server = http.createServer(async (req, res) => {
     const send = (status, body, headers={}) => { res.writeHead(status, {'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow',...headers}); res.end(body); };
     try {
       const url = new URL(req.url, origin);
       if (url.pathname === '/__preview/health') return send(200, 'ok');
+      if (config.totpAuth) {
+        const publicPath=['/login','/activate','/reset-password'].includes(url.pathname)||url.pathname.startsWith('/_next/')||url.pathname.startsWith('/brand/')||url.pathname.startsWith('/api/v1/auth/');
+        if(!publicPath){
+          let ok=false;
+          try { const result=await fetch(config.authApi??'http://api:4000/api/v1/auth/me',{headers:{Cookie:String(req.headers.cookie??'')},redirect:'manual',signal:AbortSignal.timeout(5000)});ok=result.status===200&&(await result.json()).authentication==='totp'; } catch { return send(503,'سرویس ورود در دسترس نیست. دوباره تلاش کنید.'); }
+          if(!ok)return url.pathname.startsWith('/api/')?send(401,'{"error":"LOGIN_REQUIRED"}',{'Content-Type':'application/json'}):send(302,'',{Location:'/login'});
+        }
+        return proxy(req,res,send);
+      }
       if (url.pathname === '/__preview/gate.css' && req.method === 'GET') return send(200, css, {'Content-Type':'text/css; charset=utf-8'});
       if (url.pathname === '/__preview/login' && req.method === 'GET') return send(200, html.toString().replace('<!-- error -->', url.searchParams.has('error') ? '<p role="alert">نام کاربری یا رمز درست نیست. دوباره بررسی کنید.</p>' : ''), {
         'Content-Type':'text/html; charset=utf-8',
@@ -74,16 +93,7 @@ export function createGate(config) {
       if (!authenticated) return url.pathname.startsWith('/api/')
         ? send(401, '{"error":"PREVIEW_LOGIN_REQUIRED"}', {'Content-Type':'application/json'})
         : send(302, '', {Location:'/__preview/login'});
-      const headers = {...req.headers};
-      delete headers.authorization;
-      headers.cookie = String(req.headers.cookie ?? '').split(';').filter(x=>!x.trim().startsWith(`${COOKIE}=`)).join(';');
-      const upstream = http.request(new URL(config.upstream), {path:req.url, method:req.method, headers}, response => {
-        res.writeHead(response.statusCode, {...response.headers,'X-Robots-Tag':'noindex, nofollow'});
-        response.pipe(res);
-      });
-      upstream.setTimeout(30000, ()=>upstream.destroy());
-      upstream.on('error', ()=> { if (!res.headersSent) send(502, 'سرویس در حال آماده شدن است. دوباره تلاش کنید.'); else res.destroy(); });
-      req.on('aborted', ()=>upstream.destroy()); req.pipe(upstream);
+      return proxy(req,res,send);
     } catch { if (!res.headersSent) send(400, 'درخواست معتبر نیست.'); else res.destroy(); }
   });
   server.on('close', ()=>clearInterval(cleanup));
@@ -93,6 +103,7 @@ export function createGate(config) {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   createGate({host:process.env.PREVIEW_HOST,passwordHash:process.env.PREVIEW_GATE_HASH ?? '',
+    totpAuth:process.env.TOTP_AUTH_ENABLED==='true',
     sessionKey:process.env.PREVIEW_GATE_KEY ?? '',upstream:process.env.PREVIEW_UPSTREAM ?? 'http://web:3000'})
     .listen(8080,'0.0.0.0');
 }
