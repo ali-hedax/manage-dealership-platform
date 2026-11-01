@@ -34,7 +34,9 @@ A modular monolith: one API process with domain modules, one web process, one da
 | Assessments & supplements (versioned, authorization recording) | `apps/api/src/assessments` | Implemented |
 | Parts lifecycle, Excel import | `apps/api/src/parts` (minimal .xlsx on `fflate`) | Implemented |
 | Financial gate (shares, advance, exceptions) | `apps/api/src/finance` | Implemented |
-| Advanced finance, QC, documents, reports, notifications, integrations, AI, settings UI | `MODULES` in `packages/shared/src/enums.ts` | Planned; navigation shows "در دست توسعه" |
+| QC, corrective work, independent closes and handover | `apps/api/src/completion` | Implemented (#20) |
+| Personal password + TOTP, invitation administration | `apps/api/src/auth` | Implemented in Preview (#21); recovery remains incomplete |
+| Advanced finance, documents, reports, notifications, integrations, AI, settings UI | `MODULES` in `packages/shared/src/enums.ts` | Planned; navigation shows "در دست توسعه" |
 
 ## Request path and cross-cutting concerns
 
@@ -54,7 +56,7 @@ A modular monolith: one API process with domain modules, one web process, one da
 | 2 | **Pinned proven majors**: TypeScript 5.9, NestJS 11, Next 16, Zod 4, Drizzle 0.45 | At build time npm offered TypeScript 7 and NestJS 12 (ESM-only), which change decorator/module behaviour; stability first | Upgrade in a dedicated PR with the full test suite |
 | 3 | **Drizzle ORM** with SQL migrations (drizzle-kit) + hand-written down scripts | Typed queries close to SQL, same API for node-postgres and PGlite | Down migrations are manual (`apps/api/src/db/down/`) |
 | 4 | **PGlite** (embedded PostgreSQL/WASM) for local dev, demo and tests | `pnpm dev` works without Docker or a DB install; tests run real PostgreSQL SQL, triggers included | Not for production (config refuses it); CI also migrates on real PostgreSQL 16 |
-| 5 | Server-side sessions in DB, httpOnly cookie, scrypt hashing (Node stdlib) | Revocable sessions; no native add-on to build on an unknown dealership server | MFA for managers is a later addition |
+| 5 | Server-side sessions in DB, httpOnly cookie, scrypt hashing (Node stdlib) | Revocable sessions; no native add-on to build on an unknown dealership server | Personal Preview adds encrypted TOTP and one-use challenges; recovery is still pending |
 | 6 | Same-origin runtime proxy in Next (`app/api/v1/[...path]`) | First-party cookie, no CORS; API URL configurable per environment at runtime | One extra hop |
 | 7 | UUIDv7 ids generated in the app; `version` column; `change_log` outbox | Ids unique across cloud and LAN nodes; conflict detection; sync replay | Human case numbers (`AC-1405-0001`) are allocated per node today — needs a node prefix before multi-node writes |
 | 8 | Fixed UTC+03:30 for Jalali conversion | Iran dropped DST in 2022; deterministic on server, browser and tests | Dates before Sept 2022 may be off by one hour |
@@ -67,6 +69,10 @@ A modular monolith: one API process with domain modules, one web process, one da
 | --- | --- | --- | --- |
 | Development | PGlite file in `apps/api/.data` | Synthetic, auto-seeded | `pnpm dev` |
 | Test / CI | PGlite in memory; PostgreSQL 16 service in CI | Synthetic | `pnpm test`, `pnpm test:e2e` |
-| Preview / Staging | PostgreSQL (Docker Compose) | Synthetic, auto-seeded | Not yet hosted; see [DEPLOYMENT.md](DEPLOYMENT.md) |
+| Preview / Staging | PostgreSQL (Docker Compose) | Synthetic, auto-seeded | Hosted isolated Preview; local Preview can also use PGlite. See [DEPLOYMENT.md](DEPLOYMENT.md) |
 | Production (cloud) | PostgreSQL | Real | Needs owner approval, domain, backups |
 | Dealership LAN server | PostgreSQL | Real | After IT checklist ([IT_SERVER_CHECKLIST_FA.md](IT_SERVER_CHECKLIST_FA.md)) |
+
+## Prototype boundary
+
+The root HTML is preserved legacy code, not a page served by apps/web. The lightweight deploy/preview/gate.html is an intentional separate gate. See [migration evidence](PROTOTYPE_MIGRATION.md) and [API reference](API.md). No B2B companion integration or browser-storage migration is currently implemented in the platform.

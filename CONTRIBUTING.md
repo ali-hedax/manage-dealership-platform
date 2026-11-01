@@ -5,9 +5,9 @@ Read [AGENTS.md](AGENTS.md) first — it holds the non-negotiable rules (approva
 ## Workflow
 
 1. Pick or open an issue with acceptance criteria. Board columns: Backlog → Ready → In Progress → Review → Testing → Done (`status:` labels).
-2. Branch from `main`: `feature/<short-name>`, `fix/<short-name>`, `docs/<short-name>`.
+2. Until the platform stack is merged, branch platform work from its latest reviewed head and record the dependency (see [audit](docs/GITHUB_AUDIT.md)); after integration, branch from `main`: `feature/<short-name>`, `fix/<short-name>`, `docs/<short-name>`.
 3. Keep PRs small and reviewable; fill in the PR template.
-4. Before pushing: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, plus `pnpm test:e2e` when behaviour changed.
+4. Documentation-only work: `node scripts/check-docs.mjs`. For application changes before pushing: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, plus `pnpm test:e2e` when behaviour changed.
 5. Update [docs/TEST_REPORT.md](docs/TEST_REPORT.md), [CHANGELOG.md](CHANGELOG.md) and [PROGRESS.md](PROGRESS.md).
 6. Merge to `main` only after review and explicit owner approval.
 

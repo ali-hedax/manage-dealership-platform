@@ -4,7 +4,7 @@
 
 ## Local Preview (available now)
 
-Until an isolated Preview host exists (issue #5), the Preview runs on the owner's computer:
+Local Preview is an alternative to the hosted personal-authentication Preview; it uses a separate synthetic database and demo login:
 
 ```bash
 pnpm install
@@ -19,9 +19,9 @@ pnpm preview --lan      # also reachable from phones on the same network
 - `--lan` listens on all interfaces; Windows may ask to allow Node.js through the firewall. That is the owner's decision; by default the Preview listens on localhost only.
 - Nothing is published to the internet. A public link needs either an isolated host (#5) or an approved tunnel service — both are owner decisions.
 
-## Preview on an isolated ArvanCloud VM (prepared, awaiting owner approval)
+## Preview on an isolated ArvanCloud VM (already deployed)
 
-Plan, resources, cost estimate and approval points: [PREVIEW_ARVAN_FA.md](PREVIEW_ARVAN_FA.md). Files: `deploy/preview/`.
+Historical provisioning plan, resources and approval points: [PREVIEW_ARVAN_FA.md](PREVIEW_ARVAN_FA.md). Files: `deploy/preview/`.
 
 ```bash
 # on the new VM, as root (once)
@@ -92,9 +92,17 @@ On the LAN without a public domain: an internal CA certificate or a reverse prox
 
 | Date | Environment | Commit | Operator | Migrations | Result |
 | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | No deployment yet |
+| 2026-11-01 | Isolated Preview | 58ad08c | Previous approved rollout | Through 0005_personal_auth | Healthy; owner later confirmed personal login. [Full record](PREVIEW_DEPLOYMENT_20261101.md) |
 
 
 ## In-app browser compatible Preview gate
 
 The live VM also uses deploy/preview/docker-compose.form-gate.yml after the original Preview overlay. Setup creates its hashed-password/session-key configuration and deploy.sh selects it when configured. See the browser follow-up in PREVIEW_DEPLOYMENT_20261101.md. Keep all three Compose files when operating this VM.
+
+## Current authentication and safe update boundary
+
+Personal mode supersedes the legacy shared gate described above: TOTP_AUTH_ENABLED=true on API and gate, HTTPS PUBLIC_APP_URL and a persistent AUTH_TOKEN_SECRET are required. The login page is public; private routes require a TOTP-verified session. Follow [personal-auth settings](PERSONAL_AUTH_FA.md). Local default demo mode is different.
+
+This audit only read the Manage VM Git/container state: deployed 58ad08c, clean worktree, healthy services. No deployment was performed. Historical setup commands are not instructions to provision again.
+
+Before any future owner-approved update, inspect all tracked/untracked changes, preserve them privately and take DB/config backups. The existing deploy.sh uses reset --hard and image prune; do not run it on an unreviewed checkout or as an automatic update. Review and harden that behavior in a separate tested change before relying on it. All three Compose files remain necessary on this VM. Do not publish .env, invitation files or backup contents.
