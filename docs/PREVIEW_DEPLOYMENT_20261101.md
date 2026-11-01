@@ -46,3 +46,23 @@ The in-app browser rejected the native Basic authentication challenge with ERR_I
 `setup-server.sh` configures form-gate secrets without printing them. `deploy.sh` includes the form overlay when PREVIEW_GATE_HASH exists in `.env`. Always include all three Compose files on this VM; using only the original two would restore the legacy browser challenge. No password, domain, DNS or production resource changed.
 
 Verification: Node integration tests passed locally and in the Node 22 container (valid/invalid login, Origin rejection, rate limiting, Secure/HttpOnly cookie, tampered/expired token rejection and upstream credential stripping); shell syntax and ShellCheck passed. The actual in-app browser completed both login steps and displayed the manager dashboard with five synthetic cases. Screenshot evidence and access details were delivered privately to the owner. Earlier statements about anonymous `/login` returning 401 and no host browser test are superseded by this follow-up: anonymous pages now redirect, and in-app browser login was verified.
+## Update — QC and delivery (issue #12), 2026-11-01
+
+Owner approved merging the tested changes into the Preview branch only (not `main`). `feature/qc-delivery` (draft PR #20) was merged into `feature/preview-deploy` as merge commit `88e1f6d`; doc conflicts were resolved by keeping both sides.
+
+Before the merge: CI green on #19 and #20 (5/5 each). On the merged tree locally: lint, typecheck, shared 9/9, API 56/56, gate test, build, E2E 8/8. CI on the merged branch: 5/5 green (run 41295600434, incl. the Preview overlay with the form gate).
+
+Deployment on the same VM (no new resources, no DNS, password or firewall change):
+
+- Database backup before the migration: `/home/manage/backups/preview-before-qc-20261101T100432Z.sql.gz` (mode 600, owner `manage`). The database then held only the seeded synthetic data; the only later activity was manager logins.
+- `deploy.sh feature/preview-deploy` with all three Compose files (form gate kept). Both images rebuilt on the VM; API, web, database and gate healthy; only 80/443 published by Caddy. Deployed SHA `88e1f6d` verified in `/opt/manage`. Migrations 0000–0004 applied (`qc_inspections` present).
+- Synthetic demo data recreated with `reset-demo.js` (same demo password from `.env`), so demo case 5 shows the QC rounds and technical close.
+
+Verification actually run, over public HTTPS through the form gate (secrets read from the root-only file into the test process, never printed): 49/49 checks passed —
+
+- Gate: anonymous page → gate form (302), anonymous API 401, Persian form, wrong password refused, gate cookie Secure/HttpOnly; health `ok`, `postgres`, `preview`.
+- Logins for manager, expert, supervisor, parts, cashier, QC (session cookies Secure/HttpOnly); system admin cannot read cases.
+- Dashboard (5 active cases); each of the five demo cases opens with detail, assessment, parts, finance, QC/delivery state and history; phone masked for the parts clerk; case 5 has two QC rounds (failed/passed), valid technical close, open financial close.
+- Full flow on a new synthetic case: create and find by VIN → assessment, finalize, customer authorization → purchase blocked by the finance gate → advance (expert cannot approve; manager approves; cashier confirms) → order, receipt, handover of the part → activity approved → QC fail with corrective activity → QC pass → technical close → financial close refused while the balance is due → settlement payment → financial close → handover → delivered and archived; history contains every step.
+- Afterwards the demo data was recreated again, so the owner starts with exactly the five demo cases.
+- Real browser (Edge, desktop 1366×860 and phone 412×915): gate form → Manage login → dashboard (no horizontal scroll) → demo case 5 completion panel. Screenshots kept privately (not committed; they show the live host).
