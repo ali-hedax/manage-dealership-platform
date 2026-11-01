@@ -39,3 +39,12 @@
 ## Test scenarios required before calling it done
 
 Internet down; LAN down; local server failure; cloud failure; partial sync interrupted mid-batch; two conflicting edits of the same case; duplicate delivery of the same batch; backup restore on each node followed by resync.
+
+## Delivery checkpoints (#15)
+
+1. Obtain the IT/server checklist (#7), agree node ownership, recovery and clock synchronization, and document the actual LAN topology.
+2. Specify and test authenticated transport, tenant boundaries, conflict storage, ordering, duplicate replay and node-prefixed case numbering on two disposable databases. Keep auth secrets/challenges out of generic domain sync.
+3. Build an operator-visible sync queue and conflict resolution; financial approval, QC close and delivery must never silently overwrite another node.
+4. Install on the authorized dealership LAN and execute every failure scenario above, including an internet outage with fresh login/TOTP and restore/resync. Only then accept offline availability.
+
+Current hosted Preview and PGlite local demo do not prove LAN offline operation. No target date is committed before IT answers and pilot acceptance.

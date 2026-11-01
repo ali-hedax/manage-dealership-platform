@@ -2,6 +2,11 @@ name: Feature / قابلیت
 description: New capability with acceptance criteria / قابلیت جدید با معیار پذیرش
 labels: ["type: feature", "status: backlog"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Public repository: use synthetic examples only; never include credentials, invitations, customer records or internal server details.
+        مخزن عمومی است؛ فقط نمونه ساختگی و بدون رمز، دعوت‌نامه یا داده مشتری بنویسید.
   - type: textarea
     id: need
     attributes:

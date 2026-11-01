@@ -25,3 +25,8 @@ body:
     attributes:
       label: Environment / محیط
       placeholder: local dev / preview / LAN server; browser and device
+  - type: input
+    id: revision
+    attributes:
+      label: Branch / commit / PR (شاخه یا نسخه)
+      description: Identify the tested code; never paste private configuration or invitation links.

@@ -2,6 +2,12 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — repository documentation and preservation (2026-11-01)
+
+- Reconcile bilingual setup guides with the current TypeScript platform, hosted personal login and owner-reported successful sign-in.
+- Add API reference with controller route drift checks, gradual prototype migration plan, refreshed branch/CI audit and GitHub tracking guide.
+- Preserve discovered local prototype tooling/docs separately; no runtime feature, schema or deployment changes.
+
 ## [Unreleased] — personal Preview authentication (2026-11-01)
 
 - Email identifier and personal password followed by Google Authenticator, with private invitation links, QR enrollment and administrator invitation management. No SMTP or Google account configuration is needed.

@@ -18,3 +18,10 @@
 - [ ] Schema change has a migration, a down script and a DATABASE.md entry (or: no schema change).
 - [ ] Permissions enforced in the API, not only hidden in the UI (or: no permission change).
 - [ ] No secrets, server addresses or real data in code, logs, screenshots or this description.
+
+## Branch and rollout
+
+- Base/dependent PRs and safe integration order:
+- Deployed SHA (if previously deployed; distinguish code from documentation commits):
+- [ ] `node scripts/check-docs.mjs` for documentation/API inventory changes.
+- [ ] Main merge and any server/DNS/Production change have separate explicit owner approval before execution.

@@ -2,9 +2,11 @@
 
 **پلتفرم مدیریت عملیات نمایندگی خودرو — فاز اول: خودروهای تصادفی**
 
-[English](README.en.md) · [معماری](docs/ARCHITECTURE.md) · [راهنمای کاربر](docs/USER_GUIDE_FA.md) · [وضعیت پیشرفت](PROGRESS.md) · [نقشه راه](docs/ROADMAP.md)
+[English](README.en.md) · [API](docs/API.md) · [گردش‌کار GitHub](docs/GITHUB_WORKFLOW.md) · [معماری](docs/ARCHITECTURE.md) · [راهنمای کاربر](docs/USER_GUIDE_FA.md) · [وضعیت پیشرفت](PROGRESS.md) · [نقشه راه](docs/ROADMAP.md)
 
-> **وضعیت: نسخه آزمایشی اول (Preview).** فقط با داده ساختگی اجرا شده است. هنوز روی سرور نمایندگی نصب نشده، به سامانه‌های رسمی (خودروساز، امداد، بیمه، انبار، حسابداری) وصل نیست و حالت آفلاین/همگام‌سازی هنوز فعال نشده است. جزئیات دقیق در [PROGRESS.md](PROGRESS.md).
+> **شاخه‌ها:** این راهنما مربوط به پلتفرم TypeScript در زنجیره PRهای #16 تا #21 و شاخه مستندات بعد از آن است. `main` تا تأیید ادغام مالک هنوز نمونه قدیمی را دارد. [ممیزی شاخه‌ها و CI](docs/GITHUB_AUDIT.md).
+>
+> **وضعیت: Preview مستقل با ورود شخصی.** مالک تأیید کرده خودش وارد شده است. فقط با داده ساختگی اجرا شده است. هنوز روی سرور نمایندگی نصب نشده، به سامانه‌های رسمی (خودروساز، امداد، بیمه، انبار، حسابداری) وصل نیست و حالت آفلاین/همگام‌سازی هنوز فعال نشده است. جزئیات دقیق در [PROGRESS.md](PROGRESS.md).
 
 ![داشبورد](docs/screenshots/desktop-dashboard.png)
 
@@ -30,12 +32,19 @@ Manage پرونده هر خودروی تصادفی را از پذیرش تا ت�
 | صف بررسی مغایرت قطعه، گزارش و PDF، فاکتور | تحویل دوم و سوم |
 | سرور محلی + همگام‌سازی ابری، حالت آفلاین | پس از بررسی سرور نمایندگی |
 
+## ورود به Preview میزبانی‌شده
+
+دعوت خصوصی → انتخاب رمز شخصی → اتصال Google Authenticator → ورود با ایمیل، رمز و کد. رمز مشترک demo مربوط به اجرای محلی است و در حالت شخصی Preview معتبر نیست. [راهنمای ورود و محدودیت بازیابی](docs/PERSONAL_AUTH_FA.md). ایمیل فقط شناسه است؛ ارسال خودکار ایمیل وجود ندارد.
+
 ## اجرای محلی (بدون Docker و بدون نصب PostgreSQL)
 
 پیش‌نیاز: Node.js 22 یا جدیدتر و pnpm 10.
 
 ```bash
-pnpm install
+git clone https://github.com/ali-hedax/manage-dealership-platform.git
+cd manage-dealership-platform
+git switch feature/personal-auth-totp  # main هنوز پلتفرم جدید را ندارد
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
@@ -84,7 +93,7 @@ index (4).html   نمونه اولیه قدیمی داشبورد انبار (د�
 
 ## نمونه اولیه قبلی
 
-فایل `index (4).html` نمونه اولیه تک‌فایلی تحلیل موجودی و پذیرش است و شاخه‌های `feature/b2b-auto-report` و `feature/nobat-dahi` روی آن کار کرده‌اند. این نسخه بدون تغییر حفظ شده و محصول جدید به آن وابسته نیست. وضعیت شاخه‌ها و PRها در [GITHUB_AUDIT.md](docs/GITHUB_AUDIT.md).
+فایل `index (4).html` نمونه اولیه تک‌فایلی تحلیل موجودی و پذیرش است و شاخه‌های `feature/b2b-auto-report` و `feature/nobat-dahi` روی آن کار کرده‌اند. این نسخه بدون تغییر حفظ شده و محصول جدید به آن وابسته نیست. فایل HTML دروازه ورود در `deploy/preview` نیز عمداً مستقل است. [شواهد و مراحل مهاجرت قابلیت‌های نمونه](docs/PROTOTYPE_MIGRATION.md). وضعیت شاخه‌ها و PRها در [GITHUB_AUDIT.md](docs/GITHUB_AUDIT.md).
 
 ## مستندات
 

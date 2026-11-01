@@ -20,12 +20,12 @@ Report vulnerabilities privately to the maintainer ([ali-hedax](https://github.c
 | Audit | Append-only `audit_events` (DB trigger) with actor, time, reason, before/after, request id, IP; login events | `audit.service.ts`, migration 0001 |
 | Logs | Structured JSON; cookies, auth headers and set-cookie redacted; passwords never logged | `app.module.ts` |
 | Secrets | `.env` git-ignored; `.env.example` placeholders only; demo password generated and written to a git-ignored file | `.gitignore` |
-| Supply chain | `pnpm audit` (high), dependency review on PRs, gitleaks secret scan in CI | `.github/workflows/ci.yml` |
+| Supply chain | `pnpm audit` (high), advisory dependency review on PRs (until dependency graph is enabled), blocking gitleaks secret scan in CI | `.github/workflows/ci.yml` |
 
 ## Known gaps (tracked)
 
-- MFA for manager/admin accounts — not yet implemented.
-- User management UI and password change — accounts are seeded; production accounts need an admin flow before go-live.
+- Personal Preview mode implements invitation-based password + TOTP authentication (PR #21), encrypted seeds, single-use challenges, replay rejection and tenant-scoped invitation administration. See [personal sign-in](docs/PERSONAL_AUTH_FA.md). Local synthetic demo mode remains separately configurable.
+- Full user lifecycle, self-service password/factor recovery, backup codes and established production recovery procedures remain incomplete (#14). Never reset a personal-mode demo database to recover an account. Preserve AUTH_TOKEN_SECRET with private database backups; losing/rotating it makes stored TOTP seeds unreadable.
 - Rate limiting is per IP. Without a reverse proxy that sets `X-Forwarded-For`, all users behind the web container share one IP bucket — deploy behind Caddy/Nginx.
 - File uploads (photos, documents) not implemented yet; object storage, size/type validation and malware scanning are required when added.
-- Backups and restore drill exist only as a procedure ([docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md)) until a server is provisioned.
+- A private pre-rollout backup was verified by archive listing on the isolated Preview; a full restore/failure drill for production and dealership LAN remains required. See [backup procedure](docs/BACKUP_RESTORE.md) and the [deployment record](docs/PREVIEW_DEPLOYMENT_20261101.md).
