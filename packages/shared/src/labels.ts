@@ -1,5 +1,12 @@
 import type {
+  AssessmentItemAction,
+  AssessmentKind,
+  AssessmentStatus,
+  AuthorizationMethod,
+  AuthorizationSource,
+  AuthorizationStatus,
   BlockerReason,
+  ItemApprovalStatus,
   CaseStage,
   CaseStatus,
   CoverageType,
@@ -65,6 +72,49 @@ export const BLOCKER_REASON_LABELS: Record<BlockerReason, string> = {
   other: 'سایر',
 };
 
+export const ASSESSMENT_KIND_LABELS: Record<AssessmentKind, string> = {
+  initial: 'کارشناسی اولیه',
+  supplement: 'الحاقیه',
+};
+
+export const ASSESSMENT_STATUS_LABELS: Record<AssessmentStatus, string> = {
+  draft: 'پیش‌نویس',
+  final: 'نهایی',
+  superseded: 'جایگزین‌شده با الحاقیه',
+};
+
+export const ASSESSMENT_ITEM_ACTION_LABELS: Record<AssessmentItemAction, string> = {
+  replace: 'تعویض',
+  repair: 'تعمیر',
+};
+
+export const AUTHORIZATION_STATUS_LABELS: Record<AuthorizationStatus, string> = {
+  not_required: 'نیاز به مجوز جدید ندارد',
+  pending: 'در انتظار مجوز',
+  approved: 'مجوز ثبت شد',
+  partially_approved: 'مجوز جزئی',
+  rejected: 'مجوز رد شد',
+};
+
+export const AUTHORIZATION_SOURCE_LABELS: Record<AuthorizationSource, string> = {
+  golden_card: 'سامانه کارت طلایی',
+  insurer: 'شرکت بیمه',
+  customer: 'مشتری',
+};
+
+export const AUTHORIZATION_METHOD_LABELS: Record<AuthorizationMethod, string> = {
+  official_system: 'ثبت در سامانه رسمی',
+  written: 'کتبی',
+  phone: 'تلفنی',
+  in_person: 'حضوری',
+};
+
+export const ITEM_APPROVAL_LABELS: Record<ItemApprovalStatus, string> = {
+  pending: 'در انتظار',
+  approved: 'تأییدشده',
+  rejected: 'ردشده',
+};
+
 export const MODULE_LABELS: Record<ModuleKey, string> = {
   accident: 'خودروهای تصادفی',
   reception: 'پذیرش و خدمات عمومی',
@@ -93,6 +143,14 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'blocker.created': 'ثبت مانع',
   'blocker.acknowledged': 'اقدام روی مانع',
   'blocker.resolved': 'رفع مانع',
+  'assessment.created': 'شروع کارشناسی',
+  'assessment.supplement_created': 'شروع الحاقیه (آسیب پنهان)',
+  'assessment.item_added': 'افزودن قلم کارشناسی',
+  'assessment.item_updated': 'ویرایش قلم کارشناسی',
+  'assessment.item_removed': 'حذف قلم از پیش‌نویس',
+  'assessment.finalized': 'نهایی‌شدن کارشناسی',
+  'assessment.superseded': 'جایگزینی با الحاقیه',
+  'assessment.authorization_recorded': 'ثبت مجوز',
 };
 
 // Keys produced by the API in CaseListItem.missingFields ('نیازمند تکمیل').

@@ -53,6 +53,41 @@ export const BLOCKER_REASONS = [
 ] as const;
 export type BlockerReason = (typeof BLOCKER_REASONS)[number];
 
+// Assessment versions: the initial assessment and each supplement (الحاقیه)
+// raised by hidden damage. A final version is immutable; a supplement is a new
+// version that copies the previous items and adds or changes lines.
+export const ASSESSMENT_KINDS = ['initial', 'supplement'] as const;
+export type AssessmentKind = (typeof ASSESSMENT_KINDS)[number];
+
+export const ASSESSMENT_STATUSES = ['draft', 'final', 'superseded'] as const;
+export type AssessmentStatus = (typeof ASSESSMENT_STATUSES)[number];
+
+export const ASSESSMENT_ITEM_ACTIONS = ['replace', 'repair'] as const;
+export type AssessmentItemAction = (typeof ASSESSMENT_ITEM_ACTIONS)[number];
+
+// Authorization is granted outside Manage (golden-card system, insurer,
+// customer); Manage records the decision and its official reference only.
+export const AUTHORIZATION_STATUSES = [
+  'not_required',
+  'pending',
+  'approved',
+  'partially_approved',
+  'rejected',
+] as const;
+export type AuthorizationStatus = (typeof AUTHORIZATION_STATUSES)[number];
+
+export const AUTHORIZATION_DECISIONS = ['approved', 'partially_approved', 'rejected'] as const;
+export type AuthorizationDecision = (typeof AUTHORIZATION_DECISIONS)[number];
+
+export const AUTHORIZATION_SOURCES = ['golden_card', 'insurer', 'customer'] as const;
+export type AuthorizationSource = (typeof AUTHORIZATION_SOURCES)[number];
+
+export const AUTHORIZATION_METHODS = ['official_system', 'written', 'phone', 'in_person'] as const;
+export type AuthorizationMethod = (typeof AUTHORIZATION_METHODS)[number];
+
+export const ITEM_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'] as const;
+export type ItemApprovalStatus = (typeof ITEM_APPROVAL_STATUSES)[number];
+
 // Default repair departments seeded per tenant; each tenant can rename,
 // disable or add departments.
 export const DEFAULT_DEPARTMENTS = [

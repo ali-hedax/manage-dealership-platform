@@ -1,5 +1,12 @@
 import type {
+  AssessmentItemAction,
+  AssessmentKind,
+  AssessmentStatus,
+  AuthorizationMethod,
+  AuthorizationSource,
+  AuthorizationStatus,
   BlockerReason,
+  ItemApprovalStatus,
   CaseStage,
   CaseStatus,
   CoverageType,
@@ -89,6 +96,68 @@ export interface Blocker {
   resolvedAt: string | null;
   resolvedBy: UserRef | null;
   resolutionNote: string | null;
+}
+
+export interface AssessmentItem {
+  id: string;
+  lineNo: number;
+  action: AssessmentItemAction;
+  description: string;
+  partNumber: string | null;
+  quantity: number;
+  unitPriceRial: number;
+  labourDepartment: { id: string; name: string } | null;
+  labourRial: number;
+  evidence: string | null;
+  approvalStatus: ItemApprovalStatus;
+  /** Item of the previous version this line was copied from; null = new in this version. */
+  originItemId: string | null;
+  /** True when the line is new or changed compared with the previous version. */
+  changed: boolean;
+}
+
+export interface AssessmentTotals {
+  partsRial: number;
+  labourRial: number;
+  totalRial: number;
+  /** Total minus rejected items; equals totalRial until a decision is recorded. */
+  approvedRial: number;
+}
+
+export interface Assessment {
+  id: string;
+  caseId: string;
+  versionNo: number;
+  kind: AssessmentKind;
+  status: AssessmentStatus;
+  assessorName: string;
+  assessorOrg: string | null;
+  assessedAt: string;
+  reason: string | null;
+  discoveredAt: string | null;
+  notes: string | null;
+  finalizedAt: string | null;
+  finalizedBy: UserRef | null;
+  authorizationStatus: AuthorizationStatus;
+  authorization: {
+    source: AuthorizationSource;
+    method: AuthorizationMethod;
+    reference: string | null;
+    at: string;
+    note: string | null;
+    recordedBy: UserRef;
+  } | null;
+  /** Blocker that keeps the case waiting until the authorization is recorded. */
+  blockerId: string | null;
+  items: AssessmentItem[];
+  totals: AssessmentTotals;
+  /** Difference with the previous final version (supplements only). */
+  deltaRial: number | null;
+  /** Final supplement that raises the cost: the financial gate (issue #10) must re-approve. */
+  requiresFinancialReview: boolean;
+  createdAt: string;
+  createdBy: UserRef;
+  version: number;
 }
 
 export interface TimelineEvent {
