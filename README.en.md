@@ -4,7 +4,7 @@
 
 [فارسی](README.md) · [API](docs/API.md) · [GitHub workflow](docs/GITHUB_WORKFLOW.md) · [Architecture](docs/ARCHITECTURE.md) · [Progress](PROGRESS.md) · [Roadmap](docs/ROADMAP.md)
 
-> **Main branch:** platform PRs #16–#21 and documentation #23 are now merged with explicit owner approval. Staff invitation email is reviewed on a separate feature branch/PR. See [branch/CI audit](docs/GITHUB_AUDIT.md).
+> **Main branch:** platform PRs #16–#21, docs #23 and staff #24 are merged with owner approval. Staff administration and private-link invitations are deployed on Preview. Server-side SMTP connectivity remains unresolved; local Gmail verification is not server email delivery. See [release record](docs/STAFF_PREVIEW_DEPLOYMENT_20261101.md).
 >
 > **Status: hosted personal-authentication Preview.** The owner reports completing their own login. Runs with synthetic data only. Not yet installed on the dealership server, not connected to any official system (manufacturer, roadside assistance, insurers, inventory, accounting), and offline/LAN sync is not active yet. See [PROGRESS.md](PROGRESS.md).
 

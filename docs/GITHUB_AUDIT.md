@@ -50,3 +50,7 @@ Review the documentation and prototype-preservation PRs; authorize merges separa
 The owner explicitly approved “merge in main; continue with Preview” in the current chat. PRs #16, #17, #18, #20, #19, #21 and #23 were merged in that order using merge commits and expected-head checks. Before each merge, git merge-tree proved that the result equals the previously CI-tested head tree. main is now eaa7c66be5cb78308ef52fd4e4b4afd61be84bb0, with all six jobs passed in [41318062293](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41318062293). No branches were deleted; #1/#3/#22 remain separate. No server or Production operation accompanied these merges. Earlier “main is legacy / unmerged” statements above are the historical audit snapshot.
 
 Staff email invitations are implemented next on feature/staff-email-invitations, branched from the integrated main. New feature merge and Preview rollout are tracked separately from the already-approved platform integration.
+
+## Approved staff release follow-up
+
+The owner subsequently approved PR #24 merge and Preview installation. Main is now 2b1bf10; application b7e4c93 is deployed with private backups and no reset. [Release record](STAFF_PREVIEW_DEPLOYMENT_20261101.md) separates installed staff/private-link functionality from incomplete VM SMTP delivery (#26). PR #25 adds tested image exports for future approved updates; it remains separate and unmerged, with six CI jobs passing. No prototype PR/branch was removed.
