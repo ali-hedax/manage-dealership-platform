@@ -1,0 +1,34 @@
+{
+  "name": "manage-by-hedax",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Manage by HEDAX — dealership operations platform (accident repair module, phase 1)",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --workspace-concurrency=1 build",
+    "build:shared": "pnpm --filter @manage/shared build",
+    "dev": "pnpm build:shared && pnpm --parallel --filter @manage/api --filter @manage/web dev",
+    "start": "pnpm --parallel --filter @manage/api --filter @manage/web start",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm build:shared && pnpm -r typecheck",
+    "test": "pnpm build:shared && pnpm -r test",
+    "test:e2e": "pnpm --filter @manage/web test:e2e",
+    "db:migrate": "pnpm --filter @manage/api db:migrate",
+    "db:seed-demo": "pnpm --filter @manage/api db:seed-demo",
+    "db:reset-demo": "pnpm --filter @manage/api db:reset-demo"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ],
+    "overrides": {
+      "multer": ">=2.5.0"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@manage/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Manage by HEDAX web app (Next.js, Persian RTL)",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "echo \"web: covered by test:e2e (Playwright)\"",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource/vazirmatn": "^5.2.0",
+    "@manage/shared": "workspace:*",
+    "next": "^16.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "swr": "^2.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "~5.9.3"
+  }
+}

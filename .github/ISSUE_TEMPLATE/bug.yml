@@ -1,0 +1,27 @@
+name: Bug / اشکال
+description: Something does not work as described / چیزی طبق انتظار کار نمی‌کند
+labels: ["type: bug", "status: backlog"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository is public. Do not include customer names, phones, plates, VINs, passwords or server addresses.
+        مخزن عمومی است؛ اطلاعات مشتری، رمز یا نشانی سرور ننویسید.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps / مراحل
+      description: What did you do? Which role (expert, supervisor, manager…)?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual / انتظار و نتیجه
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment / محیط
+      placeholder: local dev / preview / LAN server; browser and device

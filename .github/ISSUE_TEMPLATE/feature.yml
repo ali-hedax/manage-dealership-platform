@@ -1,0 +1,21 @@
+name: Feature / قابلیت
+description: New capability with acceptance criteria / قابلیت جدید با معیار پذیرش
+labels: ["type: feature", "status: backlog"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Who needs what, and why / چه کسی، چه چیزی، چرا
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria / معیار پذیرش
+      description: Testable statements. The issue is done only when these are tested and recorded in docs/TEST_REPORT.md.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Rules, permissions, data / قواعد، دسترسی، داده

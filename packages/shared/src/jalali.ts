@@ -1,0 +1,78 @@
+import { isValidJalaaliDate, toGregorian, toJalaali } from 'jalaali-js';
+import { toLatinDigits, toPersianDigits } from './text';
+
+// All timestamps are stored in UTC. Iran has used a fixed UTC+03:30 offset
+// without daylight saving since September 2022, so conversion uses a fixed
+// offset; this keeps server, browser and tests deterministic. Dates entered
+// for periods before 2022-09 may differ by one hour from wall-clock time.
+export const TEHRAN_OFFSET_MINUTES = 210;
+
+export interface JalaliParts {
+  jy: number;
+  jm: number;
+  jd: number;
+  hour: number;
+  minute: number;
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Splits a UTC instant into Tehran-local Jalali date and time parts. */
+export function toJalaliParts(date: Date): JalaliParts {
+  const local = new Date(date.getTime() + TEHRAN_OFFSET_MINUTES * 60_000);
+  const { jy, jm, jd } = toJalaali(
+    local.getUTCFullYear(),
+    local.getUTCMonth() + 1,
+    local.getUTCDate(),
+  );
+  return { jy, jm, jd, hour: local.getUTCHours(), minute: local.getUTCMinutes() };
+}
+
+/** "1405/08/09" in ASCII digits (for inputs). */
+export function formatJalaliDateInput(date: Date): string {
+  const p = toJalaliParts(date);
+  return `${p.jy}/${pad(p.jm)}/${pad(p.jd)}`;
+}
+
+/** "14:30" in ASCII digits (for inputs). */
+export function formatTimeInput(date: Date): string {
+  const p = toJalaliParts(date);
+  return `${pad(p.hour)}:${pad(p.minute)}`;
+}
+
+/** Display form with Persian digits: "۱۴۰۵/۰۸/۰۹" or "۱۴۰۵/۰۸/۰۹ ۱۴:۳۰". */
+export function formatJalali(
+  value: Date | string | null | undefined,
+  opts: { time?: boolean } = {},
+): string {
+  if (!value) return '—';
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return '—';
+  const text = opts.time
+    ? `${formatJalaliDateInput(date)} ${formatTimeInput(date)}`
+    : formatJalaliDateInput(date);
+  return toPersianDigits(text);
+}
+
+/**
+ * Parses a Jalali date ("1405/8/9", "۱۴۰۵-۰۸-۰۹") and optional time ("14:30")
+ * entered in Tehran local time. Returns null when invalid.
+ */
+export function parseJalali(dateText: string, timeText = '00:00'): Date | null {
+  const d = toLatinDigits(dateText).trim().match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
+  const t = toLatinDigits(timeText || '00:00').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!d || !t) return null;
+  const [jy, jm, jd] = [Number(d[1]), Number(d[2]), Number(d[3])];
+  const [hour, minute] = [Number(t[1]), Number(t[2])];
+  if (!isValidJalaaliDate(jy, jm, jd) || hour > 23 || minute > 59) return null;
+  const { gy, gm, gd } = toGregorian(jy, jm, jd);
+  const utc = Date.UTC(gy, gm - 1, gd, hour, minute) - TEHRAN_OFFSET_MINUTES * 60_000;
+  return new Date(utc);
+}
+
+/** Current Jalali year in Tehran (used in case numbers). */
+export function currentJalaliYear(now: Date = new Date()): number {
+  return toJalaliParts(now).jy;
+}

@@ -1,0 +1,43 @@
+# Backup and restore
+
+**Status:** procedure defined; not yet exercised on a real server (none provisioned). A restore drill must pass before real data is entered.
+
+## What to back up
+
+| Item | How | Frequency (proposal) |
+| --- | --- | --- |
+| PostgreSQL database | `pg_dump -Fc` | Daily full + before every migration/deploy |
+| Uploaded documents/photos | Object storage versioning or file copy | When the documents module ships |
+| `.env` / secrets | Owner's password manager, never in Git or the backup bucket in clear text | On change |
+
+Keep at least 7 daily and 4 weekly copies, one copy off the server (cloud backup for the LAN server, a different region/provider for the cloud node), encrypted at rest.
+
+## Backup (Compose)
+
+```bash
+docker compose exec -T db pg_dump -U manage -d manage -Fc > backup/manage-$(date +%Y%m%d-%H%M).dump
+```
+
+## Restore drill (on a scratch database, never over production first)
+
+```bash
+docker compose exec -T db createdb -U manage manage_restore
+docker compose exec -T db pg_restore -U manage -d manage_restore --no-owner < backup/manage-YYYYMMDD-HHMM.dump
+docker compose exec -T db psql -U manage -d manage_restore -c "select count(*) from cases; select count(*) from audit_events;"
+docker compose exec -T db dropdb -U manage manage_restore
+```
+
+Record date, dump file, row counts and result in the table below. The `audit_events` trigger is restored with the schema (pg_restore recreates it), so restored audit history remains append-only.
+
+## Restore after an incident
+
+1. Stop `api` and `web` (`docker compose stop api web`).
+2. Take a dump of the current (damaged) state for investigation.
+3. Restore the chosen dump into a fresh database, point `DATABASE_URL` at it, start `api`, verify `/api/v1/health` and spot-check cases.
+4. With LAN + cloud nodes (future), resync from the restored node; see [OFFLINE_SYNC.md](OFFLINE_SYNC.md).
+
+## Drill log
+
+| Date | Environment | Dump | Rows (cases / audit) | Result |
+| --- | --- | --- | --- | --- |
+| — | — | — | — | Not yet performed |

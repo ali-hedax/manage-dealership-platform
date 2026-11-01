@@ -1,0 +1,59 @@
+# Manage by HEDAX — full stack on PostgreSQL (preview / LAN-server layout).
+#   cp .env.example .env   # set POSTGRES_PASSWORD and DATABASE_URL to match
+#   docker compose up -d --build
+# Web on http://localhost:3000. Put a TLS reverse proxy (Caddy/Nginx) in front
+# for anything beyond a single machine; see docs/DEPLOYMENT.md.
+name: manage
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: manage
+      POSTGRES_USER: manage
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manage -d manage"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-preview}
+      DB_DRIVER: postgres
+      DATABASE_URL: postgres://manage:${POSTGRES_PASSWORD}@db:5432/manage
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      NODE_ID: ${NODE_ID:-compose}
+      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
+    # Not published: only the web container reaches the API.
+    expose:
+      - "4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_INTERNAL_URL: http://api:4000
+      # true only when a reverse proxy in front sets X-Forwarded-For (Caddy/Nginx)
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+volumes:
+  pgdata:
