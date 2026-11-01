@@ -2,6 +2,15 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — branch `feature/assessment-parts`
+
+### Added
+- Versioned assessments and supplements (issue #8): initial assessment and supplements after hidden damage with replace/repair lines, part numbers, quantities, prices and labour per department, evidence references; the approved version is kept unchanged when a supplement is finalized.
+- Authorization recording: source, method, official reference (required for golden card and insurer), partial approval per line; an «مجوز» blocker holds the case (and delivery) until the decision is recorded.
+- A supplement can move the internal delivery forecast; the official deadline is untouched. Supplements that raise the cost are flagged for financial re-approval.
+- Demo case 1 shows an approved assessment and a supplement waiting for authorization.
+- History shows assessment changes with amounts in Rials. On phones the assessment lines are shown as stacked cards.
+
 ## [0.1.0] — Unreleased (branch `feature/accident-mvp`)
 
 ### Added

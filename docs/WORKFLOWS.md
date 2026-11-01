@@ -16,9 +16,15 @@ Status key: **✅ implemented and tested** · **◐ partial** · **○ planned**
 - Official approval exists only when recorded in the official system; Manage stores the reference, it does not approve.
 - ○ Approved items/labour, insurer vs customer share, price differences, phone/written approvals, supplier introduced by insurer, advance payment and customer approval for personal cases (delivery 2).
 
-## 3. Assessment and supplements — ○ (delivery 2)
+## 3. Assessment and supplements — ✅
 
-Versioned assessments with items (part number, qty, price, labour by unit, authorization, evidence, assessor); supplements on hidden damage keep the previous version and request new approvals.
+- **Initial assessment** (version 1): assessor name and organisation, assessment time, lines with replace/repair, part number, quantity, unit price, labour amount and labour department, evidence reference. Amounts are whole Rials. Starting it moves a case in "پذیرش" to "کارشناسی".
+- **Draft → final**: lines are edited only in the draft; finalizing freezes the lines and totals. A final version cannot be changed — any change is a supplement.
+- **Authorization**: a final version that needs authorization opens an «مجوز» blocker on the case (start = assessment time, or discovery time for hidden damage). Only recording the decision closes it; it cannot be resolved by hand. The decision records source (golden-card system / insurer / customer), method, **official reference (required for golden card and insurer)**, time and note. Partial approval marks rejected lines; the approved amount excludes them. Finalizing the initial assessment moves a case in "پذیرش/کارشناسی" to "در انتظار مجوز / تأیید". Manage records the decision; it never issues it.
+- **Supplement (الحاقیه) after hidden damage**: requires a description and the discovery time. It copies the previous version's lines into a new draft; added or edited lines are marked «جدید» / «تغییرکرده» and need a fresh decision, unchanged lines keep theirs. On finalize the previous version becomes «جایگزین‌شده» and stays exactly as approved; its pending wait (if any) is closed. A supplement that only removes lines needs no new authorization. Finalizing can move the internal **forecast** (audited); the **official deadline is never changed** here.
+- Costs: totals per version, difference to the previous version, approved amount. A supplement that raises the cost is flagged for financial re-approval; the financial gate itself is issue #10.
+- Parts: the replace lines of the current version are the parts needs that the parts module (#9) will consume.
+- No delivery while an authorization is pending (open blocker); repair work that does not depend on it continues.
 
 ## 4. Division of work and follow-up — ✅
 

@@ -31,7 +31,8 @@ A modular monolith: one API process with domain modules, one web process, one da
 | Dashboard | `apps/api/src/dashboard` | Implemented |
 | Audit | `apps/api/src/audit` + DB trigger | Implemented |
 | Sync | `change_log`, idempotency keys, `version` columns | Foundations only |
-| Assessment & supplements, parts, approvals, finance, QC, documents, reports, notifications, integrations, AI, settings UI | `MODULES` in `packages/shared/src/enums.ts` | Planned; navigation shows "در دست توسعه" |
+| Assessments & supplements (versioned, authorization recording) | `apps/api/src/assessments` | Implemented |
+| Parts, finance, QC, documents, reports, notifications, integrations, AI, settings UI | `MODULES` in `packages/shared/src/enums.ts` | Planned; navigation shows "در دست توسعه" |
 
 ## Request path and cross-cutting concerns
 

@@ -20,7 +20,7 @@ Manage tracks every accident-repair vehicle from admission to delivery, so the s
 - Manager dashboard whose counts link to the exact filtered lists
 - Append-only audit trail (database trigger)
 
-Next deliveries: assessment and supplements, parts, financial gate, QC and delivery, reports and Persian PDF, then LAN server + cloud sync.
+Versioned assessment and supplements are implemented on `feature/assessment-parts`. Next deliveries: parts, financial gate, QC and delivery, reports and Persian PDF, then LAN server + cloud sync.
 
 ## Run locally (no Docker, no PostgreSQL install)
 
