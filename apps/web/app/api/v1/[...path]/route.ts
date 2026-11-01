@@ -12,7 +12,6 @@ const FORWARD_REQUEST = [
   'cookie',
   'idempotency-key',
   'user-agent',
-  'x-forwarded-for',
   'x-manage-client',
   'x-request-id',
 ];
@@ -28,6 +27,11 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     const value = req.headers.get(name);
     if (value) headers.set(name, value);
   }
+  // The API rate-limits logins by client address. X-Forwarded-For is set by the
+  // client unless a reverse proxy in front of this server overwrites it, so it
+  // is passed on only when such a proxy is configured (TRUST_PROXY_HEADERS).
+  const forwardedFor = req.headers.get('x-forwarded-for');
+  if (forwardedFor && process.env.TRUST_PROXY_HEADERS === 'true') headers.set('x-forwarded-for', forwardedFor);
   const hasBody = !['GET', 'HEAD'].includes(req.method);
 
   let upstream: Response;
