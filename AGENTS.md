@@ -103,7 +103,7 @@ The manual fetch button (`force`) bypasses cadence, but not the 10:00 gate. Sche
 
 - **Never commit or log:** real spreadsheets/CSVs, customer data, passwords, companion tokens, cookies, browser profiles/sessions, databases, network traces, or anything under `.local/` (profiles, `report-archive`, `companion.log`, local live-check scripts). `.gitignore` covers these; check `git status` before committing and avoid blind `git add -A`.
 - Do not copy `.local` or archive contents into docs or reports. Tests use synthetic fixtures only; real files only locally via `--real`.
-- Remote: `origin` = `https://github.com/ali-hedax/hedax.git`. Verify `git remote -v` and the current branch before any push; do not guess repository names. `brand-guide-hedax` is a different project.
+- Remote: `origin` = `https://github.com/ali-hedax/manage-dealership-platform.git`. Verify `git remote -v` and the current branch before any push; do not guess repository names. `brand-guide-hedax` is a different project.
 - No force push, no history rewrite, no checkout/reset that loses uncommitted work. Commit or push only when asked.
 
 ## Known issues (evidence as of 2026-09-28, commit `e75f19c`)
