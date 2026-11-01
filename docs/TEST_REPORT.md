@@ -11,10 +11,10 @@ Last full run: **2026-11-01**, branch `feature/assessment-parts` (issue #8 on to
 | Shared unit tests (Jalali, digits, plates, phones, RBAC, schemas) | `pnpm --filter @manage/shared test` | ✅ 9 / 9 |
 | API unit + integration (Jest + supertest, real HTTP, embedded PostgreSQL) | `pnpm --filter @manage/api test` | ✅ 41 / 41 (4 suites; +6 assessment tests) |
 | Production build (API + web) | `pnpm build` | ✅ pass |
-| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 6 / 6 locally on Edge in three consecutive runs (incl. new assessment flow); CI run pending for this branch |
+| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 6 / 6 locally on Edge in three consecutive runs (incl. new assessment flow); ✅ on CI Chromium (PR #17, run 41279034901) |
 | Dependency audit (prod, high) + gitleaks secret scan | `pnpm audit`, CI `security` | ✅ no known vulnerabilities; no secrets found. Dependency review is non-blocking until the repo's Dependency graph is enabled (#4) |
 | `pnpm dev` from an empty database | manual | ✅ API healthy, demo auto-seeded, web proxy 200 |
-| Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (GitHub Actions run 41276167117) |
+| Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (run 41276167117; with migration `0002_assessments` and the new demo seed: run 41279034901) |
 | Docker images + compose smoke test (health via web proxy, login, dashboard) | CI job `docker` | ✅ pass (run 41276167117). Not verifiable on the dev machine: 8 GB RAM, 5.6 GB free disk, Docker daemon crashed twice during builds |
 
 ## Acceptance scenarios (brief §11)
