@@ -21,5 +21,5 @@ it('demo dealership seeds through the real services with realistic states', asyn
   );
 
   const d = (await manager.get('/dashboard')).body;
-  expect(d).toMatchObject({ activeCases: 5, overdue: 1, blockedCases: 1, readyForDelivery: 1, legacyEntries: 1 });
+  expect(d).toMatchObject({ activeCases: 5, overdue: 1, blockedCases: 2, readyForDelivery: 1, legacyEntries: 1 });
 });

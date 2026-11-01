@@ -27,6 +27,12 @@ test('documentation screenshots', async ({ page }, info) => {
   await page.locator('.timeline li').first().waitFor();
   await page.screenshot({ path: out('case-detail', project), fullPage: true });
 
+  // Demo case 1: approved assessment plus a supplement waiting for authorization.
+  await page.goto('/cases');
+  await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه یک' }).click();
+  await page.getByTestId('assessment-version').first().waitFor();
+  await page.getByTestId('assessment-panel').screenshot({ path: out('assessment-demo', project) });
+
   await page.goto('/cases/new');
   await page.getByLabel('پلاک').waitFor();
   await page.screenshot({ path: out('case-new', project), fullPage: true });

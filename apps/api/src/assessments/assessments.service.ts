@@ -316,8 +316,8 @@ export class AssessmentsService {
           taskId: null,
           reason: 'authorization',
           description: `در انتظار مجوز ${label}`,
-          // For hidden damage the case has been waiting since the discovery.
-          occurredAt: a.discoveredAt && a.discoveredAt < now ? a.discoveredAt : now,
+          // The case has been waiting since the assessment (or, for hidden damage, the discovery).
+          occurredAt: (a.discoveredAt ?? a.assessedAt) < now ? (a.discoveredAt ?? a.assessedAt) : now,
         });
         blockerId = blocker.id;
       }
@@ -393,8 +393,9 @@ export class AssessmentsService {
       if (a.status !== 'final' || a.authorizationStatus !== 'pending') {
         throw badRequest('AUTHORIZATION_NOT_PENDING', 'این نسخه در انتظار مجوز نیست');
       }
-      if (a.finalizedAt && at.getTime() < a.finalizedAt.getTime() - MINUTE_TOLERANCE_MS) {
-        throw badRequest('INVALID_TIME', 'زمان مجوز نمی‌تواند قبل از نهایی‌شدن کارشناسی باشد');
+      // Staff often record afterwards: the decision may predate its entry in Manage, not the assessment.
+      if (at.getTime() < a.assessedAt.getTime() - MINUTE_TOLERANCE_MS) {
+        throw badRequest('INVALID_TIME', 'زمان مجوز نمی‌تواند قبل از زمان کارشناسی باشد');
       }
 
       const items = await tx.select().from(assessmentItems).where(eq(assessmentItems.assessmentId, a.id));

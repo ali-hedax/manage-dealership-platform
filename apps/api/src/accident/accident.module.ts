@@ -16,6 +16,6 @@ import {
 @Module({
   controllers: [CasesController, TasksController, BlockersController, DashboardController, AssessmentsController],
   providers: [CasesService, TasksService, BlockersService, DashboardService, AssessmentsService],
-  exports: [CasesService, TasksService, BlockersService],
+  exports: [CasesService, TasksService, BlockersService, AssessmentsService],
 })
 export class AccidentModule {}

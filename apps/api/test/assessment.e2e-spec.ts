@@ -178,6 +178,30 @@ describe('initial assessment', () => {
     expect(again.body.code).toBe('AUTHORIZATION_NOT_PENDING');
   });
 
+  it('accepts a decision recorded afterwards, but not one older than the assessment', async () => {
+    const c = await newCase();
+    let a: Assessment = (
+      await expert.post(`/cases/${c.id}/assessments`, {
+        kind: 'initial',
+        assessorName: 'الف',
+        assessedAt: daysAgo(1),
+      })
+    ).body;
+    a = await addItem(a, { action: 'repair', description: 'صافکاری', labourRial: 1_000_000 });
+    a = (await expert.post(`/assessments/${a.id}/finalize`, { expectedVersion: a.version })).body;
+    // The wait started when the assessment was done, not when it was typed in.
+    const wait = (await caseOf(c.id)).blockers.find((b) => b.id === a.blockerId)!;
+    expect(new Date(wait.occurredAt).getTime()).toBe(new Date(a.assessedAt).getTime());
+
+    const body = { expectedVersion: a.version, decision: 'approved', source: 'customer', method: 'phone' };
+    const tooEarly = await expert.post(`/assessments/${a.id}/authorization`, { ...body, at: daysAgo(2) });
+    expect(tooEarly.body.code).toBe('INVALID_TIME');
+    const decidedAt = hoursAgo(12);
+    const late = await expert.post(`/assessments/${a.id}/authorization`, { ...body, at: decidedAt });
+    expect(late.status).toBe(201);
+    expect(late.body.authorization.at).toBe(decidedAt);
+  });
+
   it('allows a single initial assessment and one draft at a time', async () => {
     const c = await newCase();
     const first = await expert.post(`/cases/${c.id}/assessments`, { kind: 'initial', assessorName: 'الف' });
