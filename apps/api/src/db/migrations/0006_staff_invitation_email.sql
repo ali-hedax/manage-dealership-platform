@@ -1,0 +1,2 @@
+ALTER TABLE "auth_challenges" ADD COLUMN "invitation_delivery" text DEFAULT 'manual' NOT NULL;--> statement-breakpoint
+ALTER TABLE "auth_challenges" ADD COLUMN "invitation_sent_at" timestamp with time zone;

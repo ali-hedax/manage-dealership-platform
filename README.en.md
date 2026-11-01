@@ -4,7 +4,7 @@
 
 [فارسی](README.md) · [API](docs/API.md) · [GitHub workflow](docs/GITHUB_WORKFLOW.md) · [Architecture](docs/ARCHITECTURE.md) · [Progress](PROGRESS.md) · [Roadmap](docs/ROADMAP.md)
 
-> **Branch scope:** this guide describes the TypeScript platform in stacked PRs #16–#21 and the documentation descendant. `main` still holds the legacy prototype until an owner-approved merge. See [branch/CI audit](docs/GITHUB_AUDIT.md).
+> **Main branch:** platform PRs #16–#21 and documentation #23 are now merged with explicit owner approval. Staff invitation email is reviewed on a separate feature branch/PR. See [branch/CI audit](docs/GITHUB_AUDIT.md).
 >
 > **Status: hosted personal-authentication Preview.** The owner reports completing their own login. Runs with synthetic data only. Not yet installed on the dealership server, not connected to any official system (manufacturer, roadside assistance, insurers, inventory, accounting), and offline/LAN sync is not active yet. See [PROGRESS.md](PROGRESS.md).
 
@@ -26,7 +26,7 @@ Versioned assessment and supplements, the parts lifecycle (with Excel import), t
 
 ## Hosted Preview sign-in
 
-Private invitation → choose a personal password → enroll Google Authenticator → sign in with email, password and a fresh code. Email is an identifier; there is no automatic mail delivery. Local shared demo credentials do not work in personal mode. [Persian sign-in guide and recovery limitations](docs/PERSONAL_AUTH_FA.md).
+Private invitation → choose a personal password → enroll Google Authenticator → sign in with email, password and a fresh code. Email identifies the account; the second factor is Authenticator. The new staff workflow adds invitation email separately; see [staff guide and rollout status](docs/STAFF_FA.md). Local shared demo credentials do not work in personal mode. [Persian sign-in guide and recovery limitations](docs/PERSONAL_AUTH_FA.md).
 
 ## Run locally (no Docker, no PostgreSQL install)
 
@@ -35,7 +35,7 @@ Requires Node.js 22+ and pnpm 10.
 ```bash
 git clone https://github.com/ali-hedax/manage-dealership-platform.git
 cd manage-dealership-platform
-git switch feature/personal-auth-totp  # main does not yet contain the platform
+git switch main
 pnpm install --frozen-lockfile
 pnpm dev
 ```

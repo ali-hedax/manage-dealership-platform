@@ -44,3 +44,9 @@ The owner reports completing their own personal login. That is recorded as owner
 ## Follow-up
 
 Review the documentation and prototype-preservation PRs; authorize merges separately. Keep #1/#3/b2b history until feature-parity decisions. See [migration plan](PROTOTYPE_MIGRATION.md), [workflow](GITHUB_WORKFLOW.md), [progress](../PROGRESS.md) and [tests](TEST_REPORT.md).
+
+## Approved platform integration — 2026-11-01
+
+The owner explicitly approved “merge in main; continue with Preview” in the current chat. PRs #16, #17, #18, #20, #19, #21 and #23 were merged in that order using merge commits and expected-head checks. Before each merge, git merge-tree proved that the result equals the previously CI-tested head tree. main is now eaa7c66be5cb78308ef52fd4e4b4afd61be84bb0, with all six jobs passed in [41318062293](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41318062293). No branches were deleted; #1/#3/#22 remain separate. No server or Production operation accompanied these merges. Earlier “main is legacy / unmerged” statements above are the historical audit snapshot.
+
+Staff email invitations are implemented next on feature/staff-email-invitations, branched from the integrated main. New feature merge and Preview rollout are tracked separately from the already-approved platform integration.

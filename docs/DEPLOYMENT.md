@@ -106,3 +106,7 @@ Personal mode supersedes the legacy shared gate described above: TOTP_AUTH_ENABL
 This audit only read the Manage VM Git/container state: deployed 58ad08c, clean worktree, healthy services. No deployment was performed. Historical setup commands are not instructions to provision again.
 
 Before any future owner-approved update, inspect all tracked/untracked changes, preserve them privately and take DB/config backups. The existing deploy.sh uses reset --hard and image prune; do not run it on an unreviewed checkout or as an automatic update. Review and harden that behavior in a separate tested change before relying on it. All three Compose files remain necessary on this VM. Do not publish .env, invitation files or backup contents.
+
+## Staff invitation email configuration
+
+New feature branch: feature/staff-email-invitations. Set SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD and SMTP_FROM privately on the Manage Preview only; Compose passes them to API only. Gmail requires a user-created App Password; neither the primary Google password nor a six-digit code can be used. Keep AUTH_TOKEN_SECRET unchanged. Verify SMTP authentication without sending mail, then exercise an owner-authorized invitation recipient. Back up DB/config before additive migration 0006. Current mail configuration being present is distinct from successful provider authentication and actual email delivery. Do not claim rollout complete until the feature is deployed, services healthy and the sender verified.

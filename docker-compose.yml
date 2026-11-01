@@ -39,6 +39,12 @@ services:
       TOTP_AUTH_ENABLED: ${TOTP_AUTH_ENABLED:-false}
       AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
     # Not published: only the web container reaches the API.
     expose:

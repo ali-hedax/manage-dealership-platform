@@ -57,3 +57,7 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 | `0004_qc_delivery` | `qc_inspections`, `case_payments`, `tasks.qc_inspection_id`; on `cases`: who closed technically/financially with notes, estimate / customer share / accepted balance at the financial close, handover recipient, relation, note and recorder | `down/0004_qc_delivery.down.sql` |
 
 Workflow for a change: edit `schema.ts` → `pnpm --filter @manage/api db:generate` → review the SQL → write the down script → run tests → document here. Production: back up first, then `pnpm db:migrate` ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
+
+## 0006_staff_invitation_email
+
+Additive columns on auth_challenges: invitation_delivery (manual/sending/sent/failed; default manual for existing data) and invitation_sent_at (nullable UTC timestamp). Store delivery status on each invitation, never its raw token or SMTP diagnostic. Sent/failed outcomes also append a sanitized user audit event in the same transaction. If execution stops mid-send, sending stays visibly uncertain until the owner explicitly resends. Down script: apps/api/src/db/down/0006_staff_invitation_email.down.sql, disposable databases only. No existing identity, password or encrypted Authenticator seed is reset.

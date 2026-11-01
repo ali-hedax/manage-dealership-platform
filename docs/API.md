@@ -52,6 +52,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 <!-- routes:start -->
 | Method | Route | Controller |
 | --- | --- | --- |
+| GET | `/api/v1/auth/invitations/email/status` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/me` | [source](../apps/api/src/auth/auth.controller.ts) |
 | GET | `/api/v1/auth/options` | [source](../apps/api/src/auth/email-auth.controller.ts) |
@@ -77,6 +78,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/auth/email/verify` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/invitations/accept` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/invitations/confirm` | [source](../apps/api/src/auth/email-auth.controller.ts) |
+| POST | `/api/v1/auth/invitations/email` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/login` | [source](../apps/api/src/auth/auth.controller.ts) |
 | POST | `/api/v1/auth/logout` | [source](../apps/api/src/auth/auth.controller.ts) |
@@ -102,3 +104,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
 <!-- routes:end -->
+
+## Staff invitation email
+
+GET /auth/invitations/email/status requires user.manage and returns only { configured: boolean }, not credentials. POST /auth/invitations/email accepts the same email/displayName/roles schema, commits a pending account and then attempts one SMTP delivery. It returns { id, status: "invited", emailDelivery: "sent" | "failed" }; no invitation URL is returned. Missing configuration fails with 503 INVITATION_MAIL_NOT_CONFIGURED before creating an account. A failed send returns a persisted failed status, not a false success or raw SMTP error. Explicit resend creates a new invitation for the same pending account and invalidates older tokens; active users return 409. Authentication responses are no-store and excluded from the replay cache. GET /auth/invitations adds invitationDelivery, invitationSentAt and invitationExpiresAt from the latest tenant-scoped invite; active account status takes precedence. SMTP acceptance does not guarantee inbox delivery. See [staff guide](STAFF_FA.md).

@@ -96,6 +96,8 @@ export const authChallenges = pgTable('auth_challenges', {
   attempts: integer('attempts').notNull().default(0),
   expiresAt: ts('expires_at').notNull(),
   consumedAt: ts('consumed_at'),
+  invitationDelivery: text('invitation_delivery').notNull().default('manual'),
+  invitationSentAt: ts('invitation_sent_at'),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('auth_challenges_user_idx').on(t.userId, t.purpose)]);
 

@@ -29,3 +29,7 @@ Report vulnerabilities privately to the maintainer ([ali-hedax](https://github.c
 - Rate limiting is per IP. Without a reverse proxy that sets `X-Forwarded-For`, all users behind the web container share one IP bucket — deploy behind Caddy/Nginx.
 - File uploads (photos, documents) not implemented yet; object storage, size/type validation and malware scanning are required when added.
 - A private pre-rollout backup was verified by archive listing on the isolated Preview; a full restore/failure drill for production and dealership LAN remains required. See [backup procedure](docs/BACKUP_RESTORE.md) and the [deployment record](docs/PREVIEW_DEPLOYMENT_20261101.md).
+
+## Staff invitation email
+
+Invitation email requires user.manage; the host/from/credentials are server configuration, never client-controlled. Implicit TLS or mandatory STARTTLS is used with certificate verification, transport logs disabled and file/URL loading disabled. Raw SMTP failures are discarded, while sanitized sent/failed audit events and per-challenge delivery states remain. The email endpoint never returns the invitation URL. The manual bootstrap/link endpoint remains explicitly authorized and excluded from generic response caching. No automatic email retry queue or inbox-delivery guarantee is claimed. SMTP credentials must never enter Git; Gmail sender setup is performed privately by the owner.
