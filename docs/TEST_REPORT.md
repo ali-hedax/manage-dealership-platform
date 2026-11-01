@@ -11,11 +11,11 @@ Last full run: **2026-11-01**, branch `feature/accident-mvp`, Windows 10 / Node 
 | Shared unit tests (Jalali, digits, plates, phones, RBAC, schemas) | `pnpm --filter @manage/shared test` | ✅ 9 / 9 |
 | API unit + integration (Jest + supertest, real HTTP, embedded PostgreSQL) | `pnpm --filter @manage/api test` | ✅ 35 / 35 (3 suites) |
 | Production build (API + web) | `pnpm build` | ✅ pass |
-| E2E (Playwright, Edge, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 5 / 5, three consecutive runs (see below) |
-| Dependency audit (prod, high) | `pnpm audit --prod --audit-level high` | ✅ no known vulnerabilities (after drizzle 0.45 + multer override) |
+| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 5 / 5 locally on Edge in three consecutive runs; ✅ on CI Chromium |
+| Dependency audit (prod, high) + gitleaks secret scan | `pnpm audit`, CI `security` | ✅ no known vulnerabilities; no secrets found. Dependency review is non-blocking until the repo's Dependency graph is enabled (#4) |
 | `pnpm dev` from an empty database | manual | ✅ API healthy, demo auto-seeded, web proxy 200 |
-| Migrations + seed on PostgreSQL 16 | CI job `postgres` | ⏳ runs on GitHub Actions for this PR |
-| Docker images + compose smoke test | CI job `docker` | ⏳ runs on GitHub Actions. **Not verified locally**: the dev machine has 8 GB RAM and 5.6 GB free disk, and the Docker daemon crashed twice during builds |
+| Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (GitHub Actions run 41276167117) |
+| Docker images + compose smoke test (health via web proxy, login, dashboard) | CI job `docker` | ✅ pass (run 41276167117). Not verifiable on the dev machine: 8 GB RAM, 5.6 GB free disk, Docker daemon crashed twice during builds |
 
 ## Acceptance scenarios (brief §11)
 
