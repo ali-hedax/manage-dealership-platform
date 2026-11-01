@@ -46,6 +46,16 @@ test('documentation screenshots', async ({ page }, info) => {
   await page.getByTestId('finance-panel').screenshot({ path: out('finance-demo', project) });
   await page.screenshot({ path: out('case-personal', project), fullPage: true });
 
+  // Demo case 5: QC failed once, corrective work, passed, technically closed.
+  await page.goto('/cases');
+  await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه پنج' }).click();
+  await page.getByTestId('qc-round').first().waitFor();
+  await page.getByTestId('completion-panel').screenshot({ path: out('completion-demo', project) });
+  await page.getByTestId('completion-panel').getByRole('button', { name: 'ثبت کنترل کیفیت' }).click();
+  await page.getByTestId('qc-paint').getByRole('button', { name: 'رد', exact: true }).click();
+  await page.getByRole('dialog').screenshot({ path: out('qc-form', project) });
+  await page.getByRole('dialog').getByRole('button', { name: 'انصراف' }).click();
+
   await page.goto('/cases/new');
   await page.getByLabel('پلاک').waitFor();
   await page.screenshot({ path: out('case-new', project), fullPage: true });

@@ -16,7 +16,7 @@ Status key: **✅ implemented and tested** · **◐ partial** · **○ planned**
 - Official approval exists only when recorded in the official system; Manage stores the reference, it does not approve.
 - ✅ Approved items and labour and phone/written/in-person approvals (assessment authorization, §3); customer approval for personal cases is an authorization with source "customer".
 - ✅ Payer shares per case (customer / insurer / company), supplier introduced by the insurer as a part source, price differences on parts (§6), advance payment (§7).
-- ○ Invoicing, settlement and accounting export (financial close, issue #12 / later finance module).
+- ✅ Settlement of the customer share and financial close (issue #12, §9). ○ Invoicing and accounting export (later finance module).
 
 ## 3. Assessment and supplements — ✅
 
@@ -57,8 +57,8 @@ Status key: **✅ implemented and tested** · **◐ partial** · **○ planned**
 - **Advance**: expert (or supervisor/manager) proposes amount and reason → **service manager approves** → **cashier confirms receipt** with a payment reference. The approver is never the proposer (enforced by the API, not only hidden in the UI).
 - **Exception**: purchases without the advance up to a recorded limit, with reason, approved by a service manager other than the proposer; spending against it is tracked.
 - **Gate**: only **part purchases** are held. Documentation, planning, stock reservation, customer-supplied parts and repair activities continue. Open when: no customer share, or a paid advance covers the current estimate, or an approved exception has enough limit left. A supplement that raises the estimate closes the gate again ("re-approval required").
-- Finance panel: estimate, shares, received, balance, committed purchases, approvals with who/when.
-- ○ Costly *labour* gating needs labour cost per activity (later); invoicing and settlement: issue #12.
+- Finance panel: estimate, shares, received, balance, committed purchases, approvals and settlement payments with who/when.
+- ○ Costly *labour* gating needs labour cost per activity (later). Settlement: §9.
 
 ## 8. Delay accountability — ◐
 
@@ -67,10 +67,15 @@ Status key: **✅ implemented and tested** · **◐ partial** · **○ planned**
 - ○ Discrepancy check "part not arrived" vs recorded handover to the unit (needs the parts module). It raises an item for manager review, never an automatic verdict.
 - ✅ Audit records cannot be edited or deleted (database trigger).
 
-## 9. Completion — ◐
+## 9. Completion — ✅ (issue #12)
 
-- ✅ Delivery gate: a case can move to "تحویل‌شده" only when every activity is approved by the supervisor and no blocker is open; actual delivery time and technical close time are recorded.
-- ○ QC checklist and corrective activity, parts/labour reconciliation, supplement reconciliation, financial settlement as a separate gate, recipient and handover confirmation, archive (delivery 2).
+- **QC round** (QC inspector, supervisor, manager): only after every activity is approved. Checklist of 10 items (body fit, paint, lights/electrical, warning lamps*, brakes/steering*, airbags/belts*, fluids/leaks, road test, cleanliness, old parts); each is pass / fail / not checked, safety items (*) cannot be "not checked". A failed item needs a description and the unit that fixes it: a **corrective activity** is created in that unit, the case returns to "در حال تعمیر" and the round is "رد". Rounds are numbered and never edited. Any change to an activity after a round (reopen, re-approval, new activity) requires a new round.
+- **Technical close** (supervisor, manager), explicit action, refused with the list of reasons unless: all activities approved, no open blocker, no draft assessment / supplement, no pending authorization, no part still open (everything handed over or cancelled), every approved replace line has a handed-over part (supplement reconciliation through the root line), and the latest QC round passed after the last change. Approved labour for a unit without an approved activity is a **warning** only. Sets "آماده تحویل".
+- **Financial close** (cashier, manager), independent of the technical close: a final assessment exists, no draft / pending authorization, the customer share is known, no finance proposal waits for a decision, and the customer share is received (advances + settlement payments). With a balance due only the **service manager** can close, with a reason; the accepted amount is recorded. The estimate and share at the close are stored: a later supplement, share change or new balance makes the close invalid until repeated. Insurer and golden-card shares are settled in their official systems; Manage records only the customer side.
+- **Settlement payment** (cashier): amount (never above the balance), receipt reference, time.
+- **Handover** (expert, supervisor, manager): needs both closes still valid; recipient name, relation (owner, agent with letter, insurer, other), time (not before the closes, not in the future), note and the recipient's confirmation that they inspected the vehicle and signed. Sets "تحویل‌شده", actual delivery time and **archives** the case (status "بسته": read-only, hidden from the open list, found under "همه").
+- The stage selector cannot set "آماده تحویل" or "تحویل‌شده". Moving a technically closed case back to an earlier stage cancels the technical close.
+- ○ Printable delivery form / invoice, customer signature capture and accounting export: with reports and PDF (issue #13) and the finance module.
 
 ## Roles (phase 1)
 
@@ -79,6 +84,7 @@ Status key: **✅ implemented and tested** · **◐ partial** · **○ planned**
 | کارشناس تصادفات | Create/edit cases, see customer contact, report case-level blockers, read timeline |
 | سرپرست تصادفات | Above + manage activities, approve completion, follow up / resolve blockers |
 | مدیر خدمات | Everything above, all cases, settings |
-| قطعات، کنترل کیفیت | Read cases (phone masked), report blockers |
-| مالی و صندوق | Read cases with contact details |
+| قطعات | Read cases (phone masked), report blockers, parts steps |
+| کنترل کیفیت | Read cases (phone masked), report blockers, record QC rounds |
+| مالی و صندوق | Read cases with contact details, confirm advances, settlement payments, financial close (with a balance due: manager only) |
 | مدیر سیستم | Account administration only — no access to customer cases |

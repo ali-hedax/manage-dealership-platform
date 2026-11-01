@@ -13,6 +13,7 @@ import {
 } from '@manage/shared';
 import { AssessmentPanel } from '@/components/AssessmentPanel';
 import { BlockersPanel } from '@/components/BlockersPanel';
+import { CompletionPanel } from '@/components/CompletionPanel';
 import { FinancePanel } from '@/components/FinancePanel';
 import { PartsPanel } from '@/components/PartsPanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
@@ -102,7 +103,8 @@ export default function CaseDetailPage() {
               onChange={(e) => changeStage(e.target.value as CaseStage)}
             >
               {CASE_STAGES.map((s) => (
-                <option key={s} value={s}>
+                // Ready for delivery and delivered come from the technical close and the handover.
+                <option key={s} value={s} disabled={s !== kase.stage && (s === 'ready_for_delivery' || s === 'delivered')}>
                   مرحله: {STAGE_LABELS[s]}
                 </option>
               ))}
@@ -165,6 +167,7 @@ export default function CaseDetailPage() {
           <PartsPanel kase={kase} onChange={refresh} />
           <TasksPanel kase={kase} onChange={refresh} />
           <BlockersPanel kase={kase} onChange={refresh} />
+          <CompletionPanel kase={kase} onChange={refresh} />
         </div>
 
         <div className="stack">

@@ -30,6 +30,7 @@ type Mode =
   | { kind: 'propose' }
   | { kind: 'decide'; a: FinanceApproval; decision: 'approve' | 'reject' }
   | { kind: 'pay'; a: FinanceApproval }
+  | { kind: 'settle' }
   | null;
 
 const amountText = (n: number | null) => (n === null ? '' : String(n));
@@ -73,6 +74,8 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
     } else if (m.kind === 'propose') {
       setKind('advance');
       setAmount(f.balanceRial ? String(f.balanceRial) : '');
+    } else if (m.kind === 'settle') {
+      setAmount(f.balanceRial ? String(f.balanceRial) : '');
     }
   }
 
@@ -100,6 +103,11 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
           body: { decision: mode.decision, expectedVersion: mode.a.version, note: text || null },
         });
         toast(mode.decision === 'approve' ? 'تأیید مدیر ثبت شد' : 'پیشنهاد رد شد');
+      } else if (mode.kind === 'settle') {
+        await api(`/cases/${kase.id}/finance/payments`, {
+          body: { amountRial: parseAmount(amount), paymentRef: text, at },
+        });
+        toast('دریافت تسویه ثبت شد');
       } else {
         await api(`/financial-approvals/${mode.a.id}/payment`, {
           body: { expectedVersion: mode.a.version, paymentRef: text, at },
@@ -123,20 +131,31 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
         ? mode.decision === 'approve' || !!text.trim()
         : mode?.kind === 'pay'
           ? !!text.trim()
-          : true;
+          : mode?.kind === 'settle'
+            ? parseAmount(amount) > 0 && !!text.trim()
+            : true;
 
   return (
     <section className="panel" data-testid="finance-panel">
       <div className="panel-head">
         <h2>مالی و پیش‌پرداخت</h2>
-        {editable && can('finance.propose') && (
+        {editable && (can('finance.propose') || (can('finance.payment') && !!f.balanceRial)) && (
           <div className="row" style={{ gap: 6 }}>
-            <button className="btn btn-sm" onClick={() => open({ kind: 'shares' })}>
-              سهم پرداخت‌کنندگان
-            </button>
-            <button className="btn btn-sm" onClick={() => open({ kind: 'propose' })}>
-              پیشنهاد مالی
-            </button>
+            {can('finance.payment') && !!f.balanceRial && (
+              <button className="btn btn-sm" onClick={() => open({ kind: 'settle' })}>
+                ثبت دریافت تسویه
+              </button>
+            )}
+            {can('finance.propose') && (
+              <>
+                <button className="btn btn-sm" onClick={() => open({ kind: 'shares' })}>
+                  سهم پرداخت‌کنندگان
+                </button>
+                <button className="btn btn-sm" onClick={() => open({ kind: 'propose' })}>
+                  پیشنهاد مالی
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -226,6 +245,22 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
             </div>
           );
         })}
+
+        {f.payments.map((p) => (
+          <div key={p.id} className="finance-item" data-testid="settlement-payment">
+            <div className="row" style={{ gap: 6 }}>
+              <b>دریافت تسویه</b>
+              <span className="num">{rial(p.amountRial)}</span>
+              <span className="chip chip-green">دریافت شد</span>
+            </div>
+            <div className="xs muted meta">
+              <span>
+                {formatJalali(p.paidAt, { time: true })} — {p.paymentRef} ({p.recordedBy.displayName})
+                {p.note ? `؛ ${p.note}` : ''}
+              </span>
+            </div>
+          </div>
+        ))}
       </div>
 
       <Dialog
@@ -239,7 +274,9 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
                 ? mode.decision === 'approve'
                   ? 'تأیید هزینه توسط مدیر'
                   : 'رد پیشنهاد'
-                : 'تأیید دریافت پیش‌پرداخت'
+                : mode?.kind === 'settle'
+                  ? 'ثبت دریافت تسویه'
+                  : 'تأیید دریافت پیش‌پرداخت'
         }
         onClose={() => setMode(null)}
         footer={
@@ -308,6 +345,20 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
         {mode?.kind === 'pay' && (
           <>
             <div className="small">مبلغ: {rial(mode.a.amountRial)}</div>
+            <label className="field">
+              <span>شماره پیگیری / رسید پرداخت *</span>
+              <input className="input ltr-input" value={text} onChange={(e) => setText(e.target.value)} />
+            </label>
+            <JalaliInput label="زمان دریافت" value={at} onChange={setAt} withTime nowButton />
+          </>
+        )}
+        {mode?.kind === 'settle' && (
+          <>
+            <div className="small">مانده سهم مشتری: {rial(f.balanceRial ?? 0)}</div>
+            <label className="field">
+              <span>مبلغ دریافتی (ریال) *</span>
+              <input className="input ltr-input" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </label>
             <label className="field">
               <span>شماره پیگیری / رسید پرداخت *</span>
               <input className="input ltr-input" value={text} onChange={(e) => setText(e.target.value)} />

@@ -2,6 +2,19 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — branch `feature/qc-delivery`
+
+### Added
+- Quality control and delivery (issue #12): QC checklist per round (10 items; safety items cannot be skipped). A failed item needs a description and a unit, opens a corrective activity and returns the case to repair; a new round is required after any later change to the work.
+- Technical close (supervisor/manager) only when all work is approved, no blocker is open, no draft or pending authorization remains, every approved replaced line has a part handed over to the unit and the latest QC passed. Labour without a matching approved activity is shown as a warning.
+- Financial close (cashier/manager) as a separate gate: final assessment, known customer share, no pending finance proposal and the customer share received — or a service-manager decision to accept the remaining balance, with a reason. Settlement payments are recorded by the cashier with a receipt reference.
+- Handover with recipient name and relation, time and the recipient's confirmation; needs both closes and archives the case (status closed, read-only). A close that no longer matches the case (reopened work, new share or estimate) must be repeated.
+- Case page: "کنترل کیفیت و تحویل" panel with QC history and what still blocks each step; corrective activities are marked; history labels for the new events.
+
+### Changed
+- The stage selector can no longer set "آماده تحویل" or "تحویل‌شده"; they come from the technical close and the handover. Moving a closed case back into the workflow cancels its technical close.
+- Demo case 5 shows a failed QC round, the corrective work, a passed round and the technical close; settlement and handover are left to try.
+
 ## [Unreleased] — branch `feature/parts-finance`
 
 ### Added
