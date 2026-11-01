@@ -47,6 +47,9 @@ export default defineConfig({
         NODE_ID: 'e2e',
         // The suite logs in as several roles from one address within a minute.
         LOGIN_RATE_LIMIT: '200',
+        // Synthetic key allows the manual staff-invitation fallback to use
+        // the real API without enabling personal-mode login for demo roles.
+        AUTH_TOKEN_SECRET: 'e2e-synthetic-only-authenticator-key',
       },
     },
     {

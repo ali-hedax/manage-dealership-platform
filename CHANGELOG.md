@@ -5,6 +5,7 @@ All notable changes. Versions follow semantic versioning once releases start.
 ## [Unreleased] — staff email invitations
 
 - Rename account administration to کارکنان. Owner enters name, email and roles, sends invitation email, sees activation/delivery state, and explicitly resends failed/expired invitations.
+- Optional private-link invitation lets the owner onboard colleagues while email setup is unavailable; the UI explicitly states that no email was sent.
 - Preserve personal password and TOTP enrollment; no SMTP link/token in email-endpoint responses or audit. Add private SMTP configuration and additive delivery-state migration 0006.
 - Record owner-approved integration of platform PRs #16–#21 and #23 into main; legacy prototype work remains separate.
 

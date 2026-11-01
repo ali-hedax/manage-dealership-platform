@@ -36,3 +36,14 @@ test('staff form explains mail configuration and server-side failure without cla
   await page.reload();await expect(page.getByRole('button',{name:'افزودن و ارسال دعوت',exact:true})).toBeDisabled();
   await expect(page.getByText('ارسال ایمیل دعوت هنوز تنظیم نشده است.',{exact:false})).toBeVisible();
 });
+
+test('owner can invite privately while email setup is unavailable',async({page})=>{
+  await login(page,'admin');
+  await page.route('**/api/v1/auth/invitations/email/status',r=>r.fulfill({json:{configured:false}}));
+  await page.goto('/users');await page.getByLabel('نام و نام خانوادگی',{exact:true}).fill('همکار موقت');
+  await page.getByLabel('ایمیل',{exact:true}).fill('private-worker@example.test');
+  await page.getByRole('button',{name:'ساخت لینک دعوت خصوصی',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'لینک خصوصی برای'})).toContainText('ایمیلی ارسال نشده است');
+  await expect(page.getByLabel('لینک دعوت محرمانه',{exact:true})).toHaveValue(/\/activate#token=/);
+  await expect(page.getByRole('heading',{name:'همکار موقت',exact:true})).toBeVisible();
+});
