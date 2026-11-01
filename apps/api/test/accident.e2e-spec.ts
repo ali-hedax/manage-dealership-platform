@@ -293,6 +293,21 @@ describe('blockers: occurrence, follow-up and resolution timing', () => {
     );
   });
 
+  it('accepts minute-precision resolution times in the same minute the blocker occurred', async () => {
+    const c = await newCase();
+    const occurredAt = new Date();
+    const b = (await supervisor.post(`/cases/${c.id}/blockers`, { reason: 'capacity', occurredAt: occurredAt.toISOString() }))
+      .body;
+    const sameMinute = new Date(Math.floor(occurredAt.getTime() / 60_000) * 60_000).toISOString();
+    const r = await supervisor.post(`/blockers/${b.id}/resolve`, { note: 'رفع', at: sameMinute });
+    expect(r.status).toBe(201);
+    expect(new Date(r.body.resolvedAt).getTime()).toBeGreaterThanOrEqual(new Date(b.occurredAt).getTime());
+    const earlier = new Date(occurredAt.getTime() - 5 * 60_000).toISOString();
+    const b2 = (await supervisor.post(`/cases/${c.id}/blockers`, { reason: 'capacity', occurredAt: occurredAt.toISOString() }))
+      .body;
+    expect((await supervisor.post(`/blockers/${b2.id}/resolve`, { note: 'x', at: earlier })).body.code).toBe('INVALID_TIME');
+  });
+
   it('records the full history in the case timeline', async () => {
     const c = await newCase();
     const t = await addTask(c.id, { departmentId: dept('body') });

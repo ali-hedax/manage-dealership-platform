@@ -3,7 +3,7 @@ import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { Blocker, BlockerFollowUpInput, CreateBlockerInput, ResolveBlockerInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
-import { assertNotFuture, CasesService } from '../cases/cases.service';
+import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
@@ -112,9 +112,12 @@ export class BlockersService {
     assertNotFuture(at, 'زمان رفع مانع نمی‌تواند در آینده باشد');
     const blocker = await this.db.transaction(async (tx) => {
       const b = await this.loadOpen(tx, tenantId, id);
-      if (at < b.occurredAt) throw badRequest('INVALID_TIME', 'زمان رفع نمی‌تواند قبل از بروز مانع باشد');
+      if (at.getTime() < b.occurredAt.getTime() - MINUTE_TOLERANCE_MS) {
+        throw badRequest('INVALID_TIME', 'زمان رفع نمی‌تواند قبل از بروز مانع باشد');
+      }
+      const resolvedAt = at < b.occurredAt ? b.occurredAt : at;
       const updated = await this.save(tx, b, {
-        resolvedAt: at,
+        resolvedAt,
         resolvedBy: actor.user.id,
         resolutionNote: input.note,
       });
@@ -124,7 +127,7 @@ export class BlockersService {
         caseId: b.caseId,
         action: 'blocker.resolved',
         reason: input.note,
-        occurredAt: at,
+        occurredAt: resolvedAt,
         snapshot: { version: updated.version, row: updated },
       });
 

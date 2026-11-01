@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { CreateTaskInput, Task, TaskActionInput, TaskStatus, UpdateTaskInput } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
-import { assertNotFuture, CasesService } from '../cases/cases.service';
+import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
@@ -172,10 +172,14 @@ export class TasksService {
         }
         case 'complete':
           if (status !== 'in_progress') throw invalidTransition(status, 'اتمام');
-          if (task.actualStartAt && at < task.actualStartAt) {
+          if (task.actualStartAt && at.getTime() < task.actualStartAt.getTime() - MINUTE_TOLERANCE_MS) {
             throw badRequest('INVALID_TIME', 'زمان اتمام نمی‌تواند قبل از زمان شروع باشد');
           }
-          patch = { status: 'done', actualEndAt: at, completedBy: actor.user.id };
+          patch = {
+            status: 'done',
+            actualEndAt: task.actualStartAt && at < task.actualStartAt ? task.actualStartAt : at,
+            completedBy: actor.user.id,
+          };
           action = 'task.completed';
           break;
         case 'approve':

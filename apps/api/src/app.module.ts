@@ -40,7 +40,8 @@ class Lifecycle implements OnApplicationBootstrap, OnApplicationShutdown {
   async onApplicationBootstrap() {
     if (this.cfg.APP_ENV === 'development' && !(await this.seeder.isSeeded())) {
       const password = await this.seeder.seed();
-      this.seeder.writeCredentials(password);
+      // A password given via SEED_DEMO_PASSWORD is already known; only generated ones are written.
+      if (!this.cfg.SEED_DEMO_PASSWORD) this.seeder.writeCredentials(password);
       this.logger.log('Empty development database: synthetic demo dealership created');
     }
   }

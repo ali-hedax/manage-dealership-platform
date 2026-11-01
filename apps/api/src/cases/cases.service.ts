@@ -47,6 +47,8 @@ type CustomerInput = NonNullable<CreateCaseInput['customer']>;
 
 const RESPONSIBLE_ROLES: Role[] = ['accident_expert', 'accident_supervisor', 'service_manager'];
 const FUTURE_TOLERANCE_MS = 10 * 60_000;
+// The UI records times to the minute; ordering checks accept that precision.
+export const MINUTE_TOLERANCE_MS = 60_000;
 
 const responsibleUser = alias(users, 'responsible_user');
 const createdByUser = alias(users, 'created_by_user');
