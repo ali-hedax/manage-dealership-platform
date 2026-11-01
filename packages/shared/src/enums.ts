@@ -88,6 +88,42 @@ export type AuthorizationMethod = (typeof AUTHORIZATION_METHODS)[number];
 export const ITEM_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'] as const;
 export type ItemApprovalStatus = (typeof ITEM_APPROVAL_STATUSES)[number];
 
+// Parts: one row per needed part of a case. Source decides who supplies and
+// pays; status follows need → (stock) → order → receipt with inspection →
+// handover to the repair unit.
+export const PART_SOURCES = ['company', 'stock', 'external', 'insurer_supplier', 'customer'] as const;
+export type PartSource = (typeof PART_SOURCES)[number];
+
+export const PART_STATUSES = ['needed', 'reserved', 'ordered', 'received', 'rejected', 'handed_over', 'cancelled'] as const;
+export type PartStatus = (typeof PART_STATUSES)[number];
+
+export const PART_ACTIONS = ['check_stock', 'reserve', 'order', 'update_eta', 'receive', 'hand_over', 'cancel'] as const;
+export type PartAction = (typeof PART_ACTIONS)[number];
+
+export const PART_INSPECTIONS = ['ok', 'wrong', 'defective'] as const;
+export type PartInspection = (typeof PART_INSPECTIONS)[number];
+
+// Financial gate: an advance is proposed by the expert, approved by the
+// service manager and its receipt confirmed by the cashier. An exception lets
+// purchases continue up to a limit without the advance.
+export const FINANCE_APPROVAL_KINDS = ['advance', 'exception'] as const;
+export type FinanceApprovalKind = (typeof FINANCE_APPROVAL_KINDS)[number];
+
+export const FINANCE_APPROVAL_STATUSES = ['proposed', 'approved', 'rejected', 'paid'] as const;
+export type FinanceApprovalStatus = (typeof FINANCE_APPROVAL_STATUSES)[number];
+
+// Why purchases are allowed or blocked for a case (see FinanceService.gate).
+export const FINANCE_GATE_REASONS = [
+  'no_customer_share',
+  'advance_paid',
+  'exception',
+  'shares_unknown',
+  'no_estimate',
+  'advance_missing',
+  're_approval_required',
+] as const;
+export type FinanceGateReason = (typeof FINANCE_GATE_REASONS)[number];
+
 // Default repair departments seeded per tenant; each tenant can rename,
 // disable or add departments.
 export const DEFAULT_DEPARTMENTS = [

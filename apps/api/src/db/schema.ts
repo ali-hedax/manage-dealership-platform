@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -281,6 +282,8 @@ export const blockers = pgTable(
     resolvedAt: ts('resolved_at'),
     resolvedBy: uuid('resolved_by').references(() => users.id),
     resolutionNote: text('resolution_note'),
+    // "Part not arrived" blockers may name the part; its handover resolves them.
+    partRequestId: uuid('part_request_id').references((): AnyPgColumn => partRequests.id),
     isTest: boolean('is_test').notNull().default(false),
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
@@ -372,6 +375,121 @@ export const assessmentItems = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
   (t) => [index('assessment_items_assessment_idx').on(t.assessmentId, t.lineNo)],
+);
+
+// One row per needed part of a case. Each step keeps its own time so delays
+// can be attributed: need → stock check / reservation → order (ETA) → receipt
+// with inspection → handover to the repair unit.
+export const partRequests = pgTable(
+  'part_requests',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    // Root assessment line (first version) this need comes from, if any.
+    assessmentItemId: uuid('assessment_item_id').references(() => assessmentItems.id),
+    description: text('description').notNull(),
+    partNumber: text('part_number'),
+    quantity: smallint('quantity').notNull().default(1),
+    source: text('source').notNull(),
+    status: text('status').notNull().default('needed'),
+    inStock: boolean('in_stock'),
+    stockCheckedAt: ts('stock_checked_at'),
+    reservedAt: ts('reserved_at'),
+    approvedUnitPriceRial: bigint('approved_unit_price_rial', { mode: 'number' }),
+    unitPriceRial: bigint('unit_price_rial', { mode: 'number' }),
+    priceApprovalRef: text('price_approval_ref'),
+    priceApprovedBy: text('price_approved_by'),
+    supplier: text('supplier'),
+    orderRef: text('order_ref'),
+    orderedAt: ts('ordered_at'),
+    etaAt: ts('eta_at'),
+    firstEtaAt: ts('first_eta_at'),
+    receivedAt: ts('received_at'),
+    receiptDocNo: text('receipt_doc_no'),
+    inspection: text('inspection'),
+    inspectionNote: text('inspection_note'),
+    handedOverAt: ts('handed_over_at'),
+    handedOverDepartmentId: uuid('handed_over_department_id').references(() => departments.id),
+    recipientName: text('recipient_name'),
+    cancelledAt: ts('cancelled_at'),
+    cancelReason: text('cancel_reason'),
+    financeBasis: text('finance_basis'),
+    financeExceptionId: uuid('finance_exception_id'),
+    notes: text('notes'),
+    isTest: boolean('is_test').notNull().default(false),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    index('part_requests_case_idx').on(t.caseId),
+    index('part_requests_tenant_status_idx').on(t.tenantId, t.status),
+  ],
+);
+
+// Payer split of a case's estimate (one row per case, created on first edit).
+export const caseFinance = pgTable('case_finance', {
+  caseId: uuid('case_id')
+    .primaryKey()
+    .references(() => cases.id),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  customerShareRial: bigint('customer_share_rial', { mode: 'number' }),
+  insurerShareRial: bigint('insurer_share_rial', { mode: 'number' }),
+  companyShareRial: bigint('company_share_rial', { mode: 'number' }),
+  note: text('note'),
+  isTest: boolean('is_test').notNull().default(false),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by')
+    .notNull()
+    .references(() => users.id),
+  version: integer('version').notNull().default(1),
+});
+
+// Advance payments and spending exceptions. Proposer, approver and payment
+// confirmer are recorded separately; the approver is never the proposer.
+export const financialApprovals = pgTable(
+  'financial_approvals',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    kind: text('kind').notNull(),
+    status: text('status').notNull().default('proposed'),
+    amountRial: bigint('amount_rial', { mode: 'number' }).notNull(),
+    coversEstimateRial: bigint('covers_estimate_rial', { mode: 'number' }).notNull(),
+    reason: text('reason').notNull(),
+    proposedAt: ts('proposed_at').notNull().defaultNow(),
+    proposedBy: uuid('proposed_by')
+      .notNull()
+      .references(() => users.id),
+    decidedAt: ts('decided_at'),
+    decidedBy: uuid('decided_by').references(() => users.id),
+    decisionNote: text('decision_note'),
+    paidAt: ts('paid_at'),
+    paymentRef: text('payment_ref'),
+    paymentConfirmedBy: uuid('payment_confirmed_by').references(() => users.id),
+    isTest: boolean('is_test').notNull().default(false),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    index('financial_approvals_case_idx').on(t.caseId),
+    index('financial_approvals_tenant_status_idx').on(t.tenantId, t.status),
+  ],
 );
 
 // Append-only. A database trigger rejects UPDATE and DELETE (see migration

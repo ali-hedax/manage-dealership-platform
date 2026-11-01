@@ -30,6 +30,10 @@ export class DashboardService {
         unassigned: count(flagConditions.unassigned!()),
         readyForDelivery: count(flagConditions.ready!()),
         legacyEntries: count(flagConditions.legacy!()),
+        awaitingAuthorization: count(flagConditions.awaiting_authorization!()),
+        partsOverdue: count(flagConditions.parts_overdue!()),
+        partsToOrder: count(flagConditions.parts_to_order!()),
+        financePending: count(flagConditions.finance_pending!()),
       })
       .from(cases)
       .where(tenantCases);

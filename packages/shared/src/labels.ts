@@ -6,7 +6,13 @@ import type {
   AuthorizationSource,
   AuthorizationStatus,
   BlockerReason,
+  FinanceApprovalKind,
+  FinanceApprovalStatus,
+  FinanceGateReason,
   ItemApprovalStatus,
+  PartInspection,
+  PartSource,
+  PartStatus,
   CaseStage,
   CaseStatus,
   CoverageType,
@@ -115,6 +121,52 @@ export const ITEM_APPROVAL_LABELS: Record<ItemApprovalStatus, string> = {
   rejected: 'ردشده',
 };
 
+export const PART_SOURCE_LABELS: Record<PartSource, string> = {
+  company: 'قطعه شرکت (ایران‌خودرو)',
+  stock: 'انبار نمایندگی',
+  external: 'خرید بیرونی مجاز',
+  insurer_supplier: 'تأمین‌کننده معرفی‌شده بیمه',
+  customer: 'قطعه مشتری',
+};
+
+export const PART_STATUS_LABELS: Record<PartStatus, string> = {
+  needed: 'نیاز ثبت شد',
+  reserved: 'رزرو از انبار',
+  ordered: 'سفارش داده شد',
+  received: 'رسید و کنترل شد',
+  rejected: 'اشتباه یا معیوب — سفارش مجدد',
+  handed_over: 'تحویل واحد تعمیر',
+  cancelled: 'لغوشده',
+};
+
+export const PART_INSPECTION_LABELS: Record<PartInspection, string> = {
+  ok: 'سالم و صحیح',
+  wrong: 'اشتباه',
+  defective: 'معیوب',
+};
+
+export const FINANCE_APPROVAL_KIND_LABELS: Record<FinanceApprovalKind, string> = {
+  advance: 'پیش‌پرداخت',
+  exception: 'استثنا (بدون پیش‌پرداخت)',
+};
+
+export const FINANCE_APPROVAL_STATUS_LABELS: Record<FinanceApprovalStatus, string> = {
+  proposed: 'پیشنهاد — منتظر تأیید مدیر',
+  approved: 'تأیید مدیر',
+  rejected: 'ردشده',
+  paid: 'دریافت شد',
+};
+
+export const FINANCE_GATE_LABELS: Record<FinanceGateReason, string> = {
+  no_customer_share: 'خرید مجاز: سهم مشتری ندارد',
+  advance_paid: 'خرید مجاز: پیش‌پرداخت دریافت شده',
+  exception: 'خرید مجاز با استثنای تأییدشده',
+  shares_unknown: 'خرید متوقف: سهم مشتری مشخص نشده',
+  no_estimate: 'خرید متوقف: کارشناسی نهایی نشده',
+  advance_missing: 'خرید متوقف: پیش‌پرداخت دریافت نشده',
+  re_approval_required: 'خرید متوقف: هزینه افزایش یافته و تأیید مالی دوباره لازم است',
+};
+
 export const MODULE_LABELS: Record<ModuleKey, string> = {
   accident: 'خودروهای تصادفی',
   reception: 'پذیرش و خدمات عمومی',
@@ -151,6 +203,20 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'assessment.finalized': 'نهایی‌شدن کارشناسی',
   'assessment.superseded': 'جایگزینی با الحاقیه',
   'assessment.authorization_recorded': 'ثبت مجوز',
+  'part.created': 'ثبت نیاز قطعه',
+  'part.stock_checked': 'بررسی موجودی انبار',
+  'part.reserved': 'رزرو قطعه از انبار',
+  'part.ordered': 'سفارش قطعه',
+  'part.eta_changed': 'تغییر زمان رسیدن قطعه',
+  'part.received': 'رسید و کنترل قطعه',
+  'part.rejected': 'قطعه اشتباه یا معیوب',
+  'part.handed_over': 'تحویل قطعه به واحد تعمیر',
+  'part.cancelled': 'لغو قطعه',
+  'finance.shares_set': 'ثبت سهم پرداخت‌کنندگان',
+  'finance.proposed': 'پیشنهاد مالی',
+  'finance.approved': 'تأیید مالی مدیر',
+  'finance.rejected': 'رد پیشنهاد مالی',
+  'finance.paid': 'تأیید دریافت پیش‌پرداخت',
 };
 
 // Keys produced by the API in CaseListItem.missingFields ('نیازمند تکمیل').

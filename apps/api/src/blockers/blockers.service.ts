@@ -7,7 +7,7 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessments, blockers } from '../db/schema';
+import { assessments, blockers, partRequests } from '../db/schema';
 import { TasksService } from '../tasks/tasks.service';
 
 export type BlockerRow = typeof blockers.$inferSelect;
@@ -35,9 +35,26 @@ export class BlockersService {
     // Phase 1: only the supervisor records the status of repair activities.
     if (input.taskId && !actor.user.permissions.has('task.manage')) throw forbidden();
 
+    if (input.partRequestId && input.reason !== 'part_not_arrived' && input.reason !== 'part_wrong_or_defective') {
+      throw badRequest('INVALID_PART_LINK', 'قطعه فقط به مانع «قطعه نرسیده» یا «قطعه اشتباه یا معیوب» وصل می‌شود');
+    }
     const id = newId();
     await this.db.transaction(async (tx) => {
       await this.cases.loadForWrite(tx, tenantId, caseId);
+      if (input.partRequestId) {
+        const [part] = await tx
+          .select({ caseId: partRequests.caseId, status: partRequests.status })
+          .from(partRequests)
+          .where(and(eq(partRequests.id, input.partRequestId), eq(partRequests.tenantId, tenantId)));
+        if (!part || part.caseId !== caseId) throw badRequest('INVALID_PART', 'قطعه متعلق به این پرونده نیست');
+        // A recorded handover contradicts "not arrived": surface it instead of hiding it.
+        if (part.status === 'handed_over') {
+          throw badRequest(
+            'PART_ALREADY_HANDED_OVER',
+            'تحویل این قطعه به واحد تعمیر قبلاً ثبت شده است؛ مغایرت را با انبار بررسی کنید',
+          );
+        }
+      }
       if (input.taskId) {
         const task = await this.tasks.loadForWrite(tx, tenantId, input.taskId, input.expectedTaskVersion);
         if (task.caseId !== caseId) throw badRequest('INVALID_TASK', 'فعالیت متعلق به این پرونده نیست');
@@ -60,6 +77,7 @@ export class BlockersService {
       }
       await this.insert(tx, actor, caseId, {
         id,
+        partRequestId: input.partRequestId ?? null,
         taskId: input.taskId ?? null,
         reason: input.reason,
         description: input.description ?? null,
@@ -74,7 +92,14 @@ export class BlockersService {
     tx: DbOrTx,
     actor: Actor,
     caseId: string,
-    b: { id?: string; taskId: string | null; reason: BlockerReason; description: string | null; occurredAt: Date },
+    b: {
+      id?: string;
+      taskId: string | null;
+      partRequestId?: string | null;
+      reason: BlockerReason;
+      description: string | null;
+      occurredAt: Date;
+    },
   ): Promise<BlockerRow> {
     const id = b.id ?? newId();
     const [row] = await tx
@@ -84,6 +109,7 @@ export class BlockersService {
         tenantId: actor.user.tenantId,
         caseId,
         taskId: b.taskId,
+        partRequestId: b.partRequestId ?? null,
         reason: b.reason,
         description: b.description,
         occurredAt: b.occurredAt,
@@ -140,33 +166,36 @@ export class BlockersService {
       if (at.getTime() < b.occurredAt.getTime() - MINUTE_TOLERANCE_MS) {
         throw badRequest('INVALID_TIME', 'زمان رفع نمی‌تواند قبل از بروز مانع باشد');
       }
-      const updated = await this.close(tx, actor, b, at, input.note);
-
-      // Unblock the task once its last open blocker is resolved.
-      if (b.taskId) {
-        const others = await tx
-          .select({ id: blockers.id })
-          .from(blockers)
-          .where(and(eq(blockers.taskId, b.taskId), isNull(blockers.resolvedAt), ne(blockers.id, id)));
-        const task = await this.tasks.loadForWrite(tx, tenantId, b.taskId);
-        if (!others.length && task.status === 'blocked') {
-          const next = task.actualStartAt ? 'in_progress' : 'pending';
-          const saved = await this.tasks.save(tx, task, { status: next });
-          await this.audit.record(tx, actor, {
-            entityType: 'task',
-            entityId: task.id,
-            caseId: b.caseId,
-            action: 'task.updated',
-            reason: 'رفع مانع',
-            before: { status: 'blocked' },
-            after: { status: next },
-            snapshot: { version: saved.version, row: saved },
-          });
-        }
-      }
-      return updated;
+      return this.closeAndRelease(tx, actor, b, at, input.note);
     });
     return this.get(actor, blocker.caseId, id);
+  }
+
+  /** Resolves a blocker and unblocks its task once its last open blocker is gone. */
+  async closeAndRelease(tx: DbOrTx, actor: Actor, b: BlockerRow, at: Date, note: string): Promise<BlockerRow> {
+    const updated = await this.close(tx, actor, b, at, note);
+    if (b.taskId) {
+      const others = await tx
+        .select({ id: blockers.id })
+        .from(blockers)
+        .where(and(eq(blockers.taskId, b.taskId), isNull(blockers.resolvedAt), ne(blockers.id, b.id)));
+      const task = await this.tasks.loadForWrite(tx, actor.user.tenantId, b.taskId);
+      if (!others.length && task.status === 'blocked') {
+        const next = task.actualStartAt ? 'in_progress' : 'pending';
+        const saved = await this.tasks.save(tx, task, { status: next });
+        await this.audit.record(tx, actor, {
+          entityType: 'task',
+          entityId: task.id,
+          caseId: b.caseId,
+          action: 'task.updated',
+          reason: 'رفع مانع',
+          before: { status: 'blocked' },
+          after: { status: next },
+          snapshot: { version: saved.version, row: saved },
+        });
+      }
+    }
+    return updated;
   }
 
   /** Marks an open blocker resolved inside the caller's transaction. */
