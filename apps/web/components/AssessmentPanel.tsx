@@ -11,7 +11,6 @@ import {
   AUTHORIZATION_SOURCES,
   AUTHORIZATION_STATUS_LABELS,
   ITEM_APPROVAL_LABELS,
-  toLatinDigits,
   type Assessment,
   type AssessmentItem,
   type AssessmentItemAction,
@@ -24,7 +23,7 @@ import {
 } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { faNum, formatJalali, toPersianDigits } from '@/lib/format';
+import { faNum, formatJalali, parseAmount, rial, toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
@@ -43,12 +42,6 @@ const DECISION_LABELS: Record<AuthorizationDecision, string> = {
   rejected: 'رد',
 };
 
-const rial = (n: number) => `${faNum(n)} ریال`;
-/** Accepts Persian or Latin digits with thousands separators. */
-const parseAmount = (s: string) => {
-  const n = Number(toLatinDigits(s).replace(/[,٬\s]/g, ''));
-  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
-};
 
 const defaultSource = (k: CaseDetail): AuthorizationSource =>
   k.coverageType === 'golden_card' ? 'golden_card' : k.coverageType === 'personal' ? 'customer' : 'insurer';

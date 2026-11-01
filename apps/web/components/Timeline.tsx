@@ -3,7 +3,11 @@
 import useSWR from 'swr';
 import {
   AUDIT_ACTION_LABELS,
+  AUTHORIZATION_SOURCE_LABELS,
   AUTHORIZATION_STATUS_LABELS,
+  FINANCE_APPROVAL_STATUS_LABELS,
+  PART_SOURCE_LABELS,
+  PART_STATUS_LABELS,
   BLOCKER_REASON_LABELS,
   COVERAGE_LABELS,
   STAGE_LABELS,
@@ -41,7 +45,7 @@ const FIELD_LABELS: Record<string, string> = {
   reason: 'علت',
   versionNo: 'نسخه',
   discoveredAt: 'کشف آسیب',
-  description: 'قلم',
+  description: 'شرح',
   quantity: 'تعداد',
   unitPriceRial: 'قیمت واحد',
   labourRial: 'اجرت',
@@ -51,12 +55,37 @@ const FIELD_LABELS: Record<string, string> = {
   authorizationStatus: 'مجوز',
   decision: 'تصمیم مجوز',
   reference: 'شماره ثبت رسمی',
+  source: 'منبع',
+  supplier: 'تأمین‌کننده',
+  orderRef: 'شماره سفارش',
+  etaAt: 'زمان رسیدن',
+  inStock: 'موجود در انبار',
+  receiptDocNo: 'شماره رسید',
+  recipientName: 'تحویل‌گیرنده',
+  priceApprovalRef: 'شماره تأیید قیمت',
+  amountRial: 'مبلغ',
+  customerShareRial: 'سهم مشتری',
+  insurerShareRial: 'سهم بیمه',
+  companyShareRial: 'سهم شرکت',
+  paymentRef: 'شماره دریافت',
 };
 
-function show(field: string, v: unknown): string {
+function show(field: string, v: unknown, action: string): string {
   if (v == null || v === '') return '—';
   if (field === 'stage') return STAGE_LABELS[v as keyof typeof STAGE_LABELS] ?? String(v);
+  if (field === 'status' && action.startsWith('part.')) {
+    return PART_STATUS_LABELS[v as keyof typeof PART_STATUS_LABELS] ?? String(v);
+  }
+  if (field === 'status' && action.startsWith('finance.')) {
+    return FINANCE_APPROVAL_STATUS_LABELS[v as keyof typeof FINANCE_APPROVAL_STATUS_LABELS] ?? String(v);
+  }
   if (field === 'status') return TASK_STATUS_LABELS[v as keyof typeof TASK_STATUS_LABELS] ?? String(v);
+  if (field === 'source' && action.startsWith('assessment.')) {
+    return AUTHORIZATION_SOURCE_LABELS[v as keyof typeof AUTHORIZATION_SOURCE_LABELS] ?? String(v);
+  }
+  if (field === 'source') return PART_SOURCE_LABELS[v as keyof typeof PART_SOURCE_LABELS] ?? String(v);
+  if (typeof v === 'boolean') return v ? 'بله' : 'خیر';
+  if (typeof v === 'number' && !field.endsWith('Rial')) return toPersianDigits(v);
   if (field === 'coverageType') return COVERAGE_LABELS[v as keyof typeof COVERAGE_LABELS] ?? String(v);
   if (field === 'authorizationStatus' || field === 'decision') {
     return AUTHORIZATION_STATUS_LABELS[v as keyof typeof AUTHORIZATION_STATUS_LABELS] ?? String(v);
@@ -87,8 +116,8 @@ export function Timeline({ caseId, version }: { caseId: string; version: number 
             </div>
             {fields.map((k) => (
               <div key={k} className="xs muted">
-                {FIELD_LABELS[k]}: {k in before && k in after ? `${show(k, before[k])} ← ` : ''}
-                {show(k, shown[k])}
+                {FIELD_LABELS[k]}: {k in before && k in after ? `${show(k, before[k], e.action)} ← ` : ''}
+                {show(k, shown[k], e.action)}
               </div>
             ))}
             {e.reason && <div className="xs">{e.reason}</div>}

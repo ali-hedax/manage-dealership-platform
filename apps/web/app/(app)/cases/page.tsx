@@ -27,6 +27,10 @@ const FLAGS: { key: string; label: string }[] = [
   { key: 'needs_completion', label: 'نیازمند تکمیل' },
   { key: 'ready', label: 'آماده تحویل' },
   { key: 'legacy', label: 'ثبت از قبل' },
+  { key: 'awaiting_authorization', label: 'منتظر مجوز' },
+  { key: 'parts_to_order', label: 'قطعه سفارش‌نشده' },
+  { key: 'parts_overdue', label: 'قطعه دیرکرد' },
+  { key: 'finance_pending', label: 'منتظر تصمیم مالی' },
 ];
 
 function CasesList() {

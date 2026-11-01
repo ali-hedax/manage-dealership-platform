@@ -20,6 +20,8 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   NODE_ID: z.string().min(1).default('dev-local'),
   SEED_DEMO_PASSWORD: z.string().optional(),
+  // Login attempts per minute per client address (default 10).
+  LOGIN_RATE_LIMIT: z.preprocess((v) => (v === '' ? undefined : v), z.coerce.number().int().positive().optional()),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

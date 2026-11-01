@@ -7,7 +7,9 @@ import {
   BLOCKER_REASON_LABELS,
   type BlockerReason,
   type CaseDetail,
+  PART_STATUS_LABELS,
   type Department,
+  type Part,
   type Task,
   type TaskAction,
 } from '@manage/shared';
@@ -39,6 +41,10 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   const [at, setAt] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [reason, setReason] = useState<BlockerReason>('part_not_arrived');
+  const [partId, setPartId] = useState('');
+  const { data: parts } = useSWR<Part[]>(`/cases/${kase.id}/parts`, fetcher);
+  // Parts a "not arrived" blocker can wait for; handing one over resolves the blocker.
+  const waitingParts = (parts ?? []).filter((p) => p.status !== 'handed_over' && p.status !== 'cancelled');
   const [busy, setBusy] = useState(false);
   const manage = can('task.manage');
   const editable = kase.status === 'open' && kase.stage !== 'delivered';
@@ -49,6 +55,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
     setAt(new Date().toISOString());
     setNote('');
     setReason('part_not_arrived');
+    setPartId('');
   }
 
   /** One click for routine actions; the dialog only when a time or reason is needed. */
@@ -96,6 +103,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
               taskId: task.id,
               occurredAt: at,
               expectedTaskVersion: task.version,
+              partRequestId: partId && reason.startsWith('part_') ? partId : null,
             },
           }),
         'مانع ثبت شد',
@@ -245,6 +253,20 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {pending?.kind === 'block' && reason.startsWith('part_') && waitingParts.length > 0 && (
+          <label className="field">
+            <span>قطعه</span>
+            <select className="input" value={partId} onChange={(e) => setPartId(e.target.value)}>
+              <option value="">—</option>
+              {waitingParts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.description} ({PART_STATUS_LABELS[p.status]})
+                </option>
+              ))}
+            </select>
+            <span className="hint">با ثبت تحویل این قطعه به واحد، مانع خودکار رفع می‌شود.</span>
           </label>
         )}
         {!(pending?.kind === 'action' && pending.action === 'reopen') && (

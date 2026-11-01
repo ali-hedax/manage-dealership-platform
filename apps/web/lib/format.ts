@@ -1,4 +1,4 @@
-import { formatJalali, toPersianDigits } from '@manage/shared';
+import { formatJalali, toLatinDigits, toPersianDigits } from '@manage/shared';
 
 export { formatJalali, toPersianDigits };
 
@@ -40,4 +40,12 @@ export function deadlineTone(iso: string | null, active: boolean): Tone {
 
 export function faNum(n: number): string {
   return toPersianDigits(n.toLocaleString('en-US'));
+}
+
+export const rial = (n: number) => `${faNum(n)} ریال`;
+
+/** Amount typed by the user: Persian or Latin digits, with or without separators. */
+export function parseAmount(s: string): number {
+  const n = Number(toLatinDigits(s).replace(/[,٬\s]/g, ''));
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
 }

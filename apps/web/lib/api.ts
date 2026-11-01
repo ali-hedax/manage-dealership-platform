@@ -26,7 +26,7 @@ export function newKey(): string {
 }
 
 interface Options {
-  method?: 'GET' | 'POST' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT';
   body?: unknown;
   /** Reuse the same key when retrying the same user action. */
   idempotencyKey?: string;
