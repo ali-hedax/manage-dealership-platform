@@ -152,3 +152,52 @@ export const MODULES = [
   { key: 'ai_assistant', status: 'planned' },
 ] as const;
 export type ModuleKey = (typeof MODULES)[number]['key'];
+
+// Quality control: one checklist per QC round. A failed item opens a
+// corrective activity; the case returns to repair until a new round passes.
+export const QC_CHECK_ITEMS = [
+  'body_fit',
+  'paint',
+  'lights_electrical',
+  'warning_lamps',
+  'brakes_steering',
+  'safety_restraints',
+  'fluids_leaks',
+  'road_test',
+  'cleanliness',
+  'old_parts',
+] as const;
+export type QcCheckItem = (typeof QC_CHECK_ITEMS)[number];
+
+// Safety items are always inspected: "not applicable" is refused.
+export const QC_SAFETY_ITEMS: readonly QcCheckItem[] = ['warning_lamps', 'brakes_steering', 'safety_restraints'];
+
+export const QC_RESULTS = ['ok', 'fail', 'na'] as const;
+export type QcResult = (typeof QC_RESULTS)[number];
+
+export const QC_OUTCOMES = ['passed', 'failed'] as const;
+export type QcOutcome = (typeof QC_OUTCOMES)[number];
+
+// Why a technical or financial close (or the delivery) is not possible yet.
+export const COMPLETION_ISSUES = [
+  'tasks_unapproved',
+  'open_blockers',
+  'assessment_draft',
+  'authorization_pending',
+  'parts_open',
+  'lines_without_part',
+  'labour_without_task',
+  'qc_missing',
+  'qc_failed',
+  'qc_stale',
+  'no_final_assessment',
+  'shares_unknown',
+  'finance_pending',
+  'balance_due',
+  'technical_not_closed',
+  'financial_not_closed',
+] as const;
+export type CompletionIssueCode = (typeof COMPLETION_ISSUES)[number];
+
+export const RECIPIENT_RELATIONS = ['owner', 'agent', 'insurer', 'other'] as const;
+export type RecipientRelation = (typeof RECIPIENT_RELATIONS)[number];

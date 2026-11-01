@@ -10,6 +10,8 @@ import {
   type FinancePaymentInput,
   type FinanceSharesInput,
   type ProposeFinanceInput,
+  type SettlementPayment,
+  type SettlementPaymentInput,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -17,7 +19,7 @@ import { assertNotFuture, CasesService } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessments, caseFinance, cases, financialApprovals, partRequests, users } from '../db/schema';
+import { assessments, caseFinance, casePayments, cases, financialApprovals, partRequests, users } from '../db/schema';
 
 type ApprovalRow = typeof financialApprovals.$inferSelect;
 
@@ -241,6 +243,50 @@ export class FinanceService {
     return this.summary(actor, a.caseId);
   }
 
+  /** Settlement payment of the customer share (cashier); never more than the balance. */
+  async recordPayment(actor: Actor, caseId: string, input: SettlementPaymentInput): Promise<CaseFinance> {
+    const tenantId = actor.user.tenantId;
+    const at = input.at ? new Date(input.at) : new Date();
+    assertNotFuture(at, 'زمان دریافت نمی‌تواند در آینده باشد');
+    await this.db.transaction(async (tx) => {
+      const kase = await this.cases.loadForWrite(tx, tenantId, caseId);
+      if (kase.status !== 'open') throw badRequest('CASE_CLOSED', 'پرونده بسته شده است');
+      const f = await this.summaryOn(tx, tenantId, caseId);
+      if (f.balanceRial === null) throw badRequest('SHARES_UNKNOWN', 'سهم مشتری مشخص نشده است؛ ابتدا سهم‌ها را ثبت کنید');
+      if (input.amountRial > f.balanceRial) {
+        throw badRequest('PAYMENT_EXCEEDS_BALANCE', 'مبلغ دریافتی بیشتر از مانده سهم مشتری است', {
+          balanceRial: f.balanceRial,
+        });
+      }
+      const id = newId();
+      const [row] = await tx
+        .insert(casePayments)
+        .values({
+          id,
+          tenantId,
+          caseId,
+          amountRial: input.amountRial,
+          paymentRef: input.paymentRef,
+          paidAt: at,
+          note: input.note ?? null,
+          recordedBy: actor.user.id,
+          isTest: actor.user.isTestTenant,
+        })
+        .returning();
+      await this.audit.record(tx, actor, {
+        entityType: 'finance',
+        entityId: id,
+        caseId,
+        action: 'finance.payment_recorded',
+        occurredAt: at,
+        reason: input.note ?? null,
+        after: { amountRial: input.amountRial, paymentRef: input.paymentRef },
+        snapshot: { version: 1, row: row! },
+      });
+    });
+    return this.summary(actor, caseId);
+  }
+
   // ------------------------------------------------------------------- gate
 
   /** Purchase gate for a case, evaluated inside the caller's transaction. */
@@ -301,18 +347,22 @@ export class FinanceService {
   // ----------------------------------------------------------------- queries
 
   async summary(actor: Actor, caseId: string): Promise<CaseFinance> {
-    const tenantId = actor.user.tenantId;
-    const [kase] = await this.db
+    return this.summaryOn(this.db, actor.user.tenantId, caseId);
+  }
+
+  /** Finance summary read through `db` (a transaction when called by the financial close). */
+  async summaryOn(db: DbOrTx, tenantId: string, caseId: string): Promise<CaseFinance> {
+    const [kase] = await db
       .select({ coverageType: cases.coverageType })
       .from(cases)
       .where(and(eq(cases.id, caseId), eq(cases.tenantId, tenantId)));
     if (!kase) throw notFound('پرونده');
-    const inputs = await this.gateInputs(this.db, tenantId, caseId);
+    const inputs = await this.gateInputs(db, tenantId, caseId);
     const gate = evaluateGate(inputs, 0);
-    const [shares] = await this.db.select().from(caseFinance).where(eq(caseFinance.caseId, caseId));
+    const [shares] = await db.select().from(caseFinance).where(eq(caseFinance.caseId, caseId));
     const share = customerShareOf(kase.coverageType, shares?.customerShareRial, inputs.estimateRial);
 
-    const rows = await this.db
+    const rows = await db
       .select({
         a: financialApprovals,
         proposedByName: proposedByUser.displayName,
@@ -326,7 +376,7 @@ export class FinanceService {
       .where(and(eq(financialApprovals.tenantId, tenantId), eq(financialApprovals.caseId, caseId)))
       .orderBy(asc(financialApprovals.proposedAt));
     const spent = await this.spentByException(
-      this.db,
+      db,
       rows.filter((r) => r.a.kind === 'exception').map((r) => r.a.id),
     );
     const approvals: FinanceApproval[] = rows.map(({ a, proposedByName, decidedByName, paidByName }) => ({
@@ -347,9 +397,25 @@ export class FinanceService {
       paymentConfirmedBy: a.paymentConfirmedBy ? { id: a.paymentConfirmedBy, displayName: paidByName! } : null,
       version: a.version,
     }));
-    const paidRial = approvals.filter((a) => a.status === 'paid').reduce((s, a) => s + a.amountRial, 0);
+    const paymentRows = await db
+      .select({ p: casePayments, recordedByName: users.displayName })
+      .from(casePayments)
+      .innerJoin(users, eq(users.id, casePayments.recordedBy))
+      .where(and(eq(casePayments.tenantId, tenantId), eq(casePayments.caseId, caseId)))
+      .orderBy(asc(casePayments.paidAt));
+    const payments: SettlementPayment[] = paymentRows.map(({ p, recordedByName }) => ({
+      id: p.id,
+      amountRial: p.amountRial,
+      paymentRef: p.paymentRef,
+      paidAt: p.paidAt.toISOString(),
+      note: p.note,
+      recordedBy: { id: p.recordedBy, displayName: recordedByName },
+    }));
+    const paidRial =
+      approvals.filter((a) => a.status === 'paid').reduce((s, a) => s + a.amountRial, 0) +
+      payments.reduce((s, p) => s + p.amountRial, 0);
 
-    const [purchases] = await this.db
+    const [purchases] = await db
       .select({ total: sql<number>`coalesce(sum(${partRequests.quantity} * ${partRequests.unitPriceRial}), 0)::bigint` })
       .from(partRequests)
       .where(
@@ -377,6 +443,7 @@ export class FinanceService {
       purchasesRial: Number(purchases?.total ?? 0),
       gate: { open: gate.open, reason: gate.reason, message: FINANCE_GATE_LABELS[gate.reason] },
       approvals,
+      payments,
     };
   }
 

@@ -1,6 +1,6 @@
 # Test report
 
-Last full run: **2026-11-01**, branch `feature/parts-finance` (issues #9, #10 on top of `feature/assessment-parts`), Windows 10 / Node 26.8 locally (CI targets Node 22 on Ubuntu). All data synthetic.
+Last full run: **2026-11-01**, branch `feature/qc-delivery` (issue #12 on top of `feature/parts-finance`), Windows 10 / Node 26.8 locally (CI targets Node 22 on Ubuntu). All data synthetic.
 
 ## Summary
 
@@ -9,13 +9,13 @@ Last full run: **2026-11-01**, branch `feature/parts-finance` (issues #9, #10 on
 | Lint (ESLint on API, tsc on shared/web) | `pnpm lint` | ✅ pass |
 | Typecheck | `pnpm typecheck` | ✅ pass |
 | Shared unit tests (Jalali, digits, plates, phones, RBAC, schemas) | `pnpm --filter @manage/shared test` | ✅ 9 / 9 |
-| API unit + integration (Jest + supertest, real HTTP, embedded PostgreSQL) | `pnpm --filter @manage/api test` | ✅ 50 / 50 (5 suites; +9 parts/finance tests) |
+| API unit + integration (Jest + supertest, real HTTP, embedded PostgreSQL) | `pnpm --filter @manage/api test` | ✅ 56 / 56 (6 suites; new `qc-delivery` suite with 4 tests, delivery test in `accident` updated to the new gates) |
 | Production build (API + web) | `pnpm build` | ✅ pass |
-| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 7 / 7 locally on Edge in three consecutive runs (incl. parts/finance flow); ✅ on CI Chromium (PR #18, run 41284274194) |
+| E2E (Playwright, desktop 1366×860 + Pixel 7) | `pnpm test:e2e` | ✅ 8 / 8 locally on Edge in three consecutive runs (incl. QC/settlement/handover flow; 2 documentation-screenshot tests skipped by design); ✅ on CI Chromium (PR #20, run 41294515754) |
 | Dependency audit (prod, high) + gitleaks secret scan | `pnpm audit`, CI `security` | ✅ no known vulnerabilities; no secrets found. Dependency review is non-blocking until the repo's Dependency graph is enabled (#4) |
 | `pnpm dev` from an empty database | manual | ✅ API healthy, demo auto-seeded, web proxy 200 |
 | Local Preview `pnpm preview` | manual smoke | ✅ production build on :3100, login via web proxy 200, dashboard counts (5 active, 2 blocked, 1 awaiting authorization, 1 overdue part, 1 part to order, 1 pending finance), sample .xlsx served; restart without `--reset` keeps data and accounts |
-| Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (run 41276167117; with migration `0002_assessments` and the new demo seed: run 41279034901; with `0003_parts_finance`: run 41284274194) |
+| Migrations + seed + audit trigger + demo reset on PostgreSQL 16 | CI job `postgres` | ✅ pass (run 41276167117; with migration `0002_assessments` and the new demo seed: run 41279034901; with `0003_parts_finance`: run 41284274194; with `0004_qc_delivery`: run 41294515754) |
 | Docker images + compose smoke test (health via web proxy, login, dashboard) | CI job `docker` | ✅ pass (run 41276167117). Not verifiable on the dev machine: 8 GB RAM, 5.6 GB free disk, Docker daemon crashed twice during builds |
 
 ## Acceptance scenarios (brief §11)
@@ -30,7 +30,7 @@ Last full run: **2026-11-01**, branch `feature/parts-finance` (issues #9, #10 on
 | 6 | Multiple departments and technicians, parallel and dependent work | ✅ | API: dependencies enforced, parallel start, weighted progress 50 %, cycle rejected; E2E: dependency-aware start button |
 | 7 | "Part not arrived" while handover is recorded → reviewable discrepancy | ◐ | API: a "not arrived" blocker naming a handed-over part is refused with a discrepancy message. Review queue for the manager: issue #11 |
 | 8 | Block costly purchase without financial approval, allow no-cost work | ✅ | API: purchase refused (`FINANCE_GATE`) while stock check, reservation and starting an activity succeed; a supplement raising the estimate closes the gate ("re-approval required"); exception with limit: proposer cannot approve, purchase within limit allowed, beyond limit refused, spending tracked |
-| 9 | QC, corrective work, settlement, delivery | ◐ | API: delivery gate (all approved, no open blockers), reopen requires reason, actual delivery time. QC/settlement: issue #12 |
+| 9 | QC, corrective work, settlement, delivery | ✅ | API "acceptance 9": QC refused before all work is approved; technical close refused with reasons (approved line without installed part, QC missing); checklist rules (failed item needs description + unit, safety item cannot be skipped, all items required); failed round → corrective activity in the chosen unit, case back in repair; round 2 passes after the corrective work → technical close → "آماده تحویل"; handover refused until the financial close; balance due blocks the close, overpayment refused, cashier records the settlement, financial close; handover needs the recipient's confirmation, then delivered + archived (read-only, only under "all"), history has every step. A reopened activity invalidates the technical close (handover refused, stale QC → new round, close again); a changed customer share invalidates the financial close; closing with a balance due only by the service manager with a reason; role checks. E2E: demo case 5 — QC history and corrective activity, cashier settlement + financial close, expert handover → archived |
 | 10 | Roles and denial of unauthorized access | ✅ | API: unauthenticated 401, CSRF 403, support roles 403 on create/tasks, expert cannot block activities, admin cannot read cases, masked phone, tenant isolation 404, lockout; E2E: parts clerk read-only view |
 | 11 | Old vehicles with past admission date | ✅ | API: past admission + current stage + overdue/legacy filters; E2E: legacy entry form |
 | 12 | Reports and correct Persian PDF | ○ | Issue #13. Print view exists; PDF not yet |
@@ -45,7 +45,8 @@ Last full run: **2026-11-01**, branch `feature/parts-finance` (issues #9, #10 on
 - Repeated `Idempotency-Key` replays the stored response instead of creating a duplicate case.
 - Stale `expectedVersion` returns `409 VERSION_CONFLICT`.
 - Dashboard card counts equal the totals of the lists they link to (all 7 flags).
-- Demo seed creates 5 realistic cases through the real services (stages, overdue, blocker, ready, legacy).
+- Demo seed creates 5 realistic cases through the real services (stages, overdue, blocker, ready, legacy); case 5 reaches "آماده تحویل" through two QC rounds (one failed with corrective work) and the technical close.
+- The stage selector refuses "تحویل‌شده" (`DELIVERY_GATE`) and "آماده تحویل" (`TECHNICAL_CLOSE_REQUIRED`) even with all work approved.
 - Phone width: no horizontal scrolling on dashboard and case list; menu opens.
 
 ## Assessment and supplements (issue #8)
@@ -87,6 +88,14 @@ Found and fixed during the review:
 | #18 | JSON body limit was the 100 KB default while the import accepts ~1 MB files: real sheets above ~75 KB failed | Limit 2 MB; test with a 1500-row sheet (~270 KB) |
 | #18 | An .xlsx is a ZIP: a small upload could expand to gigabytes in memory | Only needed parts inflated; declared sizes capped (16 MB per entry, 32 MB total); decompression-bomb test |
 
+## QC, closes and delivery (issue #12)
+
+API tests (`apps/api/test/qc-delivery.e2e-spec.ts`): acceptance 9 end-to-end on a personal case; invalidation of both closes after later changes (golden card); balance-due close (cashier 403, manager without reason 400, manager with reason → accepted amount recorded); permissions (expert / parts clerk cannot record QC, QC inspector cannot close or hand over, expert cannot close financially, cashier cannot hand over; QC inspector reads the completion state).
+
+E2E (`apps/web/e2e/qc-delivery.spec.ts`, demo case 5): QC inspector sees two rounds and the corrective activity, no handover button; cashier sees the balance blocking the close, records the settlement (balance prefilled), closes financially; expert hands over (submit disabled until the recipient's confirmation) → "تحویل‌شده", archived, no edit link. Screenshots of the panel and the QC form (desktop and phone) reviewed: `docs/screenshots/*-completion-demo.png`, `*-qc-form.png`.
+
+CI (PR #20, run 41294515754): all 5 jobs green, incl. migration `0004_qc_delivery` + demo seed on PostgreSQL 16 and the Docker smoke test. Not covered yet: no printable delivery form or invoice (issue #13 / finance module).
+
 ## Defects found by tests and fixed
 
 | Found by | Defect | Fix |
@@ -103,6 +112,9 @@ Found and fixed during the review:
 | E2E (full suite) | Several role logins within a minute hit the login rate limit (10/min) | `LOGIN_RATE_LIMIT` setting; default unchanged, E2E uses 200 |
 | E2E (3rd run, intermittent) | After clearing cookies, the old page's background 401 redirect aborted the next navigation | Test leaves the page before switching user |
 | Screenshot review | History showed the authorization source as "part source" and numbers in Latin digits | Labels per event type, Persian digits |
+| API test (issue #12) | Work re-approved within a minute of a QC round was not detected as "QC stale" (minute tolerance on backdatable times) | Stale when any activity changed after the round was recorded (application clock) |
+| API test (issue #12) | A technical close made before reopened work counted as valid again after a new QC round, without the supervisor closing again | Close is valid only if made after the latest QC round |
+| Screenshot spec | Button "رد" also matched «… موضوعیت ندارد» | Exact match |
 
 ## E2E consecutive runs (flakiness check)
 
@@ -118,6 +130,7 @@ With the assessment flow (branch `feature/assessment-parts`, 2026-11-01): 6 pass
 
 With parts and finance (branch `feature/parts-finance`, 2026-11-01, after the two E2E fixes above): 7 passed in 49.6 s, 48.7 s and 49.1 s.
 
+With QC and delivery (branch `feature/qc-delivery`, 2026-11-01): 8 passed in 1.1 min, 1.2 min and 1.4 min (desktop + mobile, Edge).
 
 ## Live isolated Preview verification — 2026-11-01
 

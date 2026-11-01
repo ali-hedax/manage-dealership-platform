@@ -148,6 +148,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
               <div className="row" style={{ gap: 8 }}>
                 <span className="dept">{t.department.name}</span>
                 <TaskStatusChip status={t.status} />
+                {t.qcInspectionId && <span className="chip chip-amber">کار اصلاحی کنترل کیفیت</span>}
                 {t.title && <span className="small">{t.title}</span>}
               </div>
               <div className="meta">

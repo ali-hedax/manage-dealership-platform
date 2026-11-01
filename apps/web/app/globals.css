@@ -1170,3 +1170,27 @@ dialog.dialog::backdrop {
     background: #fff;
   }
 }
+
+/* ------------------------------------------------------- QC and delivery */
+
+.issues {
+  margin: 0;
+  padding-inline-start: 18px;
+  color: var(--red);
+}
+.issues li.is-warning {
+  color: var(--amber);
+}
+fieldset.qc-check {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--silver-2);
+  border-radius: var(--radius-s);
+}
+fieldset.qc-check legend {
+  padding-inline: 4px;
+  font-size: var(--fs-s);
+  font-weight: 700;
+}

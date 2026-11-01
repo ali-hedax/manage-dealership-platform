@@ -184,6 +184,19 @@ export const cases = pgTable(
     actualDeliveryAt: ts('actual_delivery_at'),
     technicalClosedAt: ts('technical_closed_at'),
     financialClosedAt: ts('financial_closed_at'),
+    // Completion (issue #12): technical and financial close are independent gates;
+    // the handover needs both. The values at the financial close detect later changes.
+    technicalClosedBy: uuid('technical_closed_by').references(() => users.id),
+    technicalCloseNote: text('technical_close_note'),
+    financialClosedBy: uuid('financial_closed_by').references(() => users.id),
+    financialCloseNote: text('financial_close_note'),
+    financialCloseEstimateRial: bigint('financial_close_estimate_rial', { mode: 'number' }),
+    financialCloseShareRial: bigint('financial_close_share_rial', { mode: 'number' }),
+    financialCloseWaivedRial: bigint('financial_close_waived_rial', { mode: 'number' }),
+    deliveredBy: uuid('delivered_by').references(() => users.id),
+    recipientName: text('recipient_name'),
+    recipientRelation: text('recipient_relation'),
+    deliveryNote: text('delivery_note'),
     isLegacyEntry: boolean('is_legacy_entry').notNull().default(false),
     missingFields: text('missing_fields').array().notNull().default(sql`'{}'::text[]`),
     searchText: text('search_text').notNull().default(''),
@@ -233,6 +246,8 @@ export const tasks = pgTable(
     weight: smallint('weight').notNull().default(1),
     sortOrder: integer('sort_order').notNull().default(0),
     notes: text('notes'),
+    // Corrective activity opened by a failed QC item.
+    qcInspectionId: uuid('qc_inspection_id').references((): AnyPgColumn => qcInspections.id),
     isTest: boolean('is_test').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
     createdBy: uuid('created_by')
@@ -490,6 +505,57 @@ export const financialApprovals = pgTable(
     index('financial_approvals_case_idx').on(t.caseId),
     index('financial_approvals_tenant_status_idx').on(t.tenantId, t.status),
   ],
+);
+
+// Settlement payments of the customer share recorded by the cashier (advances
+// are confirmed on financial_approvals). Append-only by the application.
+export const casePayments = pgTable(
+  'case_payments',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    amountRial: bigint('amount_rial', { mode: 'number' }).notNull(),
+    paymentRef: text('payment_ref').notNull(),
+    paidAt: ts('paid_at').notNull(),
+    note: text('note'),
+    recordedBy: uuid('recorded_by')
+      .notNull()
+      .references(() => users.id),
+    isTest: boolean('is_test').notNull().default(false),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('case_payments_case_idx').on(t.caseId)],
+);
+
+// One row per QC round; immutable once recorded. `checks` holds the result of
+// every checklist item (see QC_CHECK_ITEMS) and the corrective task it opened.
+export const qcInspections = pgTable(
+  'qc_inspections',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    round: smallint('round').notNull(),
+    outcome: text('outcome').notNull(),
+    checks: jsonb('checks').notNull(),
+    note: text('note'),
+    inspectedAt: ts('inspected_at').notNull(),
+    inspectedBy: uuid('inspected_by')
+      .notNull()
+      .references(() => users.id),
+    isTest: boolean('is_test').notNull().default(false),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('qc_inspections_case_round_uq').on(t.caseId, t.round)],
 );
 
 // Append-only. A database trigger rejects UPDATE and DELETE (see migration

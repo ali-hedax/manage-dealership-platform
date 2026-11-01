@@ -6,6 +6,7 @@ import type {
   AuthorizationSource,
   AuthorizationStatus,
   BlockerReason,
+  CompletionIssueCode,
   FinanceApprovalKind,
   FinanceApprovalStatus,
   FinanceGateReason,
@@ -13,6 +14,10 @@ import type {
   PartInspection,
   PartSource,
   PartStatus,
+  QcCheckItem,
+  QcOutcome,
+  QcResult,
+  RecipientRelation,
   CaseStage,
   CaseStatus,
   CoverageType,
@@ -217,6 +222,11 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'finance.approved': 'تأیید مالی مدیر',
   'finance.rejected': 'رد پیشنهاد مالی',
   'finance.paid': 'تأیید دریافت پیش‌پرداخت',
+  'finance.payment_recorded': 'ثبت دریافت تسویه',
+  'qc.recorded': 'ثبت کنترل کیفیت',
+  'case.technical_closed': 'بستن فنی',
+  'case.financial_closed': 'بستن مالی',
+  'case.delivered': 'تحویل خودرو',
 };
 
 // Keys produced by the API in CaseListItem.missingFields ('نیازمند تکمیل').
@@ -233,4 +243,54 @@ export const MISSING_FIELD_LABELS: Record<string, string> = {
   official_deadline: 'مهلت رسمی',
   insurer: 'شرکت بیمه',
   insurance_claim_no: 'شماره خسارت بیمه',
+};
+
+export const QC_CHECK_LABELS: Record<QcCheckItem, string> = {
+  body_fit: 'درز، تنظیم و نصب قطعات بدنه',
+  paint: 'رنگ، همرنگی و پولیش',
+  lights_electrical: 'چراغ‌ها و سیستم برق',
+  warning_lamps: 'چراغ‌های هشدار پشت آمپر',
+  brakes_steering: 'ترمز، فرمان و جلوبندی',
+  safety_restraints: 'کیسه هوا و کمربند ایمنی',
+  fluids_leaks: 'مایعات و نشتی',
+  road_test: 'تست جاده',
+  cleanliness: 'نظافت داخل و بیرون خودرو',
+  old_parts: 'تعیین تکلیف قطعات اسقاط',
+};
+
+export const QC_RESULT_LABELS: Record<QcResult, string> = {
+  ok: 'قبول',
+  fail: 'رد',
+  na: 'بررسی نشد / موضوعیت ندارد',
+};
+
+export const QC_OUTCOME_LABELS: Record<QcOutcome, string> = {
+  passed: 'قبول',
+  failed: 'رد — نیازمند کار اصلاحی',
+};
+
+export const COMPLETION_ISSUE_LABELS: Record<CompletionIssueCode, string> = {
+  tasks_unapproved: 'فعالیت‌هایی هنوز تأیید سرپرست نگرفته‌اند',
+  open_blockers: 'مانع باز روی پرونده وجود دارد',
+  assessment_draft: 'پیش‌نویس کارشناسی یا الحاقیه هنوز نهایی نشده است',
+  authorization_pending: 'مجوز آخرین نسخه کارشناسی هنوز ثبت نشده است',
+  parts_open: 'قطعه‌هایی هنوز به واحد تعمیر تحویل یا لغو نشده‌اند',
+  lines_without_part: 'اقلام تعویضی تأییدشده بدون قطعه تحویل‌شده به واحد',
+  labour_without_task: 'اجرت تأییدشده برای واحدی که فعالیت تأییدشده ندارد',
+  qc_missing: 'کنترل کیفیت ثبت نشده است',
+  qc_failed: 'آخرین کنترل کیفیت رد شده است؛ پس از کار اصلاحی دوباره کنترل شود',
+  qc_stale: 'پس از آخرین کنترل کیفیت کار تأیید شده است؛ دوباره کنترل شود',
+  no_final_assessment: 'کارشناسی نهایی‌شده وجود ندارد',
+  shares_unknown: 'سهم مشتری مشخص نشده است',
+  finance_pending: 'پیشنهاد مالی منتظر تصمیم مدیر است',
+  balance_due: 'سهم مشتری کامل دریافت نشده است',
+  technical_not_closed: 'بستن فنی انجام نشده یا باید دوباره انجام شود',
+  financial_not_closed: 'بستن مالی انجام نشده یا باید دوباره انجام شود',
+};
+
+export const RECIPIENT_RELATION_LABELS: Record<RecipientRelation, string> = {
+  owner: 'مالک',
+  agent: 'نماینده مالک (با معرفی‌نامه)',
+  insurer: 'نماینده بیمه',
+  other: 'سایر',
 };

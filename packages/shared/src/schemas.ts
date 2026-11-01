@@ -10,6 +10,10 @@ import {
   PART_ACTIONS,
   PART_INSPECTIONS,
   PART_SOURCES,
+  QC_CHECK_ITEMS,
+  QC_RESULTS,
+  QC_SAFETY_ITEMS,
+  RECIPIENT_RELATIONS,
   CASE_STAGES,
   CASE_STATUSES,
   COVERAGE_TYPES,
@@ -378,3 +382,75 @@ export const financePaymentSchema = z.object({
   at: optionalIsoDate,
 });
 export type FinancePaymentInput = z.infer<typeof financePaymentSchema>;
+
+export const settlementPaymentSchema = z.object({
+  amountRial: rial.refine((v) => v > 0, 'مبلغ باید بیشتر از صفر باشد'),
+  paymentRef: z.string().trim().min(1).max(64),
+  at: optionalIsoDate,
+  note: optionalText(500),
+});
+export type SettlementPaymentInput = z.infer<typeof settlementPaymentSchema>;
+
+// ------------------------------------------------- QC, closes and delivery
+
+export const qcCheckSchema = z
+  .object({
+    item: z.enum(QC_CHECK_ITEMS),
+    result: z.enum(QC_RESULTS),
+    note: optionalText(500),
+    // Unit that does the corrective work for a failed item.
+    departmentId: uuid.nullish(),
+  })
+  .refine((v) => v.result !== 'fail' || !!v.note, { message: 'برای مورد ردشده شرح ایراد الزامی است', path: ['note'] })
+  .refine((v) => v.result !== 'fail' || !!v.departmentId, {
+    message: 'برای مورد ردشده واحد انجام کار اصلاحی را انتخاب کنید',
+    path: ['departmentId'],
+  })
+  .refine((v) => v.result !== 'na' || !QC_SAFETY_ITEMS.includes(v.item), {
+    message: 'موارد ایمنی باید بازبینی شوند و «بررسی نشد» برای آن‌ها پذیرفته نیست',
+    path: ['result'],
+  });
+export type QcCheckInput = z.infer<typeof qcCheckSchema>;
+
+export const recordQcSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    checks: z.array(qcCheckSchema).length(QC_CHECK_ITEMS.length),
+    at: optionalIsoDate,
+    note: optionalText(1000),
+  })
+  .refine((v) => new Set(v.checks.map((c) => c.item)).size === QC_CHECK_ITEMS.length, {
+    message: 'همه موارد چک‌لیست کنترل کیفیت باید یک بار تعیین شوند',
+    path: ['checks'],
+  });
+export type RecordQcInput = z.infer<typeof recordQcSchema>;
+
+export const technicalCloseSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  note: optionalText(1000),
+});
+export type TechnicalCloseInput = z.infer<typeof technicalCloseSchema>;
+
+export const financialCloseSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    // Close although part of the customer share is unpaid (manager only, reason required).
+    waiveBalance: z.boolean().default(false),
+    note: optionalText(1000),
+  })
+  .refine((v) => !v.waiveBalance || !!v.note, {
+    message: 'برای بستن با مانده بدهی ذکر دلیل الزامی است',
+    path: ['note'],
+  });
+export type FinancialCloseInput = z.infer<typeof financialCloseSchema>;
+
+export const deliverySchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  recipientName: z.string().trim().min(2).max(120),
+  recipientRelation: z.enum(RECIPIENT_RELATIONS),
+  // Recipient checked the vehicle and confirmed the handover (signed form).
+  handoverConfirmed: z.literal(true, { error: 'تأیید تحویل‌گیرنده الزامی است' }),
+  at: optionalIsoDate,
+  note: optionalText(1000),
+});
+export type DeliveryInput = z.infer<typeof deliverySchema>;
