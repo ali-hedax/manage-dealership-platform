@@ -146,8 +146,11 @@ jobs:
           node-version: 22
       - name: Known vulnerabilities in production dependencies
         run: pnpm audit --prod --audit-level high
+      # Requires Settings → Code security → Dependency graph (currently disabled; owner decision #4).
+      # Non-blocking until enabled; pnpm audit above and gitleaks below still fail the job.
       - name: Dependency review
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
