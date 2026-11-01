@@ -29,14 +29,38 @@ const columnIndex = (ref: string) => {
 
 export class XlsxError extends Error {}
 
+// Decompression limits: an .xlsx is a ZIP archive, and a small upload could
+// otherwise expand to gigabytes. Only the parts we read are decompressed; the
+// declared size bounds the output buffer, so it is checked before inflating.
+export const MAX_ENTRY_BYTES = 16 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
+const MAX_ENTRIES = 2000;
+const needed = (name: string) =>
+  name === 'xl/workbook.xml' ||
+  name === 'xl/_rels/workbook.xml.rels' ||
+  name === 'xl/sharedStrings.xml' ||
+  /^xl\/worksheets\/[^/]+\.xml$/.test(name);
+
 /** Rows of the first worksheet; empty cells are ''. */
 export function readFirstSheet(data: Uint8Array): string[][] {
   let files: Record<string, Uint8Array>;
+  let entries = 0;
+  let total = 0;
+  let tooLarge = false;
   try {
-    files = unzipSync(data);
+    files = unzipSync(data, {
+      filter: (f) => {
+        entries += 1;
+        if (!needed(f.name)) return false;
+        total += f.originalSize;
+        if (entries > MAX_ENTRIES || f.originalSize > MAX_ENTRY_BYTES || total > MAX_TOTAL_BYTES) tooLarge = true;
+        return !tooLarge;
+      },
+    });
   } catch {
     throw new XlsxError('فایل اکسل معتبر نیست (فقط .xlsx پذیرفته می‌شود)');
   }
+  if (tooLarge) throw new XlsxError('محتوای فایل اکسل بیش از حد بزرگ است؛ فایل را به چند بخش تقسیم کنید');
   const sheetPath = firstSheetPath(files);
   const sheet = files[sheetPath];
   if (!sheet) throw new XlsxError('برگه‌ای در فایل اکسل پیدا نشد');

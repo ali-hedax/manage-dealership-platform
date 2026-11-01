@@ -1,5 +1,7 @@
 import type { Assessment, CaseDetail, CaseFinance, Department, Part, TimelineEvent } from '@manage/shared';
-import { writeSheet } from '../src/parts/xlsx';
+import { randomBytes } from 'node:crypto';
+import { strToU8, zipSync } from 'fflate';
+import { MAX_ENTRY_BYTES, writeSheet } from '../src/parts/xlsx';
 import { IMPORT_COLUMNS } from '../src/parts/parts.service';
 import { Client, createHarness, daysAgo, daysAhead, type Harness } from './harness';
 
@@ -398,6 +400,36 @@ describe('Excel import and permissions', () => {
       fileBase64: Buffer.from('not a spreadsheet').toString('base64'),
     });
     expect(notXlsx.body.errors[0].message).toContain('.xlsx');
+  });
+
+  it('accepts a realistic large sheet and refuses a decompression bomb', async () => {
+    const c = await newCase({ coverageType: 'golden_card', goldenCardFileNo: 'GC-TEST-13', officialDeadlineAt: daysAhead(9) });
+    // 1500 rows with random notes (incompressible): well above the 100 KB default JSON body limit.
+    const many = Array.from({ length: 1500 }, (_, i) => [
+      `قطعه آزمون شماره ${i + 1}`,
+      `TEST-PN-${10_000 + i}`,
+      1,
+      'قطعه شرکت',
+      1_000_000 + i,
+      randomBytes(100).toString('hex'),
+    ]);
+    const big = sheet(many);
+    expect(big.length).toBeGreaterThan(150_000);
+    const preview = await parts.post(`/cases/${c.id}/parts/import`, { fileBase64: big, dryRun: true });
+    expect(preview.status).toBe(201);
+    expect(preview.body.rows).toHaveLength(1500);
+
+    // 20 MB of spaces compresses to a few KB; it must be refused without inflating it.
+    const bomb = zipSync({
+      'xl/worksheets/sheet1.xml': strToU8(' '.repeat(MAX_ENTRY_BYTES + 4 * 1024 * 1024)),
+    });
+    expect(bomb.length).toBeLessThan(100_000);
+    const refused = await parts.post(`/cases/${c.id}/parts/import`, {
+      fileBase64: Buffer.from(bomb).toString('base64'),
+      dryRun: true,
+    });
+    expect(refused.status).toBe(201);
+    expect(refused.body.errors[0].message).toContain('بیش از حد بزرگ');
   });
 
   it('enforces part and finance permissions on the server', async () => {
