@@ -92,3 +92,18 @@ Owner approved installing PR #28 on the Manage Preview only, from CI-built image
   - Anonymous staff list, mail check and private-invite API calls return 401. Demo shared-password logins return 403 (personal sign-in only), so the authenticated staff page can only be exercised by the owner.
 - **Network observation:** the app answers in about 0.1 s, but new TCP connections to the public address sometimes take 5–15 s. This happens from the owner's machine and from the VM to its own public IP, and SSH connections time out intermittently. UFW, conntrack (52/65,536) and fail2ban show no cause on the VM; the delays are upstream (datacenter or national network). Nothing was changed.
 - **Rollback:** `bash /home/manage/backups/pr28-20261102T065529Z/deploy-pr28.sh rollback` re-tags the previous images and checks out `b7e4c93`. Migration 0007 only added a nullable column; a full DB restore is `pg_restore --clean --if-exists` from `db.dump`.
+
+## Update — PR #30 (existing-vehicle Excel import), 2026-11-02
+
+Owner approved installing PR #30 on the Manage Preview only. Approval covers the feature, not test-data removal or importing the real vehicle file; none was done.
+
+- **CI:** final head `439e92b` passed 6/6 checks. Images were built by draft PR #31 (PR #30 plus only the image-export CI step), run 41413134903. Source merge commit `83278e0` differs from `439e92b` only in `.github/workflows/ci.yml`. The archive SHA-256 was verified locally and on the VM, and image IDs match the CI manifest. The archive was copied in verified 5 MB chunks.
+- **Backup:** `/home/manage/backups/pr30-20261102T083407Z` contains `pg_dump -Fc` (188 entries), `.env`, Preview config, previous git head and image IDs, counts, SHA256SUMS and `deploy-pr30.sh`. A test restore into a temporary database matched (users 8, Authenticator 1, cases 5, audit 85, migrations 8); the temporary database was dropped. Previous images are tagged `before-pr30-20261102T083407Z`.
+- **Install:** only API and web were recreated. Caddy, the gate, the database and `.env` (byte-identical) were untouched. The checkout is clean at `439e92b`.
+- **Verification:**
+  - All services are healthy, and health reports ok/postgres/preview.
+  - Migration 0008 applied (9 migrations); the `vehicle_imports` and `vehicle_import_rows` tables and `cases.admission_no` exist.
+  - Users, active accounts, enrolled Authenticators, cases, tasks, parts, audit, invitations and the 6 existing sessions are identical before and after. No import has run.
+  - Over public HTTPS: `/login` returns 200 and `totpEnabled` is true. Anonymous `/` and `/cases/import` redirect to `/login`, and anonymous imports, sample and invitation APIs return 401.
+  - The authenticated import page and the owner's own sign-in can only be checked by the owner (personal sign-in only).
+- **Rollback:** `bash /home/manage/backups/pr30-20261102T083407Z/deploy-pr30.sh rollback` returns to the `e042d9f` images and code. Migration 0008 is additive; a full DB restore is `pg_restore --clean --if-exists` from `db.dump`.
