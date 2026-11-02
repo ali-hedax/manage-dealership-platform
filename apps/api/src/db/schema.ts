@@ -152,6 +152,9 @@ export const vehicles = pgTable(
     plate: text('plate'),
     vin: text('vin'),
     color: text('color'),
+    // Chassis number as recorded on the admission sheet (often a short form);
+    // never treated as a full VIN.
+    chassisRef: text('chassis_ref'),
     isTest: boolean('is_test').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
@@ -222,6 +225,17 @@ export const cases = pgTable(
     recipientName: text('recipient_name'),
     recipientRelation: text('recipient_relation'),
     deliveryNote: text('delivery_note'),
+    // Admission card number of the workshop (not the Manage case number) and its
+    // matching key; "بدون پذیرش" / "برگشتی" have no key because they are not unique.
+    admissionNo: text('admission_no'),
+    admissionNoKey: text('admission_no_key'),
+    // 'minute' or 'date' when only the admission day is known (imported records).
+    admittedAtPrecision: text('admitted_at_precision').notNull().default('minute'),
+    // 'manual' or 'excel_import'; importKey is the identity a vehicle import
+    // matched on (vin:, adm:, chs:), unique per dealership so re-imports cannot
+    // create a second case.
+    origin: text('origin').notNull().default('manual'),
+    importKey: text('import_key'),
     isLegacyEntry: boolean('is_legacy_entry').notNull().default(false),
     missingFields: text('missing_fields').array().notNull().default(sql`'{}'::text[]`),
     searchText: text('search_text').notNull().default(''),
@@ -240,6 +254,10 @@ export const cases = pgTable(
     uniqueIndex('cases_tenant_number_uq').on(t.tenantId, t.caseNumber),
     index('cases_tenant_status_stage_idx').on(t.tenantId, t.status, t.stage),
     index('cases_vehicle_idx').on(t.vehicleId),
+    uniqueIndex('cases_tenant_import_key_uq')
+      .on(t.tenantId, t.importKey)
+      .where(sql`${t.importKey} is not null`),
+    index('cases_tenant_admission_key_idx').on(t.tenantId, t.admissionNoKey),
   ],
 );
 
@@ -273,6 +291,8 @@ export const tasks = pgTable(
     notes: text('notes'),
     // Corrective activity opened by a failed QC item.
     qcInspectionId: uuid('qc_inspection_id').references((): AnyPgColumn => qcInspections.id),
+    // Set when an import created the task; re-importing the same row skips it.
+    importRef: text('import_ref'),
     isTest: boolean('is_test').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
     createdBy: uuid('created_by')
@@ -281,7 +301,13 @@ export const tasks = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
   },
-  (t) => [index('tasks_case_idx').on(t.caseId), index('tasks_tenant_status_idx').on(t.tenantId, t.status)],
+  (t) => [
+    index('tasks_case_idx').on(t.caseId),
+    index('tasks_tenant_status_idx').on(t.tenantId, t.status),
+    uniqueIndex('tasks_case_import_ref_uq')
+      .on(t.caseId, t.importRef)
+      .where(sql`${t.importRef} is not null`),
+  ],
 );
 
 export const taskDependencies = pgTable(
@@ -645,4 +671,58 @@ export const idempotencyKeys = pgTable(
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.userId, t.key] })],
+);
+
+// Existing-vehicle Excel imports. A preview is stored first; applying it
+// re-evaluates every row against the current data. Rows keep the original cell
+// values (provenance) and the case they created or updated.
+export const vehicleImports = pgTable('vehicle_imports', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  status: text('status').notNull().default('preview'),
+  fileName: text('file_name').notNull(),
+  fileSha256: text('file_sha256').notNull(),
+  sheetName: text('sheet_name').notNull(),
+  headerRow: integer('header_row').notNull(),
+  decisions: jsonb('decisions').notNull(),
+  counts: jsonb('counts').notNull(),
+  blankRows: jsonb('blank_rows').notNull(),
+  unmappedColumns: jsonb('unmapped_columns').notNull(),
+  isTest: boolean('is_test').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id),
+  appliedAt: ts('applied_at'),
+  appliedBy: uuid('applied_by').references(() => users.id),
+});
+
+export const vehicleImportRows = pgTable(
+  'vehicle_import_rows',
+  {
+    id: uuid('id').primaryKey(),
+    importId: uuid('import_id')
+      .notNull()
+      .references(() => vehicleImports.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    rowNo: integer('row_no').notNull(),
+    outcome: text('outcome').notNull(),
+    source: jsonb('source').notNull(),
+    // Same values keyed by column (rowNo, admissionNo, ...) for re-evaluation at apply time.
+    values: jsonb('values').notNull(),
+    identity: text('identity'),
+    caseId: uuid('case_id').references(() => cases.id),
+    caseNumber: text('case_number'),
+    changes: jsonb('changes').notNull(),
+    messages: jsonb('messages').notNull(),
+    isTest: boolean('is_test').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('vehicle_import_rows_import_row_uq').on(t.importId, t.rowNo),
+    index('vehicle_import_rows_case_idx').on(t.caseId),
+  ],
 );

@@ -16,6 +16,7 @@ import { BlockersPanel } from '@/components/BlockersPanel';
 import { CompletionPanel } from '@/components/CompletionPanel';
 import { FinancePanel } from '@/components/FinancePanel';
 import { PartsPanel } from '@/components/PartsPanel';
+import { ProvenancePanel } from '@/components/ProvenancePanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
 import { Plate } from '@/components/Plate';
 import { TasksPanel } from '@/components/TasksPanel';
@@ -124,7 +125,15 @@ export default function CaseDetailPage() {
       <section className="panel times" aria-label="زمان‌ها">
         <div>
           <div className="k">پذیرش واقعی</div>
-          <div className="v">{formatJalali(kase.admittedAt, { time: true })}</div>
+          <div className="v">
+            {kase.admittedAtPrecision === 'date' ? (
+              <>
+                {formatJalali(kase.admittedAt)} <span className="xs muted">(ساعت نامعلوم)</span>
+              </>
+            ) : (
+              formatJalali(kase.admittedAt, { time: true })
+            )}
+          </div>
           <div className="rel muted">ثبت در Manage: {formatJalali(kase.createdAt)}</div>
         </div>
         <div>
@@ -185,6 +194,20 @@ export default function CaseDetailPage() {
                 </dd>
                 <dt>VIN</dt>
                 <dd>{v.vin ? <span className="ltr">{v.vin}</span> : '—'}</dd>
+                {v.chassisRef && (
+                  <>
+                    <dt>شاسی ثبت‌شده</dt>
+                    <dd>
+                      <bdi>{v.chassisRef}</bdi>
+                    </dd>
+                  </>
+                )}
+                {kase.admissionNo && (
+                  <>
+                    <dt>شماره کارت پذیرش</dt>
+                    <dd>{kase.admissionNo}</dd>
+                  </>
+                )}
                 <dt>کیلومتر</dt>
                 <dd className="num">{kase.odometerKm != null ? faNum(kase.odometerKm) : <Missing />}</dd>
                 <dt>محل خودرو</dt>
@@ -222,6 +245,8 @@ export default function CaseDetailPage() {
           </section>
 
           <FinancePanel kase={kase} onChange={refresh} />
+
+          <ProvenancePanel kase={kase} />
 
           {can('audit.read') && (
             <section className="panel">

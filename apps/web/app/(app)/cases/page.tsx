@@ -71,11 +71,18 @@ function CasesList() {
           <h1>پرونده‌های تصادفی</h1>
           <p className="muted small">{data ? `${faNum(data.total)} پرونده` : ' '}</p>
         </div>
-        {can('case.create') && (
-          <Link className="btn btn-primary" href="/cases/new">
-            ثبت پرونده
-          </Link>
-        )}
+        <div className="row" style={{ gap: 6 }}>
+          {can('case.import') && (
+            <Link className="btn" href="/cases/import">
+              ورود خودروهای موجود از اکسل
+            </Link>
+          )}
+          {can('case.create') && (
+            <Link className="btn btn-primary" href="/cases/new">
+              ثبت پرونده
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="panel">
@@ -85,7 +92,7 @@ function CasesList() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="جست‌وجو با پلاک، VIN، نام یا تلفن مالک، شماره پرونده"
+            placeholder="جست‌وجو با پلاک، VIN، شاسی، شماره پذیرش، نام یا تلفن مالک، شماره پرونده"
             aria-label="جست‌وجوی پرونده"
             autoFocus
           />

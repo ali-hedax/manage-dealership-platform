@@ -13,6 +13,7 @@ import {
   QC_CHECK_ITEMS,
   QC_RESULTS,
   QC_SAFETY_ITEMS,
+  IMPORT_DEADLINE_TARGETS,
   RECIPIENT_RELATIONS,
   CASE_STAGES,
   CASE_STATUSES,
@@ -454,3 +455,20 @@ export const deliverySchema = z.object({
   note: optionalText(1000),
 });
 export type DeliveryInput = z.infer<typeof deliverySchema>;
+
+// ------------------------------------------------- existing-vehicle import
+
+export const vehicleImportDecisionsSchema = z.object({
+  // Rows with a date but no time: record the day only (time shown as unknown).
+  dateWithoutTime: z.boolean().default(false),
+  deadlineAs: z.enum(IMPORT_DEADLINE_TARGETS).default('none'),
+});
+export type VehicleImportDecisions = z.infer<typeof vehicleImportDecisionsSchema>;
+
+export const vehicleImportSchema = z.object({
+  fileName: z.string().trim().min(1).max(200),
+  // base64 of an .xlsx up to ~1 MB.
+  fileBase64: z.string().min(1).max(1_400_000),
+  decisions: vehicleImportDecisionsSchema.default({ dateWithoutTime: false, deadlineAs: 'none' }),
+});
+export type VehicleImportInput = z.infer<typeof vehicleImportSchema>;

@@ -58,6 +58,10 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 
 Workflow for a change: edit `schema.ts` → `pnpm --filter @manage/api db:generate` → review the SQL → write the down script → run tests → document here. Production: back up first, then `pnpm db:migrate` ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
 
+## 0008_vehicle_import
+
+Existing-vehicle Excel import. On `cases`: `admission_no` (workshop admission card number, original text) and `admission_no_key` (matching key; null for non-unique values such as «بدون پذیرش»), `admitted_at_precision` ('minute' default, 'date' when only the day is known), `origin` ('manual' | 'excel_import') and `import_key` (identity used by the import: vin:, adm: or chs:; unique per tenant when set, so an interrupted or repeated import cannot create a second case). `vehicles.chassis_ref`: chassis number as recorded on the sheet, never treated as a VIN. `tasks.import_ref` (unique per case when set): a sheet row's next action is created once. New tables `vehicle_imports` (file name and SHA-256, sheet, header row, decisions, counts, blank rows, unmapped columns, status preview | applying | applied | partial, creator/applier) and `vehicle_import_rows` (row number, outcome, original cells by header (`source`), values by column key, identity, case, changes, messages). Rows are the provenance of imported cases. Additive; existing cases default to manual/minute. Down script `down/0008_vehicle_import.down.sql` (disposable databases only).
+
 ## 0007_invitation_failure
 
 Additive nullable column `auth_challenges.invitation_failure`: category of the last failed invitation email (`dns_failed`, `connection_blocked`, `tls_failed`, `auth_failed`, `recipient_rejected`, `unknown`). Never the raw SMTP error. Cleared by a successful resend (new challenge). Down script: `apps/api/src/db/down/0007_invitation_failure.down.sql`, disposable databases only.

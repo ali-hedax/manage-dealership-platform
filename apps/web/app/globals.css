@@ -1194,3 +1194,39 @@ fieldset.qc-check legend {
   font-size: var(--fs-s);
   font-weight: 700;
 }
+.issues li.is-info {
+  color: var(--steel);
+}
+ul.plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Vehicle import rows become stacked cards on phones (same pattern as table.items). */
+@media (max-width: 860px) {
+  .table.import-rows thead {
+    display: none;
+  }
+  .table.import-rows tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 10px;
+    padding: 10px 0;
+    border-block-end: 1px solid var(--silver-2);
+  }
+  .table.import-rows td {
+    border: 0;
+    padding: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .table.import-rows td.wide {
+    grid-column: 1 / -1;
+  }
+  .table.import-rows td[data-label]::before {
+    content: attr(data-label) ': ';
+    color: var(--steel-2);
+    font-size: var(--fs-xs);
+  }
+}

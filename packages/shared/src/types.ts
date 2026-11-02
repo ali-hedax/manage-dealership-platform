@@ -7,6 +7,8 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  ImportDeadlineTarget,
+  VehicleImportOutcome,
   FinanceApprovalKind,
   FinanceApprovalStatus,
   FinanceGateReason,
@@ -316,7 +318,14 @@ export interface CaseDetail extends Omit<CaseListItem, 'customerName'> {
     plate: string | null;
     vin: string | null;
     color: string | null;
+    /** Chassis number as recorded on the admission sheet (may be short; not a VIN). */
+    chassisRef: string | null;
   };
+  /** Workshop admission card number (not the Manage case number). */
+  admissionNo: string | null;
+  /** 'date' when only the admission day is known (imported record). */
+  admittedAtPrecision: 'minute' | 'date';
+  origin: 'manual' | 'excel_import';
   odometerKm: number | null;
   damageDescription: string | null;
   vehicleLocation: string | null;
@@ -423,4 +432,57 @@ export interface CaseCompletion {
   } | null;
   /** Issues that still prevent the handover. */
   deliveryIssues: CompletionIssue[];
+}
+
+export interface VehicleImportMessage {
+  level: 'error' | 'warning' | 'info';
+  text: string;
+}
+
+export interface VehicleImportChange {
+  field: string;
+  from: string | null;
+  to: string | null;
+}
+
+export interface VehicleImportRow {
+  /** Row number in the sheet (as Excel shows it). */
+  rowNo: number;
+  outcome: VehicleImportOutcome;
+  /** Values as they appear in the file, by column header. */
+  source: Record<string, string>;
+  identity: string | null;
+  caseId: string | null;
+  caseNumber: string | null;
+  changes: VehicleImportChange[];
+  messages: VehicleImportMessage[];
+}
+
+export interface VehicleImport {
+  id: string;
+  status: 'preview' | 'applied' | 'partial';
+  fileName: string;
+  sheetName: string;
+  headerRow: number;
+  decisions: { dateWithoutTime: boolean; deadlineAs: ImportDeadlineTarget };
+  counts: Record<VehicleImportOutcome, number>;
+  /** Empty template rows that were skipped, by row number. */
+  blankRows: number[];
+  /** Columns of the file that have no destination in Manage (kept as provenance). */
+  unmappedColumns: string[];
+  rows: VehicleImportRow[];
+  createdAt: string;
+  createdBy: UserRef;
+  appliedAt: string | null;
+}
+
+/** Where a case's data came from when it was created or updated by an import. */
+export interface CaseProvenance {
+  importId: string;
+  fileName: string;
+  rowNo: number;
+  outcome: VehicleImportOutcome;
+  appliedAt: string | null;
+  appliedBy: UserRef;
+  source: Record<string, string>;
 }

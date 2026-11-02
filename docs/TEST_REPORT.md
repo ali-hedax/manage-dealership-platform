@@ -175,6 +175,17 @@ Read-only evidence: primary platform and prior Preview checkout clean; deployed 
 
 Local documentation validation passed: 26 Markdown files, 49 controller routes, `node --check scripts/check-docs.mjs` and `git diff --check`. No application dependencies, customer data or private runtime configuration are needed for this check.
 
+## Existing-vehicle Excel import — 2026-11-02 (branch `feature/vehicle-excel-import`)
+
+Built and tested with synthetic workbooks that reproduce the intake file's structure (sheet and header names read from the owner's Google Sheet; no real rows copied).
+
+- Unit (`vehicle-sheet.spec.ts`, 5): header found on row 3 behind a guide sheet and two title rows, blank template rows reported; non-vehicle workbooks rejected; identifier keys keep leading zeros and Persian/Arabic digits; «بدون پذیرش»/«برگشتی» not unique; 8-character chassis is not a VIN, I/O/Q rejected; Jalali text and Excel serial dates; Tehran midnight boundary (1405/08/05 00:00 → 2026-10-26T20:30Z); times; stage and coverage wording.
+- API (`vehicle-import.e2e-spec.ts`, 6): preview separates new / incomplete (no time without decision, no identity, no stage) / duplicate / error (invalid date, new case "delivered") and keeps every row; preview writes nothing; permission 403 and invalid file. Apply creates legacy cases (original admission text, chassis reference, precision, coverage, responsible, task in the named unit, no invented blocker), provenance with original cells, search by admission and chassis number; re-importing the same file → all unchanged, no new case or task; apply twice → 409; report .xlsx with issued case numbers. Updates fill only non-empty differences (empty owner cell does not clear; same plate in Persian digits is not a change), different admission date and ambiguous identifiers → needs review, unknown case number → error, "ready for delivery" left to the QC workflow. Failure in the middle (2nd row): finished rows kept, failed row marked, status partial; re-import completes without duplicates. Another dealership cannot read the import or provenance and does not match these cases or case numbers.
+- E2E (`vehicle-import.spec.ts`): manager uploads the synthetic sample, decides "date without time", preview (2 new, incomplete, error, 2 blank rows), applies, opens the issued case: admission number, chassis, provenance with the original note, task. Desktop and 390 px screenshots reviewed (rows become cards on phones; no horizontal page scroll).
+- Full suite: API 85/85 (11 suites), E2E 15/15, shared 9/9, lint, typecheck, build, docs check (59 routes), `pnpm audit --prod` clean.
+
+Defect found by the tests and fixed: the next-action task was planned but not attached for new rows; comparisons now use normalized Persian text so re-imports do not report false changes.
+
 ## Invitation email diagnosis and delivery status — 2026-11-02 (branch `fix/invitation-email-delivery`)
 
 Live server, read-only: deployed SHA `b7e4c93`, migrations 0000–0006, `PUBLIC_APP_URL` = the Preview HTTPS address, SMTP settings intentionally empty. Egress from the VM: Gmail 465/587/25/2525, Outlook, Yahoo, mail APIs (Brevo, SendGrid, Mailgun, Resend, Postmark, Gmail API), Google 443, Cloudflare, npm and api.github.com time out; domestic sites answer. From inside the API image, nodemailer verify to smtp.gmail.com with dummy credentials returns `ETIMEDOUT` after 10 s on 465 and 587 (an open path would return `EAUTH`). Conclusion: blocked before TLS/authentication by the network; not an application, TLS or password defect.

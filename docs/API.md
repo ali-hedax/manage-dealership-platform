@@ -60,6 +60,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/cases/:id/completion` | [source](../apps/api/src/completion/completion.controller.ts) |
 | GET | `/api/v1/cases/:id/finance` | [source](../apps/api/src/finance/finance.controller.ts) |
 | GET | `/api/v1/cases/:id/parts` | [source](../apps/api/src/parts/parts.controller.ts) |
+| GET | `/api/v1/cases/:id/provenance` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | GET | `/api/v1/cases/:id/timeline` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/cases/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
@@ -67,6 +68,10 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/departments` | [source](../apps/api/src/reference/reference.controller.ts) |
 | GET | `/api/v1/health` | [source](../apps/api/src/health/health.controller.ts) |
 | GET | `/api/v1/users/assignable` | [source](../apps/api/src/reference/reference.controller.ts) |
+| GET | `/api/v1/vehicle-imports/:id/report` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
+| GET | `/api/v1/vehicle-imports/:id` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
+| GET | `/api/v1/vehicle-imports/sample` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
+| GET | `/api/v1/vehicle-imports` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | PATCH | `/api/v1/assessment-items/:id` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | PATCH | `/api/v1/cases/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PATCH | `/api/v1/tasks/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
@@ -103,9 +108,15 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/financial-approvals/:id/payment` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/parts/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/vehicle-imports/:id/apply` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
+| POST | `/api/v1/vehicle-imports` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
 <!-- routes:end -->
 
 ## Staff invitation email
 
 GET /auth/invitations/email/status requires user.manage and returns only { configured: boolean }, not credentials. POST /auth/invitations/email accepts the same email/displayName/roles schema, commits a pending account and then attempts one SMTP delivery. It returns { id, status: "invited", emailDelivery: "sent" | "failed" }; no invitation URL is returned. Missing configuration fails with 503 INVITATION_MAIL_NOT_CONFIGURED before creating an account. A failed send returns a persisted failed status, not a false success or raw SMTP error. Explicit resend creates a new invitation for the same pending account and invalidates older tokens; active users return 409. Authentication responses are no-store and excluded from the replay cache. A failed send also returns failure: a category (dns_failed, connection_blocked, tls_failed, auth_failed, recipient_rejected, unknown), never the raw error. POST /auth/invitations/email/check (user.manage, 3/min) connects, negotiates TLS and authenticates the sender without sending, returns { status: "ready" | "not_configured" } or { status: "failed", failure }, and audits only that result. GET /auth/invitations adds invitationDelivery, invitationSentAt, invitationFailure and invitationExpiresAt from the latest tenant-scoped invite; active account status takes precedence. SMTP acceptance does not guarantee inbox delivery. See [staff guide](STAFF_FA.md).
+
+## Existing-vehicle import
+
+`case.import` (service manager) only. `POST /vehicle-imports` takes { fileName, fileBase64 (≤1 MB .xlsx), decisions: { dateWithoutTime, deadlineAs: none | forecast | official } } and stores a preview without touching cases. It returns VehicleImport: the sheet and header row found, blank template rows, unmapped columns, per-outcome counts, and every data row with its original cells (source), identity, matched case, field changes and Persian messages. Outcomes: new, update, unchanged, duplicate, incomplete, needs_review, error. `POST /vehicle-imports/:id/apply` re-evaluates the stored rows against current data and writes new/update rows one by one: status applied, or partial if a row failed (that row becomes error with a message). Applying twice returns 409 IMPORT_NOT_PREVIEW. `GET /vehicle-imports`, `GET /vehicle-imports/:id`, `GET /vehicle-imports/:id/report` (.xlsx with issued case numbers) and `GET /vehicle-imports/sample` (synthetic template). `GET /cases/:id/provenance` (case.read) lists applied import rows of a case with original cells. Invalid files return IMPORT_FILE_INVALID; empty sheets IMPORT_EMPTY; more than 1000 rows IMPORT_TOO_LARGE. Rules: [vehicle import guide](VEHICLE_IMPORT_FA.md).

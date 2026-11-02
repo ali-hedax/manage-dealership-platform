@@ -32,7 +32,8 @@ export class TasksService {
     return this.handle.db;
   }
 
-  async create(actor: Actor, caseId: string, input: CreateTaskInput): Promise<Task> {
+  /** importRef: set by the vehicle import so the same sheet row never creates a second task. */
+  async create(actor: Actor, caseId: string, input: CreateTaskInput, importRef?: string): Promise<Task> {
     const tenantId = actor.user.tenantId;
     const id = newId();
     await this.db.transaction(async (tx) => {
@@ -62,6 +63,7 @@ export class TasksService {
           weight: input.weight,
           sortOrder: n + 1,
           notes: input.notes ?? null,
+          importRef: importRef ?? null,
           isTest: actor.user.isTestTenant,
           createdBy: actor.user.id,
         })

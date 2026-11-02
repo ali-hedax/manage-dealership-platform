@@ -57,6 +57,13 @@
       "when": 1793598639004,
       "tag": "0007_invitation_failure",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793605009278,
+      "tag": "0008_vehicle_import",
+      "breakpoints": true
     }
   ]
 }

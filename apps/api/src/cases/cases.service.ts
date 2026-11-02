@@ -42,6 +42,16 @@ import {
 import { buildSearchText, computeMissingFields, formatCaseNumber } from './case-rules';
 
 type CaseRow = typeof cases.$inferSelect;
+
+/** Fields only the vehicle import sets (not part of the public case contract). */
+export interface CaseImportFields {
+  admissionNo?: string | null;
+  admissionNoKey?: string | null;
+  admittedAtPrecision?: 'minute' | 'date';
+  origin?: 'excel_import';
+  importKey?: string | null;
+  chassisRef?: string | null;
+}
 type VehicleInput = NonNullable<CreateCaseInput['vehicle']>;
 type CustomerInput = NonNullable<CreateCaseInput['customer']>;
 
@@ -123,7 +133,7 @@ export class CasesService {
 
   // ---------------------------------------------------------------- commands
 
-  async create(actor: Actor, input: CreateCaseInput): Promise<CaseDetail> {
+  async create(actor: Actor, input: CreateCaseInput, extra: CaseImportFields = {}): Promise<CaseDetail> {
     const tenantId = actor.user.tenantId;
     const admittedAt = new Date(input.admittedAt);
     assertNotFuture(admittedAt, 'زمان پذیرش نمی‌تواند در آینده باشد');
@@ -134,7 +144,8 @@ export class CasesService {
 
     const id = newId();
     await this.db.transaction(async (tx) => {
-      const vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null);
+      let vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null);
+      if (extra.chassisRef && !vehicle.chassisRef) vehicle = await this.setChassisRef(tx, vehicle, extra.chassisRef);
       const customer = await this.upsertCustomer(tx, actor, input.customer ?? {}, null);
       const year = currentJalaliYear();
       const caseNumber = formatCaseNumber(year, await this.nextCaseSeq(tx, tenantId, year));
@@ -159,6 +170,11 @@ export class CasesService {
         officialDeadlineAt: toDate(input.officialDeadlineAt),
         forecastDeliveryAt: toDate(input.forecastDeliveryAt),
         isLegacyEntry: input.isLegacyEntry ?? false,
+        admissionNo: extra.admissionNo ?? null,
+        admissionNoKey: extra.admissionNoKey ?? null,
+        admittedAtPrecision: extra.admittedAtPrecision ?? 'minute',
+        origin: extra.origin ?? 'manual',
+        importKey: extra.importKey ?? null,
         isTest: actor.user.isTestTenant,
         createdBy: actor.user.id,
         updatedBy: actor.user.id,
@@ -179,6 +195,7 @@ export class CasesService {
           stage: values.stage,
           admittedAt: admittedAt.toISOString(),
           isLegacyEntry: values.isLegacyEntry,
+          ...(extra.origin ? { origin: extra.origin, admissionNo: values.admissionNo, admittedAtPrecision: values.admittedAtPrecision } : {}),
         },
         snapshot: { version: 1, row: row! },
       });
@@ -186,7 +203,7 @@ export class CasesService {
     return this.detail(actor, id);
   }
 
-  async update(actor: Actor, id: string, input: UpdateCaseInput): Promise<CaseDetail> {
+  async update(actor: Actor, id: string, input: UpdateCaseInput, extra: CaseImportFields = {}): Promise<CaseDetail> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
       const current = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
@@ -203,6 +220,10 @@ export class CasesService {
       if (input.responsibleUserId) await this.assertAssignable(tx, tenantId, input.responsibleUserId);
 
       if (input.vehicle) await this.upsertVehicle(tx, actor, input.vehicle, current);
+      if (extra.chassisRef) {
+        const [v] = await tx.select().from(vehicles).where(eq(vehicles.id, current.vehicleId));
+        if (v && !v.chassisRef) await this.setChassisRef(tx, v, extra.chassisRef);
+      }
       let customerId = current.customerId;
       if (input.customer) {
         customerId = (await this.upsertCustomer(tx, actor, input.customer, current))?.id ?? customerId;
@@ -228,6 +249,9 @@ export class CasesService {
       if (deadline !== undefined) patch.officialDeadlineAt = deadline;
       if (input.forecastDeliveryAt !== undefined) patch.forecastDeliveryAt = toDate(input.forecastDeliveryAt);
       if (customerId !== current.customerId) patch.customerId = customerId;
+      if (extra.admissionNo !== undefined) patch.admissionNo = extra.admissionNo;
+      if (extra.admissionNoKey !== undefined) patch.admissionNoKey = extra.admissionNoKey;
+      if (extra.importKey !== undefined && !current.importKey) patch.importKey = extra.importKey;
 
       const [updated] = await tx
         .update(cases)
@@ -462,7 +486,11 @@ export class CasesService {
         plate: v.plate,
         vin: v.vin,
         color: v.color,
+        chassisRef: v.chassisRef,
       },
+      admissionNo: c.admissionNo,
+      admittedAtPrecision: c.admittedAtPrecision as CaseDetail['admittedAtPrecision'],
+      origin: c.origin as CaseDetail['origin'],
       odometerKm: c.odometerKm,
       damageDescription: c.damageDescription,
       vehicleLocation: c.vehicleLocation,
@@ -598,6 +626,7 @@ export class CasesService {
       | 'officialDeadlineAt'
       | 'insurerName'
       | 'insuranceClaimNo'
+      | 'admissionNo'
     >,
     v: typeof vehicles.$inferSelect,
     cu: typeof customers.$inferSelect | null,
@@ -627,6 +656,8 @@ export class CasesService {
         cu?.phone,
         c.goldenCardFileNo,
         c.insuranceClaimNo,
+        c.admissionNo,
+        v.chassisRef,
       ]),
     };
   }
@@ -677,6 +708,16 @@ export class CasesService {
    * with the same VIN is reused (each visit is still a separate case) and only
    * its empty fields are filled. On update, the case's own vehicle is patched.
    */
+  /** Records the admission sheet's chassis number once; it is never treated as a VIN. */
+  private async setChassisRef(tx: DbOrTx, vehicle: typeof vehicles.$inferSelect, chassisRef: string) {
+    const [row] = await tx
+      .update(vehicles)
+      .set({ chassisRef, updatedAt: new Date(), version: vehicle.version + 1 })
+      .where(eq(vehicles.id, vehicle.id))
+      .returning();
+    return row!;
+  }
+
   private async upsertVehicle(tx: DbOrTx, actor: Actor, input: VehicleInput, current: CaseRow | null) {
     const tenantId = actor.user.tenantId;
     const normalized = {

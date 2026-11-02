@@ -201,3 +201,20 @@ export type CompletionIssueCode = (typeof COMPLETION_ISSUES)[number];
 
 export const RECIPIENT_RELATIONS = ['owner', 'agent', 'insurer', 'other'] as const;
 export type RecipientRelation = (typeof RECIPIENT_RELATIONS)[number];
+
+// Existing-vehicle Excel import: what happens to each sheet row.
+export const VEHICLE_IMPORT_OUTCOMES = [
+  'new',
+  'update',
+  'unchanged',
+  'duplicate',
+  'incomplete',
+  'needs_review',
+  'error',
+] as const;
+export type VehicleImportOutcome = (typeof VEHICLE_IMPORT_OUTCOMES)[number];
+
+// Where the delivery date of the sheet goes; official deadline and internal
+// forecast are never assumed to be the same thing.
+export const IMPORT_DEADLINE_TARGETS = ['none', 'forecast', 'official'] as const;
+export type ImportDeadlineTarget = (typeof IMPORT_DEADLINE_TARGETS)[number];

@@ -7,6 +7,8 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  ImportDeadlineTarget,
+  VehicleImportOutcome,
   FinanceApprovalKind,
   FinanceApprovalStatus,
   FinanceGateReason,
@@ -227,6 +229,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'case.technical_closed': 'بستن فنی',
   'case.financial_closed': 'بستن مالی',
   'case.delivered': 'تحویل خودرو',
+  'case.imported': 'ورود از اکسل',
+  'vehicle_import.applied': 'ثبت ورود اکسل خودروها',
 };
 
 // Keys produced by the API in CaseListItem.missingFields ('نیازمند تکمیل').
@@ -293,4 +297,20 @@ export const RECIPIENT_RELATION_LABELS: Record<RecipientRelation, string> = {
   agent: 'نماینده مالک (با معرفی‌نامه)',
   insurer: 'نماینده بیمه',
   other: 'سایر',
+};
+
+export const VEHICLE_IMPORT_OUTCOME_LABELS: Record<VehicleImportOutcome, string> = {
+  new: 'جدید',
+  update: 'موجود — به‌روزرسانی',
+  unchanged: 'موجود — بدون تغییر',
+  duplicate: 'تکراری در فایل',
+  incomplete: 'ناقص — نیازمند تصمیم',
+  needs_review: 'نیازمند بررسی',
+  error: 'دارای خطا',
+};
+
+export const IMPORT_DEADLINE_TARGET_LABELS: Record<ImportDeadlineTarget, string> = {
+  none: 'ثبت نشود (فقط در سابقه ورود)',
+  forecast: 'پیش‌بینی تحویل (برآورد داخلی)',
+  official: 'مهلت رسمی / تعهد',
 };

@@ -22,6 +22,7 @@ export const PERMISSIONS = [
   'qc.inspect', // record a QC round; failed items open corrective work
   'case.technical_close', // technical close after a passed QC round
   'case.deliver', // vehicle handover to the recipient
+  'case.import', // bulk import of existing vehicles from Excel (preview, apply, results)
   'dashboard.read',
   'audit.read',
   'user.manage',
@@ -83,6 +84,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'qc.inspect',
     'case.technical_close',
     'case.deliver',
+    'case.import',
     'dashboard.read',
     'audit.read',
     'settings.manage',
