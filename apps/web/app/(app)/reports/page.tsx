@@ -46,8 +46,10 @@ function ReportsPage() {
     router.replace(`${pathname}?${next}`);
   }, [meta, params, pathname, router]);
 
+  // Built from the live URL, not the render-time params: two quick changes (view, then a
+  // filter) must not overwrite each other.
   const set = (patch: Record<string, string | null>, keepPage = false) => {
-    const next = new URLSearchParams(params.toString());
+    const next = new URLSearchParams(window.location.search);
     for (const [k, v] of Object.entries(patch)) {
       if (v === null || v === '') next.delete(k);
       else next.set(k, v);

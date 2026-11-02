@@ -202,7 +202,7 @@ Definitions first (`docs/REPORTS_FA.md`), then implementation.
   - Stage filter in the accident view, then open a case and go back: the filter and URL are kept.
   - Stats tab with the table alternative.
   - Parts clerk sees only the parts view, 6 KPIs, next actions, and no horizontal scroll.
-- **Screenshots** (desktop and 390 px) were reviewed. Fixed after review: zero values were shown as "no data", some server text used Latin digits, and the KPI grid wrapped.
+- **Screenshots** (desktop and 390 px) were reviewed. Fixed after review: zero values were shown as "no data", some server text used Latin digits, and the KPI grid wrapped. Fixed after CI: two quick filter changes could overwrite each other (each change is now built from the live URL).
 - **Full suite:** API 98/98 (13 suites), E2E 17/17, shared 9/9, lint, typecheck, build, docs check (62 routes), audit clean.
 
 Not yet built (stage 3b): Persian PDF export with an embedded font and the dealership header; the parts discrepancy queue (#11).
