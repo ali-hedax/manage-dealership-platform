@@ -76,3 +76,19 @@ Personal mode uses email + a user-chosen password + Google Authenticator. It rep
 ## Repository reconciliation follow-up — 2026-11-01
 
 Owner reports completing their own personal-password/Authenticator setup and entering Preview. Earlier pending-owner statements are historical. The audit did not inspect their credentials/session or perform a new rollout. Read-only SSH inspection confirmed /opt/manage at 58ad08c9ccb427de74ce2d2c2f008a29e043b972 with no tracked/untracked changes and healthy application containers. That SHA is already in GitHub; later 82152c2 is documentation only.
+
+## Update — PR #28 (invitation email diagnostics), 2026-11-02
+
+Owner approved installing PR #28 on the Manage Preview only, from CI-built images, with a restorable backup first. Done; nothing was deleted.
+
+- **Images:** built by CI on draft PR #29 (PR #28 plus only the image-export CI step of PR #25). The source merge commit `58391f1` differs from PR #28 head `e042d9f` only in `.github/workflows/ci.yml`. All 6 CI jobs green (run 41398302563). Archive SHA-256 verified locally and on the VM; loaded image IDs match the CI manifest. The VM cannot reach npm or the artifact storage, so the archive was copied from the owner's machine in verified 5 MB chunks.
+- **Backup** `/home/manage/backups/pr28-20261102T065529Z` (mode 700/600): `pg_dump -Fc` (188 entries), `.env`, `deploy/preview` config, previous git head and image IDs, counts, SHA256SUMS, and the update/rollback script. Restorability was tested by restoring into a temporary database on the same server (users 8, Authenticator 1, cases 5, audit 85, migrations 7 — identical); the temporary database was dropped. Previous images are tagged `manage-api|manage-web:before-pr28-20261102T065529Z`.
+- **Install:** only the API and web containers were recreated (`--no-deps --no-build`). Caddy, the gate, the database and `.env` were untouched (`.env` byte-identical). The checkout is clean at `e042d9f`.
+- **Verification:**
+  - All five services are healthy; health reports `ok/postgres/preview`.
+  - Migration 0007 applied (8 migrations) and the `invitation_failure` column exists.
+  - Users, active accounts, enrolled Authenticators, cases, tasks, parts, audit and invitations have the same counts before and after.
+  - Over public HTTPS: certificate valid until 2027-01-30. Anonymous `/` and `/users` redirect to `/login`; `/login`, `/activate` and `/reset-password` return 200; `totpEnabled: true`.
+  - Anonymous staff list, mail check and private-invite API calls return 401. Demo shared-password logins return 403 (personal sign-in only), so the authenticated staff page can only be exercised by the owner.
+- **Network observation:** the app answers in about 0.1 s, but new TCP connections to the public address sometimes take 5–15 s. This happens from the owner's machine and from the VM to its own public IP, and SSH connections time out intermittently. UFW, conntrack (52/65,536) and fail2ban show no cause on the VM; the delays are upstream (datacenter or national network). Nothing was changed.
+- **Rollback:** `bash /home/manage/backups/pr28-20261102T065529Z/deploy-pr28.sh rollback` re-tags the previous images and checks out `b7e4c93`. Migration 0007 only added a nullable column; a full DB restore is `pg_restore --clean --if-exists` from `db.dump`.
