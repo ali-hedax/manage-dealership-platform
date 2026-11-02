@@ -23,6 +23,7 @@ export function Shell({ children }: { children: ReactNode }) {
       show: can('report.manager') || can('part.manage') || can('case.update') || can('task.manage') || can('qc.inspect'),
     },
     { href: '/users', label: 'کارکنان', show: can('user.manage') },
+    { href: '/reference-data', label: 'اطلاعات پایه', show: can('reference.parts.read') || can('reference.customers.read') },
   ];
   const current = (href: string) =>
     href === '/' ? pathname === '/' : href === '/cases' ? pathname === '/cases' || /^\/cases\/(?!new)/.test(pathname) : pathname.startsWith(href);

@@ -34,6 +34,25 @@ export const tenants = pgTable('tenants', {
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 
+// Reference imports never create operational cases, stock movements or customer ownership.
+export const referenceImports = pgTable('reference_imports', {
+  id: uuid('id').primaryKey(), tenantId: uuid('tenant_id').notNull().references(()=>tenants.id),
+  kind: text('kind').notNull(), fileName: text('file_name').notNull(), fileSha256: text('file_sha256').notNull(),
+  sheetName: text('sheet_name').notNull(), headerRow: integer('header_row').notNull(),
+  mapping: jsonb('mapping').notNull(), rows: jsonb('rows').notNull(),
+  status: text('status').notNull().default('preview'),
+  createdAt: ts('created_at').notNull().defaultNow(), appliedAt: ts('applied_at'),
+  createdBy: uuid('created_by').notNull().references(()=>users.id),
+  isTest: boolean('is_test').notNull().default(false),
+});
+export const referenceEntries = pgTable('reference_entries', {
+  id: uuid('id').primaryKey(), tenantId: uuid('tenant_id').notNull().references(()=>tenants.id),
+  kind: text('kind').notNull(), identityKey: text('identity_key').notNull(), lookupKey: text('lookup_key').notNull(),
+  data: jsonb('data').notNull(), sourceImportId: uuid('source_import_id').notNull().references(()=>referenceImports.id),
+  version: integer('version').notNull().default(1), isTest: boolean('is_test').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(), updatedAt: ts('updated_at').notNull().defaultNow(),
+},t=>[uniqueIndex('reference_entries_identity_uq').on(t.tenantId,t.kind,t.identityKey),index('reference_entries_lookup_idx').on(t.tenantId,t.kind,t.lookupKey)]);
+
 export const users = pgTable(
   'users',
   {

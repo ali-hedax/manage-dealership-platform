@@ -19,7 +19,7 @@ export function configureApp(app: INestApplication, cfg: AppConfig): void {
   app.use(helmet());
   app.use(cookieParser());
   app.use((req:Request,res:Response,next:NextFunction)=>{
-    if(req.path.startsWith('/api/v1/auth/'))res.setHeader('Cache-Control','no-store');
+    if(req.path.startsWith('/api/v1/auth/')||req.path.startsWith('/api/v1/reference-'))res.setHeader('Cache-Control','no-store');
     next();
   });
 

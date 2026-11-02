@@ -75,17 +75,19 @@ export function readWorkbook(data: Uint8Array): Worksheet[] {
 
   const sharedXml = files['xl/sharedStrings.xml'] ? strFromU8(files['xl/sharedStrings.xml']) : '';
   const shared = [...sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => textOf(m[1]!));
+  const budget = { characters: 0, cells: 0 };
   const sheets = sheetPaths(files)
     .filter((sh) => files[sh.path])
-    .map((sh) => ({ name: sh.name, rows: parseSheet(strFromU8(files[sh.path]!), shared) }));
+    .map((sh) => ({ name: sh.name, rows: parseSheet(strFromU8(files[sh.path]!), shared, budget) }));
   if (!sheets.length) throw new XlsxError('برگه‌ای در فایل اکسل پیدا نشد');
   return sheets;
 }
 
-function parseSheet(xml: string, shared: string[]): string[][] {
+function parseSheet(xml: string, shared: string[], budget: { characters: number; cells: number }): string[][] {
   const rows: string[][] = [];
   for (const rowMatch of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>/g)) {
     const rowNo = Number(/\br="(\d+)"/.exec(rowMatch[1]!)?.[1] ?? rows.length + 1);
+    if (rowNo < 1 || rowNo > 100_001) throw new XlsxError('شماره ردیف اکسل بیش از حد بزرگ است؛ فایل را به چند بخش تقسیم کنید');
     const cells: string[] = [];
     for (const c of rowMatch[2]!.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const attrs = c[1]!;
@@ -97,8 +99,14 @@ function parseSheet(xml: string, shared: string[]): string[][] {
       if (type === 's' && v !== undefined) value = shared[Number(v)] ?? '';
       else if (type === 'inlineStr') value = textOf(body);
       else if (v !== undefined) value = decode(v);
-      cells[ref ? columnIndex(ref) : cells.length] = value.trim();
+      budget.characters += value.length;
+      if (value.length > 10_000 || budget.characters > 4_000_000) throw new XlsxError('متن خانه‌های اکسل بیش از حد بزرگ است؛ فایل را کوچک‌تر کنید');
+      const ci = ref ? columnIndex(ref) : cells.length;
+      if (ci > 511) throw new XlsxError('حداکثر ۵۱۲ ستون در هر برگه پذیرفته می‌شود');
+      cells[ci] = value.trim();
     }
+    budget.cells += cells.length;
+    if (budget.cells > 1_000_000) throw new XlsxError('تعداد خانه‌های اکسل بیش از حد مجاز است؛ فایل را کوچک‌تر کنید');
     rows[rowNo - 1] = Array.from(cells, (x) => x ?? '');
   }
   return Array.from(rows, (r) => r ?? []);

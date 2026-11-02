@@ -19,6 +19,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { JalaliInput } from './JalaliInput';
 import { Plate } from './Plate';
+import { ReferenceLookup } from './ReferenceLookup';
 
 // Common Iran Khodro models as suggestions; free text is always allowed.
 const MODELS = ['دنا', 'دنا پلاس', 'پژو ۲۰۷', 'پژو ۲۰۶', 'پژو پارس', 'سمند', 'سورن پلاس', 'رانا پلاس', 'تارا', 'ری‌را', 'هایما'];
@@ -127,7 +128,7 @@ function Section({ title, children, note }: { title: string; children: ReactNode
 export function CaseForm({ existing }: { existing?: CaseDetail }) {
   const router = useRouter();
   const toast = useToast();
-  const { me } = useAuth();
+  const { me, can } = useAuth();
   const editing = !!existing;
   const [f, setF] = useState<FormState>(() => (existing ? fromCase(existing) : empty()));
   const [restored, setRestored] = useState(false);
@@ -267,6 +268,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </div>
       )}
 
+      {!editing&&can('reference.customers.read')&&<section className="panel"><div className="panel-body"><ReferenceLookup kind="customers" onSelect={r=>{setF(s=>({...s,fullName:s.fullName||r.data.fullName||'',phone:s.phone||r.data.phone||'',vin:s.vin||r.data.vin||'',plate:s.plate||r.data.plate||'',model:s.model||r.data.model||''}));toast('اطلاعات سابقه فقط در خانه‌های خالی قرار گرفت؛ مالک فعلی را تأیید کنید');}}/></div></section>}
       <Section title="خودرو" note="پلاک یا VIN برای شناسایی کافی است">
         <label className="field">
           <span>پلاک</span>

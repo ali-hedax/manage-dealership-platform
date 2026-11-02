@@ -28,6 +28,10 @@ export const PERMISSIONS = [
   'audit.read',
   'user.manage',
   'settings.manage',
+  'reference.parts.read',
+  'reference.parts.manage',
+  'reference.customers.read',
+  'reference.customers.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -35,6 +39,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   accident_expert: [
     'case.read',
     'case.create',
+    'reference.parts.read',
+    'reference.customers.read',
     'case.update',
     'customer.pii.read',
     'blocker.report',
@@ -47,6 +53,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'audit.read',
   ],
   accident_supervisor: [
+    'reference.parts.read',
+    'reference.customers.read',
     'case.read',
     'case.create',
     'case.update',
@@ -67,6 +75,10 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'audit.read',
   ],
   service_manager: [
+    'reference.parts.read',
+    'reference.parts.manage',
+    'reference.customers.read',
+    'reference.customers.manage',
     'case.read',
     'case.create',
     'case.update',
@@ -92,7 +104,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'settings.manage',
   ],
   // Support roles see cases without customer contact details.
-  parts_clerk: ['case.read', 'blocker.report', 'part.request', 'part.manage', 'dashboard.read'],
+  parts_clerk: ['case.read', 'blocker.report', 'part.request', 'part.manage', 'dashboard.read', 'reference.parts.read', 'reference.parts.manage'],
   cashier: ['case.read', 'customer.pii.read', 'finance.payment', 'finance.close', 'dashboard.read'],
   qc_inspector: ['case.read', 'blocker.report', 'qc.inspect', 'dashboard.read'],
   // Least privilege: administers accounts, does not read customer cases.

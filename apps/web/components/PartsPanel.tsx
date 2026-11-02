@@ -24,6 +24,7 @@ import { faNum, formatJalali, parseAmount, rial, toPersianDigits } from '@/lib/f
 import { useToast } from '@/lib/toast';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
+import { ReferenceLookup } from './ReferenceLookup';
 
 const STATUS_TONE: Record<PartStatus, string> = {
   needed: 'chip-amber',
@@ -382,6 +383,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       >
         {mode?.kind === 'new' && (
           <>
+            {can('reference.parts.read') && <ReferenceLookup kind="parts" onSelect={r=>{setPartNumber(r.data.partNumber||'');setDescription(r.data.description||'');toast('کد و نام قطعه انتخاب شد؛ تعداد و منبع را مشخص کنید');}}/>}
             <label className="field">
               <span>شرح قطعه *</span>
               <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />

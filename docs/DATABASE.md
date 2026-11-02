@@ -47,6 +47,8 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 
 ## Migrations
 
+`0010_reference_data`: `reference_imports` stores kind, file/hash, selected sheet/header/mapping, all source rows and outcomes, creator/times and preview/applied status. `reference_entries` stores tenant/kind/identity key (unique per tenant/kind), indexed lookup key, reference payload, source import, version and test flag. Parts identity is the normalized technical code; historical-customer identity hashes the normalized row, preserving different owners/visits for the same chassis. Quantity payload carries its own import timestamp/source filename. No existing case, customer, stock or authentication columns change. Down: `down/0010_reference_data.down.sql`, disposable DBs only. See [reference workflow](REFERENCE_DATA_FA.md).
+
 | Migration | Content | Down script |
 | --- | --- | --- |
 | `0000_init` | All tables and indexes | `down/0000_init.down.sql` (drops everything — disposable DBs only) |

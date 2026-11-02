@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ReferenceDataController } from '../reference-data/reference-data.controller';
+import { ReferenceDataService } from '../reference-data/reference-data.service';
 import { AssessmentsController } from '../assessments/assessments.controller';
 import { AssessmentsService } from '../assessments/assessments.service';
 import { BlockersService } from '../blockers/blockers.service';
@@ -27,6 +29,7 @@ import {
 /** Phase-1 module: accident repair cases, assessments, parts, finance gate, repair activities, blockers, QC and delivery, dashboard. */
 @Module({
   controllers: [
+    ReferenceDataController,
     CasesController,
     TasksController,
     BlockersController,
@@ -40,6 +43,7 @@ import {
     DiscrepanciesController,
   ],
   providers: [
+    ReferenceDataService,
     CasesService,
     TasksService,
     BlockersService,

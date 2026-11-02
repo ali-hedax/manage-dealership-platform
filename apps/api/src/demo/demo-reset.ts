@@ -17,6 +17,8 @@ export async function purgeTestTenants(db: Database): Promise<number> {
       if(personal.length)throw new Error('Refusing to purge a Preview tenant with personal accounts; preserve identities and use an explicitly reviewed reset procedure.');
     }
     for (const { id } of ids) {
+      await tx.execute(sql`delete from reference_entries where tenant_id = ${id}`);
+      await tx.execute(sql`delete from reference_imports where tenant_id = ${id}`);
       await tx.execute(sql`delete from idempotency_keys where tenant_id = ${id}`);
       await tx.execute(sql`delete from change_log where tenant_id = ${id}`);
       await tx.execute(sql`delete from audit_events where tenant_id = ${id}`);

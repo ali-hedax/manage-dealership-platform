@@ -1,5 +1,9 @@
 # Test report
 
+## Reference data — feature/reference-data
+
+New API scenarios: 7/7 passed (inspection/mapping, leading-zero codes, no writes on preview, duplicate/error retention, repeat import, safe updates and stale previews, concurrent same-code imports, historical owners, no operational-case creation, RBAC and cross-tenant read/apply/report/search isolation). New browser scenarios 2/2 passed: full catalog upload/map/preview/apply then part selection, and customer-history lookup at 390px filling only empty fields without manufacturing a VIN. Lint/typecheck/build passed; shared 9/9. First full-suite run concurrent with browser work hit Windows virtual-memory exhaustion (PGlite migration errors, Edge DLL load error 1455); it is not reported as passed. Isolated/CI full regression and the added XLSX allocation-bound tests remain in progress. No real customer data was used in tests.
+
 ## Operational start — 2026-11-02
 
 CI run `41451507538` for operations commit `165a020`: all six jobs passed (audit/secrets, docs, lint/types/build/unit/integration, PostgreSQL migration/seed, browser E2E, Docker/Compose smoke). Daily backup shell syntax verified on the host; cron active. A subsequent recovery archive was transferred to the owner's PC, encrypted with Windows CurrentUser DPAPI, decrypted in memory and compared by SHA256; plaintext local archive removed.
