@@ -41,3 +41,7 @@ Record date, dump file, row counts and result in the table below. The `audit_eve
 | Date | Environment | Dump | Rows (cases / audit) | Result |
 | --- | --- | --- | --- | --- |
 | — | — | — | — | Not yet performed |
+
+## Verified Preview restore drill — 2026-11-02
+
+The historical status above is superseded for the isolated Manage Preview: `/home/manage/backups/stage3-20261102T123555Z/db.dump` was restored into a separate temporary database before publishing PR #32. Counts matched: users 8, enrolled TOTP 1, cases 5, tasks 6, parts 4, audit 88, migrations 9. The temporary database was removed after verification; live data was not restored over or reset. Backup files and private configuration remain on the Manage VM with restrictive permissions.

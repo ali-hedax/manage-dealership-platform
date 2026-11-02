@@ -107,3 +107,13 @@ Owner approved installing PR #30 on the Manage Preview only. Approval covers the
   - Over public HTTPS: `/login` returns 200 and `totpEnabled` is true. Anonymous `/` and `/cases/import` redirect to `/login`, and anonymous imports, sample and invitation APIs return 401.
   - The authenticated import page and the owner's own sign-in can only be checked by the owner (personal sign-in only).
 - **Rollback:** `bash /home/manage/backups/pr30-20261102T083407Z/deploy-pr30.sh rollback` returns to the `e042d9f` images and code. Migration 0008 is additive; a full DB restore is `pg_restore --clean --if-exists` from `db.dump`.
+
+## Update — full reports center (PR #32), 2026-11-02
+
+Owner explicitly authorized completion, testing and deployment to the existing isolated Manage Preview. Deployed application head: `5e529fd5c01c61e4f440af71b2a26458220fb5ff`. All 6 CI checks passed in run 41424078886. Exported image source `2c4c4d2da5bd0676d0830ef22125e444312fe2cf` has the identical tree; archive SHA-256 and both loaded image IDs were checked locally/on the VM. The code was delivered in a Git bundle and installed detached, preserving a clean server checkout. No main merge occurred.
+
+Verified restorable pre-install backup: `/home/manage/backups/stage3-20261102T123555Z` (DB dump, private configuration, old code and image references, before/restored/after counts, checksums and rollback script). Restore drill used a separate temporary DB. Only API/web were recreated; database, Caddy, gate and .env were retained. Migration 0009 adds the discrepancy table; migration count 9 -> 10. Preserved: users 8, enrolled TOTP 1, cases 5, tasks 6, parts 4, audit 88. Health API/web/db/gate passed.
+
+The owner's existing browser session remained valid. Live reports and statistics loaded, discrepancy queue loaded, and a 5-row PDF downloaded from the deployed server; the complete PDF was rendered and inspected. No real vehicle file was imported and no synthetic operational data was purged. Source, DNS, firewall and authentication configuration were not modified.
+
+Rollback: `bash /home/manage/backups/stage3-current/deploy-stage3.sh rollback` restores the previous application images and source. The additive table may remain; the DB dump is preserved if a database restore is explicitly needed.

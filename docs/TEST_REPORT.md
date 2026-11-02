@@ -235,3 +235,9 @@ Browser checks: **3/3 passed locally on Edge**, covering owner form, explicit re
 ## Stage 3b continuation audit — 2026-11-02
 
 Resumed the preserved staged and unstaged changes on feature/reports-center after the previous agent reached its usage limit. Local lint/typecheck/build passed; full API 102/102 (14 suites), shared 9/9; browser 18 passed, 2 intentionally skipped documentation screenshot tests. Targeted report/discrepancy tests passed 12/12 after adding transactional detection/condition audit and version handling. Added regression coverage for repeat detection/condition events, cross-tenant reads and writes, and a PDF row longer than one page. Final regression results and CI are recorded in the subsequent release entry. PDF pages were rendered with pdfjs and inspected: embedded Persian fonts, RTL, complete width, repeated table header, footer and monochrome layout. No live records were removed or imported.
+
+## Stage 3 release verification — 2026-11-02
+
+Final regression: report/discrepancy 12/12 passed after transactional detection audit, versioning and cross-tenant checks; final oversized-row PDF regression 9/9 passed. Ordinary PDF (3 pages) and long-row PDF (4 pages) were rendered with pdfjs/canvas and every page visually inspected. Full application CI on 5e529fd: 6/6 jobs successful (41424078886), including PostgreSQL 16 migration/seed/reset, Chromium E2E and Docker HTTPS smoke. Local full API 102/102; shared 9/9; browser 18 passed and 2 optional documentation screenshot tests intentionally skipped.
+
+Published to the owner-approved Preview after a verified restore drill. Health passed; owner browser session preserved; manager daily work and statistics, discrepancy queue and deployed PDF download verified. PDF from the live API rendered correctly with embedded Persian fonts. No real data import or demo purge. See PREVIEW_DEPLOYMENT_20261101.md for backup, version and rollback.
