@@ -218,3 +218,14 @@ export type VehicleImportOutcome = (typeof VEHICLE_IMPORT_OUTCOMES)[number];
 // forecast are never assumed to be the same thing.
 export const IMPORT_DEADLINE_TARGETS = ['none', 'forecast', 'official'] as const;
 export type ImportDeadlineTarget = (typeof IMPORT_DEADLINE_TARGETS)[number];
+
+// Reports center: one view per responsibility (see docs/REPORTS_FA.md).
+export const REPORT_VIEWS = ['manager', 'parts', 'accident', 'workshop'] as const;
+export type ReportView = (typeof REPORT_VIEWS)[number];
+
+export const REPORT_PERIODS = ['today', 'week', 'month', 'custom'] as const;
+export type ReportPeriod = (typeof REPORT_PERIODS)[number];
+
+// Order of the "today" work list; the reason is shown on every row.
+export const WORK_PRIORITIES = ['overdue', 'today', 'soon', 'later', 'none'] as const;
+export type WorkPriority = (typeof WORK_PRIORITIES)[number];

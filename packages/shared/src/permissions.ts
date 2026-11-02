@@ -23,6 +23,7 @@ export const PERMISSIONS = [
   'case.technical_close', // technical close after a passed QC round
   'case.deliver', // vehicle handover to the recipient
   'case.import', // bulk import of existing vehicles from Excel (preview, apply, results)
+  'report.manager', // dealership-wide report of the service manager
   'dashboard.read',
   'audit.read',
   'user.manage',
@@ -85,6 +86,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'case.technical_close',
     'case.deliver',
     'case.import',
+    'report.manager',
     'dashboard.read',
     'audit.read',
     'settings.manage',

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import useSWR from 'swr';
 import {
@@ -121,7 +122,14 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>فعالیت‌های تعمیر</h2>
+        <h2>
+          فعالیت‌های تعمیر{' '}
+          {(can('task.manage') || can('qc.inspect')) && (
+            <Link className="xs no-print" href="/reports?view=workshop">
+              گزارش واحدها
+            </Link>
+          )}
+        </h2>
         {manage && editable && (
           <button className="btn btn-sm" type="button" onClick={() => setAdding(!adding)}>
             {adding ? 'بستن فرم' : 'افزودن فعالیت'}

@@ -62,14 +62,21 @@ export default function DashboardPage() {
         <div>
           <h1>وضعیت تعمیرگاه</h1>
           <p className="muted small">
-            {faNum(data.activeCases)} خودروی فعال، به‌روزرسانی {formatJalali(data.generatedAt, { time: true })}
+            {faNum(data.activeCases)} پرونده فعال، به‌روزرسانی {formatJalali(data.generatedAt, { time: true })}
           </p>
         </div>
-        {can('case.create') && (
-          <Link className="btn btn-primary" href="/cases/new">
-            ثبت پرونده
-          </Link>
-        )}
+        <div className="row" style={{ gap: 6 }}>
+          {can('report.manager') && (
+            <Link className="btn" href="/reports?view=manager">
+              گزارش مدیر خدمات
+            </Link>
+          )}
+          {can('case.create') && (
+            <Link className="btn btn-primary" href="/cases/new">
+              ثبت پرونده
+            </Link>
+          )}
+        </div>
       </div>
 
       <nav className="pipeline" aria-label="مراحل پرونده‌ها">

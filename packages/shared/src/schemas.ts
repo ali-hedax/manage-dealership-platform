@@ -10,10 +10,13 @@ import {
   PART_ACTIONS,
   PART_INSPECTIONS,
   PART_SOURCES,
+  PART_STATUSES,
   QC_CHECK_ITEMS,
   QC_RESULTS,
   QC_SAFETY_ITEMS,
   IMPORT_DEADLINE_TARGETS,
+  REPORT_PERIODS,
+  REPORT_VIEWS,
   RECIPIENT_RELATIONS,
   CASE_STAGES,
   CASE_STATUSES,
@@ -115,6 +118,9 @@ export const CASE_FLAGS = [
   'parts_overdue',
   'parts_to_order',
   'finance_pending',
+  'overdue_official',
+  'overdue_forecast',
+  'no_deadline',
 ] as const;
 export type CaseFlag = (typeof CASE_FLAGS)[number];
 
@@ -124,6 +130,7 @@ export const caseListQuerySchema = z.object({
   coverage: z.enum(COVERAGE_TYPES).optional(),
   status: z.enum([...CASE_STATUSES, 'all']).default('open'),
   flag: z.enum(CASE_FLAGS).optional(),
+  blockerReason: z.enum(BLOCKER_REASONS).optional(),
   responsibleUserId: uuid.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -472,3 +479,31 @@ export const vehicleImportSchema = z.object({
   decisions: vehicleImportDecisionsSchema.default({ dateWithoutTime: false, deadlineAs: 'none' }),
 });
 export type VehicleImportInput = z.infer<typeof vehicleImportSchema>;
+
+// ------------------------------------------------------------------ reports
+
+const jalaliDay = z
+  .string()
+  .trim()
+  .regex(/^[0-9۰-۹]{4}[/-][0-9۰-۹]{1,2}[/-][0-9۰-۹]{1,2}$/, 'تاریخ را به شکل ۱۴۰۵/۰۸/۱۰ وارد کنید');
+
+export const reportQuerySchema = z.object({
+  view: z.enum(REPORT_VIEWS),
+  period: z.enum(REPORT_PERIODS).default('month'),
+  // Jalali days (Tehran), inclusive; only for period=custom.
+  from: jalaliDay.optional(),
+  to: jalaliDay.optional(),
+  responsibleUserId: z.union([uuid, z.literal('me'), z.literal('none')]).optional(),
+  departmentId: uuid.optional(),
+  stage: z.enum(CASE_STAGES).optional(),
+  coverage: z.enum(COVERAGE_TYPES).optional(),
+  blockerReason: z.enum(BLOCKER_REASONS).optional(),
+  partStatus: z.enum(PART_STATUSES).optional(),
+  // Case number, admission number, plate, VIN or chassis.
+  q: z.string().trim().max(100).optional(),
+  // Work-list rows of one kind only (a KPI or chart bar opens its rows).
+  kind: z.string().trim().max(40).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ReportQuery = z.infer<typeof reportQuerySchema>;

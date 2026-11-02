@@ -10,6 +10,8 @@ import { FinanceController } from '../finance/finance.controller';
 import { FinanceService } from '../finance/finance.service';
 import { PartsController } from '../parts/parts.controller';
 import { PartsService } from '../parts/parts.service';
+import { ReportsController } from '../reports/reports.controller';
+import { ReportsService } from '../reports/reports.service';
 import { TasksService } from '../tasks/tasks.service';
 import { VehicleImportController } from '../vehicle-import/vehicle-import.controller';
 import { VehicleImportService } from '../vehicle-import/vehicle-import.service';
@@ -32,6 +34,7 @@ import {
     FinanceController,
     CompletionController,
     VehicleImportController,
+    ReportsController,
   ],
   providers: [
     CasesService,
@@ -43,6 +46,7 @@ import {
     FinanceService,
     CompletionService,
     VehicleImportService,
+    ReportsService,
   ],
   exports: [CasesService, TasksService, BlockersService, AssessmentsService, PartsService, FinanceService, CompletionService],
 })

@@ -17,6 +17,11 @@ export function Shell({ children }: { children: ReactNode }) {
     { href: '/', label: 'داشبورد', show: can('dashboard.read') },
     { href: '/cases', label: 'پرونده‌های تصادفی', show: can('case.read') },
     { href: '/cases/new', label: 'ثبت پرونده', show: can('case.create') },
+    {
+      href: '/reports',
+      label: 'گزارش‌ها',
+      show: can('report.manager') || can('part.manage') || can('case.update') || can('task.manage') || can('qc.inspect'),
+    },
     { href: '/users', label: 'کارکنان', show: can('user.manage') },
   ];
   const current = (href: string) =>

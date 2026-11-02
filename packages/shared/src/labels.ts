@@ -7,6 +7,8 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  ReportView,
+  WorkPriority,
   ImportDeadlineTarget,
   VehicleImportOutcome,
   FinanceApprovalKind,
@@ -313,4 +315,19 @@ export const IMPORT_DEADLINE_TARGET_LABELS: Record<ImportDeadlineTarget, string>
   none: 'ثبت نشود (فقط در سابقه ورود)',
   forecast: 'پیش‌بینی تحویل (برآورد داخلی)',
   official: 'مهلت رسمی / تعهد',
+};
+
+export const REPORT_VIEW_LABELS: Record<ReportView, string> = {
+  manager: 'مدیر خدمات',
+  parts: 'انبار و قطعات',
+  accident: 'تصادفات',
+  workshop: 'واحدهای تعمیر و کنترل کیفیت',
+};
+
+export const WORK_PRIORITY_LABELS: Record<WorkPriority, string> = {
+  overdue: 'موعد گذشته',
+  today: 'موعد امروز',
+  soon: 'موعد نزدیک',
+  later: 'موعد بعدی',
+  none: 'بدون موعد',
 };

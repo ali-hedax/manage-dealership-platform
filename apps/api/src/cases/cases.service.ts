@@ -112,6 +112,11 @@ export const flagConditions: Record<string, () => SQL> = {
       caseSql.active,
       sql`exists (select 1 from part_requests p where p.case_id = ${cases.id} and p.status in ('needed', 'rejected'))`,
     )!,
+  // Official deadline and internal forecast are reported separately (docs/REPORTS_FA.md).
+  overdue_official: () => and(caseSql.active, sql`${cases.officialDeadlineAt} < now()`)!,
+  overdue_forecast: () => and(caseSql.active, sql`${cases.forecastDeliveryAt} < now()`)!,
+  // Neither an official deadline nor a forecast: not late, just without a due date.
+  no_deadline: () => and(caseSql.active, isNull(cases.officialDeadlineAt), isNull(cases.forecastDeliveryAt))!,
   // Waiting for the manager's decision or for the cashier to confirm an approved advance.
   finance_pending: () =>
     and(
@@ -403,6 +408,9 @@ export class CasesService {
     if (q.coverage) conditions.push(eq(cases.coverageType, q.coverage));
     if (q.responsibleUserId) conditions.push(eq(cases.responsibleUserId, q.responsibleUserId));
     if (q.flag) conditions.push(flagConditions[q.flag]!());
+    if (q.blockerReason) {
+      conditions.push(sql`exists (select 1 from blockers b where b.case_id = ${cases.id} and b.resolved_at is null and b.reason = ${q.blockerReason})`);
+    }
     if (q.q) {
       const key = searchKey(q.q).replace(/[%_\\]/g, '\\$&');
       if (key) conditions.push(like(cases.searchText, `%${key}%`));

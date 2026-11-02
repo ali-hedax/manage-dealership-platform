@@ -31,6 +31,9 @@ const FLAGS: { key: string; label: string }[] = [
   { key: 'parts_to_order', label: 'قطعه سفارش‌نشده' },
   { key: 'parts_overdue', label: 'قطعه دیرکرد' },
   { key: 'finance_pending', label: 'منتظر تصمیم مالی' },
+  { key: 'overdue_official', label: 'عبور از مهلت رسمی' },
+  { key: 'overdue_forecast', label: 'عبور از پیش‌بینی' },
+  { key: 'no_deadline', label: 'بدون موعد' },
 ];
 
 function CasesList() {
@@ -72,6 +75,11 @@ function CasesList() {
           <p className="muted small">{data ? `${faNum(data.total)} پرونده` : ' '}</p>
         </div>
         <div className="row" style={{ gap: 6 }}>
+          {can('case.update') && (
+            <Link className="btn" href="/reports?view=accident">
+              گزارش تصادفات
+            </Link>
+          )}
           {can('case.import') && (
             <Link className="btn" href="/cases/import">
               ورود خودروهای موجود از اکسل

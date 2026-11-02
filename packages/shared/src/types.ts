@@ -7,6 +7,9 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  ReportPeriod,
+  ReportView,
+  WorkPriority,
   ImportDeadlineTarget,
   VehicleImportOutcome,
   FinanceApprovalKind,
@@ -485,4 +488,76 @@ export interface CaseProvenance {
   appliedAt: string | null;
   appliedBy: UserRef;
   source: Record<string, string>;
+}
+
+export interface ReportKpi {
+  key: string;
+  label: string;
+  /** What is counted: پرونده، خودرو، درخواست قطعه، فعالیت. */
+  unit: string;
+  value: number;
+  /** Physical parts (sum of quantities) next to a part-request count. */
+  quantity?: number;
+  definition: string;
+  /** Case-list query that shows exactly the counted cases, when one exists. */
+  listQuery?: string;
+  /** Work-list filter (kind) that shows the counted rows. */
+  itemKind?: string;
+}
+
+export interface ReportBar {
+  key: string;
+  label: string;
+  value: number;
+  /** Case-list query of exactly these cases. */
+  listQuery?: string;
+  /** Same report narrowed to this bar (e.g. departmentId=…). */
+  reportQuery?: string;
+  itemKind?: string;
+}
+
+export interface WorkItem {
+  kind: string;
+  kindLabel: string;
+  caseId: string;
+  caseNumber: string;
+  plate: string | null;
+  vehicleLabel: string;
+  partId?: string;
+  taskId?: string;
+  description: string;
+  partNumber?: string | null;
+  quantity?: number;
+  status: string;
+  dueAt: string | null;
+  dueLabel: string | null;
+  priority: WorkPriority;
+  priorityReason: string;
+  responsible: UserRef | null;
+  stoppedBy: string | null;
+  nextAction: string;
+}
+
+export interface ReportResult {
+  view: ReportView;
+  generatedAt: string;
+  isTestData: boolean;
+  period: { key: ReportPeriod; from: string; to: string; label: string; previousFrom: string; previousTo: string };
+  filters: { key: string; label: string; value: string }[];
+  kpis: ReportKpi[];
+  charts: {
+    key: string;
+    title: string;
+    unit: string;
+    kind: 'bar' | 'trend';
+    bars: ReportBar[];
+    /** Trend only: second series (e.g. deliveries next to admissions). */
+    series?: { label: string; values: number[] }[];
+    note?: string;
+    /** Rows left out because the needed data does not exist. */
+    excluded?: { count: number; reason: string };
+  }[];
+  /** Comparable figures for events in the period and the same-length period before. */
+  events: { key: string; label: string; unit: string; current: number; previous: number }[];
+  items: { rows: WorkItem[]; total: number; page: number; pageSize: number; kinds: { kind: string; label: string; count: number }[] };
 }

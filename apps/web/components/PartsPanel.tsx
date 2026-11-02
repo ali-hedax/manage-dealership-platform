@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import useSWR from 'swr';
 import {
@@ -255,7 +256,14 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   return (
     <section className="panel" data-testid="parts-panel">
       <div className="panel-head">
-        <h2>قطعات</h2>
+        <h2>
+          قطعات{' '}
+          {can('part.manage') && (
+            <Link className="xs no-print" href="/reports?view=parts">
+              گزارش انبار
+            </Link>
+          )}
+        </h2>
         {request && editable && (
           <div className="row" style={{ gap: 6 }}>
             <button className="btn btn-sm" disabled={busy} onClick={fromAssessment}>

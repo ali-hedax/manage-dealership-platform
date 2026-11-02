@@ -175,6 +175,38 @@ Read-only evidence: primary platform and prior Preview checkout clean; deployed 
 
 Local documentation validation passed: 26 Markdown files, 49 controller routes, `node --check scripts/check-docs.mjs` and `git diff --check`. No application dependencies, customer data or private runtime configuration are needed for this check.
 
+## Reports center (stage 3a) — 2026-11-02 (branch `feature/reports-center`)
+
+Definitions first (`docs/REPORTS_FA.md`), then implementation.
+
+- **Unit tests** (`reports.spec.ts`, 5):
+  - "today" starts at Tehran midnight (20:30 UTC); the week starts on Saturday; the month starts on the 1st of the Jalali month.
+  - Previous period has the same length; an incomplete month is compared with the same elapsed time.
+  - Custom Jalali range is inclusive, Persian digits are accepted, reversed and missing dates are rejected.
+  - Priority uses Tehran days ("today" until 24:00 Tehran); a missing due date is "no due date", not late.
+  - Views are opened by permission.
+- **API tests** (`reports.e2e-spec.ts`, 8):
+  - Role access in the report and the export (parts clerk 403 on the manager view, cashier no views).
+  - Every manager KPI equals the total of the case list it links to, and stage bars sum to active cases.
+  - Work-list rows per kind equal the KPI.
+  - Per-reason bars equal the case list filtered by that reason.
+  - A case with two part blockers and two parts counts once as a case and a vehicle, with physical quantities summed separately.
+  - Ordering: overdue → today → soon → later → no due date, with server paging.
+  - Legacy/imported cases are excluded from time-in-stage, with the count shown.
+  - Events are compared with the same-length previous period; filtering by "me" works.
+  - Workshop filter by unit, and bars link back to the report.
+  - Export contains all filtered rows (not just the page), the title, time and test-data label, and no phone numbers.
+  - Another dealership sees nothing, and a real dealership is not labelled test data.
+- **Browser tests** (`reports.spec.ts`, 2):
+  - Service manager: the KPI "دارای مانع" opens the case list with the same count.
+  - Stage filter in the accident view, then open a case and go back: the filter and URL are kept.
+  - Stats tab with the table alternative.
+  - Parts clerk sees only the parts view, 6 KPIs, next actions, and no horizontal scroll.
+- **Screenshots** (desktop and 390 px) were reviewed. Fixed after review: zero values were shown as "no data", some server text used Latin digits, and the KPI grid wrapped.
+- **Full suite:** API 98/98 (13 suites), E2E 17/17, shared 9/9, lint, typecheck, build, docs check (62 routes), audit clean.
+
+Not yet built (stage 3b): Persian PDF export with an embedded font and the dealership header; the parts discrepancy queue (#11).
+
 ## Existing-vehicle Excel import — 2026-11-02 (branch `feature/vehicle-excel-import`)
 
 Built and tested with synthetic workbooks that reproduce the intake file's structure (sheet and header names read from the owner's Google Sheet; no real rows copied).
