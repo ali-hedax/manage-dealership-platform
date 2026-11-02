@@ -27,6 +27,8 @@ export class EmailAuthController {
   list(@CurrentActor() actor:Actor) {return this.email.list(actor);}
   @RequirePermissions('user.manage') @Get('invitations/email/status')
   mailStatus(@CurrentActor() actor:Actor) {return this.email.mailStatus(actor);}
+  @RequirePermissions('user.manage') @Post('invitations/email/check') @Throttle({default:{limit:3,ttl:60000}})
+  checkMail(@CurrentActor() actor:Actor) {return this.email.checkMail(actor);}
   @RequirePermissions('user.manage') @Post('invitations/email') @Throttle({default:{limit:5,ttl:60000}})
   emailInvitation(@CurrentActor() actor:Actor,@Body(new ZodPipe(invitationSchema)) body:InvitationInput) {return this.email.invite(actor,body,'email');}
   @RequirePermissions('user.manage') @Post('invitations') @Throttle({default:{limit:5,ttl:60000}})

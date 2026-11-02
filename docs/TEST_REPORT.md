@@ -175,6 +175,14 @@ Read-only evidence: primary platform and prior Preview checkout clean; deployed 
 
 Local documentation validation passed: 26 Markdown files, 49 controller routes, `node --check scripts/check-docs.mjs` and `git diff --check`. No application dependencies, customer data or private runtime configuration are needed for this check.
 
+## Invitation email diagnosis and delivery status — 2026-11-02 (branch `fix/invitation-email-delivery`)
+
+Live server, read-only: deployed SHA `b7e4c93`, migrations 0000–0006, `PUBLIC_APP_URL` = the Preview HTTPS address, SMTP settings intentionally empty. Egress from the VM: Gmail 465/587/25/2525, Outlook, Yahoo, mail APIs (Brevo, SendGrid, Mailgun, Resend, Postmark, Gmail API), Google 443, Cloudflare, npm and api.github.com time out; domestic sites answer. From inside the API image, nodemailer verify to smtp.gmail.com with dummy credentials returns `ETIMEDOUT` after 10 s on 465 and 587 (an open path would return `EAUTH`). Conclusion: blocked before TLS/authentication by the network; not an application, TLS or password defect.
+
+Local tests: API 74/74 (9 suites). New: failure classification; real sockets without mocks (closed port → `connection_blocked`, plain-text server on the TLS port → `tls_failed`, unresolvable host → `dns_failed`, missing settings → `not_configured`); failed send stores and shows only the category, successful resend clears it without a duplicate employee; connection check is admin-only, sends nothing, audits only the category. E2E 14/14 (new: failure reason and connection check on the staff page). Shared 9/9, gate 2/2, build, lint, typecheck, `pnpm audit --prod` clean. `configure-smtp.sh`: `bash -n` locally; ShellCheck in CI.
+
+Not done: a real email from the Preview (network blocked); no message was sent in this step.
+
 ## Staff invitation email — 2026-11-01
 
 Local lint/build passed. Shared 9/9, API 68/68 (including seven new invitation/transport tests) passed; production dependency audit reports no known vulnerabilities. Coverage: RBAC/readiness, no pending account on missing SMTP config, per-invitation delivery and sanitized audit, no token in response/cache/audit, send failure and explicit resend without duplicate identity, active-user protection, password/QR setup and real synthetic TOTP login; SMTP HTML escaping, TLS/STARTTLS and refusal handling. Transport tests mock the sender; they do not claim real Gmail delivery.

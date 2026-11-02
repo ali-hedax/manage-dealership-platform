@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node dist/scripts/migrate.js",
     "db:seed-demo": "node dist/scripts/seed-demo.js",
-    "db:reset-demo": "node dist/scripts/reset-demo.js"
+    "db:reset-demo": "node dist/scripts/reset-demo.js",
+    "mail:check": "node dist/scripts/check-mail.js"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.16",

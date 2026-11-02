@@ -58,6 +58,10 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 
 Workflow for a change: edit `schema.ts` → `pnpm --filter @manage/api db:generate` → review the SQL → write the down script → run tests → document here. Production: back up first, then `pnpm db:migrate` ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
 
+## 0007_invitation_failure
+
+Additive nullable column `auth_challenges.invitation_failure`: category of the last failed invitation email (`dns_failed`, `connection_blocked`, `tls_failed`, `auth_failed`, `recipient_rejected`, `unknown`). Never the raw SMTP error. Cleared by a successful resend (new challenge). Down script: `apps/api/src/db/down/0007_invitation_failure.down.sql`, disposable databases only.
+
 ## 0006_staff_invitation_email
 
 Additive columns on auth_challenges: invitation_delivery (manual/sending/sent/failed; default manual for existing data) and invitation_sent_at (nullable UTC timestamp). Store delivery status on each invitation, never its raw token or SMTP diagnostic. Sent/failed outcomes also append a sanitized user audit event in the same transaction. If execution stops mid-send, sending stays visibly uncertain until the owner explicitly resends. Down script: apps/api/src/db/down/0006_staff_invitation_email.down.sql, disposable databases only. No existing identity, password or encrypted Authenticator seed is reset.

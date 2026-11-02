@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow semantic versioning once releases start.
 
+## [Unreleased] — branch `fix/invitation-email-delivery`
+
+- کارکنان: «بررسی اتصال ایمیل» (اتصال، TLS و احراز هویت فرستنده از همان سرور، بدون ارسال پیام) و نمایش علت شکست ارسال (اتصال مسدود، DNS، TLS، احراز هویت، رد گیرنده) زیر نام همکار؛ متن «ارسال شد» به «پذیرفته‌شده توسط سرور ایمیل» اصلاح شد.
+- Migration افزایشی 0007 (`invitation_failure`)، اسکریپت `mail:check` و `deploy/preview/configure-smtp.sh` برای تنظیم خصوصی App Password روی سرور با بررسی پیش از فعال‌سازی و پشتیبان `.env`.
+
 ## [Unreleased] — staff email invitations
 
 - Rename account administration to کارکنان. Owner enters name, email and roles, sends invitation email, sees activation/delivery state, and explicitly resends failed/expired invitations.

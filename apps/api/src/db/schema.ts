@@ -98,6 +98,8 @@ export const authChallenges = pgTable('auth_challenges', {
   consumedAt: ts('consumed_at'),
   invitationDelivery: text('invitation_delivery').notNull().default('manual'),
   invitationSentAt: ts('invitation_sent_at'),
+  // Category of the last failed email delivery (see MAIL_FAILURES); never the raw SMTP error.
+  invitationFailure: text('invitation_failure'),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('auth_challenges_user_idx').on(t.userId, t.purpose)]);
 

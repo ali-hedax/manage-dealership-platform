@@ -5,9 +5,20 @@ import {ROLES,ROLE_LABELS,type Role} from '@manage/shared';
 import {api,fetcher,errorMessage} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 
-type UserRow={id:string;email:string;displayName:string;roles:Role[];isActive:boolean;invitationDelivery:string;invitationExpiresAt:string|null};
+type UserRow={id:string;email:string;displayName:string;roles:Role[];isActive:boolean;invitationDelivery:string;invitationFailure:string|null;invitationExpiresAt:string|null};
+type MailCheck={status:'ready'|'not_configured'|'failed';failure?:string};
 type InvitationInput={email:string;displayName:string;roles:Role[]};
-const deliveryLabels:Record<string,string>={manual:'دعوت ایمیلی ارسال نشده',sending:'نتیجه ارسال مشخص نیست؛ در صورت نیاز دوباره بفرستید',sent:'دعوت ایمیلی ارسال شده؛ در انتظار فعال‌سازی',failed:'ارسال ایمیل ناموفق؛ دوباره بفرستید'};
+const deliveryLabels:Record<string,string>={manual:'دعوت ایمیلی ارسال نشده',sending:'نتیجه ارسال مشخص نیست؛ در صورت نیاز دوباره بفرستید',sent:'سرور ایمیل دعوت را پذیرفت؛ در انتظار فعال‌سازی (رسیدن به صندوق را فقط خود همکار تأیید می‌کند)',failed:'ارسال ایمیل ناموفق؛ دوباره بفرستید'};
+// Why a send or check failed; categories come from the API (never the raw SMTP error).
+const failureLabels:Record<string,string>={
+  connection_blocked:'سرور Manage به سرور ایمیل وصل نشد (مسدود یا بدون پاسخ). این مشکل شبکه سرور است، نه رمز یا نشانی همکار.',
+  dns_failed:'نام سرور ایمیل پیدا نشد؛ تنظیمات SMTP را بررسی کنید.',
+  tls_failed:'اتصال امن (TLS) با سرور ایمیل برقرار نشد؛ پورت و نوع اتصال را بررسی کنید.',
+  auth_failed:'سرور ایمیل نام کاربری یا App Password فرستنده را نپذیرفت.',
+  recipient_rejected:'سرور ایمیل نشانی گیرنده را نپذیرفت؛ نشانی ایمیل همکار را بررسی کنید.',
+  unknown:'علت خطا مشخص نیست؛ اتصال ایمیل را بررسی کنید.',
+};
+const checkLabel=(c:MailCheck)=>c.status==='ready'?'اتصال، رمزنگاری و احراز هویت فرستنده موفق بود (پیامی ارسال نشد).':c.status==='not_configured'?'ارسال ایمیل هنوز روی سرور تنظیم نشده است.':failureLabels[c.failure??'unknown']??failureLabels.unknown;
 
 export default function UsersPage(){
   const {can}=useAuth();const allowed=can('user.manage');
@@ -16,15 +27,17 @@ export default function UsersPage(){
   const [email,setEmail]=useState(''),[displayName,setName]=useState(''),[roles,setRoles]=useState<Role[]>(['accident_expert']);
   const [busyEmail,setBusyEmail]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [privateLink,setPrivateLink]=useState('');
+  const [check,setCheck]=useState<MailCheck|null>(null),[checking,setChecking]=useState(false);
+  async function checkMail(){setChecking(true);setCheck(null);try{setCheck(await api<MailCheck>('/auth/invitations/email/check',{body:{}}));}catch(err){setError(errorMessage(err));}finally{setChecking(false);}}
   const busy=!!busyEmail;
   async function invite(input:InvitationInput,delivery:'email'|'manual'='email'){
     if(busy)return;
     setBusyEmail(input.email);setError('');setMessage('');setPrivateLink('');
     try{
-      const result=await api<{emailDelivery?:'sent'|'failed';invitationUrl?:string}>(delivery==='email'?'/auth/invitations/email':'/auth/invitations',{body:{email:input.email,displayName:input.displayName,roles:input.roles}});
+      const result=await api<{emailDelivery?:'sent'|'failed';failure?:string;invitationUrl?:string}>(delivery==='email'?'/auth/invitations/email':'/auth/invitations',{body:{email:input.email,displayName:input.displayName,roles:input.roles}});
       if(delivery==='manual'&&result.invitationUrl){setPrivateLink(result.invitationUrl);setMessage(`لینک خصوصی برای ${input.email} ساخته شد و ۲۴ ساعت اعتبار دارد. فقط برای همین همکار بفرستید؛ ایمیلی ارسال نشده است.`);}
-      else if(result.emailDelivery==='sent')setMessage(`دعوت‌نامه برای ${input.email} ارسال شد و ۲۴ ساعت اعتبار دارد. همکار شما رمز شخصی و Google Authenticator خودش را تنظیم می‌کند.`);
-      else setError('کارمند ثبت شد اما ارسال ایمیل موفق نبود. پس از بررسی اتصال ایمیل، از فهرست کارکنان «ارسال دوباره دعوت» را بزنید.');
+      else if(result.emailDelivery==='sent')setMessage(`سرور ایمیل دعوت‌نامه ${input.email} را پذیرفت؛ دعوت ۲۴ ساعت اعتبار دارد. رسیدن به صندوق را از همکار بپرسید؛ او رمز شخصی و Google Authenticator خودش را تنظیم می‌کند.`);
+      else setError(`کارمند ثبت شد اما ارسال ایمیل موفق نبود: ${failureLabels[result.failure??'unknown']??failureLabels.unknown} پس از رفع مشکل «ارسال دوباره دعوت» را بزنید یا لینک خصوصی بسازید.`);
       await mutate();
     }catch(err){setError(errorMessage(err));}finally{setBusyEmail('');}
   }
@@ -35,6 +48,10 @@ export default function UsersPage(){
     <p>نام، ایمیل و دسترسی همکار را مشخص کنید. دعوت‌نامه به ایمیل او می‌رود؛ خودش رمز شخصی انتخاب می‌کند و Google Authenticator را متصل می‌کند.</p>
     {mail?.configured===false&&<p className="callout callout-red" role="status">ارسال ایمیل دعوت هنوز تنظیم نشده است. فعلاً می‌توانید لینک دعوت خصوصی بسازید و برای همکارتان بفرستید.</p>}
     {mailError&&<p role="alert" className="callout callout-red">وضعیت ارسال ایمیل دریافت نشد. صفحه را تازه کنید.</p>}
+    <div className="row" style={{gap:8,alignItems:'center',marginBlockEnd:12}}>
+      <button type="button" className="btn" disabled={checking} onClick={()=>void checkMail()}>{checking?'در حال بررسی اتصال ایمیل…':'بررسی اتصال ایمیل'}</button>
+      <span aria-live="polite" className="small" data-testid="mail-check">{check&&checkLabel(check)}</span>
+    </div>
     <section className="card"><h2>افزودن کارمند و ارسال دعوت</h2>
       <form className="form" onSubmit={submit} aria-busy={busy}>
         <fieldset disabled={busy} style={{border:0,padding:0,margin:0,minInlineSize:0,display:'grid',gap:12}}>
@@ -64,6 +81,7 @@ export default function UsersPage(){
       {data?.map(u=><article key={u.id} style={{paddingBlock:16,borderBlockEnd:'1px solid var(--silver)',overflowWrap:'anywhere'}}>
         <h3>{u.displayName}</h3><p><bdi>{u.email}</bdi></p>
         <p>{u.isActive?'فعال':u.invitationExpiresAt&&new Date(u.invitationExpiresAt).getTime()<Date.now()?'دعوت منقضی شده؛ دوباره بفرستید':deliveryLabels[u.invitationDelivery]??'در انتظار فعال‌سازی'}</p>
+        {!u.isActive&&u.invitationDelivery==='failed'&&<p className="small">علت: {failureLabels[u.invitationFailure??'unknown']??failureLabels.unknown}</p>}
         <p>{u.roles.map(r=>ROLE_LABELS[r]).join('، ')}</p>
         {!u.isActive&&<button type="button" className="btn" disabled={busy||!ready} aria-label={`ارسال دوباره دعوت برای ${u.displayName}`} onClick={()=>void invite(u)}>{busyEmail===u.email?'در حال ارسال…':'ارسال دوباره دعوت'}</button>}
         {!u.isActive&&(!ready||u.invitationDelivery==='failed')&&<button type="button" className="btn" disabled={busy} aria-label={`ساخت لینک خصوصی برای ${u.displayName}`} onClick={()=>void invite(u,'manual')}>ساخت لینک خصوصی تازه</button>}

@@ -2,7 +2,7 @@ import request from 'supertest';
 import {eq} from 'drizzle-orm';
 import {createHarness,type Harness} from './harness';
 import {auditEvents,authChallenges,users} from '../src/db/schema';
-import {InvitationMailService} from '../src/auth/invitation-mail.service';
+import {InvitationMailService,MailDeliveryError} from '../src/auth/invitation-mail.service';
 import {APP_CONFIG,type AppConfig} from '../src/config';
 import {authenticator} from '../src/auth/totp';
 
@@ -54,6 +54,33 @@ describe('Staff invitation email',()=>{
     const r=await request(h.app.getHttpServer()).post('/api/v1/auth/invitations/accept').set('x-manage-client','test').send({token:oldToken,password:'synthetic-worker-password'});
     expect(r.status).toBe(401);
     expect(await h.db.db.select().from(users).where(eq(users.email,employee.email))).toHaveLength(1);
+  });
+  it('shows why a send failed (category only) and clears it after a successful resend',async()=>{
+    jest.spyOn(h.app.get(InvitationMailService),'send').mockRejectedValueOnce(new MailDeliveryError('connection_blocked')).mockResolvedValue();
+    const admin=await h.login('admin');
+    const failed=await admin.post('/auth/invitations/email',employee);
+    expect(failed.body).toMatchObject({emailDelivery:'failed',failure:'connection_blocked'});
+    expect((await admin.get('/auth/invitations')).body[0]).toMatchObject({invitationDelivery:'failed',invitationFailure:'connection_blocked'});
+    const audit=await h.db.db.select().from(auditEvents).where(eq(auditEvents.action,'user.invitation_email_failed'));
+    expect(audit).toHaveLength(1);expect(JSON.stringify(audit[0])).toContain('connection_blocked');
+    const retry=await admin.post('/auth/invitations/email',employee);
+    expect(retry.body.emailDelivery).toBe('sent');expect(retry.body.failure).toBeUndefined();
+    expect((await admin.get('/auth/invitations')).body[0]).toMatchObject({invitationDelivery:'sent',invitationFailure:null});
+    expect(await h.db.db.select().from(users).where(eq(users.email,employee.email))).toHaveLength(1);
+  });
+  it('checks the mail connection without sending, for account managers only, and audits only the category',async()=>{
+    const check=jest.spyOn(h.app.get(InvitationMailService),'check').mockResolvedValue({status:'failed',failure:'auth_failed'});
+    const send=jest.spyOn(h.app.get(InvitationMailService),'send');
+    const manager=await h.login('manager');
+    expect((await manager.post('/auth/invitations/email/check',{})).status).toBe(403);
+    const admin=await h.login('admin');
+    const r=await admin.post('/auth/invitations/email/check',{});
+    expect(r.status).toBe(201);expect(r.body).toEqual({status:'failed',failure:'auth_failed'});
+    expect(check).toHaveBeenCalledTimes(1);expect(send).not.toHaveBeenCalled();
+    const audit=await h.db.db.select().from(auditEvents).where(eq(auditEvents.action,'user.invitation_mail_checked'));
+    expect(audit).toHaveLength(1);expect(JSON.stringify(audit)).not.toContain(mailConfig.SMTP_PASSWORD);
+    check.mockRestore();h.app.get<AppConfig>(APP_CONFIG).SMTP_HOST='';
+    expect((await admin.post('/auth/invitations/email/check',{})).body).toEqual({status:'not_configured'});
   });
   it('completes emailed invitation, own password and real TOTP enrollment/login',async()=>{
     const mail=jest.spyOn(h.app.get(InvitationMailService),'send').mockResolvedValue();const admin=await h.login('admin');

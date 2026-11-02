@@ -162,8 +162,8 @@ jobs:
       - name: Deployment scripts
         run: |
           node --test deploy/preview/gate.test.mjs
-          bash -n deploy/preview/setup-server.sh deploy/preview/deploy.sh
-          shellcheck deploy/preview/setup-server.sh deploy/preview/deploy.sh
+          bash -n deploy/preview/setup-server.sh deploy/preview/deploy.sh deploy/preview/configure-smtp.sh
+          shellcheck deploy/preview/setup-server.sh deploy/preview/deploy.sh deploy/preview/configure-smtp.sh
       - if: always()
         run: docker compose -f docker-compose.yml -f deploy/preview/docker-compose.preview.yml logs --no-color caddy api | tail -80
       - if: always()

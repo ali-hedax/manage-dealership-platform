@@ -15,7 +15,7 @@ import type {Actor} from './auth.types';
 import type {EmailLoginInput,EmailVerifyInput,InvitationInput,PasswordSetInput} from './email.contracts';
 import {hashPassword,verifyPassword} from './password';
 import {authenticator,decryptTotp,encryptTotp,newTotpSeed,totpStep} from './totp';
-import {InvitationMailService} from './invitation-mail.service';
+import {InvitationMailService,MailDeliveryError,type MailFailure} from './invitation-mail.service';
 
 type Meta={ip?:string;requestId?:string;userAgent?:string};
 const invalid=()=>new AppError(401,'INVALID_CREDENTIALS','ایمیل، رمز یا کد تأیید معتبر نیست');
@@ -84,6 +84,13 @@ export class EmailAuthService {
     if(!actor.user.permissions.has('user.manage'))throw forbidden();
     return {configured:this.mail.configured};
   }
+  /** Connection, TLS and sender authentication check without sending; the result category is audited. */
+  async checkMail(actor:Actor){
+    if(!actor.user.permissions.has('user.manage'))throw forbidden();
+    const result=await this.mail.check();
+    await this.db.transaction(tx=>this.audit.record(tx,actor,{entityType:'user',entityId:actor.user.id,action:'user.invitation_mail_checked',after:{...result}}));
+    return result;
+  }
   async invite(actor:Actor,input:InvitationInput,delivery:'manual'|'email'='manual'){
     if(!actor.user.permissions.has('user.manage'))throw forbidden();
     if(delivery==='email')this.mail.assertConfigured();
@@ -104,17 +111,18 @@ export class EmailAuthService {
     });
     const invitationUrl=`${this.cfg.PUBLIC_APP_URL.replace(/\/$/,'')}/activate#token=${id}.${raw}`;
     if(delivery==='manual')return {id:userId,invitationUrl,status:'invited'};
-    let emailDelivery:'sent'|'failed'='failed';
-    try{await this.mail.send({email:input.email,displayName:input.displayName,invitationUrl});emailDelivery='sent';}catch{
+    let emailDelivery:'sent'|'failed'='failed';let failure:MailFailure|null=null;
+    try{await this.mail.send({email:input.email,displayName:input.displayName,invitationUrl});emailDelivery='sent';}catch(error){
       // Never log SMTP errors: they can include credentials, recipients or links.
-      // The persisted failure lets the owner explicitly resend without a retry loop.
+      // Only the category is kept, so the owner can fix the cause and resend explicitly.
+      failure=error instanceof MailDeliveryError?error.failure:'unknown';
     }
     await this.db.transaction(async tx=>{
-      await tx.update(authChallenges).set({invitationDelivery:emailDelivery,invitationSentAt:emailDelivery==='sent'?new Date():null})
+      await tx.update(authChallenges).set({invitationDelivery:emailDelivery,invitationSentAt:emailDelivery==='sent'?new Date():null,invitationFailure:failure})
         .where(and(eq(authChallenges.id,id),eq(authChallenges.tenantId,actor.user.tenantId)));
-      await this.audit.record(tx,actor,{entityType:'user',entityId:userId,action:`user.invitation_email_${emailDelivery}`,after:{challengeId:id,delivery:emailDelivery}});
+      await this.audit.record(tx,actor,{entityType:'user',entityId:userId,action:`user.invitation_email_${emailDelivery}`,after:{challengeId:id,delivery:emailDelivery,failure}});
     });
-    return {id:userId,status:'invited',emailDelivery};
+    return {id:userId,status:'invited',emailDelivery,...(failure?{failure}:{})};
   }
 
   async enroll(input:PasswordSetInput,meta:Meta){
@@ -154,11 +162,11 @@ export class EmailAuthService {
     if(!actor.user.permissions.has('user.manage'))throw forbidden();
     const people=await this.db.select({id:users.id,email:users.email,displayName:users.displayName,roles:users.roles,isActive:users.isActive})
       .from(users).where(and(eq(users.tenantId,actor.user.tenantId),isNotNull(users.email)));
-    const invitations=await this.db.selectDistinctOn([authChallenges.userId],{userId:authChallenges.userId,delivery:authChallenges.invitationDelivery,sentAt:authChallenges.invitationSentAt,expiresAt:authChallenges.expiresAt})
+    const invitations=await this.db.selectDistinctOn([authChallenges.userId],{userId:authChallenges.userId,delivery:authChallenges.invitationDelivery,sentAt:authChallenges.invitationSentAt,failure:authChallenges.invitationFailure,expiresAt:authChallenges.expiresAt})
       .from(authChallenges).where(and(eq(authChallenges.tenantId,actor.user.tenantId),eq(authChallenges.purpose,'invite')))
       .orderBy(authChallenges.userId,desc(authChallenges.createdAt),desc(authChallenges.id));
     const latest=new Map(invitations.map(i=>[i.userId,i]));
-    return people.map(u=>({...u,invitationDelivery:latest.get(u.id)?.delivery??'manual',invitationSentAt:latest.get(u.id)?.sentAt??null,invitationExpiresAt:latest.get(u.id)?.expiresAt??null}));
+    return people.map(u=>({...u,invitationDelivery:latest.get(u.id)?.delivery??'manual',invitationSentAt:latest.get(u.id)?.sentAt??null,invitationFailure:latest.get(u.id)?.failure??null,invitationExpiresAt:latest.get(u.id)?.expiresAt??null}));
   }
   async bootstrapOwner(email:string){
     if(!['development','preview'].includes(this.cfg.APP_ENV))throw forbidden();
