@@ -273,7 +273,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </div>
       )}
 
-      {!editing&&can('reference.customers.read')&&<section className="panel"><div className="panel-body"><ReferenceLookup kind="customers" onSelect={r=>{setF(s=>({...s,fullName:s.fullName||r.data.fullName||'',phone:s.phone||r.data.phone||'',vin:s.vin||r.data.vin||'',plate:s.plate||r.data.plate||'',model:s.model||r.data.model||'',trim:s.trim||r.data.trim||''}));toast('اطلاعات سابقه فقط در خانه‌های خالی قرار گرفت؛ مالک و شماره پذیرش فعلی را تأیید کنید');}}/></div></section>}
+      {can('reference.customers.read')&&<section className="panel"><div className="panel-body"><ReferenceLookup kind="customers" initialQuery={existing?.vehicle.vin||existing?.vehicle.chassisRef||''} onSelect={r=>{setF(s=>({...s,fullName:s.fullName||r.data.fullName||'',phone:s.phone||r.data.phone||'',vin:s.vin||r.data.vin||'',plate:s.plate||r.data.plate||'',model:s.model||r.data.model||'',trim:s.trim||r.data.trim||''}));toast('اطلاعات سابقه فقط در خانه‌های خالی قرار گرفت؛ مالک و شماره پذیرش فعلی را تأیید کنید');}}/></div></section>}
       <Section title="خودرو" note="پلاک یا VIN برای شناسایی کافی است">
         <label className="field">
           <span>پلاک</span>

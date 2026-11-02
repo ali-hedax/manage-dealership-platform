@@ -6,8 +6,8 @@ import {api,errorMessage} from '@/lib/api';
 import {formatJalali} from '@/lib/format';
 
 /** Explicit searches and selection: no implicit ownership, no stock reservation. */
-export function ReferenceLookup({kind,onSelect}:{kind:ReferenceKind;onSelect?:(record:ReferenceRecord)=>void}){
- const [query,setQuery]=useState(''),[records,setRecords]=useState<ReferenceRecord[]>([]);
+export function ReferenceLookup({kind,onSelect,initialQuery=''}:{kind:ReferenceKind;initialQuery?:string;onSelect?:(record:ReferenceRecord)=>void}){
+ const [query,setQuery]=useState(initialQuery),[records,setRecords]=useState<ReferenceRecord[]>([]);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[searched,setSearched]=useState(false),[truncated,setTruncated]=useState(false);
  const request=useRef(0);const parts=kind==='parts';
  async function search(){

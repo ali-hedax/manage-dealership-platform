@@ -31,5 +31,6 @@ test('long manufacturer trim, editable contacts and admission numbers save witho
  await page.getByLabel('شماره کارت پذیرش ایران‌خودرو',{exact:true}).fill('1405777777');
  await page.getByLabel('زمان پذیرش واقعی',{exact:true}).fill('۱۴۰۵/۰۷/۰۱ ۰۹:۱۵:۰۰');await page.getByLabel('زمان پذیرش واقعی',{exact:true}).press('Tab');
  await page.getByRole('button',{name:'ثبت پرونده',exact:true}).click();await expect(page.getByRole('link',{name:'ویرایش پرونده'})).toBeVisible();await expect(page.getByText('شماره پذیرش ایران‌خودرو:',{exact:false}).first()).toContainText('۱۴۰۵۷۷۷۷۷۷');
+ await page.getByRole('link',{name:'ویرایش پرونده',exact:true}).click();await page.getByLabel('VIN کامل یا شماره شاسی عین سابقه').fill('TESTARCHIVE01');await page.getByRole('button',{name:'جست‌وجو در اطلاعات پایه'}).click();await page.getByRole('button',{name:'استفاده از اطلاعات این سابقه'}).click();await expect(page.getByLabel('تلفن همراه',{exact:true})).toHaveValue('09000000001');await page.getByLabel('تلفن همراه',{exact:true}).fill('09000000009');await page.getByRole('button',{name:'ذخیره تغییرات',exact:true}).click();await expect(page.getByRole('link',{name:'ویرایش پرونده'})).toBeVisible();
  await page.goto('/cases?q=1405777777');await expect(page.getByRole('table')).toContainText('۱۴۰۵۷۷۷۷۷۷');await expect(page.getByRole('table').getByRole('link').first()).toHaveText(/AC-/);
 });
