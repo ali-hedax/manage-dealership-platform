@@ -2,6 +2,8 @@
 
 ## Operational start — 2026-11-02
 
+CI run `41451507538` for operations commit `165a020`: all six jobs passed (audit/secrets, docs, lint/types/build/unit/integration, PostgreSQL migration/seed, browser E2E, Docker/Compose smoke). Daily backup shell syntax verified on the host; cron active. A subsequent recovery archive was transferred to the owner's PC, encrypted with Windows CurrentUser DPAPI, decrypted in memory and compared by SHA256; plaintext local archive removed.
+
 Application code/images unchanged from tested `5e529fd`. With explicit owner approval, tested the one-time promotion on a restored PostgreSQL backup before applying it to the actual VM. Verified exact five synthetic cases and seven non-personal demo users; credentials/roles/TOTP of the owner, all prior audit records and case counters preserved. Added 13 transactional audit records. Initial import through the existing service: 15 created, 7 incomplete, 1 delivered-row error retained, 0 duplicate; applying the same preview again was rejected. Database assertions: 15 real cases, 15 unique import keys. Restored the post-import backup to a separate temporary DB and verified 15/0/15 counts; removed temporary DBs. Browser owner's session, dealership name, absence of preview banner, 15-case list and actual case/import-history panel verified. API production/PostgreSQL health OK, all health-checked services healthy. Daily cron installed; immediate backup succeeded. See [operational notes](REAL_START_FA.md). No live synthetic tests or invented customer fields.
 
 Last full run: **2026-11-01**, branch `feature/qc-delivery` (issue #12 on top of `feature/parts-finance`), Windows 10 / Node 26.8 locally (CI targets Node 22 on Ubuntu). All data synthetic.
