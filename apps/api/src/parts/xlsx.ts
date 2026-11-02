@@ -100,7 +100,7 @@ function parseSheet(xml: string, shared: string[], budget: { characters: number;
       else if (type === 'inlineStr') value = textOf(body);
       else if (v !== undefined) value = decode(v);
       budget.characters += value.length;
-      if (value.length > 10_000 || budget.characters > 4_000_000) throw new XlsxError('متن خانه‌های اکسل بیش از حد بزرگ است؛ فایل را کوچک‌تر کنید');
+      if (value.length > 10_000 || budget.characters > 12_000_000) throw new XlsxError('متن خانه‌های اکسل بیش از حد بزرگ است؛ فایل را کوچک‌تر کنید');
       const ci = ref ? columnIndex(ref) : cells.length;
       if (ci > 511) throw new XlsxError('حداکثر ۵۱۲ ستون در هر برگه پذیرفته می‌شود');
       cells[ci] = value.trim();

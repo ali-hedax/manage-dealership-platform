@@ -181,7 +181,7 @@ function CasesList() {
         <table className="table responsive">
           <thead>
             <tr>
-              <th>پرونده</th>
+              <th>پرونده و پذیرش</th>
               <th>پلاک</th>
               <th>خودرو و مالک</th>
               <th>پوشش</th>
@@ -201,7 +201,8 @@ function CasesList() {
                     <Link href={`/cases/${c.id}`} className="num" style={{ fontWeight: 700 }} onClick={(e) => e.stopPropagation()}>
                       {toPersianDigits(c.caseNumber)}
                     </Link>
-                    <div className="xs muted">پذیرش {formatJalali(c.admittedAt)}</div>
+                    <div className="small">پذیرش ایران‌خودرو: <bdi>{c.admissionNo?toPersianDigits(c.admissionNo):'ندارد؛ پیگیری با شماره منیج'}</bdi></div>
+                    <div className="xs muted">تاریخ پذیرش {formatJalali(c.admittedAt)}</div>
                   </td>
                   <td>
                     <Plate value={c.plate} />

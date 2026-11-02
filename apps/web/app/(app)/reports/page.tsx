@@ -318,6 +318,7 @@ function ReportsPage() {
                               <Link href={`/cases/${i.caseId}`}>
                                 <bdi>{i.caseNumber}</bdi>
                               </Link>
+                              <div className="small">پذیرش ایران‌خودرو: <bdi>{i.admissionNo||'ندارد؛ شناسه منیج'}</bdi></div>
                               <div className="xs muted">
                                 {i.vehicleLabel}
                                 {i.plate ? ` — ${toPersianDigits(i.plate)}` : ''}

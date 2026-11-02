@@ -40,6 +40,7 @@ import {
   vehicles,
 } from '../db/schema';
 import { buildSearchText, computeMissingFields, formatCaseNumber } from './case-rules';
+import {idKey,isNonUniqueAdmission} from '../vehicle-import/vehicle-sheet';
 
 type CaseRow = typeof cases.$inferSelect;
 
@@ -175,8 +176,8 @@ export class CasesService {
         officialDeadlineAt: toDate(input.officialDeadlineAt),
         forecastDeliveryAt: toDate(input.forecastDeliveryAt),
         isLegacyEntry: input.isLegacyEntry ?? false,
-        admissionNo: extra.admissionNo ?? null,
-        admissionNoKey: extra.admissionNoKey ?? null,
+        admissionNo: extra.admissionNo ?? input.admissionNo ?? null,
+        admissionNoKey: extra.admissionNoKey ?? (input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null),
         admittedAtPrecision: extra.admittedAtPrecision ?? 'minute',
         origin: extra.origin ?? 'manual',
         importKey: extra.importKey ?? null,
@@ -254,6 +255,7 @@ export class CasesService {
       if (deadline !== undefined) patch.officialDeadlineAt = deadline;
       if (input.forecastDeliveryAt !== undefined) patch.forecastDeliveryAt = toDate(input.forecastDeliveryAt);
       if (customerId !== current.customerId) patch.customerId = customerId;
+      if(input.admissionNo!==undefined){patch.admissionNo=input.admissionNo;patch.admissionNoKey=input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null;}
       if (extra.admissionNo !== undefined) patch.admissionNo = extra.admissionNo;
       if (extra.admissionNoKey !== undefined) patch.admissionNoKey = extra.admissionNoKey;
       if (extra.importKey !== undefined && !current.importKey) patch.importKey = extra.importKey;
@@ -604,6 +606,7 @@ export class CasesService {
     return {
       id: c.id,
       caseNumber: c.caseNumber,
+      admissionNo: c.admissionNo,
       stage: c.stage as CaseStage,
       status: c.status as CaseStatus,
       coverageType: c.coverageType as CoverageType,

@@ -80,6 +80,7 @@ export default function CaseDetailPage() {
             <span className="case-number">{toPersianDigits(kase.caseNumber)}</span>
             <Plate value={v.plate} large />
           </div>
+          <div className="small">شماره پذیرش ایران‌خودرو: <strong><bdi>{kase.admissionNo?toPersianDigits(kase.admissionNo):'ندارد'}</bdi></strong> · شماره منیج: <bdi>{toPersianDigits(kase.caseNumber)}</bdi></div>
           <div className="row" style={{ gap: 6 }}>
             <StageChip stage={kase.stage} />
             <CoverageChip coverage={kase.coverageType} />

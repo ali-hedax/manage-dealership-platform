@@ -56,6 +56,7 @@ export interface UserRef {
 export interface CaseListItem {
   id: string;
   caseNumber: string;
+  admissionNo: string | null;
   stage: CaseStage;
   status: CaseStatus;
   coverageType: CoverageType;
@@ -523,6 +524,7 @@ export interface WorkItem {
   kindLabel: string;
   caseId: string;
   caseNumber: string;
+  admissionNo?: string|null;
   plate: string | null;
   vehicleLabel: string;
   partId?: string;

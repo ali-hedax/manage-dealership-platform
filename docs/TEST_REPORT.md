@@ -2,6 +2,8 @@
 
 ## Reference data — feature/reference-data
 
+Follow-up for actual source layouts: API/reference/XLSX regression 11/11 passed, including long manufacturer descriptions, editable plate/customer/admission number and admission search; full build/typecheck/lint pass. Six CI jobs passed for initial commit 6ec6cf7 (run 41467896590). Larger-file batching, both admission/Manage identifiers in reports and combined-date paste have additional browser regression pending on the follow-up commit. Read-only actual-file preflight was separate from all synthetic tests; no actual rows are committed or inserted in test databases.
+
 New API scenarios: 7/7 passed (inspection/mapping, leading-zero codes, no writes on preview, duplicate/error retention, repeat import, safe updates and stale previews, concurrent same-code imports, historical owners, no operational-case creation, RBAC and cross-tenant read/apply/report/search isolation). New browser scenarios 2/2 passed: full catalog upload/map/preview/apply then part selection, and customer-history lookup at 390px filling only empty fields without manufacturing a VIN. Lint/typecheck/build passed; shared 9/9. First full-suite run concurrent with browser work hit Windows virtual-memory exhaustion (PGlite migration errors, Edge DLL load error 1455); it is not reported as passed. Isolated/CI full regression and the added XLSX allocation-bound tests remain in progress. No real customer data was used in tests.
 
 ## Operational start — 2026-11-02

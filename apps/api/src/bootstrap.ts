@@ -14,8 +14,8 @@ export function configureApp(app: INestApplication, cfg: AppConfig): void {
   express.set('trust proxy', 1);
   express.disable('x-powered-by');
   express.set('loginRateLimit', cfg.LOGIN_RATE_LIMIT ?? (cfg.APP_ENV === 'test' ? 1000 : 10));
-  // JSON bodies up to 2 MB: the parts import sends an .xlsx (≤ ~1 MB) as base64.
-  express.useBodyParser('json', { limit: '2mb' });
+  // Reference files allow 5 MB XLSX; other import contracts retain their own smaller caps.
+  express.useBodyParser('json', { limit: '8mb' });
   app.use(helmet());
   app.use(cookieParser());
   app.use((req:Request,res:Response,next:NextFunction)=>{

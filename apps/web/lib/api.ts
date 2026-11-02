@@ -73,7 +73,7 @@ export function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details) && err.details.length) {
       const first = err.details[0] as { path: string; message: string };
-      return `${err.message}: ${first.path} — ${first.message}`;
+      return `${err.message}: ${first.message}`;
     }
     return err.message;
   }

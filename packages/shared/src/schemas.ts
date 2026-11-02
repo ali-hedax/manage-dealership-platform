@@ -49,21 +49,22 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const customerInputSchema = z.object({
-  fullName: optionalText(120),
+  fullName: optionalText(500),
   phone: optionalText(32),
 });
 
 export const vehicleInputSchema = z.object({
-  brand: optionalText(60),
-  model: optionalText(80),
-  trim: optionalText(80),
+  brand: optionalText(200),
+  model: optionalText(1000),
+  trim: optionalText(1000),
   modelYear: z.number().int().min(1300).max(2100).nullish(),
-  plate: optionalText(32),
+  plate: optionalText(64),
   vin: optionalText(32),
-  color: optionalText(40),
+  color: optionalText(100),
 });
 
 const caseFields = {
+  admissionNo: optionalText(80),
   customer: customerInputSchema.optional(),
   vehicle: vehicleInputSchema.optional(),
   odometerKm: z.number().int().min(0).max(5_000_000).nullish(),

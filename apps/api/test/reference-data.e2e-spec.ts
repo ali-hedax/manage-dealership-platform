@@ -65,3 +65,16 @@ it('isolates previews, reports, apply and search across dealerships; writes audi
  expect(await h.db.db.select().from(auditEvents).where(eq(auditEvents.action,'reference.applied'))).not.toHaveLength(0);
  expect(await h.db.db.select().from(referenceImports)).not.toHaveLength(0);
 });
+
+it('accepts full manufacturer trim descriptions and exposes editable admission numbers in list/search',async()=>{
+ const trim='شرح تجهیزات خودرو '.repeat(40),fullName='نام سازمان و مشتری '.repeat(12);
+ const created=await manager.post('/cases',{admissionNo:'۱۴۰۵۱۲۳۴۵۶',admittedAt:new Date(Date.now()-86400000).toISOString(),vehicle:{model:'خودرو آزمون',trim,plate:'پلاک آزمون'},customer:{fullName,phone:'09000000003'}});
+ expect(created.status).toBe(201);expect(created.body.vehicle.trim).toBe(trim.trim());expect(created.body.customer.fullName).toBe(fullName.trim());
+ const listed=await manager.get('/cases?q=1405123456');expect(listed.body.items.some((c:{id:string;admissionNo:string})=>c.id===created.body.id&&!!c.admissionNo)).toBe(true);
+ const updated=await manager.patch(`/cases/${created.body.id}`,{expectedVersion:created.body.version,admissionNo:'1405999999',vehicle:{plate:'پلاک اصلاح شده'},customer:{fullName:'مشتری اصلاح شده',phone:'09000000004'}});expect(updated.status).toBe(200);expect(updated.body.vehicle.plate).toBe('پلاک اصلاح شده');expect(updated.body.caseNumber).toBe(created.body.caseNumber);
+ expect((await manager.get('/cases?q=1405999999')).body.items.some((c:{id:string})=>c.id===created.body.id)).toBe(true);
+});
+it('keeps meaningful limits and explains invalid input in Persian without losing text',async()=>{
+ const tooLong=await manager.post('/cases',{admittedAt:new Date().toISOString(),vehicle:{trim:'x'.repeat(1001)}});expect(tooLong.status).toBe(400);expect(tooLong.body.details[0].message).toContain('شرح تیپ خودرو');expect(tooLong.body.details[0].message).toContain('1000');
+ const date=await manager.post('/cases',{admittedAt:'۱۴۰۵/۰۸/۰۱'});expect(date.status).toBe(400);expect(date.body.details[0].message).toContain('تاریخ پذیرش');
+});

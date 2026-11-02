@@ -26,6 +26,7 @@ const MODELS = ['دنا', 'دنا پلاس', 'پژو ۲۰۷', 'پژو ۲۰۶', '
 const DRAFT_KEY = 'manage.caseDraft.v1';
 
 interface FormState {
+  admissionNo: string;
   plate: string;
   vin: string;
   brand: string;
@@ -53,6 +54,7 @@ interface FormState {
 }
 
 const empty = (): FormState => ({
+  admissionNo: '',
   plate: '',
   vin: '',
   brand: 'ایران‌خودرو',
@@ -81,6 +83,7 @@ const empty = (): FormState => ({
 
 function fromCase(c: CaseDetail): FormState {
   return {
+    admissionNo: c.admissionNo??'',
     plate: c.vehicle.plate ?? '',
     vin: c.vehicle.vin ?? '',
     brand: c.vehicle.brand ?? '',
@@ -184,10 +187,12 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
     e.preventDefault();
     setError('');
     if (!f.admittedAt) return setError('زمان پذیرش را وارد کنید');
+    if(f.trim.length>1000)return setError('شرح تیپ خودرو بیش از ۱۰۰۰ نویسه است؛ متن حفظ شده، لطفاً آن را کوتاه کنید');
     if (sensitiveChanged && !f.reason.trim()) return setError('برای تغییر مهلت رسمی یا زمان پذیرش، دلیل را بنویسید');
     setBusy(true);
     const nul = (v: string) => (v.trim() === '' ? null : v.trim());
     const payload: Record<string, unknown> = {
+      admissionNo: nul(f.admissionNo),
       vehicle: {
         plate: nul(f.plate),
         vin: nul(f.vin),
@@ -268,7 +273,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </div>
       )}
 
-      {!editing&&can('reference.customers.read')&&<section className="panel"><div className="panel-body"><ReferenceLookup kind="customers" onSelect={r=>{setF(s=>({...s,fullName:s.fullName||r.data.fullName||'',phone:s.phone||r.data.phone||'',vin:s.vin||r.data.vin||'',plate:s.plate||r.data.plate||'',model:s.model||r.data.model||''}));toast('اطلاعات سابقه فقط در خانه‌های خالی قرار گرفت؛ مالک فعلی را تأیید کنید');}}/></div></section>}
+      {!editing&&can('reference.customers.read')&&<section className="panel"><div className="panel-body"><ReferenceLookup kind="customers" onSelect={r=>{setF(s=>({...s,fullName:s.fullName||r.data.fullName||'',phone:s.phone||r.data.phone||'',vin:s.vin||r.data.vin||'',plate:s.plate||r.data.plate||'',model:s.model||r.data.model||'',trim:s.trim||r.data.trim||''}));toast('اطلاعات سابقه فقط در خانه‌های خالی قرار گرفت؛ مالک و شماره پذیرش فعلی را تأیید کنید');}}/></div></section>}
       <Section title="خودرو" note="پلاک یا VIN برای شناسایی کافی است">
         <label className="field">
           <span>پلاک</span>
@@ -298,7 +303,8 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </label>
         <label className="field">
           <span>تیپ</span>
-          <input className="input" name="trim" {...text('trim')} />
+          <textarea className="input" aria-label="تیپ" name="trim" rows={3} {...text('trim')} />
+          <span className="hint">شرح کامل تیپ و تجهیزات؛ {f.trim.length} از ۱۰۰۰ نویسه</span>
         </label>
         <label className="field">
           <span>سال ساخت</span>
@@ -326,6 +332,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
       </Section>
 
       <Section title="پذیرش و خسارت">
+        <label className="field"><span>شماره کارت پذیرش ایران‌خودرو</span><input className="input ltr-input" aria-label="شماره کارت پذیرش ایران‌خودرو" name="admissionNo" maxLength={80} {...text('admissionNo')}/><span className="hint">اگر پذیرش ندارد خالی بگذارید؛ شماره پرونده منیج همیشه شناسه مستقل پرونده است.</span></label>
         <JalaliInput
           label="زمان پذیرش واقعی"
           name="admittedAt"

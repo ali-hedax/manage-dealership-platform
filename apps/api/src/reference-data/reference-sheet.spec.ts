@@ -8,6 +8,6 @@ it('rejects sparse row/column allocations before expanding the grid',()=>{
 it('bounds expanded shared-string references and individual cell text',()=>{
  const shared='<sst><si><t>'+'x'.repeat(10_001)+'</t></si></sst>';
  expect(()=>readWorkbook(book('<worksheet><row r="1"><c r="A1" t="s"><v>0</v></c></row></worksheet>',shared))).toThrow(XlsxError);
- const repeated=Array.from({length:501},(_,i)=>`<row r="${i+1}"><c r="A${i+1}" t="s"><v>0</v></c></row>`).join('');
+ const repeated=Array.from({length:1401},(_,i)=>`<row r="${i+1}"><c r="A${i+1}" t="s"><v>0</v></c></row>`).join('');
  expect(()=>readWorkbook(book('<worksheet>'+repeated+'</worksheet>','<sst><si><t>'+'x'.repeat(9_000)+'</t></si></sst>'))).toThrow(XlsxError);
 });

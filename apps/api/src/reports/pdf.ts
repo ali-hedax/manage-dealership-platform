@@ -186,7 +186,7 @@ export function renderReportPdf(r: ReportResult, dealership: string): Promise<Bu
   y += 18;
   const cols: Column[] = [
     { title: 'اولویت', width: 70, value: (i) => `${WORK_PRIORITY_LABELS[i.priority]}\n${i.priorityReason}` },
-    { title: 'پرونده / خودرو', width: 105, value: (i) => `${LATIN}${i.caseNumber}\n${i.vehicleLabel}${i.plate ? ` — ${i.plate}` : ''}` },
+    { title: 'پرونده / پذیرش / خودرو', width: 105, value: (i) => `${LATIN}${i.caseNumber}\nپذیرش: ${i.admissionNo||'ندارد'}\n${i.vehicleLabel}${i.plate ? ` — ${i.plate}` : ''}` },
     { title: 'شرح', width: 150, value: (i) => [i.description, i.partNumber ? `شماره فنی: ${LATIN}${i.partNumber}` : '', i.quantity !== undefined ? `تعداد: ${i.quantity}` : ''].filter(Boolean).join('\n') },
     { title: 'وضعیت', width: 80, value: (i) => i.status },
     { title: 'موعد', width: 80, value: (i) => (i.dueAt ? `${formatJalali(i.dueAt, { time: true })}\n${i.dueLabel ?? ''}` : 'بدون موعد') },

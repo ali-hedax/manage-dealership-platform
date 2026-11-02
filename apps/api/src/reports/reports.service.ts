@@ -233,6 +233,7 @@ export class ReportsService {
       .select({
         id: cases.id,
         caseNumber: cases.caseNumber,
+        admissionNo: cases.admissionNo,
         stage: cases.stage,
         coverageType: cases.coverageType,
         vehicleId: cases.vehicleId,
@@ -274,6 +275,7 @@ export class ReportsService {
     return {
       caseId: c.id,
       caseNumber: c.caseNumber,
+      admissionNo: c.admissionNo,
       plate: c.plate,
       vehicleLabel: [c.brand, c.model].filter(Boolean).join(' ') || 'خودرو',
       responsible: c.responsibleUserId ? { id: c.responsibleUserId, displayName: c.responsibleName ?? '' } : null,

@@ -6,6 +6,7 @@ import {
   formatTimeInput,
   parseJalali,
   toPersianDigits,
+  toLatinDigits,
 } from '@manage/shared';
 
 interface Props {
@@ -32,10 +33,13 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
   // Value this component emitted itself; re-syncing the text on our own commit
   // would overwrite a time the user is still typing.
   const emitted = useRef<string | null | undefined>(undefined);
+  const dateInput=useRef<HTMLInputElement>(null);
+  const timeInput=useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (value === emitted.current) return;
     emitted.current = undefined;
+    dateInput.current?.setCustomValidity('');timeInput.current?.setCustomValidity('');setInvalid(false);
     if (!value) {
       setDateText('');
       setTimeText('');
@@ -48,6 +52,7 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
 
   function commit(nextDate: string, nextTime: string) {
     if (!nextDate.trim()) {
+      dateInput.current?.setCustomValidity(required?'تاریخ را وارد کنید':'');timeInput.current?.setCustomValidity('');
       setInvalid(!!required);
       emitted.current = null;
       onChange(null);
@@ -55,6 +60,8 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
     }
     const parsed = parseJalali(nextDate, withTime ? nextTime || '00:00' : '12:00');
     setInvalid(!parsed);
+    dateInput.current?.setCustomValidity(parsed?'':'تاریخ و ساعت را مطابق راهنمای همین فیلد وارد کنید');
+    timeInput.current?.setCustomValidity(parsed?'':'تاریخ و ساعت را مطابق راهنمای همین فیلد وارد کنید');
     // Unchanged text keeps the precise stored value instead of truncating it to the minute.
     if (parsed && value) {
       const current = new Date(value);
@@ -78,6 +85,7 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
       <div className="row" style={{ flexWrap: 'nowrap' }}>
         <input
           id={id}
+          ref={dateInput}
           aria-label={label}
           name={name}
           className="input ltr-input num"
@@ -85,12 +93,13 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
           placeholder="۱۴۰۵/۰۸/۰۹"
           value={dateText}
           aria-invalid={invalid}
-          onChange={(e) => setDateText(e.target.value)}
+          onChange={(e) => {dateInput.current?.setCustomValidity('');const pasted=toLatinDigits(e.target.value).trim().match(/^(\d{4}[/.-]\d{1,2}[/.-]\d{1,2})\s+(\d{1,2}:\d{2})(?::\d{2})?$/);if(withTime&&pasted){setDateText(pasted[1]!);setTimeText(pasted[2]!);}else setDateText(e.target.value);}}
           onBlur={() => commit(dateText, timeText)}
           style={{ flex: 2 }}
         />
         {withTime && (
           <input
+            ref={timeInput}
             aria-label={`${label} — ساعت`}
             name={name ? `${name}-time` : undefined}
             className="input ltr-input num"
@@ -98,7 +107,7 @@ export function JalaliInput({ label, value, onChange, withTime, required, hint, 
             placeholder="۱۴:۳۰"
             value={timeText}
             aria-invalid={invalid}
-            onChange={(e) => setTimeText(e.target.value)}
+            onChange={(e) => {timeInput.current?.setCustomValidity('');setTimeText(e.target.value);}}
             onBlur={() => commit(dateText, timeText)}
             style={{ flex: 1 }}
           />

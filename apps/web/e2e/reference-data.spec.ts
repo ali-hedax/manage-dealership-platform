@@ -23,3 +23,13 @@ test('historical customer lookup fills only empty fields and works on a phone wi
  await expect(page.getByLabel('نام و نام خانوادگی',{exact:true})).toHaveValue('مالک فعلی آزمون');await expect(page.getByLabel('تلفن همراه',{exact:true})).toHaveValue('09000000001');await expect(page.getByLabel('VIN (شماره شاسی)',{exact:true})).toHaveValue('');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
+
+test('long manufacturer trim, editable contacts and admission numbers save without the old 80-character error',async({page})=>{
+ await login(page,'manager');await page.goto('/cases/new');
+ await page.getByLabel('نام و نام خانوادگی',{exact:true}).fill('مشتری سازمانی آزمون '.repeat(12));
+ await page.getByLabel('تیپ',{exact:true}).fill('شرح کامل مشخصات و تجهیزات کارخانه '.repeat(20));
+ await page.getByLabel('شماره کارت پذیرش ایران‌خودرو',{exact:true}).fill('1405777777');
+ await page.getByLabel('زمان پذیرش واقعی',{exact:true}).fill('۱۴۰۵/۰۷/۰۱ ۰۹:۱۵:۰۰');await page.getByLabel('زمان پذیرش واقعی',{exact:true}).press('Tab');
+ await page.getByRole('button',{name:'ثبت پرونده',exact:true}).click();await expect(page.getByRole('link',{name:'ویرایش پرونده'})).toBeVisible();await expect(page.getByText('شماره پذیرش ایران‌خودرو:',{exact:false}).first()).toContainText('۱۴۰۵۷۷۷۷۷۷');
+ await page.goto('/cases?q=1405777777');await expect(page.getByRole('table')).toContainText('۱۴۰۵۷۷۷۷۷۷');await expect(page.getByRole('table').getByRole('link').first()).toHaveText(/AC-/);
+});
