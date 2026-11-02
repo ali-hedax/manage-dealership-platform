@@ -67,7 +67,10 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/dashboard` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/departments` | [source](../apps/api/src/reference/reference.controller.ts) |
 | GET | `/api/v1/health` | [source](../apps/api/src/health/health.controller.ts) |
+| GET | `/api/v1/part-discrepancies/:id/history` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
+| GET | `/api/v1/part-discrepancies` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | GET | `/api/v1/reports/export` | [source](../apps/api/src/reports/reports.controller.ts) |
+| GET | `/api/v1/reports/pdf` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/views` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/users/assignable` | [source](../apps/api/src/reference/reference.controller.ts) |
@@ -109,6 +112,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/financial-approvals/:id/decision` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/financial-approvals/:id/payment` | [source](../apps/api/src/finance/finance.controller.ts) |
+| POST | `/api/v1/part-discrepancies/:id/assign` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
+| POST | `/api/v1/part-discrepancies/:id/resolve` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/parts/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/vehicle-imports/:id/apply` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |

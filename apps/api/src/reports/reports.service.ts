@@ -3,6 +3,8 @@ import { and, eq, gte, inArray, isNull, like, lt, sql, type SQL } from 'drizzle-
 import {
   BLOCKER_REASON_LABELS,
   CASE_STAGES,
+  DISCREPANCY_KIND_LABELS,
+  DISCREPANCY_STATUS_LABELS,
   COVERAGE_LABELS,
   PART_STATUS_LABELS,
   REPORT_VIEW_LABELS,
@@ -29,6 +31,7 @@ import type { Actor } from '../auth/auth.types';
 import { caseSql } from '../cases/cases.service';
 import { badRequest, forbidden } from '../common/errors';
 import { DATABASE, type DatabaseHandle } from '../db/database';
+import { DiscrepanciesService } from '../discrepancies/discrepancies.service';
 import { cases, departments, partRequests, tasks, tenants, users, vehicles } from '../db/schema';
 
 // Definitions: docs/REPORTS_FA.md. Every figure is computed here from the
@@ -133,7 +136,10 @@ type BaseCase = Awaited<ReturnType<ReportsService['baseCases']>>[number];
 
 @Injectable()
 export class ReportsService {
-  constructor(@Inject(DATABASE) private readonly handle: DatabaseHandle) {}
+  constructor(
+    @Inject(DATABASE) private readonly handle: DatabaseHandle,
+    private readonly discrepancies: DiscrepanciesService,
+  ) {}
 
   private get db() {
     return this.handle.db;
@@ -165,6 +171,7 @@ export class ReportsService {
         break;
     }
 
+    if (q.view === 'manager' || q.view === 'parts') built.items.push(...(await this.discrepancyItems(actor, base, now)));
     const events = q.view === 'manager' || q.view === 'accident' ? await this.events(tenantId, q, period) : [];
     const kinds = new Map<string, { label: string; count: number }>();
     for (const i of built.items) kinds.set(i.kind, { label: i.kindLabel, count: (kinds.get(i.kind)?.count ?? 0) + 1 });
@@ -592,6 +599,30 @@ export class ReportsService {
       { key: 'departments', title: 'فعالیت‌های باز به تفکیک واحد', unit: 'فعالیت', kind: 'bar', bars: [...deptBars.values()].map((d) => ({ key: d.id, label: d.label, value: d.value, reportQuery: `departmentId=${d.id}` })), note: 'تعداد کار بالا به‌تنهایی نشانه عملکرد ضعیف نیست؛ ظرفیت و نفرساعت ثبت نمی‌شود.' },
     ];
     return { kpis, charts, items };
+  }
+
+  /** Open and in-review parts discrepancies of the filtered cases (the queue itself is GET /part-discrepancies). */
+  private async discrepancyItems(actor: Actor, base: BaseCase[], now: Date): Promise<WorkItem[]> {
+    const byId = new Map(base.map((c) => [c.id, c]));
+    const open = (await this.discrepancies.list(actor, { status: 'active' })).filter((d) => byId.has(d.caseId));
+    return open.map((d) =>
+      this.item(
+        byId.get(d.caseId)!,
+        {
+          kind: 'discrepancy',
+          kindLabel: 'مغایرت قطعه',
+          partId: d.part?.id,
+          description: `${DISCREPANCY_KIND_LABELS[d.kind]}${d.part ? `: ${d.part.description}` : ''}`,
+          partNumber: d.part?.partNumber ?? null,
+          quantity: d.part?.quantity,
+          status: DISCREPANCY_STATUS_LABELS[d.status],
+          stoppedBy: d.detail,
+          nextAction: d.assignee ? `بررسی و ثبت نتیجه (${d.assignee.displayName})` : 'تعیین مسئول بررسی',
+        },
+        now,
+        { at: null, label: '' },
+      ),
+    );
   }
 
   // ----------------------------------------------------------------- events

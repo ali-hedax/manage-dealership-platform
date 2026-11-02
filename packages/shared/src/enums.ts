@@ -229,3 +229,10 @@ export type ReportPeriod = (typeof REPORT_PERIODS)[number];
 // Order of the "today" work list; the reason is shown on every row.
 export const WORK_PRIORITIES = ['overdue', 'today', 'soon', 'later', 'none'] as const;
 export type WorkPriority = (typeof WORK_PRIORITIES)[number];
+
+// Parts discrepancy queue (#11): the system flags; a person reviews and decides.
+export const DISCREPANCY_KINDS = ['handover_vs_shortage', 'wrong_or_defective', 'supply_inconsistent'] as const;
+export type DiscrepancyKind = (typeof DISCREPANCY_KINDS)[number];
+
+export const DISCREPANCY_STATUSES = ['open', 'in_review', 'resolved', 'dismissed'] as const;
+export type DiscrepancyStatus = (typeof DISCREPANCY_STATUSES)[number];

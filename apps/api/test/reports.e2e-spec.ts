@@ -1,4 +1,6 @@
 import type { CaseDetail, CaseListItem, Department, Paged, ReportResult } from '@manage/shared';
+import { writeFileSync } from 'node:fs';
+import { renderReportPdf } from '../src/reports/pdf';
 import { hashPassword } from '../src/auth/password';
 import { newId } from '../src/common/ids';
 import { departments, tenants, users } from '../src/db/schema';
@@ -176,6 +178,36 @@ describe('reports: export and isolation', () => {
     expect(items!.rows.length - header - 1).toBe(r.items.total); // all rows, not the page of 2
     // No customer phone numbers in reports.
     expect(JSON.stringify(items!.rows)).not.toContain('0900000');
+  });
+
+  it('renders a Persian PDF with the embedded font, header and every filtered row across pages', async () => {
+    for (let i = 0; i < 30; i++) await newCase({ officialDeadlineAt: daysAgo(i % 3) });
+    const binary = (req: ReturnType<Client['get']>) =>
+      req.buffer(true).parse((resp, cb) => {
+        const chunks: Buffer[] = [];
+        resp.on('data', (d: Buffer) => chunks.push(d));
+        resp.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    const res = await binary(manager.get('/reports/pdf?view=accident'));
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    const pdf = res.body as Buffer;
+    // Optional local copy for the visual and black-and-white print review.
+    if (process.env.REPORT_PDF_OUT) writeFileSync(process.env.REPORT_PDF_OUT, pdf);
+    const text = pdf.toString('latin1');
+    expect(text.startsWith('%PDF-')).toBe(true);
+    // Font program embedded (subset), not referenced from the system.
+    expect(text).toMatch(/FontFile2/);
+    expect(text).toMatch(/\/BaseFont \/[A-Z]{6}\+Vazirmatn-Regular/);
+    expect(text).toMatch(/Vazirmatn-Bold/);
+    expect((text.match(/\/Type \/Page\b/g) ?? []).length).toBeGreaterThan(1);
+    expect((await parts.get('/reports/pdf?view=manager')).status).toBe(403);
+    const r = await report(manager, 'view=accident');
+    const long = await renderReportPdf({ ...r, items: { ...r.items, total: 1, rows: [{ ...r.items.rows[0]!, nextAction: 'پیگیری قطعه '.repeat(400) + 'END-OF-LONG-ROW' }] } }, 'نمایندگی ایران‌خودرو ۱۳۰۷ حسینی');
+    const pages = (long.toString('latin1').match(/\/Type \/Page\b/g) ?? []).length;
+    expect(pages).toBeGreaterThan(1);
+    expect(pages).toBeLessThan(8);
+    if (process.env.REPORT_PDF_OUT) writeFileSync(process.env.REPORT_PDF_OUT.replace(/\.pdf$/, '-long.pdf'), long);
   });
 
   it('another dealership sees none of these cases and real dealerships are not marked as test data', async () => {

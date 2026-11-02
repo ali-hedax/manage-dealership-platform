@@ -15,6 +15,7 @@ import {
   QC_RESULTS,
   QC_SAFETY_ITEMS,
   IMPORT_DEADLINE_TARGETS,
+  DISCREPANCY_STATUSES,
   REPORT_PERIODS,
   REPORT_VIEWS,
   RECIPIENT_RELATIONS,
@@ -507,3 +508,26 @@ export const reportQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type ReportQuery = z.infer<typeof reportQuerySchema>;
+
+// ---------------------------------------------------- parts discrepancies
+
+export const discrepancyListSchema = z.object({
+  status: z.enum([...DISCREPANCY_STATUSES, 'active', 'all']).default('active'),
+  caseId: uuid.optional(),
+});
+export type DiscrepancyListQuery = z.infer<typeof discrepancyListSchema>;
+
+export const discrepancyAssignSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  // null releases the item back to "open".
+  assigneeUserId: uuid.nullable(),
+});
+export type DiscrepancyAssignInput = z.infer<typeof discrepancyAssignSchema>;
+
+export const discrepancyResolveSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  // resolved: the records were checked and corrected; dismissed: not a real discrepancy.
+  outcome: z.enum(['resolved', 'dismissed']),
+  reason: z.string().trim().min(5, 'دلیل و سابقه رسیدگی را بنویسید').max(1000),
+});
+export type DiscrepancyResolveInput = z.infer<typeof discrepancyResolveSchema>;

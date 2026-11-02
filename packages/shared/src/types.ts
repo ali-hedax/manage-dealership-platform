@@ -7,6 +7,8 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  DiscrepancyKind,
+  DiscrepancyStatus,
   ReportPeriod,
   ReportView,
   WorkPriority,
@@ -560,4 +562,24 @@ export interface ReportResult {
   /** Comparable figures for events in the period and the same-length period before. */
   events: { key: string; label: string; unit: string; current: number; previous: number }[];
   items: { rows: WorkItem[]; total: number; page: number; pageSize: number; kinds: { kind: string; label: string; count: number }[] };
+}
+
+export interface PartDiscrepancy {
+  id: string;
+  kind: DiscrepancyKind;
+  status: DiscrepancyStatus;
+  caseId: string;
+  caseNumber: string;
+  plate: string | null;
+  part: { id: string; description: string; partNumber: string | null; quantity: number; status: string } | null;
+  /** Facts the system found (dates and records), not a verdict. */
+  detail: string;
+  detectedAt: string;
+  /** The condition no longer holds; still open until a person records the outcome. */
+  conditionClearedAt: string | null;
+  assignee: UserRef | null;
+  resolvedAt: string | null;
+  resolvedBy: UserRef | null;
+  resolutionReason: string | null;
+  version: number;
 }

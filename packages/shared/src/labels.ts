@@ -7,6 +7,8 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  DiscrepancyKind,
+  DiscrepancyStatus,
   ReportView,
   WorkPriority,
   ImportDeadlineTarget,
@@ -233,6 +235,12 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'case.delivered': 'تحویل خودرو',
   'case.imported': 'ورود از اکسل',
   'vehicle_import.applied': 'ثبت ورود اکسل خودروها',
+  'discrepancy.assigned': 'تعیین مسئول بررسی مغایرت',
+  'discrepancy.detected': 'شناسایی خودکار مغایرت',
+  'discrepancy.condition_cleared': 'رفع نشانه ناسازگاری؛ نیازمند بررسی مسئول',
+  'discrepancy.condition_returned': 'بازگشت نشانه ناسازگاری',
+  'discrepancy.resolved': 'رفع مغایرت قطعه',
+  'discrepancy.dismissed': 'رد مغایرت (اختلاف واقعی نبود)',
 };
 
 // Keys produced by the API in CaseListItem.missingFields ('نیازمند تکمیل').
@@ -330,4 +338,17 @@ export const WORK_PRIORITY_LABELS: Record<WorkPriority, string> = {
   soon: 'موعد نزدیک',
   later: 'موعد بعدی',
   none: 'بدون موعد',
+};
+
+export const DISCREPANCY_KIND_LABELS: Record<DiscrepancyKind, string> = {
+  handover_vs_shortage: 'تحویل ثبت‌شده، اما واحد تعمیر کمبود اعلام کرده',
+  wrong_or_defective: 'قطعه اشتباه یا معیوب',
+  supply_inconsistent: 'ناسازگاری سوابق تأمین و تحویل',
+};
+
+export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
+  open: 'باز — بدون مسئول',
+  in_review: 'در حال بررسی',
+  resolved: 'رفع شد',
+  dismissed: 'اختلاف واقعی نبود',
 };

@@ -103,3 +103,9 @@ All notable changes. Versions follow semantic versioning once releases start.
 ## Preview browser sign-in compatibility — 2026-11-01
 
 - Replace the native browser password challenge with an accessible Persian sign-in form and a signed secure cookie, preserving the Preview password and isolation. Actual in-app browser login to the manager dashboard was verified.
+
+## [Unreleased] — reports stage 3b
+
+- Persian A4 PDF reports with embedded Vazirmatn, dealership header, row-limit disclosure, repeated table header, multi-page long rows and page numbers.
+- Parts discrepancy queue in warehouse and manager reports: deduplicated findings, assignee, reasoned outcomes, optimistic locking and tenant isolation. Detection, condition changes and review actions retain transactional audit/change history.
+- CI exports the images it smoke-tests for an owner-approved Preview installation; CI does not deploy or connect to the server.

@@ -22,6 +22,7 @@ import {
 } from '@manage/shared';
 import { ApiError, fetcher } from '@/lib/api';
 import { faNum, formatJalali, toPersianDigits } from '@/lib/format';
+import { DiscrepancyQueue } from '@/components/DiscrepancyQueue';
 import { ReportChart } from '@/components/ReportChart';
 
 type Views = { views: ReportView[]; defaultView: ReportView | null; defaultResponsible: 'me' | null };
@@ -94,6 +95,11 @@ function ReportsPage() {
           {data && (
             <a className="btn" href={`/api/v1/reports/export?${exportQuery}`} download>
               خروجی Excel ({faNum(Math.min(data.items.total, 5000))} ردیف{data.items.total > 5000 ? ' از ' + faNum(data.items.total) : ''})
+            </a>
+          )}
+          {data && (
+            <a className="btn" href={`/api/v1/reports/pdf?${exportQuery}`} download>
+              خروجی PDF ({faNum(Math.min(data.items.total, 1000))} ردیف{data.items.total > 1000 ? ' از ' + faNum(data.items.total) : ''})
             </a>
           )}
         </div>
@@ -263,6 +269,8 @@ function ReportsPage() {
               آمار و روند
             </button>
           </nav>
+
+          {tab === 'today' && (view === 'parts' || view === 'manager') && <DiscrepancyQueue />}
 
           {tab === 'today' ? (
             <section className="panel" data-testid="work-list">

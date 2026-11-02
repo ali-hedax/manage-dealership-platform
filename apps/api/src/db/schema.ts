@@ -726,3 +726,40 @@ export const vehicleImportRows = pgTable(
     index('vehicle_import_rows_case_idx').on(t.caseId),
   ],
 );
+
+// Parts discrepancy queue (#11). Detected by rules over parts and blockers,
+// one row per condition (dedupe_key unique per dealership, so the same
+// discrepancy is never raised twice). Only a person closes it, with a reason;
+// if the condition disappears the row is marked, not closed.
+export const partDiscrepancies = pgTable(
+  'part_discrepancies',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    partRequestId: uuid('part_request_id').references(() => partRequests.id),
+    blockerId: uuid('blocker_id').references(() => blockers.id),
+    kind: text('kind').notNull(),
+    dedupeKey: text('dedupe_key').notNull(),
+    status: text('status').notNull().default('open'),
+    detail: text('detail').notNull(),
+    detectedAt: ts('detected_at').notNull().defaultNow(),
+    conditionClearedAt: ts('condition_cleared_at'),
+    assigneeUserId: uuid('assignee_user_id').references(() => users.id),
+    resolvedAt: ts('resolved_at'),
+    resolvedBy: uuid('resolved_by').references(() => users.id),
+    resolutionReason: text('resolution_reason'),
+    isTest: boolean('is_test').notNull().default(false),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    uniqueIndex('part_discrepancies_tenant_key_uq').on(t.tenantId, t.dedupeKey),
+    index('part_discrepancies_tenant_status_idx').on(t.tenantId, t.status),
+    index('part_discrepancies_case_idx').on(t.caseId),
+  ],
+);

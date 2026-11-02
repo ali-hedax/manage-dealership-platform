@@ -69,3 +69,7 @@ Additive nullable column `auth_challenges.invitation_failure`: category of the l
 ## 0006_staff_invitation_email
 
 Additive columns on auth_challenges: invitation_delivery (manual/sending/sent/failed; default manual for existing data) and invitation_sent_at (nullable UTC timestamp). Store delivery status on each invitation, never its raw token or SMTP diagnostic. Sent/failed outcomes also append a sanitized user audit event in the same transaction. If execution stops mid-send, sending stays visibly uncertain until the owner explicitly resends. Down script: apps/api/src/db/down/0006_staff_invitation_email.down.sql, disposable databases only. No existing identity, password or encrypted Authenticator seed is reset.
+
+## 0009_part_discrepancies
+
+Adds the tenant-scoped parts discrepancy queue with a unique (tenant_id, dedupe_key), links to the case/part/blocker, detection time, condition-cleared time, assignee, review outcome and reason, test marker and optimistic version. No existing records are deleted or reclassified. Detection and condition changes, assignment and resolution write audit and change-log rows transactionally; a cleared condition does not close a review. The down script is for disposable databases only.

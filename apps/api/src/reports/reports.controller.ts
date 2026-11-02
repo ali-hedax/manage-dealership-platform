@@ -7,6 +7,7 @@ import { ZodPipe } from '../common/zod.pipe';
 import { DATABASE, type DatabaseHandle } from '../db/database';
 import { tenants } from '../db/schema';
 import { writeWorkbook } from '../parts/xlsx';
+import { renderReportPdf } from './pdf';
 import { allowedViews, MAX_EXPORT_ROWS, ReportsService } from './reports.service';
 
 /** Default view by role: what the person works on first. */
@@ -41,6 +42,16 @@ export class ReportsController {
   @RequirePermissions('case.read')
   report(@CurrentActor() actor: Actor, @Query(new ZodPipe(reportQuerySchema)) q: ReportQuery) {
     return this.reports.report(actor, q);
+  }
+
+  /** Persian A4 PDF (embedded font, dealership header, black and white); up to MAX_PDF_ROWS rows. */
+  @Get('pdf')
+  @RequirePermissions('case.read')
+  async pdf(@CurrentActor() actor: Actor, @Query(new ZodPipe(reportQuerySchema)) q: ReportQuery) {
+    const r = await this.reports.report(actor, q, { allItems: true });
+    const [tenant] = await this.handle.db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, actor.user.tenantId));
+    const data = await renderReportPdf(r, tenant?.name ?? 'Manage by HEDAX');
+    return new StreamableFile(data, { type: 'application/pdf', disposition: `attachment; filename="manage-report-${r.view}.pdf"` });
   }
 
   /** Every filtered row (up to MAX_EXPORT_ROWS) with title, time, period and filters. */
