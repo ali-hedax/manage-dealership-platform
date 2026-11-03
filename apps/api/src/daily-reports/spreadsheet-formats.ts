@@ -9,7 +9,8 @@ export type SheetFormat = 'xlsx' | 'spreadsheetml' | 'xls_binary' | 'unknown';
 export function detectFormat(data: Uint8Array): SheetFormat {
   if (data[0] === 0x50 && data[1] === 0x4b && data[2] === 0x03 && data[3] === 0x04) return 'xlsx';
   if (data[0] === 0xd0 && data[1] === 0xcf && data[2] === 0x11 && data[3] === 0xe0) return 'xls_binary';
-  const head = Buffer.from(data.subarray(0, 4096)).toString('utf8').replace(/^﻿/, '').trimStart();
+  // trimStart also removes a byte-order mark (U+FEFF is whitespace for it).
+  const head = Buffer.from(data.subarray(0, 4096)).toString('utf8').trimStart();
   if (head.startsWith('<?xml') && /<Workbook\b/.test(head) && /urn:schemas-microsoft-com:office:spreadsheet/.test(head)) return 'spreadsheetml';
   return 'unknown';
 }
@@ -49,7 +50,8 @@ export function readSpreadsheetML(data: Uint8Array, opts: { sheet?: string; limi
   const started = Date.now();
   let text = Buffer.from(data).toString('utf8');
   const diagnostics: Diagnostics = { leadingWhitespace: 0, unescapedAmpersands: 0 };
-  const lead = /^﻿?\s*/.exec(text)![0].length;
+  // \s matches a byte-order mark too.
+  const lead = /^\s*/.exec(text)![0].length;
   if (lead) {
     diagnostics.leadingWhitespace = lead;
     text = text.slice(lead);
