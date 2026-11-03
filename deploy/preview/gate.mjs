@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 const scrypt = promisify(scryptCallback);
 const COOKIE = '__Host-manage_preview';
+const UPLOAD_PATH = '/api/v1/daily-reports/uploads';
 const TTL = 12 * 60 * 60;
 const equal = (a, b) => a.length === b.length && timingSafeEqual(a, b);
 export function createGate(config) {
@@ -44,7 +45,7 @@ export function createGate(config) {
     const upstream=http.request(new URL(config.upstream),{path:req.url,method:req.method,headers},response=>{
       res.writeHead(response.statusCode,{...response.headers,'X-Robots-Tag':'noindex, nofollow'});response.pipe(res);
     });
-    upstream.setTimeout(30000,()=>upstream.destroy());
+    upstream.setTimeout(req.url.startsWith(UPLOAD_PATH)?120000:30000,()=>upstream.destroy());
     upstream.on('error',()=>{if(!res.headersSent)send(502,'سرویس در حال آماده شدن است. دوباره تلاش کنید.');else res.destroy();});
     req.on('aborted',()=>upstream.destroy());req.pipe(upstream);
   }
@@ -52,6 +53,8 @@ export function createGate(config) {
     const send = (status, body, headers={}) => { res.writeHead(status, {'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow',...headers}); res.end(body); };
     try {
       const url = new URL(req.url, origin);
+      // Only the daily report upload may take minutes on a slow office connection.
+      if (!url.pathname.startsWith(UPLOAD_PATH)) req.setTimeout(15000,()=>req.destroy());
       if (url.pathname === '/__preview/health') return send(200, 'ok');
       if (config.totpAuth) {
         const publicPath=['/login','/activate','/reset-password'].includes(url.pathname)||url.pathname.startsWith('/_next/')||url.pathname.startsWith('/brand/')||url.pathname.startsWith('/api/v1/auth/');
@@ -97,7 +100,7 @@ export function createGate(config) {
     } catch { if (!res.headersSent) send(400, 'درخواست معتبر نیست.'); else res.destroy(); }
   });
   server.on('close', ()=>clearInterval(cleanup));
-  server.requestTimeout = 15000;
+  server.requestTimeout = 600000;
   server.headersTimeout = 10000;
   return server;
 }
