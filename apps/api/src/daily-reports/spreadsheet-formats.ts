@@ -95,7 +95,9 @@ export function readSpreadsheetML(data: Uint8Array, opts: { sheet?: string; limi
       const inner = body.slice(tagEnd + 1, close);
       const cells: string[] = [];
       let col = 0;
+      let read = 0;
       for (const c of inner.matchAll(/<Cell\b([^>]*?)(\/>|>([\s\S]*?)<\/Cell>)/g)) {
+        read += 1;
         const idx = /\bss:Index="(\d+)"/.exec(c[1]!);
         if (idx) col = Number(idx[1]) - 1;
         if (col >= limits.maxColumns) throw new SpreadsheetError(`تعداد ستون‌ها بیش از ${limits.maxColumns} است`);
@@ -106,6 +108,8 @@ export function readSpreadsheetML(data: Uint8Array, opts: { sheet?: string; limi
         const merge = /\bss:MergeAcross="(\d+)"/.exec(c[1]!);
         col += 1 + (merge ? Number(merge[1]) : 0);
       }
+      // A malformed cell would shift later columns; refuse the file instead of guessing.
+      if (read !== (inner.match(/<Cell\b/g) ?? []).length) throw new SpreadsheetError(`خانه ناقص در ردیف ${count} فایل؛ فایل را دوباره از سامانه مبدأ بگیرید`);
       pos = close + 6;
       yield Array.from(cells, (x) => x ?? '');
     }

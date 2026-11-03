@@ -148,6 +148,7 @@ export type StockProfileInput = z.infer<typeof stockProfileSchema>;
 export const stockSearchSchema = z.object({
   q: text(80).default(''),
   base: z.string().trim().regex(/^\d{8}$/).optional(),
+  needsMapping: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(30),
 });
@@ -184,6 +185,7 @@ export const emdadSearchSchema = z
     caseId: uuid.optional(),
     openOnly: z.boolean().optional(),
     codeIssue: z.boolean().optional(),
+    stale: z.boolean().optional(),
     page: z.number().int().min(1).max(10_000).default(1),
     pageSize: z.number().int().min(1).max(100).default(30),
   })
@@ -235,6 +237,8 @@ export interface DailyImport {
   appliedAt: string | null;
   templateChanged: boolean;
   sameAsImportId: string | null;
+  /** Same content as the registered report (same file, or reordered rows). */
+  sameContent: boolean;
 }
 
 export interface StockOption {
@@ -254,6 +258,8 @@ export interface StockOption {
   available: string;
   salePrice: string | null;
   avgPrice: string | null;
+  /** Set when this row is absent from the newest partial report and keeps an older report's values. */
+  carriedReportedAt: string | null;
 }
 
 export interface StockSnapshotInfo {

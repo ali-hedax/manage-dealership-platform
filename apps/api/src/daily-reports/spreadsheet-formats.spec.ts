@@ -1,6 +1,14 @@
 import { buildEmdadXml, buildStockXlsx, emdadRow, EMDAD_HEADERS } from './fixtures';
 import { detectFormat, readSpreadsheetML, SpreadsheetError } from './spreadsheet-formats';
 
+describe('malformed SpreadsheetML cells', () => {
+  it('refuses a broken cell instead of shifting later columns', () => {
+    const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="s"><Table><Row><Cell><Data ss:Type="String">a</Data></Cell><Cell><Data ss:Type="String">b</Data></Row></Table></Worksheet></Workbook>`;
+    const r = readSpreadsheetML(new TextEncoder().encode(xml));
+    expect(() => [...r.rows()]).toThrow('خانه ناقص');
+  });
+});
+
 describe('daily report formats', () => {
   it('detects the real format from content, not the extension', () => {
     expect(detectFormat(buildEmdadXml([emdadRow(1)]))).toBe('spreadsheetml');

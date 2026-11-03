@@ -83,10 +83,10 @@ export class DailyReportsService implements OnApplicationBootstrap {
 
   async recover(now: Date) {
     await this.expireStale(now);
-    await this.db
-      .update(dailyReportImports)
-      .set({ status: 'uploaded' })
-      .where(and(eq(dailyReportImports.status, 'parsing'), lt(dailyReportImports.createdAt, new Date(now.getTime() - 10 * 60_000)), lt(dailyReportImports.attempts, 3)));
+    const interrupted = and(eq(dailyReportImports.status, 'parsing'), lt(dailyReportImports.createdAt, new Date(now.getTime() - 10 * 60_000)));
+    await this.db.update(dailyReportImports).set({ status: 'uploaded' }).where(and(interrupted, lt(dailyReportImports.attempts, 3)));
+    // Repeated interruption must not leave a job "reading" forever; the uploader can retry it.
+    await this.db.update(dailyReportImports).set({ status: 'failed', error: 'پردازش فایل چند بار نیمه‌تمام ماند؛ دوباره تلاش کنید' }).where(interrupted);
     await this.db.delete(dailyReportFiles).where(lt(dailyReportFiles.expiresAt, now));
     const pending = await this.db.select({ id: dailyReportImports.id }).from(dailyReportImports).where(eq(dailyReportImports.status, 'uploaded'));
     for (const p of pending) await this.process(p.id);
@@ -94,6 +94,11 @@ export class DailyReportsService implements OnApplicationBootstrap {
 
   private need(actor: Actor, p: 'daily_reports.upload' | 'daily_reports.apply' | 'daily_reports.settings') {
     if (!actor.user.permissions.has(p)) throw forbidden();
+  }
+
+  /** Whoever confirms a file must be able to read its preview. */
+  private needPreview(actor: Actor) {
+    if (!actor.user.permissions.has('daily_reports.upload') && !actor.user.permissions.has('daily_reports.apply')) throw forbidden();
   }
 
   // ------------------------------------------------------------- upload
@@ -206,16 +211,21 @@ export class DailyReportsService implements OnApplicationBootstrap {
         const parsed = parseStockSheet(grid);
         ({ headerRow, signature } = parsed);
         diagnostics.blankRows = parsed.blankRows.length;
+        diagnostics.missingColumns = parsed.missingColumns;
         counts.missing = await this.classifyStock(job.tenantId, parsed.rows);
         rows = parsed.rows;
+        // Reordered rows have another hash but the same content.
+        diagnostics.sameContent = !counts.missing && rows.some((r) => r.key) && rows.every((r) => !r.key || !['new', 'changed'].includes(r.outcome === 'needs_mapping' ? String((r.data as { delta?: string }).delta) : r.outcome));
       } else {
         const parsed = parseEmdadSheet(grid);
         ({ headerRow, signature } = parsed);
         diagnostics.missingColumns = parsed.missingColumns;
         Object.assign(counts, await this.classifyEmdad(job.tenantId, parsed.rows));
         rows = parsed.rows;
+        diagnostics.sameContent = rows.some((r) => r.key) && rows.every((r) => !r.key || !['new', 'changed'].includes(r.outcome));
       }
-      diagnostics.templateChanged = !!profile?.headerSignature && profile.headerSignature !== signature;
+      // A first file with a missing column needs the same explicit review as a changed layout.
+      diagnostics.templateChanged = (!!profile?.headerSignature && profile.headerSignature !== signature) || (diagnostics.missingColumns as string[]).length > 0;
       diagnostics.headerSignature = signature;
       for (const r of rows) counts[r.outcome] = (counts[r.outcome] ?? 0) + 1;
       counts.total = rows.length;
@@ -297,6 +307,11 @@ export class DailyReportsService implements OnApplicationBootstrap {
     return this.toDto(x.i, x.name);
   }
 
+  async getPreview(actor: Actor, id: string): Promise<DailyImport> {
+    this.needPreview(actor);
+    return this.get(actor, id);
+  }
+
   private toDto(i: ImportRow, name: string | null): DailyImport {
     const d = i.diagnostics as Record<string, unknown>;
     return {
@@ -323,6 +338,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
       appliedAt: i.appliedAt?.toISOString() ?? null,
       templateChanged: d.templateChanged === true,
       sameAsImportId: (d.sameAsImportId as string | undefined) ?? null,
+      sameContent: d.sameContent === true || !!d.sameAsImportId,
     };
   }
 
@@ -339,7 +355,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
   }
 
   async rows(actor: Actor, id: string, q: { outcome?: DailyRowOutcome; page: number; pageSize: number }) {
-    this.need(actor, 'daily_reports.upload');
+    this.needPreview(actor);
     await this.get(actor, id);
     const where = and(eq(dailyReportRows.importId, id), q.outcome ? eq(dailyReportRows.outcome, q.outcome) : undefined);
     const [{ total }] = (await this.db.select({ total: count() }).from(dailyReportRows).where(where)) as [{ total: number }];
@@ -355,7 +371,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
 
   /** Downloadable per-row result; no customer contact data, formula-safe text. */
   async report(actor: Actor, id: string) {
-    this.need(actor, 'daily_reports.upload');
+    this.needPreview(actor);
     const imp = await this.get(actor, id);
     const rows = await this.db.select().from(dailyReportRows).where(eq(dailyReportRows.importId, id)).orderBy(asc(dailyReportRows.rowNo));
     const pick =
@@ -412,6 +428,11 @@ export class DailyReportsService implements OnApplicationBootstrap {
       if (diag.templateChanged && !input.acceptTemplate) {
         throw badRequest('DAILY_TEMPLATE_CHANGED', 'ستون‌های فایل با قالب تأییدشده قبلی فرق دارد؛ پیش‌نمایش را بررسی و تغییر قالب را صریحاً تأیید کنید');
       }
+      // The same content turns today's status green only on an explicit, audited statement.
+      const identical = diag.sameContent === true || !!diag.sameAsImportId;
+      if (identical && !input.declaredToday && tehranDate(reportAt) === tehranDate(now)) {
+        throw badRequest('DAILY_SAME_CONTENT', 'محتوای این فایل با گزارش ثبت‌شده یکسان است؛ اگر واقعاً خروجی امروز و بدون تغییر است، آن را صریحاً تأیید کنید');
+      }
       // One publish per dealership and report kind at a time.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`daily:${tenantId}:${kind}`}))`);
       const profile = await this.ensureProfile(tx, tenantId, kind);
@@ -428,8 +449,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
           .set({ headerSignature: diag.headerSignature as string, updatedBy: actor.user.id, updatedAt: now, version: profile.version + 1 })
           .where(eq(dailyReportProfiles.id, profile.id));
       }
-      const identical = !!diag.sameAsImportId;
-      const task = await this.tasks.completeWith(tx, actor, kind, id, reportAt, identical, !!input.declaredToday, now);
+      const task = await this.tasks.completeWith(tx, actor, kind, id, reportAt, identical, now);
       result.task = task;
       await this.audit.record(tx, actor, {
         entityType: 'daily_report',

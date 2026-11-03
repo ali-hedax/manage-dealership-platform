@@ -3,7 +3,8 @@ import request from 'supertest';
 import { formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part } from '@manage/shared';
 import { hashPassword } from '../src/auth/password';
 import { newId } from '../src/common/ids';
-import { cases, dailyReportFiles, dailyTasks, emdadRequests, notifications, stockSnapshots, tenants, users, vehicles } from '../src/db/schema';
+import { cases, dailyReportFiles, dailyReportImports, dailyReportProfiles, dailyTasks, emdadRequests, notifications, stockSnapshots, tenants, users, vehicles } from '../src/db/schema';
+import { DailyReportsService } from '../src/daily-reports/daily-reports.service';
 import { DailyTasksService } from '../src/daily-reports/daily-tasks.service';
 import { buildEmdadXml, buildStockXlsx, emdadRow, type StockRow } from '../src/daily-reports/fixtures';
 import { readWorkbook, writeSheet } from '../src/parts/xlsx';
@@ -235,6 +236,59 @@ describe('stock snapshot, options and reservations', () => {
     expect((await parts.post('/stock/reservations', { partRequestId: n.id, fullStockCode: '0012345606', locationAddress: 'A-06', snapshotId, quantity: '0.1', confirm: true })).body.code).toBe('STOCK_REPORT_CHANGED');
   });
 
+  it('replays a retried reservation by its key instead of reserving twice', async () => {
+    const c = await newCase('810005', null);
+    const n = await need(c.id, '00123456', 2);
+    const snap = (await parts.get('/stock/options?q=0012345606')).body.snapshot.id;
+    const body = { partRequestId: n.id, fullStockCode: '0012345606', locationAddress: 'A-06', snapshotId: snap, quantity: '0.5', confirm: true };
+    const key = newId();
+    const a = await parts.post('/stock/reservations', body).set('idempotency-key', key);
+    const b = await parts.post('/stock/reservations', body).set('idempotency-key', key);
+    expect(a.status).toBe(201);
+    expect(b.headers['idempotent-replay']).toBe('true');
+    expect(b.body.id).toBe(a.body.id);
+    expect((await parts.get(`/stock/reservations?partRequestId=${n.id}`)).body.items).toHaveLength(1);
+  });
+
+  it('keeps reservation and need together when a report and a reservation race', async () => {
+    const c = await newCase('810006', null);
+    const n = await need(c.id, '00123456', 1);
+    const snap = (await parts.get('/stock/options?q=0012345607')).body.snapshot.id;
+    const next = await previewOf('stock', buildStockXlsx(family('00123456', 8, { 'موجودي': '1' })));
+    const [pub, res] = await Promise.all([apply(next.id, soon(3)), parts.post('/stock/reservations', { partRequestId: n.id, fullStockCode: '0012345607', locationAddress: 'A-07', snapshotId: snap, quantity: '1', confirm: true })]);
+    expect(pub.status).toBe(201);
+    expect([201, 409]).toContain(res.status);
+    if (res.status === 409) expect(res.body.code).toBe('STOCK_REPORT_CHANGED');
+    const active = await h.db.db.select().from(stockSnapshots).where(eq(stockSnapshots.status, 'active'));
+    expect(active).toHaveLength(1);
+    const opt = (await parts.get('/stock/options?q=0012345607')).body.items[0];
+    expect(opt).toMatchObject({ reported: '1', available: res.status === 201 ? '0' : '1' });
+  });
+
+  it('exports reservations without customer data and with formula-safe text', async () => {
+    const x = await parts.get('/stock/reservations/export?status=reserved').buffer(true).parse((res, cb) => {
+      const b: Buffer[] = [];
+      res.on('data', (c: Buffer) => b.push(c));
+      res.on('end', () => cb(null, Buffer.concat(b)));
+    });
+    expect(x.status).toBe(200);
+    const rows = readWorkbook(x.body as Buffer)[0]!.rows;
+    expect(rows.length).toBeGreaterThan(1);
+    expect(JSON.stringify(rows)).not.toContain('09000005555');
+    expect(JSON.stringify(rows)).not.toContain('مشتری آزمون روزانه');
+  });
+
+  it('asks for explicit acceptance when a column is missing from the first file of a kind', async () => {
+    const svc = (await h.db.db.select().from(dailyReportProfiles).where(eq(dailyReportProfiles.kind, 'stock')))[0]!;
+    await h.db.db.update(dailyReportProfiles).set({ headerSignature: null }).where(eq(dailyReportProfiles.id, svc.id));
+    const rows = readWorkbook(buildStockXlsx([sku('44444445', '01')]))[0]!.rows.map((r) => r.slice(0, 5));
+    const p = await previewOf('stock', writeSheet('stkstock (3)', rows));
+    expect(p.templateChanged).toBe(true);
+    expect((await apply(p.id, { reportDate: day(0) })).body.code).toBe('DAILY_TEMPLATE_CHANGED');
+    await manager.post(`/daily-reports/imports/${p.id}/discard`);
+    await h.db.db.update(dailyReportProfiles).set({ headerSignature: svc.headerSignature }).where(eq(dailyReportProfiles.id, svc.id));
+  });
+
   it('asks for explicit acceptance when the column layout changes', async () => {
     const changed = readWorkbook(buildStockXlsx([sku('44444444', '01')]))[0]!.rows.map((r, i) => [...r, i === 0 ? 'ستون تازه' : 'x']);
     const p = await previewOf('stock', writeSheet('stkstock (3)', changed));
@@ -283,7 +337,7 @@ describe('Emdad Vijeh follow-up', () => {
     expect(by('900009')[0]).toMatchObject({ statusCategory: 'needs_interpretation' });
     expect((await manager.get('/cases?pageSize=100')).body.total).toBe(casesBefore + 4);
     const stored = JSON.stringify(await h.db.db.select().from(emdadRequests));
-    for (const pii of ['مالک ساختگی', '09000000000', 'ENG-TEST']) expect(stored).not.toContain(pii);
+    for (const pii of ['مالک ساختگی', '09000000000', 'ENG-TEST', '11 ب 111 - 11']) expect(stored).not.toContain(pii);
     expect((await parts.post('/emdad/requests/search', { codeIssue: true })).body.total).toBe(2);
   });
 
@@ -355,6 +409,40 @@ describe('11:00 Tehran tasks and reminders', () => {
     expect((await expert.get('/notifications')).body.items).toHaveLength(0);
   });
 
+  it('keeps a reminder due when nobody can receive it, applies a new time to today and survives a restart', async () => {
+    const svc = h.app.get(DailyTasksService);
+    const staff = await h.db.db.select({ id: users.id, isActive: users.isActive }).from(users);
+    await h.db.db.update(users).set({ isActive: false });
+    await svc.tick(new Date('2026-12-03T07:40:00Z'));
+    const waiting = await h.db.db.select().from(dailyTasks).where(eq(dailyTasks.localDate, '2026-12-03'));
+    expect(waiting.every((t) => t.notifiedAt === null)).toBe(true);
+    for (const u of staff) await h.db.db.update(users).set({ isActive: u.isActive }).where(eq(users.id, u.id));
+    // A restart after the due time still sends today's reminder, once.
+    const after = await svc.tick(new Date('2026-12-03T07:41:00Z'));
+    expect(after.notified).toBeGreaterThan(0);
+    expect((await svc.tick(new Date('2026-12-03T07:42:00Z'))).notified).toBe(0);
+    // Before the reminder goes out, a changed time applies to today.
+    const tenantId = (await h.db.db.select({ id: users.tenantId }).from(users).where(eq(users.username, 'manager')))[0]!.id;
+    await svc.tick(new Date('2026-12-04T05:00:00Z'));
+    const prof = await manager.get('/daily-reports/profiles/emdad');
+    expect((await manager.patch('/daily-reports/profiles/emdad', { expectedVersion: prof.body.version, reminderTime: '09:00' })).status).toBe(200);
+    const state = await svc.today(tenantId, new Date('2026-12-04T05:01:00Z'));
+    expect(state.find((t) => t.kind === 'emdad')!.dueAt).toBe('2026-12-04T05:30:00.000Z');
+    expect((await manager.patch('/daily-reports/profiles/emdad', { expectedVersion: prof.body.version + 1, reminderTime: '11:00' })).status).toBe(200);
+  });
+
+  it('stops retrying a repeatedly interrupted parse job and keeps it retryable', async () => {
+    const u = await upload(manager, 'stock', buildStockXlsx([sku('55555555', '01')]));
+    const id = u.body.id as string;
+    await ready(manager, id);
+    await h.db.db.update(dailyReportImports).set({ status: 'parsing', attempts: 3, createdAt: new Date(Date.now() - 3_600_000) }).where(eq(dailyReportImports.id, id));
+    await h.app.get(DailyReportsService).recover(new Date());
+    expect((await manager.get(`/daily-reports/imports/${id}`)).body.status).toBe('failed');
+    expect((await manager.post(`/daily-reports/imports/${id}/retry`)).status).toBe(201);
+    expect((await ready(manager, id)).status).toBe('preview');
+    await manager.post(`/daily-reports/imports/${id}/discard`);
+  });
+
   it('completes the day task only with an applied report of today; identical content needs a declaration', async () => {
     const file = buildEmdadXml([emdadRow(2, { 'وضعیت امداد ویژه': 'وارد موجودی شده است' }), emdadRow(30)]);
     const a = await previewOf('emdad', file);
@@ -367,9 +455,25 @@ describe('11:00 Tehran tasks and reminders', () => {
     // The same file uploaded again is identical content.
     const b = await previewOf('emdad', file);
     expect(b.sameAsImportId).toBe(a.id);
+    expect(b.sameContent).toBe(true);
     const [t] = await h.db.db.select().from(dailyTasks).where(and(eq(dailyTasks.kind, 'emdad'), eq(dailyTasks.status, 'done')));
     await h.db.db.update(dailyTasks).set({ status: 'pending', completedImportId: null }).where(eq(dailyTasks.id, t!.id));
-    expect((await apply(b.id, { reportDate: day(0) })).body.task).toBe('needs_declaration');
+    // Without the statement nothing is published and today stays open.
+    expect((await apply(b.id, { reportDate: day(0) })).body.code).toBe('DAILY_SAME_CONTENT');
+    expect((await parts.get('/daily-reports/status')).body.tasks.find((x: { kind: string }) => x.kind === 'emdad')).toMatchObject({ status: 'pending' });
+    const declared = await apply(b.id, { reportDate: day(0), declaredToday: true });
+    expect(declared.body.task).toBe('done');
+    const [done] = await h.db.db.select().from(dailyTasks).where(eq(dailyTasks.id, t!.id));
+    expect(done).toMatchObject({ status: 'done', unchangedDeclared: true });
+    // Reordered rows have another hash, but they are still the same content and create nothing.
+    const total = (await parts.post('/emdad/requests/search', {})).body.total;
+    const reordered = await previewOf('emdad', buildEmdadXml([emdadRow(30), emdadRow(2, { 'وضعیت امداد ویژه': 'وارد موجودی شده است' })]));
+    expect(reordered.sameAsImportId).toBeNull();
+    expect(reordered.sameContent).toBe(true);
+    expect(reordered.counts).toMatchObject({ unchanged: 2 });
+    expect((await apply(reordered.id, { reportDate: day(0) })).body.code).toBe('DAILY_SAME_CONTENT');
+    expect((await apply(reordered.id, { reportDate: day(0), declaredToday: true })).status).toBe(201);
+    expect((await parts.post('/emdad/requests/search', {})).body.total).toBe(total);
   });
 });
 

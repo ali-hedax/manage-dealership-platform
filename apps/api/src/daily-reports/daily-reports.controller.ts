@@ -65,19 +65,16 @@ export class DailyReportsController {
   }
 
   @Get('daily-reports/imports/:id')
-  @RequirePermissions('daily_reports.upload')
   get(@CurrentActor() a: Actor, @IdParam() id: string) {
-    return this.reports.get(a, id);
+    return this.reports.getPreview(a, id);
   }
 
   @Get('daily-reports/imports/:id/rows')
-  @RequirePermissions('daily_reports.upload')
   rows(@CurrentActor() a: Actor, @IdParam() id: string, @Query(new ZodPipe(dailyRowsQuerySchema)) q: z.infer<typeof dailyRowsQuerySchema>) {
     return this.reports.rows(a, id, q);
   }
 
   @Get('daily-reports/imports/:id/report')
-  @RequirePermissions('daily_reports.upload')
   async report(@CurrentActor() a: Actor, @IdParam() id: string) {
     return new StreamableFile(Buffer.from(await this.reports.report(a, id)), { type: XLSX, disposition: 'attachment; filename="daily-report-result.xlsx"' });
   }
@@ -126,6 +123,12 @@ export class DailyReportsController {
   @RequirePermissions('stock.read')
   async reservations(@CurrentActor() a: Actor, @Query(new ZodPipe(reservationQuery)) q: z.infer<typeof reservationQuery>) {
     return { items: await this.stock.reservations(a, { ...q, reconcile: q.reconcile === 'true' }) };
+  }
+
+  @Get('stock/reservations/export')
+  @RequirePermissions('stock.read')
+  async reservationsExport(@CurrentActor() a: Actor, @Query(new ZodPipe(reservationQuery)) q: z.infer<typeof reservationQuery>) {
+    return new StreamableFile(Buffer.from(await this.stock.exportReservations(a, { ...q, reconcile: q.reconcile === 'true' })), { type: XLSX, disposition: 'attachment; filename="stock-reservations.xlsx"' });
   }
 
   @Post('stock/reservations')

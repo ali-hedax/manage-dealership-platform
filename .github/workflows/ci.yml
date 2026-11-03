@@ -92,6 +92,12 @@ jobs:
             echo "audit_events delete was not rejected" && exit 1
           fi
       - run: pnpm db:reset-demo
+      - name: Daily report locks on real PostgreSQL (several connections)
+        env:
+          DAILY_PG_TEST_URL: postgres://manage:ci-only@localhost:5432/manage_daily
+        run: |
+          PGPASSWORD=ci-only psql -h localhost -U manage -d manage -c "create database manage_daily"
+          cd apps/api && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testRegex 'test/daily-reports-postgres\.e2e-spec\.ts$'
 
   e2e:
     name: End-to-end (Playwright, Chromium)

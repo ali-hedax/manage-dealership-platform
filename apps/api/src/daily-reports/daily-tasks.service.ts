@@ -64,31 +64,33 @@ export class DailyTasksService implements OnApplicationBootstrap, OnApplicationS
           .returning({ id: dailyTasks.id });
         created += inserted.length;
         if (now < dueAt) continue;
-        const [claimed] = await this.db
-          .update(dailyTasks)
-          .set({ notifiedAt: now })
-          .where(and(eq(dailyTasks.tenantId, t.id), eq(dailyTasks.localDate, localDate), eq(dailyTasks.kind, kind), eq(dailyTasks.status, 'pending'), isNull(dailyTasks.notifiedAt)))
-          .returning();
-        if (!claimed) continue;
+        const open = and(eq(dailyTasks.tenantId, t.id), eq(dailyTasks.localDate, localDate), eq(dailyTasks.kind, kind), eq(dailyTasks.status, 'pending'), isNull(dailyTasks.notifiedAt));
+        if (!(await this.db.select({ id: dailyTasks.id }).from(dailyTasks).where(open)).length) continue;
+        // Without a recipient the reminder stays due, so it reaches whoever gets the permission later today.
         const recipients = await this.recipients(t.id, p?.reminderUserId ?? null);
         if (!recipients.length) continue;
-        const rows = await this.db
-          .insert(notifications)
-          .values(
-            recipients.map((userId) => ({
-              id: newId(),
-              tenantId: t.id,
-              userId,
-              kind: 'daily_report_due',
-              title: `یادآوری: ${DAILY_REPORT_KIND_LABELS[kind]}`,
-              body: 'گزارش امروز هنوز ثبت نشده است. فایل را از بخش «به‌روزرسانی گزارش‌های روزانه» بارگذاری و پس از پیش‌نمایش تأیید کنید. این یادآوری کاری را قفل نمی‌کند.',
-              link: `/daily-reports?kind=${kind}`,
-              dedupeKey: `daily:${kind}:${localDate}`,
-            })),
-          )
-          .onConflictDoNothing()
-          .returning({ id: notifications.id });
-        notified += rows.length;
+        // Claim and notifications commit together: a crash between them cannot lose the reminder.
+        notified += await this.db.transaction(async (tx) => {
+          const [claimed] = await tx.update(dailyTasks).set({ notifiedAt: now }).where(open).returning({ id: dailyTasks.id });
+          if (!claimed) return 0;
+          const rows = await tx
+            .insert(notifications)
+            .values(
+              recipients.map((userId) => ({
+                id: newId(),
+                tenantId: t.id,
+                userId,
+                kind: 'daily_report_due',
+                title: `یادآوری: ${DAILY_REPORT_KIND_LABELS[kind]}`,
+                body: 'گزارش امروز هنوز ثبت نشده است. فایل را از بخش «به‌روزرسانی گزارش‌های روزانه» بارگذاری و پس از پیش‌نمایش تأیید کنید. این یادآوری کاری را قفل نمی‌کند.',
+                link: `/daily-reports?kind=${kind}`,
+                dedupeKey: `daily:${kind}:${localDate}`,
+              })),
+            )
+            .onConflictDoNothing()
+            .returning({ id: notifications.id });
+          return rows.length;
+        });
       }
     }
     return { created, notified };
@@ -109,7 +111,8 @@ export class DailyTasksService implements OnApplicationBootstrap, OnApplicationS
     const profiles = await this.profiles(this.db, tenantId);
     return DAILY_REPORT_KINDS.map((kind) => {
       const r = rows.find((x) => x.kind === kind);
-      const dueAt = r?.dueAt ?? tehranAt(localDate, profiles.get(kind)?.reminderTime ?? DEFAULT_REMINDER);
+      // A new reminder time applies to today until the reminder has gone out.
+      const dueAt = r && (r.status === 'done' || r.notifiedAt) ? r.dueAt : tehranAt(localDate, profiles.get(kind)?.reminderTime ?? DEFAULT_REMINDER);
       const status = (r?.status ?? 'pending') as DailyTaskState['status'];
       return { kind, localDate, dueAt: dueAt.toISOString(), status, late: status === 'pending' && now >= dueAt, completedAt: r?.completedAt?.toISOString() ?? null, unchangedDeclared: r?.unchangedDeclared ?? false };
     });
@@ -117,13 +120,12 @@ export class DailyTasksService implements OnApplicationBootstrap, OnApplicationS
 
   /**
    * Completes today's task with an applied import whose report day is today.
-   * Content identical to the previous report counts only with the uploader's
-   * explicit declaration that it is today's report (recorded in the audit).
+   * Content identical to the previous report reaches this only with the
+   * uploader's declaration that it is today's report (recorded in the audit).
    */
-  async completeWith(tx: DbOrTx, actor: Actor, kind: DailyReportKind, importId: string, reportAt: Date, identical: boolean, declaredToday: boolean, now = new Date()): Promise<'done' | 'not_today' | 'needs_declaration' | 'already_done'> {
+  async completeWith(tx: DbOrTx, actor: Actor, kind: DailyReportKind, importId: string, reportAt: Date, identical: boolean, now = new Date()): Promise<'done' | 'not_today' | 'already_done'> {
     const localDate = tehranDate(now);
     if (tehranDate(reportAt) !== localDate) return 'not_today';
-    if (identical && !declaredToday) return 'needs_declaration';
     const profiles = await this.profiles(tx, actor.user.tenantId);
     await tx
       .insert(dailyTasks)

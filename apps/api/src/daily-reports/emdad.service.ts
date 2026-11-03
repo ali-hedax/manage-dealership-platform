@@ -153,6 +153,8 @@ export class EmdadService {
     if (q.caseId) conds.push(eq(emdadRequests.caseId, q.caseId));
     if (q.openOnly) conds.push(notInArray(emdadRequests.statusCategory, SETTLED_CATEGORIES), sql`coalesce(${emdadRequests.official}->>'releasedAt','') = ''`);
     if (q.codeIssue) conds.push(sql`jsonb_array_length(coalesce(${emdadRequests.official}->'codeNotes','[]'::jsonb)) > 0`);
+    // Not in the newest applied report: the row keeps its last known values, it is not closed.
+    if (q.stale) conds.push(sql`${emdadRequests.lastReportAt} < (select max(report_at) from daily_report_imports where tenant_id = ${tenantId} and kind = 'emdad' and status = 'applied')`);
     return and(...conds)!;
   }
 

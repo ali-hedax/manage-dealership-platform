@@ -1,8 +1,8 @@
 import { normalizePersian, parseBasePartNumber, parseDecimal, parseStockCode, toLatinDigits } from '@manage/shared';
 
 // Pure parsing of the two daily reports into normalized rows with an
-// outcome. No database. Customer contact data of the Emdad report (owner name,
-// mobile, engine number, vehicle description, golden-card validity) is never
+// outcome. No database. Customer data of the Emdad report (owner name, mobile,
+// plate, engine number, vehicle description, golden-card validity) is never
 // copied into the result.
 
 export const PARSER_VERSION = 'daily-reports/1';
@@ -53,6 +53,7 @@ export function parseStockSheet(rows: string[][]) {
   const header = rows[h]!;
   const at = (name: string) => header.findIndex((c) => hkey(c ?? '') === hkey(name));
   const idx = Object.fromEntries(Object.entries(STOCK_COLS).map(([k, v]) => [k, at(v)])) as Record<keyof typeof STOCK_COLS, number>;
+  const missingColumns = (Object.keys(STOCK_COLS) as (keyof typeof STOCK_COLS)[]).filter((k) => idx[k] < 0);
   const get = (r: string[], k: keyof typeof STOCK_COLS) => (idx[k] < 0 ? '' : String(r[idx[k]] ?? '').trim());
   const out: ParsedRow<StockRowData>[] = [];
   const blank: number[] = [];
@@ -112,17 +113,16 @@ export function parseStockSheet(rows: string[][]) {
       p.messages.push(`همین کد در همین محل در ردیف‌های ${group.map((g) => g.rowNo).join('، ')} آمده است؛ جمع نمی‌شود`);
     }
   }
-  return { headerRow: h + 1, header, signature: headerSignature(header), rows: out, blankRows: blank };
+  return { headerRow: h + 1, header, signature: headerSignature(header), missingColumns, rows: out, blankRows: blank };
 }
 
 // ------------------------------------------------------------------- emdad
 
-/** Columns kept from the Emdad report (no owner name, phone, engine number, vehicle description). */
+/** Columns kept from the Emdad report (no owner name, phone, plate, engine number, vehicle description). */
 export const EMDAD_FIELDS = {
   admissionNo: 'شماره کارت پذيرش',
   admissionDate: 'تاريخ پذيرش',
   chassis: 'شماره شاسی',
-  plate: 'پلاك',
   emdadRegisteredAt: 'تاریخ ثبت امداد ویژه',
   emdadNo: 'شماره امداد ویژه',
   fullCode: 'كد تداركاتي كالا',

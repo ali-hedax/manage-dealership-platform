@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import {
+  RESERVATION_STATUS_LABELS,
   normalizePersian,
   parseDecimal,
   toLatinDigits,
@@ -18,7 +19,9 @@ import { badRequest, conflict, forbidden, notFound, versionConflict } from '../c
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { cases, partRequests, stockReservations, stockSnapshotItems, stockSnapshots, users } from '../db/schema';
+import { writeSheet } from '../parts/xlsx';
 import { tehranDate } from './daily-time';
+import { safeCell } from './safe-cell';
 
 type Snapshot = typeof stockSnapshots.$inferSelect;
 type Reservation = typeof stockReservations.$inferSelect;
@@ -88,6 +91,7 @@ export class StockService {
     const term = toLatinDigits(q.q).replace(/\s+/g, ' ').trim();
     const code = term.replace(/\s+/g, '').toUpperCase();
     if (q.base) conds.push(eq(stockSnapshotItems.basePartNumber, q.base));
+    if (q.needsMapping) conds.push(eq(stockSnapshotItems.codeKind, 'needs_mapping'));
     if (term) {
       if (/^\d{8}$/.test(code)) conds.push(or(eq(stockSnapshotItems.basePartNumber, code), ilike(stockSnapshotItems.fullStockCode, `${code}%`)));
       else if (/^[0-9A-Z]{3,}$/.test(code)) conds.push(ilike(stockSnapshotItems.fullStockCode, `%${code}%`));
@@ -131,6 +135,7 @@ export class StockService {
         available: avail[n]!,
         salePrice: dec(i.salePrice),
         avgPrice: dec(i.avgPrice),
+        carriedReportedAt: i.carriedReportedAt?.toISOString() ?? null,
       })),
       total,
       page: q.page,
@@ -323,6 +328,20 @@ export class StockService {
       shortfall: (r.status === 'reserved' || (r.status === 'issued' && !r.reflectedAt)) && short.has(`${r.fullStockCode}@${r.locationAddress}`),
       version: r.version,
     }));
+  }
+
+  /** Excel of Manage reservations; case identifiers and codes only, formula-safe text. */
+  async exportReservations(actor: Actor, f: { caseId?: string; partRequestId?: string; status?: ReservationStatus; reconcile?: boolean }) {
+    const all: StockReservation[] = [];
+    for (let page = 1; page <= 50; page++) {
+      const rows = await this.reservations(actor, { ...f, page, pageSize: 200 });
+      all.push(...rows);
+      if (rows.length < 200) break;
+    }
+    return writeSheet('رزروهای داخلی منیج', [
+      ['پرونده منیج', 'پذیرش ایران‌خودرو', 'نیاز قطعه', 'کد کامل', 'محل', 'مقدار', 'وضعیت', 'قیمت فروش زمان انتخاب', 'قیمت میانگین زمان انتخاب', 'واحد پول', 'مسئول', 'زمان رزرو', 'کسری'],
+      ...all.map((r) => [safeCell(r.caseNumber), safeCell(r.admissionNo ?? ''), safeCell(r.partDescription), safeCell(r.fullStockCode), safeCell(r.locationAddress), safeCell(r.quantity), RESERVATION_STATUS_LABELS[r.status], safeCell(r.unitSalePrice ?? ''), safeCell(r.unitAvgPrice ?? ''), safeCell(r.currency ?? 'تأییدنشده'), safeCell(r.reservedByName ?? ''), r.reservedAt, r.shortfall ? 'کسری' : '']),
+    ]);
   }
 
   /** Code+locations where Manage commitments exceed the newest report (reservations are kept, only flagged). */
