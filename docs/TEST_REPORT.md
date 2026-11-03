@@ -2,7 +2,7 @@
 
 ## Accident workflow redesign — 2026-11-03 — local verification complete, not deployed
 
-Branch `feature/accident-workflow-redesign`, based on `9b07cb0` (the released daily-parts branch). No production operation, real-data import or real account/permission change.
+Implementation commit `09aa3dd`, branch `feature/accident-workflow-redesign`, based on `9b07cb0` (the released daily-parts branch). Final-head CI, including real PostgreSQL and Docker, is linked from [PR #36 checks](https://github.com/ali-hedax/manage-dealership-platform/pull/36/checks). No production operation, real-data import or real account/permission change.
 
 - `pnpm test`: shared **17/17**, API **166 passed / 9 skipped** (23 passing suites, two PostgreSQL-only suites skipped locally). Includes calendar working-hour calculations, lunch/Thursday/Friday/holidays, interval union, role boundaries, assigned-only technician actions, stale versions, dependency release only after coordinator approval, immutable baseline, station scope and quote/payer/price controls.
 - `pnpm test:e2e`: main browser **25 passed / 2 optional screenshot skips** on installed Edge, including desktop and phone. The daily browser initially found an obsolete expectation that system support cannot read stock; the expectation and large-file actor were aligned with the owner's support role, then the daily suite passed **2/2** in 1.3 minutes. No real files or services were used.
