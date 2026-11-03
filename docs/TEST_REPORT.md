@@ -2,6 +2,8 @@
 
 ## Codex continuation, 2026-11-03 — not released
 
+CI 41611054240 on 4de263b passed five jobs including all five real-PostgreSQL concurrency tests and Docker/HTTPS. The original browser suite had 22 passes, 2 optional skips and one strict-locator failure: TST00001 appears in both vehicle details and provenance. Scoped that assertion to the details definition list; awaiting new CI. The owner explicitly identified both supplied files as format samples, not current operational reports. No production apply of those samples is authorized or planned.
+
 Update: the complete isolated daily browser suite passed **2/2** in 1.3 minutes, including the original arithmetic check, exact-case selection, human alias, Emdad follow-up, 390px layouts and the full-size file through the web proxy. CI 41609812965 on d746597 passed the full check/build and Docker jobs. Real PostgreSQL ran all five tests: four passed; the remaining test correctly rejected excess need with HTTP 422/OVER_NEED but expected 400. Corrected the assertion and explicitly check OVER_NEED; new CI must verify it. No concurrency protection was weakened.
 
 - Reproduced the original browser failure with an independent API assertion: the persisted issue was `0.5`, reserved `0`, available `0`; only the mounted options table remained stale. Added SWR revalidation of options, reservation queues and daily totals after reservation changes/creation.

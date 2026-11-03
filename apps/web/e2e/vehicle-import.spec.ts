@@ -39,7 +39,8 @@ test('service manager previews and applies the vehicle sheet, then sees provenan
 
   await caseLink.click();
   await expect(page.getByText('شماره کارت پذیرش', { exact: true })).toBeVisible();
-  await expect(page.getByText('TST00001')).toBeVisible();
+  // The same source identifier can also occur in the import-history panel.
+  await expect(page.locator('dl.dl').getByText('TST00001', { exact: true })).toBeVisible();
   const prov = page.getByTestId('provenance-panel');
   await expect(prov).toContainText('vehicle-import-sample.xlsx');
   await prov.locator('summary').click();
