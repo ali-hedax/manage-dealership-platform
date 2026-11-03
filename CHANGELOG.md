@@ -1,5 +1,10 @@
 # Changelog
 
+## [Released on Manage] — daily parts reports, 2026-11-03
+
+- Published tested 40b389f (CI 41614528596, all six jobs successful) with the operational environment and existing accounts/cases preserved. Added daily stock/Emdad upload and review, exact-SKU reservations/reconciliation, audited family aliases, internal 11:00 Tehran reminders and a Persian staff guide.
+- Owner's stock definitions saved: rial, excluding tax, full physical dealership stock; zero quantity omitted from selection without deleting commitments/history. Supplied files are format samples only and were not activated in production. Fresh exports are the next user step. Main remains unmerged.
+
 ## [Unreleased] — branch `feature/daily-parts-reports`
 
 - Owner-confirmed stock definitions: full dealership physical stock, rial prices excluding tax. Zero-quantity items remain in history but are omitted from stock options; reservations are retained for shortfall review.

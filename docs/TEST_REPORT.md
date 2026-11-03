@@ -1,5 +1,15 @@
 # Test report
 
+## Released daily parts reports — 2026-11-03, 40b389f
+
+All six jobs passed in [CI 41614528596](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41614528596): API 159 passes (5 PostgreSQL-only tests skipped in that job, all 5 passed separately on PostgreSQL 16); shared 12/12; original browser 23 passes / 2 optional screenshot skips; daily browser 2/2; lint/types/build, security and Docker/HTTPS passed. Tested merge 8add505ee02c809c929154684417d5d3a66c5b12 has the same tree as release head; artifact checksum and both image IDs verified. API image b7caae62ee91c30d23cca6b8cf5d171fe212d7aae2b2f48b4afda89b59f436f6; web cfe744ea9e8a572fa7d8577d6b8086e600a706a9b56aee04511407fce0bc7628.
+
+Before production installation, backup daily-parts-20261103T100142Z was restored to an isolated database; additive migrations 0012/0013, preserved account/policy/case/reference state, and real-format sample imports passed there. Stock 6697 published; Emdad 5183 inserted (99 exact matches, 5084 without a definitive match), total row excluded; case count remained 15. Those are rehearsal results only. No sample was applied in production and temporary raw input copies were removed.
+
+Production installed with the operational wrapper; environment byte comparison, all prior case/reference IDs and credentials/policy fingerprints passed. SSH reset during restart; the completed source-after marker, all healthy services and Production/PostgreSQL health were independently rechecked. Existing owner browser confirmed the new navigation, notifications, correct stock/Emdad tab switch, empty operational import history, rial/ex-tax/full-warehouse/physical-quantity settings and 11:00 Tehran reminder. No real stock action or staff permission was changed for testing.
+
+Final backup operational/20261103T123021Z restored with matching counts: 15 cases, 47045 catalog parts, 2732 customer histories, 9 users, 2 active enrolled accounts, 1 owner, 2 daily profiles, 0 daily stock items and 0 Emdad requests. Off-server recovery copy encrypted with Windows CurrentUser DPAPI, decrypted/checksummed in memory; local plaintext removed. Main and Source untouched. Earlier incomplete/failing entries below document the repair history.
+
 ## Codex continuation, 2026-11-03 — not released
 
 The full Linux run on 39d4257 passed all 23 main browser tests (2 optional skips), then exposed a report-kind switch race: the Emdad file was posted to `kind=stock` while router navigation was pending. Changed this client-only tab switch to native history replacement (Next.js integrates this with useSearchParams); the browser test now waits for the selected type and checks the actual upload request kind and response. A new full CI run is required; no release performed from the failing run.
