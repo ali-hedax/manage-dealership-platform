@@ -32,7 +32,7 @@ export class EmailAuthService {
     const [r]=await tx.select({u:users,t:tenants}).from(users).innerJoin(tenants,eq(tenants.id,users.tenantId)).where(eq(users.id,userId));
     if(!r)throw invalid();const roles=r.u.roles as Role[];
     return {ip:meta.ip,requestId:meta.requestId,user:{id:userId,tenantId:r.t.id,tenantCode:r.t.code,tenantName:r.t.name,isTestTenant:r.t.isTest,
-      username:r.u.username,displayName:r.u.displayName,roles,permissions:permissionsFor(roles),sessionId:'pending-authenticator'}};
+      username:r.u.username,displayName:r.u.displayName,isOwner:r.u.isOwner,roles,permissions:permissionsFor(roles,r.t.permissionTemplates,r.u.permissionOverrides,r.u.isOwner),sessionId:'pending-authenticator'}};
   }
   private async record(tx:Tx,userId:string,action:string,meta:Meta={}){await this.audit.record(tx,await this.actor(tx,userId,meta),{entityType:'user',entityId:userId,action});}
 
@@ -96,6 +96,11 @@ export class EmailAuthService {
     if(delivery==='email')this.mail.assertConfigured();
     const id=newId(),raw=randomBytes(32).toString('base64url'),passwordHash=await hashPassword(randomBytes(32).toString('hex'));
     const userId=await this.db.transaction(async tx=>{
+      const [tenant]=await tx.select().from(tenants).where(eq(tenants.id,actor.user.tenantId)).for('update');
+      const currentActor=await this.actor(tx,actor.user.id);
+      if(!currentActor.user.permissions.has('user.manage'))throw forbidden();
+      const [owner]=await tx.select({id:users.id}).from(users).where(and(eq(users.tenantId,actor.user.tenantId),eq(users.isOwner,true)));
+      if(owner&&!currentActor.user.isOwner&&[...permissionsFor(input.roles,tenant.permissionTemplates)].some(p=>!currentActor.user.permissions.has(p)))throw forbidden('دسترسی سمت‌های این دعوت از دسترسی شما بیشتر است؛ مالک باید دعوت را بسازد');
       const [existing]=await tx.select().from(users).where(and(eq(users.email,input.email),eq(users.tenantId,actor.user.tenantId))).for('update');
       if(existing&&(existing.tenantId!==actor.user.tenantId||existing.isActive))throw new AppError(409,'INVITE_EXISTS','این ایمیل قبلاً برای حساب دیگری ثبت شده است');
       const uid=existing?.id??newId();

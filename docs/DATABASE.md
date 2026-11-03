@@ -75,3 +75,7 @@ Additive columns on auth_challenges: invitation_delivery (manual/sending/sent/fa
 ## 0009_part_discrepancies
 
 Adds the tenant-scoped parts discrepancy queue with a unique (tenant_id, dedupe_key), links to the case/part/blocker, detection time, condition-cleared time, assignee, review outcome and reason, test marker and optimistic version. No existing records are deleted or reclassified. Detection and condition changes, assignment and resolution write audit and change-log rows transactionally; a cleared condition does not close a review. The down script is for disposable databases only.
+
+## 0011_staff_access
+
+Additive `tenants.permission_templates` (role presets) and `permission_version`, plus `users.permission_overrides` (allow/deny) and `is_owner` (default false). Partial unique tenant owner index prevents multiple owner designations. No ownership is guessed by migration. Effective permissions: union of tenant role presets (fallback to code defaults), add personal allow, remove personal deny; designated owner has the complete catalog. Auth resolves these for every request. Owner-only mutations lock the tenant, use expected user/template versions and write audit/change-log transactionally. Invitation delegation cannot exceed the non-owner caller’s effective permissions after an owner exists. Current credentials, TOTP, sessions, case data and reference data are preserved. Application rollback retains columns; `down/0011_staff_access.down.sql` is for disposable databases only. See [staff workspaces and access](WORKSPACES_ACCESS_FA.md).

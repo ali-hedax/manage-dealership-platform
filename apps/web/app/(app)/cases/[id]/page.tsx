@@ -173,11 +173,11 @@ export default function CaseDetailPage() {
 
       <div className="grid-3" style={{ alignItems: 'start' }}>
         <div className="stack span-2">
-          <AssessmentPanel kase={kase} onChange={refresh} />
-          <PartsPanel kase={kase} onChange={refresh} />
-          <TasksPanel kase={kase} onChange={refresh} />
-          <BlockersPanel kase={kase} onChange={refresh} />
-          <CompletionPanel kase={kase} onChange={refresh} />
+          <div id="case-assessment"><AssessmentPanel kase={kase} onChange={refresh} /></div>
+          <div id="case-parts"><PartsPanel kase={kase} onChange={refresh} /></div>
+          <div id="case-tasks"><TasksPanel kase={kase} onChange={refresh} /></div>
+          <div id="case-blockers"><BlockersPanel kase={kase} onChange={refresh} /></div>
+          <div id="case-quality"><CompletionPanel kase={kase} onChange={refresh} /></div>
         </div>
 
         <div className="stack">
@@ -245,7 +245,7 @@ export default function CaseDetailPage() {
             </div>
           </section>
 
-          <FinancePanel kase={kase} onChange={refresh} />
+          <div id="case-finance"><FinancePanel kase={kase} onChange={refresh} /></div>
 
           <ProvenancePanel kase={kase} />
 

@@ -1,5 +1,9 @@
 # Test report
 
+## Department workspaces and configurable access — in progress
+
+New API access suite 5/5 passed: owner-only access editing, existing-session grants/revocations, actual part mutation, PII masking from effective permission, cross-tenant and owner protection, strict input/stale version handling, tenant presets/personal exceptions and audit/change log. Local lint/typecheck/build passed. Initial browser role/phone workspace scenario passed; owner editor test failed on an exact-text locator for a summary with extra role text, fixed with a separate name element and targeted test locator. Final browser/full-suite/CI still pending. All tests synthetic; operational data unchanged at this stage.
+
 ## Reference data — feature/reference-data — final validation
 
 All six CI jobs passed for application commit `a25292e` in [run 41472058608](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41472058608): API **113/113** (16 suites), shared **9/9**, browser **21 passed / 2 optional documentation captures skipped**, lint/typecheck/build, security audit/secrets, docs/API inventory, PostgreSQL migrations/seed/reset and Docker/Compose/HTTPS smoke. Targeted local API/reference/XLSX regression **11/11** and browser **3/3** passed before the final existing-case lookup regression, which passed in CI. Earlier concurrent local full-suite attempts exhausted Windows virtual memory (PGlite/Edge DLL 1455); those attempts are not counted as passed. All test data synthetic.

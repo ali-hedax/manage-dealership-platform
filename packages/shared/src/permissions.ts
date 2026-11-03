@@ -35,7 +35,7 @@ export const PERMISSIONS = [
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
+export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   accident_expert: [
     'case.read',
     'case.create',
@@ -111,11 +111,17 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   system_admin: ['user.manage', 'settings.manage'],
 };
 
-export function permissionsFor(roles: readonly Role[]): Set<Permission> {
+export type PermissionTemplates = Partial<Record<Role, Permission[]>>;
+export type PermissionOverrides = { allow: Permission[]; deny: Permission[] };
+
+export function permissionsFor(roles: readonly Role[], templates: PermissionTemplates = {}, overrides?: PermissionOverrides | null, isOwner = false): Set<Permission> {
+  if (isOwner) return new Set(PERMISSIONS);
   const result = new Set<Permission>();
   for (const role of roles) {
-    for (const p of ROLE_PERMISSIONS[role] ?? []) result.add(p);
+    for (const p of templates[role] ?? ROLE_PERMISSIONS[role] ?? []) if (PERMISSIONS.includes(p)) result.add(p);
   }
+  for (const p of overrides?.allow ?? []) if (PERMISSIONS.includes(p)) result.add(p);
+  for (const p of overrides?.deny ?? []) result.delete(p);
   return result;
 }
 

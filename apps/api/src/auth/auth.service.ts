@@ -157,6 +157,7 @@ export class AuthService {
   me(user: AuthUser): Me {
     return {
       id: user.id,
+      isOwner: user.isOwner,
       username: user.username,
       authentication: user.verifiedWithTotp ? 'totp' : 'password',
       displayName: user.displayName,
@@ -200,13 +201,14 @@ export class AuthService {
     return {
       id: user.id,
       tenantId: tenant.id,
+      isOwner: user.isOwner,
       tenantCode: tenant.code,
       tenantName: tenant.name,
       isTestTenant: tenant.isTest,
       username: user.username,
       displayName: user.displayName,
       roles,
-      permissions: permissionsFor(roles),
+      permissions: permissionsFor(roles, tenant.permissionTemplates, user.permissionOverrides, user.isOwner),
       sessionId,
     };
   }

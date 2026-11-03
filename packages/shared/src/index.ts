@@ -6,3 +6,4 @@ export * from './types';
 export * from './text';
 export * from './jalali';
 export * from './reference-data';
+export * from './access';

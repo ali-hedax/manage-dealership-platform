@@ -17,6 +17,8 @@ import { AccidentModule } from './accident/accident.module';
 import { AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { AccessService } from './auth/access.service';
+import { AccessController } from './auth/access.controller';
 import { EmailAuthController } from './auth/email-auth.controller';
 import { EmailAuthService } from './auth/email-auth.service';
 import { InvitationMailService } from './auth/invitation-mail.service';
@@ -108,8 +110,9 @@ export class AppModule {
         ThrottlerModule.forRoot([{ ttl: 60_000, limit: cfg.APP_ENV === 'test' ? 10_000 : 600 }]),
         AccidentModule,
       ],
-      controllers: [AuthController, EmailAuthController, HealthController, ReferenceController],
+      controllers: [AuthController, EmailAuthController, HealthController, ReferenceController, AccessController],
       providers: [
+        AccessService,
         DemoSeedService,
         Lifecycle,
         { provide: APP_GUARD, useClass: ThrottlerGuard },

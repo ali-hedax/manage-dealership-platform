@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] — branch `feature/department-workspaces`
+
+- منوی واحد تصادفات با پرونده/ثبت/گزارش و میزهای کار نقش‌ها، کارت‌های کار با آیکون و صف مرتبط، میان‌بر بخش‌های پرونده و نمایش جمع‌شده واحدهای آینده.
+- پنل مالک برای تغییر الگوهای سمت و مجوز اضافه/ممنوع هر کارمند، بازبینی قبل ذخیره، اعمال در درخواست بعدی، حفاظت حساب مالک، کنترل هم‌زمانی و ثبت تاریخی. ماسک تماس بر اساس مجوز نهایی و جلوگیری از دعوت فراتر از مجوز مدیر غیرمالک.
+
 All notable changes. Versions follow semantic versioning once releases start.
 
 ## [Unreleased] — branch `feature/reference-data`

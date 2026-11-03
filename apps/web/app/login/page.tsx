@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { api, ApiError, errorMessage } from '@/lib/api';
+import type {Me} from '@manage/shared';
+import {workspaceHome} from '@/lib/workspaces';
 
 function LoginForm() {
   const router = useRouter();
@@ -28,15 +30,16 @@ function LoginForm() {
         const step=await api<{challengeId:string;proof:string}>('/auth/email/login',{body:{email:username.trim().toLowerCase(),password}});
         setChallenge(step);setPassword('');setBusy(false);return;
       }
+      let signedIn:Me;
       if (challenge) {
-        await api('/auth/email/verify',{body:{...challenge,code}});
+        signedIn=await api<Me>('/auth/email/verify',{body:{...challenge,code}});
       } else {
-      await api('/auth/login', {
+      signedIn=await api<Me>('/auth/login', {
         body: { username: username.trim(), password, tenantCode: tenantCode.trim() || undefined },
       });
       }
       const next = params.get('next');
-      router.replace(next && next.startsWith('/') && !next.startsWith('//') && !/[\\\r\n]/.test(next) ? next : '/');
+      router.replace(next && next.startsWith('/') && !next.startsWith('//') && !/[\\\r\n]/.test(next) ? next : workspaceHome(signedIn));
     } catch (err) {
       if (err instanceof ApiError && err.code === 'TENANT_REQUIRED') setNeedTenant(true);
       setError(errorMessage(err));

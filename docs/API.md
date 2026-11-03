@@ -52,6 +52,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 <!-- routes:start -->
 | Method | Route | Controller |
 | --- | --- | --- |
+| GET | `/api/v1/access/presets` | [source](../apps/api/src/auth/access.controller.ts) |
+| GET | `/api/v1/access` | [source](../apps/api/src/auth/access.controller.ts) |
 | GET | `/api/v1/auth/invitations/email/status` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/me` | [source](../apps/api/src/auth/auth.controller.ts) |
@@ -126,6 +128,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/vehicle-imports/:id/apply` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | POST | `/api/v1/vehicle-imports` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
+| PUT | `/api/v1/access/templates/:role` | [source](../apps/api/src/auth/access.controller.ts) |
+| PUT | `/api/v1/access/users/:id` | [source](../apps/api/src/auth/access.controller.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
 <!-- routes:end -->
 

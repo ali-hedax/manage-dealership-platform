@@ -3,7 +3,6 @@ import { and, asc, desc, eq, inArray, isNull, like, ne, sql, type SQL } from 'dr
 import { alias } from 'drizzle-orm/pg-core';
 import {
   currentJalaliYear,
-  hasPermission,
   maskPhone,
   normalizePersian,
   normalizePhone,
@@ -474,7 +473,7 @@ export class CasesService {
       .limit(1);
     if (!r) throw notFound('پرونده');
 
-    const canSeePii = hasPermission(actor.user.roles, 'customer.pii.read');
+    const canSeePii = actor.user.permissions.has('customer.pii.read');
     const { c, v, cu } = r;
     return {
       ...this.baseItem(c, v, r.responsibleName, r.openBlockers, r.progress),

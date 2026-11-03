@@ -31,6 +31,8 @@ export const tenants = pgTable('tenants', {
   name: text('name').notNull(),
   brand: text('brand'),
   isTest: boolean('is_test').notNull().default(false),
+  permissionTemplates: jsonb('permission_templates').$type<import('@manage/shared').PermissionTemplates>().notNull().default({}),
+  permissionVersion: integer('permission_version').notNull().default(1),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 
@@ -68,6 +70,8 @@ export const users = pgTable(
     displayName: text('display_name').notNull(),
     passwordHash: text('password_hash').notNull(),
     roles: text('roles').array().notNull(),
+    isOwner: boolean('is_owner').notNull().default(false),
+    permissionOverrides: jsonb('permission_overrides').$type<import('@manage/shared').PermissionOverrides>().notNull().default({allow:[],deny:[]}),
     isActive: boolean('is_active').notNull().default(true),
     isTest: boolean('is_test').notNull().default(false),
     failedLoginCount: integer('failed_login_count').notNull().default(0),
@@ -77,7 +81,7 @@ export const users = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
   },
-  (t) => [uniqueIndex('users_tenant_username_uq').on(t.tenantId, t.username), uniqueIndex('users_email_uq').on(t.email)],
+  (t) => [uniqueIndex('users_tenant_username_uq').on(t.tenantId, t.username), uniqueIndex('users_email_uq').on(t.email), uniqueIndex('users_tenant_owner_uq').on(t.tenantId).where(sql`${t.isOwner} = true`)],
 );
 
 export const sessions = pgTable(

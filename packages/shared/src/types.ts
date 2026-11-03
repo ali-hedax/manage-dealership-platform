@@ -38,6 +38,7 @@ import type { Permission } from './permissions';
 
 export interface Me {
   id: string;
+  isOwner?: boolean;
   authentication?: 'password' | 'totp';
   username: string;
   displayName: string;

@@ -11,6 +11,7 @@ import {
 } from '@manage/shared';
 import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { WorkspaceLauncher } from '@/components/WorkspaceLauncher';
 import { faNum, formatJalali } from '@/lib/format';
 
 interface Attention {
@@ -29,9 +30,9 @@ export default function DashboardPage() {
 
   if (!can('dashboard.read')) {
     return (
-      <div className="callout callout-blue">
+      <div className="stack"><WorkspaceLauncher/><div className="callout callout-blue">
         نقش شما به داشبورد عملیات دسترسی ندارد. از منوی کناری بخش مربوط به خود را انتخاب کنید.
-      </div>
+      </div></div>
     );
   }
   if (error) return <div className="callout callout-red">داشبورد بارگذاری نشد. صفحه را تازه کنید.</div>;
@@ -79,6 +80,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <WorkspaceLauncher compact/>
       <nav className="pipeline" aria-label="مراحل پرونده‌ها">
         {pipelineStages.map((s) => {
           const n = stageCount(s);
