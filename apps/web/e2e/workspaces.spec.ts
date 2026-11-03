@@ -20,6 +20,9 @@ test('department menu exposes only useful workspaces and finance/QC queues work 
  const cases=await (await page.request.get('/api/v1/cases')).json();
  await page.goto(`/cases/${cases.items[0].id}#case-quality`);
  await expect(page.locator('#case-quality')).toBeInViewport();
+ const shortcut=page.getByRole('link',{name:'کنترل کیفیت و تحویل',exact:true});
+ await shortcut.scrollIntoViewIfNeeded();await shortcut.click();
+ await expect(page.locator('#case-quality')).toBeInViewport();
 });
 test('owner edits individual exceptions and role defaults with review and an intact phone layout',async({page},info)=>{
  await login(page,'manager');

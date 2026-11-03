@@ -32,6 +32,7 @@ export default function UsersPage(){
   const [privateLink,setPrivateLink]=useState('');
   const [check,setCheck]=useState<MailCheck|null>(null),[checking,setChecking]=useState(false);
   useEffect(()=>{if(presets?.assignableRoles)setRoles(current=>{const next=current.filter(r=>presets.assignableRoles!.includes(r));return next.length?next:presets.assignableRoles!.slice(0,1);});},[presets]);
+  useEffect(()=>{const section=window.location.hash.slice(1);if(['access-control','invite-staff'].includes(section))document.getElementById(section)?.scrollIntoView({block:'start'});},[me.isOwner]);
   async function checkMail(){setChecking(true);setCheck(null);try{setCheck(await api<MailCheck>('/auth/invitations/email/check',{body:{}}));}catch(err){setError(errorMessage(err));}finally{setChecking(false);}}
   const busy=!!busyEmail;
   async function invite(input:InvitationInput,delivery:'email'|'manual'='email'){
