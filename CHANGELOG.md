@@ -6,6 +6,7 @@
 - Added coded repair stations, an effective-dated Tehran work calendar, explicit holiday review, working-minute planning, parallel/dependent repair work, immutable original deadlines and recorded rescheduling reasons.
 - Added a restricted technician phone page for assigned start/end actions, separate coordinator handover confirmation, station delay/transfer reports and per-case union of blocker intervals.
 - Added parts market quotes and coordinator-recorded payer decisions; purchase requires matching, unexpired authorization, including price increases above the assessment. Customer receipts and release authority belong to the coordinator; spending exceptions remain separately controlled.
+- Station-code filtering now follows the report into matching case lists, event counts, Excel and Persian PDF; unknown station codes are explicitly shown as unknown.
 - Added the [Persian workflow guide](docs/ACCIDENT_WORKFLOW_FA.md). This version is not deployed; real staff access, holiday data and LAN/mobile rollout require separate review.
 
 ## [Released on Manage] — daily parts reports, 2026-11-03
