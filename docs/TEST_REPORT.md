@@ -2,6 +2,8 @@
 
 ## Codex continuation, 2026-11-03 — not released
 
+Update: the complete isolated daily browser suite passed **2/2** in 1.3 minutes, including the original arithmetic check, exact-case selection, human alias, Emdad follow-up, 390px layouts and the full-size file through the web proxy. CI 41609812965 on d746597 passed the full check/build and Docker jobs. Real PostgreSQL ran all five tests: four passed; the remaining test correctly rejected excess need with HTTP 422/OVER_NEED but expected 400. Corrected the assertion and explicitly check OVER_NEED; new CI must verify it. No concurrency protection was weakened.
+
 - Reproduced the original browser failure with an independent API assertion: the persisted issue was `0.5`, reserved `0`, available `0`; only the mounted options table remained stale. Added SWR revalidation of options, reservation queues and daily totals after reservation changes/creation.
 - New synthetic alias tests cover permission refusal, immutable standard-code grouping, version conflict, tenant isolation and detaching a human-approved alias. API scenarios: **24/24 passed** after correcting the test tenant-code length. Shared **12/12 passed**. API/web builds succeeded; final changes and full suites still require CI.
 - Browser passed the former stock-arithmetic failure and the new nine-option alias grouping, then failed at an unstable native-select locator. Replaced it with the created case's exact ID; complete rerun pending. Do not infer mobile coverage from this partial run.

@@ -79,7 +79,8 @@ suite('daily reports on real PostgreSQL', () => {
   it('never exceeds a need filled from several codes at once', async () => {
     const n = await need('820010', 1);
     const results = await Promise.all(['02', '03'].map((s) => parts.post('/stock/reservations', { partRequestId: n.id, fullStockCode: `12345678${s}`, locationAddress: `A-${s}`, snapshotId, quantity: '1', confirm: true })));
-    expect(results.map((r) => r.status).sort()).toEqual([201, 400]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 422]);
+    expect(results.find((r) => r.status === 422)!.body.code).toBe('OVER_NEED');
     expect(await h.db.db.select().from(stockReservations).where(eq(stockReservations.partRequestId, n.id))).toHaveLength(1);
   });
 
