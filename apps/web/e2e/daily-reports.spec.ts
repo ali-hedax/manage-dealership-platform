@@ -12,8 +12,14 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const headers = { 'x-manage-client': 'test' };
 
 async function uploadAndConfirm(page: Page, label: string, file: { name: string; mimeType: string; buffer: Buffer }, expected: RegExp) {
-  await page.getByRole('button', { name: label, exact: true }).click();
+  const typeButton = page.getByRole('button', { name: label, exact: true });
+  await typeButton.click();
+  await expect(typeButton).toHaveAttribute('aria-pressed', 'true');
+  const uploadResponse = page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/api/v1/daily-reports/uploads?'));
   await page.getByLabel('انتخاب فایل').setInputFiles(file);
+  const uploaded = await uploadResponse;
+  expect(new URL(uploaded.url()).searchParams.get('kind')).toBe(label === 'موجودی روزانه انبار' ? 'stock' : 'emdad');
+  expect(uploaded.ok()).toBe(true);
   const job = page.getByTestId('daily-job');
   await expect(job.getByTestId('daily-counts')).toContainText(expected);
   await job.getByLabel('تاریخ گزارش را خودم بررسی کردم').check();

@@ -1,5 +1,5 @@
 'use client';
-import {useRouter,useSearchParams} from 'next/navigation';
+import {useSearchParams} from 'next/navigation';
 import {Suspense,useEffect,useRef,useState} from 'react';
 import useSWR,{mutate as refreshCache} from 'swr';
 import {
@@ -40,7 +40,10 @@ function Report({kind,canUpload,canApply}:{kind:DailyReportKind;canUpload:boolea
  useEffect(()=>{if(activeId||!history)return;const open=history.find(i=>['uploaded','parsing','preview','failed'].includes(i.status));if(open)setActiveId(open.id);},[history,activeId]);
  const {data:job,mutate:refreshJob}=useSWR<DailyImport>(activeId?`/daily-reports/imports/${activeId}`:null,fetcher,{refreshInterval:i=>i&&WORKING.includes(i.status)?1500:0});
  async function choose(file:File|undefined){
-  setError('');if(!file)return;if(file.size>MAX_BYTES){setError('حجم فایل بیش از سقف مجاز (۳۲ مگابایت) است');return;}
+  setError('');if(!file)return;
+  const selectedKind=new URL(window.location.href).searchParams.get('kind')==='emdad'?'emdad':'stock';
+  if(selectedKind!==kind){setError('نوع گزارش تغییر کرده است؛ فایل را دوباره انتخاب کنید');return;}
+  if(file.size>MAX_BYTES){setError('حجم فایل بیش از سقف مجاز (۳۲ مگابایت) است');return;}
   setUpload(0);setActiveId(null);
   try{const r=await sendFile(kind,file,setUpload);setActiveId(r.id);if(r.resumed)toast('این فایل قبلاً بارگذاری شده بود؛ از همان‌جا ادامه می‌دهیم');await refreshHistory();}
   catch(e){setError(errorMessage(e));}finally{setUpload(null);if(input.current)input.current.value='';}
@@ -138,13 +141,13 @@ function Settings({kind}:{kind:DailyReportKind}){
 }
 
 function DailyReports(){
- const {can}=useAuth();const params=useSearchParams(),router=useRouter();
+ const {can}=useAuth();const params=useSearchParams();
  const canUpload=can('daily_reports.upload'),canApply=can('daily_reports.apply');
  const kind:DailyReportKind=params.get('kind')==='emdad'?'emdad':'stock';
  if(!canUpload&&!canApply&&!can('daily_reports.settings'))return <div className="callout"><h1>به‌روزرسانی گزارش‌های روزانه</h1><p>برای این بخش مجوز ندارید. مالک می‌تواند از بخش کارکنان دسترسی بدهد.</p></div>;
  return <div className="stack"><header className="unit-header"><div><h1>به‌روزرسانی گزارش‌های روزانه</h1><p className="muted">هر روز دو فایل مستقل: انتخاب نوع، فایل، پیش‌نمایش، تأیید تاریخ و ثبت. هیچ داده‌ای پیش از تأیید شما تغییر نمی‌کند.</p></div></header>
  <DailyStatusPanel/>
- <div className="segmented" role="group" aria-label="نوع گزارش">{(['stock','emdad'] as const).map(k=><button key={k} type="button" aria-pressed={kind===k} onClick={()=>router.replace(`/daily-reports?kind=${k}`)}>{DAILY_REPORT_KIND_LABELS[k]}</button>)}</div>
+ <div className="segmented" role="group" aria-label="نوع گزارش">{(['stock','emdad'] as const).map(k=><button key={k} type="button" aria-pressed={kind===k} onClick={()=>window.history.replaceState(null,'',`/daily-reports?kind=${k}`)}>{DAILY_REPORT_KIND_LABELS[k]}</button>)}</div>
  {(canUpload||canApply)&&<Report key={kind} kind={kind} canUpload={canUpload} canApply={canApply}/>}
  <Settings key={`s-${kind}`} kind={kind}/></div>;
 }

@@ -2,6 +2,8 @@
 
 ## Codex continuation, 2026-11-03 — not released
 
+The full Linux run on 39d4257 passed all 23 main browser tests (2 optional skips), then exposed a report-kind switch race: the Emdad file was posted to `kind=stock` while router navigation was pending. Changed this client-only tab switch to native history replacement (Next.js integrates this with useSearchParams); the browser test now waits for the selected type and checks the actual upload request kind and response. A new full CI run is required; no release performed from the failing run.
+
 Follow-up: `dl.dl` was also shared by provenance in the full Linux run (41612221866), although the isolated local import test passed. Narrowed the locator to the unique panel headed «مشخصات» and assert that panel is unique before checking its chassis. All other five CI jobs passed. Awaiting the complete browser run, not treating an isolated pass as full coverage.
 
 CI 41611054240 on 4de263b passed five jobs including all five real-PostgreSQL concurrency tests and Docker/HTTPS. The original browser suite had 22 passes, 2 optional skips and one strict-locator failure: TST00001 appears in both vehicle details and provenance. Scoped that assertion to the details definition list; awaiting new CI. The owner explicitly identified both supplied files as format samples, not current operational reports. No production apply of those samples is authorized or planned.
