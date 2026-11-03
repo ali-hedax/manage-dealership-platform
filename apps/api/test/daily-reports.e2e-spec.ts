@@ -127,12 +127,13 @@ describe('stock snapshot, options and reservations', () => {
   let needA: Part;
 
   it('publishes atomically with an explicit report date and keeps leading zeros, letter codes and exact prices', async () => {
-    const p = await previewOf('stock', buildStockXlsx([...family('00123456'), sku('00999999', '01', { 'موجودي': '0.5' }), sku('', '', { 'کد کالا': '_x001F_ 999999999AA', 'شرح کالا': 'کد حرفی ساختگی' })]));
+    const p = await previewOf('stock', buildStockXlsx([...family('00123456'), sku('00999999', '01', { 'موجودي': '0.5' }), sku('00000000', '01', { 'موجودي': '0' }), sku('', '', { 'کد کالا': '_x001F_ 999999999AA', 'شرح کالا': 'کد حرفی ساختگی' })]));
     expect((await manager.post(`/daily-reports/imports/${p.id}/apply`, { reportDate: day(6) })).status).toBe(400);
     expect((await apply(p.id, { reportDate: '1499/01/01' })).body.code).toBe('DAILY_REPORT_FUTURE');
     const r = await apply(p.id, { reportDate: day(6), reportTime: '09:00' });
     expect(r.status).toBe(201);
-    expect(r.body.counts).toMatchObject({ published: 10, carried: 0 });
+    expect(r.body.counts).toMatchObject({ published: 11, carried: 0 });
+    expect((await parts.get('/stock/options?q=0000000001')).body.total).toBe(0);
     snapshotId = r.body.snapshotId;
     expect(await h.db.db.select().from(dailyReportFiles).where(eq(dailyReportFiles.importId, p.id))).toHaveLength(0);
     expect((await apply(p.id, { reportDate: day(6) })).status).toBe(409);
@@ -223,10 +224,10 @@ describe('stock snapshot, options and reservations', () => {
 
     // The next report (taken after the issue) shows the reduced quantity.
     const next = await previewOf('stock', buildStockXlsx([sku('00123456', '01', { 'موجودي': '0.5', 'قيمت فروش': '1600' }), ...family('00123456').slice(1)]));
-    expect(next.counts).toMatchObject({ changed: 1, unchanged: 7, missing: 2 });
+    expect(next.counts).toMatchObject({ changed: 1, unchanged: 7, missing: 3 });
     const pub = await apply(next.id, soon(1));
     expect(pub.status).toBe(201);
-    expect(pub.body).toMatchObject({ counts: { published: 8, carried: 2 }, reconciliation: 1 });
+    expect(pub.body).toMatchObject({ counts: { published: 8, carried: 3 }, reconciliation: 1 });
     const reflected = await parts.post(`/stock/reservations/${r1.id}/actions`, { action: 'reflect', expectedVersion: issued.body.version });
     expect(reflected.status).toBe(201);
     expect((await parts.get('/stock/options?q=0012345601')).body.items[0]).toMatchObject({ reported: '0.5', issuedUnreflected: '0', available: '0', salePrice: '1600' });

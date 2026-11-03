@@ -106,7 +106,8 @@ export class StockService {
     const tenantId = actor.user.tenantId;
     const snap = await this.active(this.db, tenantId);
     if (!snap) return { snapshot: null, items: [], total: 0, page: q.page, pageSize: q.pageSize };
-    const conds: (SQL | undefined)[] = [eq(stockSnapshotItems.snapshotId, snap.id), eq(stockSnapshotItems.tenantId, tenantId)];
+    // Owner's rule: zero physical stock is kept in history, not offered for selection.
+    const conds: (SQL | undefined)[] = [eq(stockSnapshotItems.snapshotId, snap.id), eq(stockSnapshotItems.tenantId, tenantId), sql`${stockSnapshotItems.quantity} > 0`];
     const effectiveBase = sql<string>`coalesce(${stockSnapshotItems.basePartNumber}, ${stockCodeAliases.basePartNumber})`;
     const term = toLatinDigits(q.q).replace(/\s+/g, ' ').trim();
     const code = term.replace(/\s+/g, '').toUpperCase();

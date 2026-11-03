@@ -2,6 +2,8 @@
 
 ## [Unreleased] — branch `feature/daily-parts-reports`
 
+- Owner-confirmed stock definitions: full dealership physical stock, rial prices excluding tax. Zero-quantity items remain in history but are omitted from stock options; reservations are retained for shortfall review.
+
 - Stock option balances and daily totals refresh after reservation, issue and release actions. Daily report desk links apply the matching due/review filters.
 - Nonstandard stock codes support an audited, versioned human family alias without rewriting source codes, stock quantities or reservation history (0013). Unmapped codes remain independent.
 - Added Persian staff guide and recorded the owner's rial/full-warehouse/physical-quantity definitions. Tax inclusion is still unknown. Not deployed.
