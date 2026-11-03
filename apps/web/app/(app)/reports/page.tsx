@@ -28,7 +28,7 @@ import { ReportChart } from '@/components/ReportChart';
 type Views = { views: ReportView[]; defaultView: ReportView | null; defaultResponsible: 'me' | null };
 const PRIORITY_TONE: Record<string, string> = { overdue: 'chip-red', today: 'chip-amber', soon: 'chip-amber', later: 'chip-blue', none: '' };
 // Report-specific keys kept in the URL (filters survive opening a case and coming back).
-const KEYS = ['view', 'tab', 'period', 'from', 'to', 'responsibleUserId', 'departmentId', 'stage', 'coverage', 'blockerReason', 'partStatus', 'q', 'kind', 'page'] as const;
+const KEYS = ['view', 'tab', 'period', 'from', 'to', 'responsibleUserId', 'departmentId', 'stationCode', 'stage', 'coverage', 'blockerReason', 'partStatus', 'q', 'kind', 'page'] as const;
 
 function ReportsPage() {
   const params = useSearchParams();
@@ -164,6 +164,7 @@ function ReportsPage() {
               </select>
             </label>
           )}
+          <form className="field" key={params.get('stationCode')??'any-station'} onSubmit={e=>{e.preventDefault();const value=String(new FormData(e.currentTarget).get('stationCode')??'').trim();set({stationCode:value});}}><label className="field"><span>کد جایگاه ارجاع</span><input className="input" name="stationCode" maxLength={32} defaultValue={params.get('stationCode')??''}/></label><button type="submit" className="btn btn-sm">اعمال کد جایگاه</button></form>
           <label className="field">
             <span>مرحله</span>
             <select className="input" value={params.get('stage') ?? ''} onChange={(e) => set({ stage: e.target.value })}>
@@ -326,6 +327,7 @@ function ReportsPage() {
                             </td>
                             <td data-label="شرح" className="wide">
                               {toPersianDigits(i.description)}
+                              <div className="xs muted">جایگاه: {i.stationCodes?.join('، ')||'نامعلوم'}</div>
                               {i.partNumber && <div className="xs muted">شماره فنی: <bdi>{i.partNumber}</bdi></div>}
                               {i.quantity !== undefined && <div className="xs muted">تعداد: {faNum(i.quantity)}</div>}
                               <div className="xs muted">{i.kindLabel}</div>

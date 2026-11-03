@@ -127,6 +127,7 @@ export const CASE_FLAGS = [
 export type CaseFlag = (typeof CASE_FLAGS)[number];
 
 export const caseListQuerySchema = z.object({
+  stationCode:z.string().trim().min(1).max(32).optional(),
   q: z.string().trim().max(100).optional(),
   stage: z.enum(CASE_STAGES).optional(),
   coverage: z.enum(COVERAGE_TYPES).optional(),
@@ -494,6 +495,7 @@ const jalaliDay = z
   .regex(/^[0-9۰-۹]{4}[/-][0-9۰-۹]{1,2}[/-][0-9۰-۹]{1,2}$/, 'تاریخ را به شکل ۱۴۰۵/۰۸/۱۰ وارد کنید');
 
 export const reportQuerySchema = z.object({
+  stationCode:z.string().trim().min(1).max(32).optional(),
   view: z.enum(REPORT_VIEWS),
   period: z.enum(REPORT_PERIODS).default('month'),
   // Jalali days (Tehran), inclusive; only for period=custom.

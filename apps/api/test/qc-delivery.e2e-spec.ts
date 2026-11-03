@@ -306,7 +306,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
     expect(state.deliveryIssues.map((i) => i.code)).toEqual(['financial_not_closed']);
   });
 
-  it('closing with a balance due needs the service manager and a reason', async () => {
+  it('customer balance release uses coordinator release authority and a reason', async () => {
     const c = await newCase({ coverageType: 'personal' });
     await authorized(c.id, 'customer');
     await installPart(c.id);
@@ -317,7 +317,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
 
     expect((await cashier.post(`/cases/${c.id}/financial-close`, { expectedVersion: v, waiveBalance: true, note: 'اعتبار' })).status).toBe(403);
     expect((await manager.post(`/cases/${c.id}/financial-close`, { expectedVersion: v, waiveBalance: true })).status).toBe(400);
-    const res = await manager.post(`/cases/${c.id}/financial-close`, {
+    const res = await expert.post(`/cases/${c.id}/financial-close`, {
       expectedVersion: v,
       waiveBalance: true,
       note: 'مشتری اعتباری؛ تسویه در پایان ماه',

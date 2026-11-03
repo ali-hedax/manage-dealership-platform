@@ -29,6 +29,7 @@ test('coded station, schedule, technician mobile start/end and coordinator hando
  await login(page,'expert');const detail=await (await page.request.get(`/api/v1/cases/${kase.id}`)).json();const done=detail.tasks.find((t:{id:string})=>t.id===task.id);expect(done.status).toBe('done');
  const approved=await page.request.post(`/api/v1/tasks/${task.id}/actions`,{headers,data:{action:'approve',expectedVersion:done.version}});expect(approved.ok()).toBe(true);
  await page.goto('/workshop');await page.getByRole('button',{name:'همه کارها',exact:true}).click();await expect(page.getByRole('cell',{name:/TEST-MOBILE-01/})).toBeVisible();
+ await page.goto('/reports?view=workshop');await page.getByLabel('کد جایگاه ارجاع',{exact:true}).fill('TEST-MOBILE-01');await page.getByRole('button',{name:'اعمال کد جایگاه',exact:true}).click();await expect(page).toHaveURL(/stationCode=TEST-MOBILE-01/);await expect(page.getByRole('link',{name:/خروجی Excel/})).toHaveAttribute('href',/stationCode=TEST-MOBILE-01/);
 });
 test('reporting desk is read-only and calendar and station settings fit a phone',async({page},info)=>{
  await login(page,'manager');await page.goto('/workshop');await expect(page.getByRole('heading',{name:'نبض تعمیرگاه'})).toBeVisible();

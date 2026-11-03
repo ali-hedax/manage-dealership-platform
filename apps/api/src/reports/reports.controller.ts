@@ -79,7 +79,7 @@ export class ReportsController {
     const items = [
       ...head,
       ...(truncated ? [[`توجه: ${r.items.total} ردیف وجود دارد؛ فقط ${MAX_EXPORT_ROWS} ردیف اول در این فایل است. فیلتر را محدودتر کنید.`], []] : []),
-      ['اولویت', 'دلیل اولویت', 'نوع', 'شماره پرونده منیج', 'شماره پذیرش ایران‌خودرو', 'پلاک', 'خودرو', 'شرح', 'شماره فنی', 'تعداد', 'وضعیت', 'موعد', 'نوع موعد', 'مسئول', 'علت توقف', 'اقدام بعدی'],
+      ['اولویت', 'دلیل اولویت', 'نوع', 'شماره پرونده منیج', 'شماره پذیرش ایران‌خودرو', 'پلاک', 'خودرو', 'شرح', 'شماره فنی', 'تعداد', 'وضعیت', 'موعد', 'نوع موعد', 'مسئول', 'علت توقف', 'اقدام بعدی', 'کد جایگاه‌ها'],
       ...r.items.rows.map((i) => [
         WORK_PRIORITY_LABELS[i.priority],
         i.priorityReason,
@@ -97,6 +97,7 @@ export class ReportsController {
         i.responsible?.displayName ?? null,
         i.stoppedBy,
         i.nextAction,
+        i.stationCodes?.join('، ')||'نامعلوم',
       ]),
     ];
     const data = writeWorkbook([

@@ -1,9 +1,10 @@
+import { eq } from 'drizzle-orm';
 import type { CaseDetail, CaseListItem, Department, Paged, ReportResult } from '@manage/shared';
 import { writeFileSync } from 'node:fs';
 import { renderReportPdf } from '../src/reports/pdf';
 import { hashPassword } from '../src/auth/password';
 import { newId } from '../src/common/ids';
-import { departments, tenants, users } from '../src/db/schema';
+import { departments, tenants, users, tasks } from '../src/db/schema';
 import { readWorkbook } from '../src/parts/xlsx';
 import { Client, createHarness, daysAgo, TEST_PASSWORD, type Harness } from './harness';
 
@@ -231,3 +232,22 @@ describe('reports: export and isolation', () => {
   });
 });
 
+
+it('keeps station codes and station filtering in the report, Excel and PDF paths',async()=>{
+ const c=await newCase();
+ const created=await supervisor.post(`/cases/${c.id}/tasks`,{departmentId:dept('body'),title:'آزمون گزارش جایگاه'});expect(created.status).toBe(201);
+ await h.db.db.update(tasks).set({stationSnapshot:{code:'TEST-REPORT-01',name:'جایگاه ساختگی گزارش',trade:'body'}}).where(eq(tasks.id,created.body.id));
+ expect((await supervisor.post(`/tasks/${created.body.id}/actions`,{action:'start',expectedVersion:1})).status).toBe(201);
+ const result=await report(manager,'view=workshop&stationCode=TEST-REPORT-01');
+ expect(result.filters).toContainEqual({key:'station',label:'کد جایگاه ارجاع',value:'TEST-REPORT-01'});
+ expect((await manager.get('/cases?stationCode=TEST-REPORT-01')).body.total).toBe(1);
+ expect((await manager.get('/cases?stationCode=TEST-NONEXISTENT')).body.total).toBe(0);
+ expect(result.items.rows).toHaveLength(1);expect(result.items.rows[0]!.stationCodes).toEqual(['TEST-REPORT-01']);
+ const scopedManager=await report(manager,'view=manager&stationCode=TEST-REPORT-01');expect(scopedManager.kpis.find(k=>k.key==='active')?.listQuery).toBe('stationCode=TEST-REPORT-01');
+ const filtered=await report(manager,'view=accident&stationCode=TEST-REPORT-01');expect(filtered.items.rows).toHaveLength(1);expect(filtered.items.rows.every(r=>r.caseId===c.id&&r.stationCodes?.includes('TEST-REPORT-01'))).toBe(true);
+ const binary=(req:ReturnType<Client['get']>)=>req.buffer(true).parse((resp,cb)=>{const chunks:Buffer[]=[];resp.on('data',(d:Buffer)=>chunks.push(d));resp.on('end',()=>cb(null,Buffer.concat(chunks)));});
+ const xlsx=await binary(manager.get('/reports/export?view=workshop&stationCode=TEST-REPORT-01'));expect(xlsx.status).toBe(200);
+ const sheets=readWorkbook(new Uint8Array(xlsx.body as Buffer));expect(sheets[1]!.rows.flat()).toContain('کد جایگاه‌ها');expect(sheets[1]!.rows.flat()).toContain('TEST-REPORT-01');
+ const pdf=await binary(manager.get('/reports/pdf?view=workshop&stationCode=TEST-REPORT-01'));expect(pdf.status).toBe(200);expect((pdf.body as Buffer).subarray(0,4).toString()).toBe('%PDF');
+ if(process.env.WORKSHOP_PDF_OUT)writeFileSync(process.env.WORKSHOP_PDF_OUT,pdf.body as Buffer);
+});

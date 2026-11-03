@@ -3,7 +3,7 @@ import { login } from './helpers';
 
 // Existing-vehicle Excel import in the browser with the synthetic sample:
 // preview categories, apply, issued case numbers, provenance on the case.
-test('service manager previews and applies the vehicle sheet, then sees provenance on the case', async ({ page }) => {
+test('system support previews and applies the vehicle sheet, then sees provenance on the case', async ({ page }) => {
   await login(page, 'admin');
   await page.goto('/cases');
   await page.getByRole('link', { name: 'ورود خودروهای موجود از اکسل' }).click();

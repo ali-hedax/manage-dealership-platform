@@ -408,6 +408,7 @@ export class CasesService {
     if (q.stage) conditions.push(eq(cases.stage, q.stage));
     if (q.coverage) conditions.push(eq(cases.coverageType, q.coverage));
     if (q.responsibleUserId) conditions.push(eq(cases.responsibleUserId, q.responsibleUserId));
+    if(q.stationCode)conditions.push(sql`exists (select 1 from tasks t where t.case_id = ${cases.id} and t.tenant_id = ${cases.tenantId} and t.station_snapshot->>'code' = ${q.stationCode})`);
     if (q.flag) conditions.push(flagConditions[q.flag]!());
     if (q.blockerReason) {
       conditions.push(sql`exists (select 1 from blockers b where b.case_id = ${cases.id} and b.resolved_at is null and b.reason = ${q.blockerReason})`);

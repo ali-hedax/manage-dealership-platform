@@ -93,6 +93,7 @@ function CasesList() {
         </div>
       </div>
 
+      {params.get('stationCode')&&<p className="callout">پرونده‌های دارای ارجاع به جایگاه <bdi>{params.get('stationCode')}</bdi> <button type="button" className="btn btn-sm" onClick={()=>update({stationCode:null,page:null})}>برداشتن فیلتر جایگاه</button></p>}
       <div className="panel">
         <div className="panel-body stack" style={{ gap: 12 }}>
           <input

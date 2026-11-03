@@ -172,6 +172,11 @@ export class ReportsService {
     }
 
     if (q.view === 'manager' || q.view === 'parts') built.items.push(...(await this.discrepancyItems(actor, base, now)));
+    if(q.stationCode) {
+      const scoped=(query:string)=>{const params=new URLSearchParams(query);params.set('stationCode',q.stationCode!);return params.toString();};
+      built.kpis=built.kpis.map(k=>k.listQuery===undefined?k:{...k,listQuery:scoped(k.listQuery)});
+      built.charts=built.charts.map(chart=>({...chart,bars:chart.bars.map(b=>b.listQuery===undefined?b:{...b,listQuery:scoped(b.listQuery)})}));
+    }
     const events = q.view === 'manager' || q.view === 'accident' ? await this.events(tenantId, q, period) : [];
     const kinds = new Map<string, { label: string; count: number }>();
     for (const i of built.items) kinds.set(i.kind, { label: i.kindLabel, count: (kinds.get(i.kind)?.count ?? 0) + 1 });
@@ -220,6 +225,7 @@ export class ReportsService {
     if (q.responsibleUserId === 'me') conditions.push(eq(cases.responsibleUserId, actor.user.id));
     else if (q.responsibleUserId === 'none') conditions.push(isNull(cases.responsibleUserId));
     else if (q.responsibleUserId) conditions.push(eq(cases.responsibleUserId, q.responsibleUserId));
+    if(q.stationCode)conditions.push(sql`exists (select 1 from tasks t where t.case_id = ${cases.id} and t.tenant_id = ${cases.tenantId} and t.station_snapshot->>'code' = ${q.stationCode})`);
     if (q.stage) conditions.push(eq(cases.stage, q.stage));
     if (q.coverage) conditions.push(eq(cases.coverageType, q.coverage));
     if (q.blockerReason) {
@@ -255,6 +261,7 @@ export class ReportsService {
         lastStageChangeAt: sql<Date | null>`(select max(a.occurred_at) from audit_events a where a.case_id = ${cases.id} and a.action = 'case.stage_changed')`,
         hasFinalAssessment: sql<boolean>`exists (select 1 from assessments a where a.case_id = ${cases.id} and a.status = 'final')`,
         authorizationPending: sql<boolean>`exists (select 1 from assessments a where a.case_id = ${cases.id} and a.status = 'final' and a.authorization_status = 'pending')`,
+        activeStationCodes:sql<string[]>`coalesce((select array_agg(distinct t.station_snapshot->>'code') from tasks t where t.case_id = ${cases.id} and t.tenant_id = ${cases.tenantId} and t.status in ('in_progress','blocked','done') and t.station_snapshot->>'code' is not null),'{}')`,
         financeProposals: sql<number>`(select count(*)::int from financial_approvals f where f.case_id = ${cases.id} and f.status = 'proposed')`,
       })
       .from(cases)
@@ -282,6 +289,7 @@ export class ReportsService {
       priority: p.priority,
       priorityReason: p.reason,
       dueLabel: due ? (own ? own.label : c.officialDeadlineAt ? 'مهلت رسمی' : 'پیش‌بینی تحویل') : null,
+      stationCodes:c.activeStationCodes,
       ...fields,
       dueAt: due ? due.toISOString() : null,
     };
@@ -380,6 +388,7 @@ export class ReportsService {
     for (let t = start.getTime(); t < period.to.getTime(); t += step) buckets.push(new Date(t));
     const scope = and(
       eq(cases.tenantId, tenantId),
+      ...(q.stationCode?[sql`exists (select 1 from tasks t where t.case_id = ${cases.id} and t.tenant_id = ${cases.tenantId} and t.station_snapshot->>'code' = ${q.stationCode})`]:[]),
       ...(q.responsibleUserId && !['me', 'none'].includes(q.responsibleUserId) ? [eq(cases.responsibleUserId, q.responsibleUserId)] : []),
     );
     const times = async (col: typeof cases.admittedAt | typeof cases.actualDeliveryAt) =>
@@ -541,7 +550,7 @@ export class ReportsService {
           })
           .from(tasks)
           .innerJoin(departments, eq(departments.id, tasks.departmentId))
-          .where(and(inArray(tasks.caseId, [...byId.keys()]), ...(q.departmentId ? [eq(tasks.departmentId, q.departmentId)] : [])))
+          .where(and(inArray(tasks.caseId, [...byId.keys()]),...(q.stationCode?[sql`${tasks.stationSnapshot}->>'code' = ${q.stationCode}`]:[]), ...(q.departmentId ? [eq(tasks.departmentId, q.departmentId)] : [])))
       : [];
     const open = rows.filter((r) => r.t.status !== 'approved');
     const by = (s: TaskStatus) => open.filter((r) => r.t.status === s);
@@ -564,7 +573,7 @@ export class ReportsService {
       kpi('pending', 'محول‌شده (شروع‌نشده)', 'فعالیت', by('pending').length, 'فعالیت در انتظار', undefined, 'pending'),
       kpi('in_progress', 'در حال انجام', 'فعالیت', by('in_progress').length, 'شروع‌شده', undefined, 'in_progress'),
       kpi('blocked', 'متوقف', 'فعالیت', by('blocked').length, 'دارای مانع باز؛ مدت از زمان بروز مانع', undefined, 'blocked'),
-      kpi('done', 'منتظر تأیید سرپرست', 'فعالیت', by('done').length, 'اتمام ثبت‌شده، تأییدنشده', undefined, 'done'),
+      kpi('done', 'منتظر تأیید تحویل', 'فعالیت', by('done').length, 'اتمام ثبت‌شده، تأییدنشده', undefined, 'done'),
       kpi('ready_for_qc', 'آماده کنترل کیفیت', 'خودرو', readyForQc.length, 'همه فعالیت‌ها تأیید شده و کنترل کیفیت معتبر ندارد', undefined, 'ready_for_qc'),
       kpi('corrective', 'کار اصلاحی کنترل کیفیت', 'فعالیت', corrective.length, 'فعالیت ساخته‌شده از ردشدن کنترل کیفیت، تأییدنشده', undefined, 'corrective'),
     ];
@@ -579,10 +588,11 @@ export class ReportsService {
           kind,
           kindLabel: kind === 'corrective' ? 'کار اصلاحی کنترل کیفیت' : TASK_STATUS_LABELS[s],
           taskId: r.t.id,
+          stationCodes:r.t.stationSnapshot?.code?[r.t.stationSnapshot.code]:[],
           description: `${r.dept}${r.t.title ? ` — ${r.t.title}` : ''}${r.t.technicianName ? ` (${r.t.technicianName})` : ''}`,
           status: TASK_STATUS_LABELS[s],
           stoppedBy: r.blockReason ? `${BLOCKER_REASON_LABELS[r.blockReason as BlockerReason]}${blockedDays !== null ? ` — ${blockedDays} روز` : ''}` : null,
-          nextAction: s === 'pending' ? 'شروع کار' : s === 'in_progress' ? 'ثبت اتمام' : s === 'blocked' ? 'پیگیری رفع مانع' : 'تأیید سرپرست',
+          nextAction: s === 'pending' ? 'شروع کار' : s === 'in_progress' ? 'ثبت اتمام' : s === 'blocked' ? 'پیگیری رفع مانع' : 'تأیید تحویل مسئول تصادفات',
         },
         now,
         r.t.plannedEndAt ? { at: r.t.plannedEndAt, label: 'پایان برنامه‌ای' } : undefined,
@@ -632,9 +642,10 @@ export class ReportsService {
   private async events(tenantId: string, q: ReportQuery, period: ReturnType<typeof periodRange>) {
     const responsible =
       q.responsibleUserId && q.responsibleUserId !== 'me' && q.responsibleUserId !== 'none' ? sql`and c.responsible_user_id = ${q.responsibleUserId}` : sql``;
+    const stationScope=q.stationCode?sql`and exists (select 1 from tasks t where t.case_id = c.id and t.tenant_id = c.tenant_id and t.station_snapshot->>'code' = ${q.stationCode})`:sql``;
     const count = async (column: 'admitted_at' | 'actual_delivery_at', from: Date, to: Date) => {
       const res = await this.db.execute<{ n: number }>(
-        sql`select count(*)::int as n from cases c where c.tenant_id = ${tenantId} and c.${sql.raw(column)} >= ${from.toISOString()} and c.${sql.raw(column)} < ${to.toISOString()} ${responsible}`,
+        sql`select count(*)::int as n from cases c where c.tenant_id = ${tenantId} and c.${sql.raw(column)} >= ${from.toISOString()} and c.${sql.raw(column)} < ${to.toISOString()} ${responsible} ${stationScope}`,
       );
       return Number(((res as { rows?: { n: number }[] }).rows ?? (res as unknown as { n: number }[]))[0]?.n ?? 0);
     };
@@ -662,6 +673,7 @@ export class ReportsService {
     if (q.coverage) out.push({ key: 'coverage', label: 'پوشش', value: COVERAGE_LABELS[q.coverage] });
     if (q.blockerReason) out.push({ key: 'blocker', label: 'مانع', value: BLOCKER_REASON_LABELS[q.blockerReason] });
     if (q.partStatus) out.push({ key: 'part', label: 'وضعیت قطعه', value: PART_STATUS_LABELS[q.partStatus] });
+    if(q.stationCode)out.push({key:'station',label:'کد جایگاه ارجاع',value:q.stationCode});
     if (q.q) out.push({ key: 'q', label: 'جست‌وجو', value: q.q });
     if (q.kind) out.push({ key: 'kind', label: 'نوع ردیف', value: q.kind });
     return out;

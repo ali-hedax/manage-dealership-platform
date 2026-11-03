@@ -526,6 +526,7 @@ export interface ReportBar {
 }
 
 export interface WorkItem {
+  stationCodes?:string[];
   kind: string;
   kindLabel: string;
   caseId: string;

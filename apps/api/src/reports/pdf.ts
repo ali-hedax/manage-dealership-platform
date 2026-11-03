@@ -153,7 +153,7 @@ export function renderReportPdf(r: ReportResult, dealership: string): Promise<Bu
   const meta = [
     `زمان تهیه: ${formatJalali(r.generatedAt, { time: true })}`,
     `بازه رویدادها: ${r.period.label} (${formatJalali(r.period.from)} تا ${formatJalali(r.period.to)})`,
-    `فیلترها: ${r.filters.map((f) => `${f.label}: ${f.value}`).join('، ')}`,
+    `فیلترها: ${r.filters.map((f) => `${f.label}: ${f.key==='station'?LATIN:''}${f.value}`).join('، ')}`,
   ];
   for (const m of meta) {
     for (const l of wrap(doc, toPersianDigits(m), right - left)) {
@@ -187,7 +187,7 @@ export function renderReportPdf(r: ReportResult, dealership: string): Promise<Bu
   const cols: Column[] = [
     { title: 'اولویت', width: 70, value: (i) => `${WORK_PRIORITY_LABELS[i.priority]}\n${i.priorityReason}` },
     { title: 'پرونده / پذیرش / خودرو', width: 105, value: (i) => `${LATIN}${i.caseNumber}\nپذیرش: ${i.admissionNo||'ندارد'}\n${i.vehicleLabel}${i.plate ? ` — ${i.plate}` : ''}` },
-    { title: 'شرح', width: 150, value: (i) => [i.description, i.partNumber ? `شماره فنی: ${LATIN}${i.partNumber}` : '', i.quantity !== undefined ? `تعداد: ${i.quantity}` : ''].filter(Boolean).join('\n') },
+    { title: 'شرح', width: 150, value: (i) => [i.description, `جایگاه: ${i.stationCodes?.map(code=>code.split(/(\s+)/).map(w=>w.trim()?LATIN+w:w).join('')).join('، ')||'نامعلوم'}`, i.partNumber ? `شماره فنی: ${LATIN}${i.partNumber}` : '', i.quantity !== undefined ? `تعداد: ${i.quantity}` : ''].filter(Boolean).join('\n') },
     { title: 'وضعیت', width: 80, value: (i) => i.status },
     { title: 'موعد', width: 80, value: (i) => (i.dueAt ? `${formatJalali(i.dueAt, { time: true })}\n${i.dueLabel ?? ''}` : 'بدون موعد') },
     { title: 'مسئول', width: 70, value: (i) => i.responsible?.displayName ?? 'تعیین نشده' },
