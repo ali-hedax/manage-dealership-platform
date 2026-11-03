@@ -13,6 +13,8 @@ import {
   reserveSchema,
   stockProfileSchema,
   stockSearchSchema,
+  stockAliasSchema,
+  type StockAliasInput,
   type DailyApplyInput,
   type DailyReportKind,
   type EmdadFollowUpInput,
@@ -117,6 +119,12 @@ export class DailyReportsController {
   @RequirePermissions('stock.read')
   options(@CurrentActor() a: Actor, @Query(new ZodPipe(stockSearchSchema)) q: StockSearchQuery) {
     return this.stock.options(a, q);
+  }
+
+  @Post('stock/aliases')
+  @RequirePermissions('daily_reports.settings')
+  alias(@CurrentActor() a: Actor, @Body(new ZodPipe(stockAliasSchema)) b: StockAliasInput) {
+    return this.stock.saveAlias(a, b);
   }
 
   @Get('stock/reservations')

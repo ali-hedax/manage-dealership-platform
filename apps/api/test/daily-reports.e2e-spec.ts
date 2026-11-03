@@ -148,6 +148,28 @@ describe('stock snapshot, options and reservations', () => {
     expect(letter.body.items[0]).toMatchObject({ codeKind: 'needs_mapping', basePartNumber: null, fullStockCode: '999999999AA' });
   });
 
+  it('only groups a nonstandard code by an audited, versioned human alias and can detach it', async () => {
+    const body = { fullStockCode: '999999999AA', basePartNumber: '00123456', reason: 'تأیید دستی خانواده در آزمون', expectedVersion: 0 };
+    expect((await parts.post('/stock/aliases', body)).status).toBe(403);
+    expect((await owner.post('/stock/aliases', { ...body, fullStockCode: '0012345601' })).body.code).toBe('STANDARD_CODE_ALIAS');
+    const linked = await owner.post('/stock/aliases', body);
+    expect(linked.status).toBe(201);
+    expect((await parts.get('/stock/options?base=00123456')).body.total).toBe(9);
+    expect((await parts.get('/stock/options?q=999999999AA')).body.items[0]).toMatchObject({ basePartNumber: '00123456', supplySuffix: null, alias: { version: 1 }, reported: '2' });
+    expect((await owner.post('/stock/aliases', body)).status).toBe(409);
+    const otherId = newId();
+    const otherCode = `alias-${otherId.slice(0, 8)}`;
+    await h.db.db.insert(tenants).values({ id: otherId, code: otherCode, name: 'نمایندگی ساختگی دیگر', isTest: true });
+    await h.db.db.insert(users).values({ id: newId(), tenantId: otherId, username: 'alias-other', displayName: 'مالک آزمون دیگر', passwordHash: await hashPassword(TEST_PASSWORD), roles: ['service_manager'], isOwner: true, isTest: true });
+    const other = await h.login('alias-other', otherCode);
+    expect((await other.get('/stock/options?base=00123456')).body.total).toBe(0);
+    expect((await other.post('/stock/aliases', body)).status).toBe(201);
+    expect((await owner.post('/stock/aliases', { ...body, basePartNumber: null, expectedVersion: 1, reason: 'قطع اتصال برای آزمون' })).status).toBe(201);
+    expect((await parts.get('/stock/options?base=00123456')).body.total).toBe(8);
+    expect((await parts.get('/stock/options?q=99999999')).body.total).toBe(0);
+    expect((await parts.get('/stock/options?needsMapping=true')).body.items.map((i: { fullStockCode: string }) => i.fullStockCode)).toContain('999999999AA');
+  });
+
   it('refuses reservations until the owner confirms scope, completeness and the quantity meaning', async () => {
     caseA = await newCase('810001', null);
     needA = await need(caseA.id, '00123456', 2);
@@ -478,6 +500,16 @@ describe('11:00 Tehran tasks and reminders', () => {
 });
 
 describe('isolation', () => {
+  it('links desk totals to the same review and due-date filters', async () => {
+    const open = (await parts.post('/emdad/requests/search', { openOnly: true })).body.items[0];
+    expect(open).toBeDefined();
+    expect((await parts.patch(`/emdad/requests/${open.id}/follow-up`, { expectedVersion: open.version, dueAt: daysAgo(1), nextAction: 'پیگیری آزمون' })).status).toBe(200);
+    const { counts } = (await parts.get('/daily-reports/status')).body;
+    expect((await parts.post('/emdad/requests/search', { review: true })).body.total).toBe(counts.emdadReview);
+    expect((await parts.post('/emdad/requests/search', { openOnly: true, dueToday: true })).body.total).toBe(counts.emdadDueToday);
+    expect(counts.emdadDueToday).toBeGreaterThan(0);
+  });
+
   it('keeps imports, stock and Emdad rows inside their dealership', async () => {
     const tenantId = newId();
     await h.db.db.insert(tenants).values({ id: tenantId, code: 'daily-other', name: 'نمایندگی آزمون دیگر', isTest: true });

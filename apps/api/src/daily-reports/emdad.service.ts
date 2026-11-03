@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, ilike, inArray, isNull, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import {
   parseBasePartNumber,
   parseStockCode,
@@ -19,6 +19,7 @@ import { idKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 import { writeSheet } from '../parts/xlsx';
 import type { EmdadOfficial } from './report-rows';
 import { safeCell } from './safe-cell';
+import { nextTehranDay, tehranDate } from './daily-time';
 
 type Row = typeof emdadRequests.$inferSelect;
 export interface MatchResult {
@@ -152,6 +153,8 @@ export class EmdadService {
     else if (q.assignee) conds.push(eq(emdadRequests.assigneeUserId, q.assignee));
     if (q.caseId) conds.push(eq(emdadRequests.caseId, q.caseId));
     if (q.openOnly) conds.push(notInArray(emdadRequests.statusCategory, SETTLED_CATEGORIES), sql`coalesce(${emdadRequests.official}->>'releasedAt','') = ''`);
+    if (q.dueToday) conds.push(lt(emdadRequests.dueAt, nextTehranDay(tehranDate(new Date()))));
+    if (q.review) conds.push(or(inArray(emdadRequests.matchStatus, ['needs_review', 'ambiguous']), eq(emdadRequests.statusCategory, 'needs_interpretation')));
     if (q.codeIssue) conds.push(sql`jsonb_array_length(coalesce(${emdadRequests.official}->'codeNotes','[]'::jsonb)) > 0`);
     // Not in the newest applied report: the row keeps its last known values, it is not closed.
     if (q.stale) conds.push(sql`${emdadRequests.lastReportAt} < (select max(report_at) from daily_report_imports where tenant_id = ${tenantId} and kind = 'emdad' and status = 'applied')`);

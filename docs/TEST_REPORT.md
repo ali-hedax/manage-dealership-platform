@@ -1,5 +1,13 @@
 # Test report
 
+## Codex continuation, 2026-11-03 — not released
+
+- Reproduced the original browser failure with an independent API assertion: the persisted issue was `0.5`, reserved `0`, available `0`; only the mounted options table remained stale. Added SWR revalidation of options, reservation queues and daily totals after reservation changes/creation.
+- New synthetic alias tests cover permission refusal, immutable standard-code grouping, version conflict, tenant isolation and detaching a human-approved alias. API scenarios: **24/24 passed** after correcting the test tenant-code length. Shared **12/12 passed**. API/web builds succeeded; final changes and full suites still require CI.
+- Browser passed the former stock-arithmetic failure and the new nine-option alias grouping, then failed at an unstable native-select locator. Replaced it with the created case's exact ID; complete rerun pending. Do not infer mobile coverage from this partial run.
+- Private read-only preflight using this code: stock 6697 rows = 6586 standard + 111 needs mapping; Emdad 5183 records + 1 total row; no missing required columns. Both source SHA256 values unchanged. This was parsing only, not a production import or database rehearsal.
+- Real PostgreSQL lock tests, all API/browser tests and Docker/HTTPS remain unconfirmed for this continuation until CI runs. Migrations 0012/0013 have not been applied to production by this session.
+
 ## Daily parts reports — in progress, not done, not released (2026-11-03)
 
 Local runs on `feature/daily-parts-reports` at `defcb9f` plus the uncommitted web UI. The branch is not pushed, so there is **no CI run**. See [the handoff](../HANDOFF_DAILY_PARTS.md).

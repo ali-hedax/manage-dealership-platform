@@ -22,6 +22,7 @@ import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali, parseAmount, rial, toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
+import { StockFamilyPreview } from './CaseStockPanel';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
 import { ReferenceLookup } from './ReferenceLookup';
@@ -398,6 +399,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
                 <input className="input ltr-input" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
               </label>
             </div>
+            <StockFamilyPreview partNumber={partNumber} />
             <SourceSelect value={source} onChange={setSource} />
             <label className="field">
               <span>قیمت تأییدشده واحد (ریال)</span>

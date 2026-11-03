@@ -146,6 +146,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reference-imports/:id/apply` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
+| POST | `/api/v1/stock/aliases` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations/:id/actions` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |

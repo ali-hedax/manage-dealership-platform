@@ -89,6 +89,7 @@ export class DemoSeedService {
           displayName: u.displayName,
           passwordHash,
           roles: u.roles,
+          isOwner: u.username === this.cfg.DEMO_OWNER_USERNAME,
           isTest: true,
         })),
       );

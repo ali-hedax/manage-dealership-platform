@@ -20,6 +20,8 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   NODE_ID: z.string().min(1).default('dev-local'),
   SEED_DEMO_PASSWORD: z.string().optional(),
+  // Browser tests only: owner of the synthetic dealership. The demo seed never runs in production.
+  DEMO_OWNER_USERNAME: z.string().optional(),
   TOTP_AUTH_ENABLED: z.string().default('false').transform((v) => v === 'true'),
   PUBLIC_APP_URL: z.url().default('http://localhost:3000'),
   AUTH_TOKEN_SECRET: z.preprocess((v)=>v===''?undefined:v,z.string().min(32).optional()),

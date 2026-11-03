@@ -1,5 +1,7 @@
 # Database
 
+Migration `0013_stock_code_aliases` adds tenant-scoped, versioned human-approved family aliases for nonstandard stock codes. A nullable base detaches an alias without losing its audited history. Snapshot quantities, source codes and existing reservations are unchanged. Permission: `daily_reports.settings`; every update records approver, reason, time and audit/change-log in the same transaction. Down script is for an isolated rehearsal only. Neither 0012 nor 0013 is confirmed installed in production at this handoff.
+
 PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts). Migrations: [`apps/api/src/db/migrations`](../apps/api/src/db/migrations) (applied by Drizzle's migrator, tracked in `drizzle.__drizzle_migrations`). Rollback scripts: [`apps/api/src/db/down`](../apps/api/src/db/down).
 
 ## Conventions

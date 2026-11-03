@@ -11,6 +11,8 @@ const channel = process.env.PW_CHANNEL || (process.platform === 'win32' ? 'msedg
 
 export default defineConfig({
   testDir: './e2e',
+  // Needs an owner in the seed, which changes staff rules: playwright.daily.config.ts.
+  testIgnore: /daily-reports\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -28,7 +30,7 @@ export default defineConfig({
     {
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], channel, viewport: { width: 1366, height: 860 } },
-      testIgnore: /mobile\.spec\.ts/,
+      testIgnore: /mobile\.spec\.ts|daily-reports\.spec\.ts/,
     },
     { name: 'mobile', use: { ...devices['Pixel 7'], channel }, testMatch: /(mobile|screenshots)\.spec\.ts/ },
   ],
@@ -47,6 +49,8 @@ export default defineConfig({
         NODE_ID: 'e2e',
         // The suite logs in as several roles from one address within a minute.
         LOGIN_RATE_LIMIT: '200',
+        // Reminders depend on the time of day; their browser test mocks the inbox.
+        DAILY_SCHEDULER: 'false',
         // Synthetic key allows the manual staff-invitation fallback to use
         // the real API without enabling personal-mode login for demo roles.
         AUTH_TOKEN_SECRET: 'e2e-synthetic-only-authenticator-key',

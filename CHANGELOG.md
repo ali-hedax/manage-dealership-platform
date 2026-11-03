@@ -2,6 +2,10 @@
 
 ## [Unreleased] — branch `feature/daily-parts-reports`
 
+- Stock option balances and daily totals refresh after reservation, issue and release actions. Daily report desk links apply the matching due/review filters.
+- Nonstandard stock codes support an audited, versioned human family alias without rewriting source codes, stock quantities or reservation history (0013). Unmapped codes remain independent.
+- Added Persian staff guide and recorded the owner's rial/full-warehouse/physical-quantity definitions. Tax inclusion is still unknown. Not deployed.
+
 - در دست ساخت و منتشرنشده: بارگذاری روزانه موجودی انبار و امداد ویژه، رزرو داخلی با انتخاب کد کامل، پیگیری امداد و یادآوری داخلی ساعت ۱۱ تهران. API روی شاخه ثبت شده و رابط کاربری هنوز کامل آزموده و commit نشده است؛ وضعیت در [HANDOFF_DAILY_PARTS.md](HANDOFF_DAILY_PARTS.md).
 
 ## [Unreleased] — branch `feature/department-workspaces`

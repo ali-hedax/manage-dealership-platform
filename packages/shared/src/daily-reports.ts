@@ -184,6 +184,8 @@ export const emdadSearchSchema = z
     assignee: z.union([uuid, z.literal('me'), z.literal('none')]).optional(),
     caseId: uuid.optional(),
     openOnly: z.boolean().optional(),
+    dueToday: z.boolean().optional(),
+    review: z.boolean().optional(),
     codeIssue: z.boolean().optional(),
     stale: z.boolean().optional(),
     page: z.number().int().min(1).max(10_000).default(1),
@@ -247,6 +249,8 @@ export interface StockOption {
   basePartNumber: string | null;
   supplySuffix: string | null;
   codeKind: 'standard' | 'needs_mapping';
+  /** Explicit human-approved grouping only, never proof of technical equivalence. */
+  alias?: { id: string; basePartNumber: string | null; reason: string; version: number } | null;
   description: string | null;
   unit: string | null;
   vehicleModel: string | null;
@@ -261,6 +265,14 @@ export interface StockOption {
   /** Set when this row is absent from the newest partial report and keeps an older report's values. */
   carriedReportedAt: string | null;
 }
+
+export const stockAliasSchema = z.object({
+  fullStockCode: z.string().trim().min(1).max(80).regex(/^[0-9A-Za-z]+$/),
+  basePartNumber: z.string().regex(/^\d{8}$/).nullable(),
+  reason: z.string().trim().min(3).max(500),
+  expectedVersion: z.number().int().min(0),
+}).strict();
+export type StockAliasInput = z.infer<typeof stockAliasSchema>;
 
 export interface StockSnapshotInfo {
   id: string;

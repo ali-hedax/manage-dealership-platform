@@ -20,7 +20,9 @@ deploy/preview/auth.caddy
 
 # Test output
 playwright-report/
+playwright-report-daily/
 test-results/
+test-results-daily/
 apps/web/e2e/.auth/
 
 # OS / editor

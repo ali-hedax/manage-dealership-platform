@@ -92,6 +92,13 @@
       "when": 1793692012318,
       "tag": "0012_daily_parts_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793696562482,
+      "tag": "0013_stock_code_aliases",
+      "breakpoints": true
     }
   ]
 }

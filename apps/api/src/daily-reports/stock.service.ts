@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   RESERVATION_STATUS_LABELS,
   normalizePersian,
+  parseStockCode,
   parseDecimal,
   toLatinDigits,
   type ReservationActionInput,
@@ -12,13 +13,14 @@ import {
   type StockReservation,
   type StockSearchQuery,
   type StockSnapshotInfo,
+  type StockAliasInput,
 } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { cases, partRequests, stockReservations, stockSnapshotItems, stockSnapshots, users } from '../db/schema';
+import { cases, partRequests, stockCodeAliases, stockReservations, stockSnapshotItems, stockSnapshots, users } from '../db/schema';
 import { writeSheet } from '../parts/xlsx';
 import { tehranDate } from './daily-time';
 import { safeCell } from './safe-cell';
@@ -55,6 +57,23 @@ export class StockService {
     return this.handle.db;
   }
 
+  async saveAlias(actor: Actor, input: StockAliasInput) {
+    if (!actor.user.permissions.has('daily_reports.settings')) throw forbidden();
+    const code = input.fullStockCode.toUpperCase();
+    if (parseStockCode(code)?.basePartNumber) throw badRequest('STANDARD_CODE_ALIAS', 'کد استاندارد از قاعده هشت رقم پایه و دو رقم تدارکاتی پیروی می‌کند و قابل تغییر نیست');
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`stock-alias:${actor.user.tenantId}:${code}`}))`);
+      const [before] = await tx.select().from(stockCodeAliases).where(and(eq(stockCodeAliases.tenantId, actor.user.tenantId), eq(stockCodeAliases.fullStockCode, code)));
+      if ((before?.version ?? 0) !== input.expectedVersion) throw versionConflict();
+      const patch = { basePartNumber: input.basePartNumber, reason: input.reason, approvedBy: actor.user.id, updatedAt: new Date(), version: (before?.version ?? 0) + 1 };
+      const [row] = before
+        ? await tx.update(stockCodeAliases).set(patch).where(eq(stockCodeAliases.id, before.id)).returning()
+        : await tx.insert(stockCodeAliases).values({ ...patch, id: newId(), tenantId: actor.user.tenantId, fullStockCode: code }).returning();
+      await this.audit.record(tx, actor, { entityType: 'daily_report', entityId: row.id, action: 'stock.alias.updated', before: before ? { basePartNumber: before.basePartNumber, reason: before.reason } : null, after: { fullStockCode: code, basePartNumber: row.basePartNumber, reason: row.reason }, snapshot: { version: row.version, row } });
+      return { id: row.id, basePartNumber: row.basePartNumber, reason: row.reason, version: row.version };
+    });
+  }
+
   async active(tx: DbOrTx, tenantId: string): Promise<Snapshot | null> {
     const [s] = await tx
       .select()
@@ -88,12 +107,13 @@ export class StockService {
     const snap = await this.active(this.db, tenantId);
     if (!snap) return { snapshot: null, items: [], total: 0, page: q.page, pageSize: q.pageSize };
     const conds: (SQL | undefined)[] = [eq(stockSnapshotItems.snapshotId, snap.id), eq(stockSnapshotItems.tenantId, tenantId)];
+    const effectiveBase = sql<string>`coalesce(${stockSnapshotItems.basePartNumber}, ${stockCodeAliases.basePartNumber})`;
     const term = toLatinDigits(q.q).replace(/\s+/g, ' ').trim();
     const code = term.replace(/\s+/g, '').toUpperCase();
-    if (q.base) conds.push(eq(stockSnapshotItems.basePartNumber, q.base));
-    if (q.needsMapping) conds.push(eq(stockSnapshotItems.codeKind, 'needs_mapping'));
+    if (q.base) conds.push(sql`${effectiveBase} = ${q.base}`);
+    if (q.needsMapping) conds.push(eq(stockSnapshotItems.codeKind, 'needs_mapping'), isNull(stockCodeAliases.basePartNumber));
     if (term) {
-      if (/^\d{8}$/.test(code)) conds.push(or(eq(stockSnapshotItems.basePartNumber, code), ilike(stockSnapshotItems.fullStockCode, `${code}%`)));
+      if (/^\d{8}$/.test(code)) conds.push(sql`${effectiveBase} = ${code}`);
       else if (/^[0-9A-Z]{3,}$/.test(code)) conds.push(ilike(stockSnapshotItems.fullStockCode, `%${code}%`));
       else {
         // Report text uses Arabic ي/ك; compare in Persian form.
@@ -102,11 +122,13 @@ export class StockService {
       }
     }
     const where = and(...conds);
-    const [{ total }] = (await this.db.select({ total: sql<number>`count(*)::int` }).from(stockSnapshotItems).where(where)) as [{ total: number }];
+    const aliasJoin = and(eq(stockCodeAliases.tenantId, tenantId), eq(stockCodeAliases.fullStockCode, stockSnapshotItems.fullStockCode));
+    const [{ total }] = (await this.db.select({ total: sql<number>`count(*)::int` }).from(stockSnapshotItems).leftJoin(stockCodeAliases, aliasJoin).where(where)) as [{ total: number }];
     const c = this.commitments(this.db, tenantId);
     const rows = await this.db
-      .select({ i: stockSnapshotItems, reserved: sql<string>`coalesce(${c.reserved}, 0)`, issued: sql<string>`coalesce(${c.issued}, 0)` })
+      .select({ i: stockSnapshotItems, alias: stockCodeAliases, reserved: sql<string>`coalesce(${c.reserved}, 0)`, issued: sql<string>`coalesce(${c.issued}, 0)` })
       .from(stockSnapshotItems)
+      .leftJoin(stockCodeAliases, aliasJoin)
       .leftJoin(c, and(eq(c.code, stockSnapshotItems.fullStockCode), eq(c.loc, stockSnapshotItems.locationAddress)))
       .where(where)
       .orderBy(asc(stockSnapshotItems.basePartNumber), asc(stockSnapshotItems.fullStockCode), asc(stockSnapshotItems.locationAddress))
@@ -118,10 +140,11 @@ export class StockService {
     );
     return {
       snapshot: snapshotInfo(snap),
-      items: rows.map(({ i, reserved, issued }, n) => ({
+      items: rows.map(({ i, alias, reserved, issued }, n) => ({
         fullStockCode: i.fullStockCode,
         rawCode: i.rawCode,
-        basePartNumber: i.basePartNumber,
+        basePartNumber: i.basePartNumber ?? alias?.basePartNumber ?? null,
+        alias: alias ? { id: alias.id, basePartNumber: alias.basePartNumber, reason: alias.reason, version: alias.version } : null,
         supplySuffix: i.supplySuffix,
         codeKind: i.codeKind as StockOption['codeKind'],
         description: i.description,

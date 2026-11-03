@@ -47,6 +47,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
       ...(stream ? { duplex: 'half' } : {}),
     } as RequestInit);
   } catch {
+    console.error('api proxy failed: upstream unavailable');
     return Response.json(
       { statusCode: 502, code: 'API_UNREACHABLE', message: 'سرویس Manage در دسترس نیست. چند لحظه بعد دوباره تلاش کنید.' },
       { status: 502 },

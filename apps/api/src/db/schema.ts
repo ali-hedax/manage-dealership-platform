@@ -951,11 +951,19 @@ export const stockSnapshotItems = pgTable(
   ],
 );
 
-/**
- * Manage's own reservation of a stock SKU for a case and part need. Not a
- * reservation in Iran Khodro's system. Issue/release/cancel are separate
- * audited steps; an issue stays counted until the source snapshot reflects it.
- */
+/** Human-approved family aliases; source codes and historical snapshots stay unchanged. */
+export const stockCodeAliases = pgTable('stock_code_aliases', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  fullStockCode: text('full_stock_code').notNull(),
+  basePartNumber: text('base_part_number'),
+  reason: text('reason').notNull(),
+  approvedBy: uuid('approved_by').notNull().references(() => users.id),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (t) => [uniqueIndex('stock_code_aliases_tenant_code_uq').on(t.tenantId, t.fullStockCode)]);
+
+/** Internal commitments; issues stay deducted until their report reflection is confirmed. */
 export const stockReservations = pgTable(
   'stock_reservations',
   {

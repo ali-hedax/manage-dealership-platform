@@ -15,6 +15,7 @@ import { AssessmentPanel } from '@/components/AssessmentPanel';
 import { BlockersPanel } from '@/components/BlockersPanel';
 import { CompletionPanel } from '@/components/CompletionPanel';
 import { FinancePanel } from '@/components/FinancePanel';
+import { CaseStockPanel } from '@/components/CaseStockPanel';
 import { PartsPanel } from '@/components/PartsPanel';
 import { ProvenancePanel } from '@/components/ProvenancePanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
@@ -184,6 +185,7 @@ export default function CaseDetailPage() {
         <div className="stack span-2">
           <div id="case-assessment"><AssessmentPanel kase={kase} onChange={refresh} /></div>
           <div id="case-parts"><PartsPanel kase={kase} onChange={refresh} /></div>
+          <CaseStockPanel kase={kase} />
           <div id="case-tasks"><TasksPanel kase={kase} onChange={refresh} /></div>
           <div id="case-blockers"><BlockersPanel kase={kase} onChange={refresh} /></div>
           <div id="case-quality"><CompletionPanel kase={kase} onChange={refresh} /></div>

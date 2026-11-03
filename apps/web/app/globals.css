@@ -1456,6 +1456,20 @@ button.hbar:hover .hbar-fill {
     grid-template-columns: minmax(90px, 40%) 1fr 40px;
   }
 }
+/* ------------------------------------------------- daily parts reports */
+.daily-kinds { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:12px; }
+.daily-kind { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:12px 14px; border:1px solid var(--silver); border-radius:var(--radius-s); background:var(--surface); }
+.daily-kind.is-late { border-inline-start:4px solid var(--red); }
+.daily-kind.is-done { border-inline-start:4px solid var(--green); }
+.chips-row { display:flex; flex-wrap:wrap; gap:6px; }
+.notice-bar { display:grid; gap:8px; margin-block-end:12px; }
+.notice { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; }
+.notice p { margin:2px 0 0; }
+.emdad-official { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr)); gap:8px 14px; margin:8px 0; }
+.emdad-official dt { color:var(--steel-2); font-size:var(--fs-xs); }
+.emdad-official dd { margin:0; overflow-wrap:anywhere; }
+progress { inline-size:min(100%,320px); vertical-align:middle; }
+tr.is-late td { background:var(--red-soft); }
 @media print {
   .print-only {
     display: block;
