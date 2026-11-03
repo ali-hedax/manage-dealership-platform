@@ -16,6 +16,10 @@ test('department menu exposes only useful workspaces and finance/QC queues work 
  await page.getByRole('button',{name:'منو',exact:true}).click();const sidebar=page.getByRole('complementary',{name:'منوی اصلی'});
  await expect(sidebar.getByText('واحد تصادفات',{exact:true})).toBeVisible();await expect(sidebar.getByRole('link',{name:'کنترل کیفیت',exact:true})).toBeVisible();
  await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'منو',exact:true})).toBeFocused();
+ // A direct section link must scroll after asynchronously loaded case data arrives.
+ const cases=await (await page.request.get('/api/v1/cases')).json();
+ await page.goto(`/cases/${cases.items[0].id}#case-quality`);
+ await expect(page.locator('#case-quality')).toBeInViewport();
 });
 test('owner edits individual exceptions and role defaults with review and an intact phone layout',async({page},info)=>{
  await login(page,'manager');

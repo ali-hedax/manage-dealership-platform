@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
   CASE_STAGES,
@@ -37,6 +37,15 @@ export default function CaseDetailPage() {
   const { data: kase, error, mutate } = useSWR<CaseDetail>(`/cases/${id}`, fetcher);
   const { mutate: mutateKey } = useSWRConfig();
   const [stageBusy, setStageBusy] = useState(false);
+  // Case data arrives after the route commits. Retry the initial section link
+  // once its target exists; later data refreshes must not move the user's scroll.
+  useEffect(() => {
+    if (!kase?.id) return;
+    const target = window.location.hash.slice(1);
+    if (/^case-(assessment|parts|tasks|blockers|quality|finance)$/.test(target)) {
+      document.getElementById(target)?.scrollIntoView({ block: 'start' });
+    }
+  }, [kase?.id]);
 
   if (error) {
     return (

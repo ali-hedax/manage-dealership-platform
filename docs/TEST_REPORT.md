@@ -1,8 +1,10 @@
 # Test report
 
-## Department workspaces and configurable access — in progress
+## Department workspaces and configurable access — initial release and anchor follow-up
 
-New API access suite 5/5 passed: owner-only access editing, existing-session grants/revocations, actual part mutation, PII masking from effective permission, cross-tenant and owner protection, strict input/stale version handling, tenant presets/personal exceptions and audit/change log. Local lint/typecheck/build passed. Initial browser role/phone workspace scenario passed; owner editor test failed on an exact-text locator for a summary with extra role text, fixed with a separate name element and targeted test locator. Final browser/full-suite/CI still pending. All tests synthetic; operational data unchanged at this stage.
+All six jobs passed for `2c0f6f0` in [CI 41585365297](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41585365297): API 118/118 (17 suites), shared 9/9, browser 23 passed / 2 optional documentation captures skipped, lint/types/build, security, docs, PostgreSQL and Docker/HTTPS. Owner-authorized live release restored and rehearsed the additive migration/owner designation, preserved credentials/roles and every prior case/reference ID, and verified the real owner UI. Final backup restored with 15 cases, 47,045 parts, 2,732 history, 9 accounts, 2 active TOTP and 1 owner; encrypted off-server recovery verified.
+
+Live verification found an initial direct section link did not scroll after async case loading. Follow-up scrolls to a whitelisted case-section anchor only when the case ID first arrives (not on later data refreshes). Added a cold direct-link viewport assertion. Local targeted browser 2/2 and build passed; follow-up CI/deployment pending. All tests synthetic; no actual employee access was changed for testing. Local full API attempt exhausted Windows/PGlite virtual memory and was stopped; complete validation comes from CI.
 
 ## Reference data — feature/reference-data — final validation
 
