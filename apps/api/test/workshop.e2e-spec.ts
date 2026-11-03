@@ -46,6 +46,18 @@ it('rescheduling needs a reason and preserves the original baseline and calendar
  const fail=await c.patch(`/tasks/${taskId}`,{expectedVersion:before.version,plannedEndAt:'2026-11-10T10:00:00Z'});expect(fail.body.code).toBe('SCHEDULE_REASON_REQUIRED');
  const r=await c.patch(`/tasks/${taskId}`,{expectedVersion:before.version,plannedEndAt:'2026-11-10T10:00:00Z',scheduleReason:'تغییر برنامه با حفظ سابقه'});expect(r.status).toBe(200);expect(r.body.baselineEndAt).toBe(before.baselineEndAt);
 });
+it('uses the effective calendar for a first plan while preserving already planned work',async()=>{
+ const unplanned=await c.post(`/cases/${caseId}/tasks`,{departmentId,title:'بدون برنامه اولیه'});expect(unplanned.status).toBe(201);
+ const old=(await c.get(`/cases/${caseId}`)).body.tasks.find((t:{id:string})=>t.id===taskId);
+ const today=new Date(Date.now()+210*60000).toISOString().slice(0,10);
+ const calendar={...DEFAULT_WORK_CALENDAR,week:DEFAULT_WORK_CALENDAR.week.map((_,day)=>day===5?[]:[{start:480,end:540}])};
+ expect((await admin.post('/workshop/calendar',{expectedVersion:1,effectiveFrom:today,calendar,reason:'تغییر ساعات برای نخستین برنامه'})).status).toBe(201);
+ const startDay=new Date(today+'T00:00:00Z');while(startDay.getUTCDay()!==3)startDay.setUTCDate(startDay.getUTCDate()+1);
+ const start=startDay.toISOString().slice(0,10)+'T08:00:00+03:30';const expectedDay=new Date(startDay.getTime()+86400000).toISOString().slice(0,10)+'T09:00:00+03:30';
+ const plan=await c.patch(`/tasks/${unplanned.body.id}`,{expectedVersion:1,plannedStartAt:start,durationMinutes:120,scheduleReason:'اولین برنامه طبق تقویم جاری'});
+ expect(plan.status).toBe(200);expect(plan.body.plannedEndAt).toBe(new Date(expectedDay).toISOString());
+ const after=(await c.get(`/cases/${caseId}`)).body.tasks.find((t:{id:string})=>t.id===taskId);expect(after.plannedEndAt).toBe(old.plannedEndAt);expect(after.baselineEndAt).toBe(old.baselineEndAt);
+});
 it('parts proposes, coordinator records external authorization, only matching approved quote permits purchase',async()=>{
  const part=await c.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون بازار',quantity:1,source:'external'});expect(part.status).toBe(201);partId=part.body.id;
  expect((await c.post(`/parts/${partId}/actions`,{action:'order',expectedVersion:1,source:'external',unitPriceRial:1000})).status).toBe(403);

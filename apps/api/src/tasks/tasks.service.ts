@@ -105,7 +105,7 @@ export class TasksService {
 
       const scheduleChanged=['departmentId','plannedStartAt','plannedEndAt','durationMinutes','stationId','assignedUserId','dependsOn'].some(k=>k in input);
       if(scheduleChanged && !input.scheduleReason) throw badRequest('SCHEDULE_REASON_REQUIRED','برای تغییر برنامه یا ارجاع، دلیل را ثبت کنید');
-      const planning = scheduleChanged ? await this.plan(tx,actor,{...input,departmentId:input.departmentId??task.departmentId,stationId:input.stationId===undefined?task.stationId:input.stationId,assignedUserId:input.assignedUserId===undefined?task.assignedUserId:input.assignedUserId,plannedStartAt:input.plannedStartAt===undefined?task.plannedStartAt?.toISOString():input.plannedStartAt,plannedEndAt:input.plannedEndAt===undefined?task.plannedEndAt?.toISOString():input.plannedEndAt},task.calendarSnapshot) : {};
+      const planning = scheduleChanged ? await this.plan(tx,actor,{...input,departmentId:input.departmentId??task.departmentId,stationId:input.stationId===undefined?task.stationId:input.stationId,assignedUserId:input.assignedUserId===undefined?task.assignedUserId:input.assignedUserId,plannedStartAt:input.plannedStartAt===undefined?task.plannedStartAt?.toISOString():input.plannedStartAt,plannedEndAt:input.plannedEndAt===undefined?task.plannedEndAt?.toISOString():input.plannedEndAt},(task.plannedStartAt||task.plannedEndAt||task.actualStartAt)?task.calendarSnapshot:null) : {};
       const patch: Partial<TaskRow> = {...planning};
       for (const key of ['departmentId', 'title', 'technicianName', 'technicianCode', 'weight', 'notes'] as const) {
         if (input[key] !== undefined) (patch as any)[key] = input[key];
