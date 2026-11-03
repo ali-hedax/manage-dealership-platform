@@ -38,7 +38,7 @@ test('coordinator collects payment and records customer price approval; parts or
   const decision=page.locator('form').filter({has:page.getByRole('heading',{name:'پاسخ به قیمت آینه بغل چپ'})});
   await decision.getByLabel('مرجع پاسخ').selectOption('customer');
   await decision.getByLabel('نام تأییدکننده').fill('مشتری آزمون');
-  await decision.getByLabel('شماره یا مرجع هماهنگی').fill('TEST-CUSTOMER-APPROVAL');
+  await decision.getByLabel('شماره ثبت رسمی / مرجع تأیید مشتری').fill('TEST-CUSTOMER-APPROVAL');
   await decision.getByLabel('شرح پاسخ').fill('مشتری قیمت بازار را تأیید کرد');
   await decision.getByRole('button',{name:'ثبت پاسخ',exact:true}).click();
   await expect(page.getByText('پاسخ و مرجع تأیید ثبت شد.')).toBeVisible();

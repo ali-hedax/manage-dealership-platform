@@ -27,7 +27,7 @@ export const saveCalendarSchema = z.object({ expectedVersion:z.number().int().mi
 export const stationSchema = z.object({ code:z.string().trim().min(1).max(32), name:z.string().trim().min(1).max(120), trade:z.enum(REPAIR_TRADES), departmentId:z.uuid(), responsibleUserId:z.uuid().nullable(), isActive:z.boolean().default(true), expectedVersion:z.number().int().min(1).optional() });
 export interface WorkshopStation extends z.infer<typeof stationSchema> { id:string; version:number }
 export const quoteSchema = z.object({ expectedVersion:z.number().int().min(1), unitPriceRial:z.number().int().min(1).max(1e12), supplier:z.string().trim().min(1).max(200), validUntil:z.iso.datetime({offset:true}), note:z.string().trim().max(1000).optional() });
-export const quoteDecisionSchema = z.object({ expectedVersion:z.number().int().min(1), decision:z.enum(['approved','rejected']), source:z.enum(['golden_card','insurer','customer']), reference:z.string().trim().min(1).max(200), approver:z.string().trim().min(1).max(150), note:z.string().trim().min(3).max(1000) });
+export const quoteDecisionSchema = z.object({ expectedVersion:z.number().int().min(1), decision:z.enum(['approved','rejected']), officialRecorded:z.boolean().optional(), source:z.enum(['golden_card','insurer','customer']), reference:z.string().trim().min(1).max(200), approver:z.string().trim().min(1).max(150), note:z.string().trim().min(3).max(1000) });
 export interface PartQuote {
   id:string; partId:string; caseId:string; description:string; partNumber:string|null; caseNumber:string;
   quantity:number; unitPriceRial:number; supplier:string; validUntil:string; status:string;

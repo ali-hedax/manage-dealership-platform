@@ -114,7 +114,7 @@ export class WorkshopService {
       const id=newId();const [row]=await tx.insert(partQuotes).values({id,tenantId:actor.user.tenantId,partId,caseId:p.caseId,quantity:p.quantity,unitPriceRial:input.unitPriceRial,supplier:input.supplier,validUntil:new Date(input.validUntil),note:input.note,createdBy:actor.user.id,isTest:actor.user.isTestTenant}).returning();
       const [updatedPart]=await tx.update(partRequests).set({version:p.version+1,updatedAt:new Date()}).where(and(eq(partRequests.id,partId),eq(partRequests.tenantId,actor.user.tenantId))).returning();
       await this.audit.record(tx,actor,{entityType:'part',entityId:partId,caseId:p.caseId,action:'part.quote_version_changed',after:{version:updatedPart.version},snapshot:{version:updatedPart.version,row:updatedPart}});
-      await this.audit.record(tx,actor,{entityType:'part_quote',entityId:id,caseId:p.caseId,action:'part_quote.proposed',after:{partId,quantity:p.quantity,...input},snapshot:{version:1,row}});
+      await this.audit.record(tx,actor,{entityType:'part_quote',entityId:id,caseId:p.caseId,action:'part_quote.proposed',after:{partId,quantity:p.quantity,unitPriceRial:input.unitPriceRial,supplier:input.supplier,validUntil:input.validUntil,note:input.note},snapshot:{version:1,row}});
     });return this.quotes(actor);
   }
   async decide(actor:Actor,id:string,input:z.infer<typeof quoteDecisionSchema>) {
@@ -130,9 +130,10 @@ export class WorkshopService {
       if(q.createdBy===actor.user.id&&!actor.user.isOwner)throw forbidden('ثبت‌کننده قیمت نمی‌تواند تأیید همان پیشنهاد را ثبت کند');
       const source=kase.coverageType==='golden_card'?'golden_card':kase.coverageType==='insurance'?'insurer':kase.coverageType==='personal'?'customer':null;
       if(source&&source!==input.source)throw badRequest('QUOTE_WRONG_SOURCE','مرجع تأیید با پوشش پرونده هماهنگ نیست');
+      if(input.decision==='approved'&&input.source!=='customer'&&!input.officialRecorded)throw badRequest('OFFICIAL_APPROVAL_REQUIRED','مجوز کارت طلایی یا بیمه باید در سامانه رسمی ثبت شده باشد؛ شماره ثبت و تأیید ثبت رسمی را وارد کنید');
       if(input.decision==='approved'&&q.validUntil<new Date())throw badRequest('QUOTE_EXPIRED','قیمت منقضی شده است؛ پیشنهاد تازه ثبت شود');
       const [row]=await tx.update(partQuotes).set({status:input.decision,source:input.source,reference:input.reference,approver:input.approver,note:input.note,decidedAt:new Date(),decidedBy:actor.user.id,version:q.version+1}).where(and(eq(partQuotes.id,id),eq(partQuotes.tenantId,actor.user.tenantId))).returning();
-      await this.audit.record(tx,actor,{entityType:'part_quote',entityId:id,caseId:q.caseId,action:'part_quote.'+input.decision,before:{status:q.status},after:input,snapshot:{version:row.version,row}});
+      await this.audit.record(tx,actor,{entityType:'part_quote',entityId:id,caseId:q.caseId,action:'part_quote.'+input.decision,before:{status:q.status},after:{decision:input.decision,source:input.source,reference:input.reference,approver:input.approver,note:input.note,officialRecorded:input.officialRecorded??false},snapshot:{version:row.version,row}});
     });return this.quotes(actor);
   }
   async overview(actor:Actor):Promise<WorkshopOverview> {

@@ -77,7 +77,7 @@ async function partAct(p: Part, action: string, extra: object = {}, who: Client 
     const quote=proposal.body.find((q:{partId:string;status:string})=>q.partId===p.id&&q.status==='pending');
     const kase=await caseOf(p.caseId);
     const source=kase.coverageType==='golden_card'?'golden_card':kase.coverageType==='insurance'?'insurer':'customer';
-    expect((await expert.post(`/workshop/quotes/${quote.id}/decision`,{expectedVersion:1,decision:'approved',source,reference:opts.priceApprovalRef??'TEST-MARKET',approver:opts.priceApprovedBy??'تأییدکننده آزمون',note:'مجوز خرید آزمون ثبت شد'})).status).toBe(201);
+    expect((await expert.post(`/workshop/quotes/${quote.id}/decision`,{expectedVersion:1,decision:'approved',officialRecorded:true,source,reference:opts.priceApprovalRef??'TEST-MARKET',approver:opts.priceApprovedBy??'تأییدکننده آزمون',note:'مجوز خرید آزمون ثبت شد'})).status).toBe(201);
     extra={...extra,supplier:opts.supplier??'فروشنده آزمون'};p={...p,version:current.version+1};
   }
   return who.post(`/parts/${p.id}/actions`, { action, expectedVersion: p.version, ...extra });

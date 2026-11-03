@@ -66,9 +66,10 @@ it('parts proposes, coordinator records external authorization, only matching ap
  const q=(await c.get('/workshop/quotes')).body[0];
  const order={action:'order',expectedVersion:2,source:'external',unitPriceRial:1000,supplier:'فروشنده آزمون'};
  expect((await p.post(`/parts/${partId}/actions`,order)).body.code).toBe('MARKET_APPROVAL_REQUIRED');
- const decision={expectedVersion:1,decision:'approved',source:'golden_card',reference:'TEST-APPROVAL-001',approver:'کارشناس آزمون',note:'ثبت مجوز سامانه رسمی آزمون'};
+ const decision={expectedVersion:1,decision:'approved',officialRecorded:true,source:'golden_card',reference:'TEST-APPROVAL-001',approver:'کارشناس آزمون',note:'ثبت مجوز سامانه رسمی آزمون'};
  expect((await p.post(`/workshop/quotes/${q.id}/decision`,decision)).status).toBe(403);
  expect((await c.post(`/workshop/quotes/${q.id}/decision`,{...decision,source:'insurer'})).body.code).toBe('QUOTE_WRONG_SOURCE');
+ expect((await c.post(`/workshop/quotes/${q.id}/decision`,{...decision,officialRecorded:false})).body.code).toBe('OFFICIAL_APPROVAL_REQUIRED');
  expect((await c.post(`/workshop/quotes/${q.id}/decision`,decision)).status).toBe(201);
  expect((await p.post(`/parts/${partId}/actions`,{...order,unitPriceRial:1200})).body.code).toBe('MARKET_APPROVAL_REQUIRED');
  expect((await p.post(`/parts/${partId}/actions`,order)).status).toBe(201);
