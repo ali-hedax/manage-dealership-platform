@@ -4,7 +4,7 @@ import { login } from './helpers';
 // Existing-vehicle Excel import in the browser with the synthetic sample:
 // preview categories, apply, issued case numbers, provenance on the case.
 test('service manager previews and applies the vehicle sheet, then sees provenance on the case', async ({ page }) => {
-  await login(page, 'manager');
+  await login(page, 'admin');
   await page.goto('/cases');
   await page.getByRole('link', { name: 'ورود خودروهای موجود از اکسل' }).click();
   await expect(page.getByRole('heading', { name: 'ورود خودروهای موجود از اکسل' })).toBeVisible();

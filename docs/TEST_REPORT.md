@@ -1,5 +1,16 @@
 # Test report
 
+## Accident workflow redesign — 2026-11-03 — local verification complete, not deployed
+
+Branch `feature/accident-workflow-redesign`, based on `9b07cb0` (the released daily-parts branch). No production operation, real-data import or real account/permission change.
+
+- `pnpm test`: shared **17/17**, API **166 passed / 9 skipped** (23 passing suites, two PostgreSQL-only suites skipped locally). Includes calendar working-hour calculations, lunch/Thursday/Friday/holidays, interval union, role boundaries, assigned-only technician actions, stale versions, dependency release only after coordinator approval, immutable baseline, station scope and quote/payer/price controls.
+- `pnpm test:e2e`: main browser **25 passed / 2 optional screenshot skips** on installed Edge, including desktop and phone. The daily browser initially found an obsolete expectation that system support cannot read stock; the expectation and large-file actor were aligned with the owner's support role, then the daily suite passed **2/2** in 1.3 minutes. No real files or services were used.
+- Extra market-security rerun after tightening above-assessment prices: **17/17** across parts-finance and workshop API scenarios. The full local suite above began before this final refinement; CI is the authoritative final-head run.
+- Lint, typecheck and build passed locally. Documentation/API inventory passed: 36 Markdown files and 116 routes. Generated migration 0014 executed in synthetic PGlite integration tests. The new technician, station board and calendar were visually reviewed from browser screenshots; the start/end action has an asserted minimum height of 64 CSS pixels. Read-only calendars are shown as a compact table rather than a disabled editing form.
+- Added PostgreSQL CI scenarios for competing calendar revisions, cross-task dependency cycles, competing market proposals and duplicate technician starts, alongside the existing five daily-stock concurrency tests. Docker daemon is unavailable locally; PostgreSQL/compose results are checked in the branch PR before review. Local skipped tests are not reported as PostgreSQL passes.
+- Calendar holidays are entered/reviewed explicitly; automatic official-calendar coverage, actual technician rollout on dealership phones, LAN/offline sync and production deployment are not claimed. Generative AI analysis remains planned. The current report is based on recorded events, without assigning blame or generating financial authorization.
+
 ## Released daily parts reports — 2026-11-03, 40b389f
 
 All six jobs passed in [CI 41614528596](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41614528596): API 159 passes (5 PostgreSQL-only tests skipped in that job, all 5 passed separately on PostgreSQL 16); shared 12/12; original browser 23 passes / 2 optional screenshot skips; daily browser 2/2; lint/types/build, security and Docker/HTTPS passed. Tested merge 8add505ee02c809c929154684417d5d3a66c5b12 has the same tree as release head; artifact checksum and both image IDs verified. API image b7caae62ee91c30d23cca6b8cf5d171fe212d7aae2b2f48b4afda89b59f436f6; web cfe744ea9e8a572fa7d8577d6b8086e600a706a9b56aee04511407fce0bc7628.

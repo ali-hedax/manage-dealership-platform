@@ -251,7 +251,7 @@ export const cases = pgTable(
     recipientRelation: text('recipient_relation'),
     deliveryNote: text('delivery_note'),
     // Admission card number of the workshop (not the Manage case number) and its
-    // matching key; "بدون پذیرش" / "برگشتی" have no key because they are not unique.
+    // matching key; "Ø¨Ø¯ÙˆÙ† Ù¾Ø°ÛŒØ±Ø´" / "Ø¨Ø±Ú¯Ø´ØªÛŒ" have no key because they are not unique.
     admissionNo: text('admission_no'),
     admissionNoKey: text('admission_no_key'),
     // 'minute' or 'date' when only the admission day is known (imported records).
@@ -300,7 +300,13 @@ export const tasks = pgTable(
       .notNull()
       .references(() => departments.id),
     title: text('title'),
-    // Technicians have no accounts in phase 1; the supervisor records on their behalf.
+    stationId: uuid('station_id').references((): AnyPgColumn => workshopStations.id),
+    assignedUserId: uuid('assigned_user_id').references(() => users.id),
+    stationSnapshot: jsonb('station_snapshot').$type<{code:string;name:string;trade:string}>(),
+    calendarSnapshot: jsonb('calendar_snapshot').$type<import('@manage/shared').CalendarRevision>(),
+    baselineStartAt: ts('baseline_start_at'),
+    baselineEndAt: ts('baseline_end_at'),
+    // Identity of assignee is distinct from the actor recording on their behalf.
     technicianName: text('technician_name'),
     technicianCode: text('technician_code'),
     status: text('status').notNull().default('pending'),
@@ -469,8 +475,8 @@ export const assessmentItems = pgTable(
 );
 
 // One row per needed part of a case. Each step keeps its own time so delays
-// can be attributed: need → stock check / reservation → order (ETA) → receipt
-// with inspection → handover to the repair unit.
+// can be attributed: need â†’ stock check / reservation â†’ order (ETA) â†’ receipt
+// with inspection â†’ handover to the repair unit.
 export const partRequests = pgTable(
   'part_requests',
   {
@@ -1123,3 +1129,30 @@ export const notifications = pgTable(
     index('notifications_user_idx').on(t.userId, t.readAt),
   ],
 );
+
+// Append-only revisions keep historical working-time calculations reproducible.
+export const workCalendars = pgTable('work_calendars', {
+  id:uuid('id').primaryKey(), tenantId:uuid('tenant_id').notNull().references(()=>tenants.id),
+  effectiveFrom:text('effective_from').notNull(), calendar:jsonb('calendar').$type<import('@manage/shared').WorkCalendar>().notNull(),
+  reason:text('reason').notNull(), version:integer('version').notNull(),
+  createdBy:uuid('created_by').notNull().references(()=>users.id), createdAt:ts('created_at').notNull().defaultNow(),
+  isTest:boolean('is_test').notNull().default(false),
+},t=>[uniqueIndex('work_calendars_tenant_version_uq').on(t.tenantId,t.version)]);
+export const workshopStations = pgTable('workshop_stations', {
+  id:uuid('id').primaryKey(), tenantId:uuid('tenant_id').notNull().references(()=>tenants.id),
+  departmentId:uuid('department_id').notNull().references(()=>departments.id),
+  code:text('code').notNull(),name:text('name').notNull(),trade:text('trade').notNull(),
+  responsibleUserId:uuid('responsible_user_id').references(()=>users.id), isActive:boolean('is_active').notNull().default(true),
+  version:integer('version').notNull().default(1), isTest:boolean('is_test').notNull().default(false),
+  createdAt:ts('created_at').notNull().defaultNow(),updatedAt:ts('updated_at').notNull().defaultNow(),
+},t=>[uniqueIndex('workshop_stations_tenant_code_uq').on(t.tenantId,t.code)]);
+export const partQuotes = pgTable('part_quotes', {
+  id:uuid('id').primaryKey(),tenantId:uuid('tenant_id').notNull().references(()=>tenants.id),
+  partId:uuid('part_id').notNull().references(()=>partRequests.id),caseId:uuid('case_id').notNull().references(()=>cases.id),
+  quantity:integer('quantity').notNull(),unitPriceRial:bigint('unit_price_rial',{mode:'number'}).notNull(),
+  supplier:text('supplier').notNull(),validUntil:ts('valid_until').notNull(),status:text('status').notNull().default('pending'),
+  source:text('source'),reference:text('reference'),approver:text('approver'),note:text('note'),
+  createdBy:uuid('created_by').notNull().references(()=>users.id),createdAt:ts('created_at').notNull().defaultNow(),
+  decidedBy:uuid('decided_by').references(()=>users.id),decidedAt:ts('decided_at'),
+  version:integer('version').notNull().default(1),isTest:boolean('is_test').notNull().default(false),
+},t=>[index('part_quotes_tenant_part_idx').on(t.tenantId,t.partId)]);

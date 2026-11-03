@@ -10,7 +10,7 @@ const file=(kind:'parts'|'customers',rows:string[][])=>({kind,fileName:'syntheti
 const partPreview=(rows:string[][],who=manager)=>who.post('/reference-imports',{...file('parts',[['کد','نام','موجودی'],...rows]),sheetIndex:0,headerRow:1,mapping:{partNumber:0,description:1,quantity:2}});
 const customerFile=()=>file('customers',[['شاسی','نام','تلفن','مدل'],['TESTCHS001','مشتری آزمون اول','09000000001','خودرو آزمون'],['TESTCHS001','مشتری آزمون دوم','09000000002','خودرو آزمون']]);
 const customerPreview=(who=manager)=>who.post('/reference-imports',{...customerFile(),sheetIndex:0,headerRow:1,mapping:{chassis:0,fullName:1,phone:2,model:3}});
-beforeAll(async()=>{h=await createHarness();[manager,parts,qc]=await Promise.all(['manager','parts','qc'].map(u=>h.login(u)));});
+beforeAll(async()=>{h=await createHarness();[manager,parts,qc]=await Promise.all(['admin','parts','qc'].map(u=>h.login(u)));});
 afterAll(async()=>{await h?.close();});
 
 it('inspects sheets, validates mappings and preserves code leading zeroes',async()=>{
@@ -57,7 +57,7 @@ it('does not expose customers to parts/QC roles or allow unauthorized imports',a
 it('isolates previews, reports, apply and search across dealerships; writes audited transactions',async()=>{
  const p=await partPreview([['TENANT001','قطعه خصوصی آزمون','1']]);
  const tenantId=newId();await h.db.db.insert(tenants).values({id:tenantId,code:'reference-other',name:'نمایندگی آزمون دیگر',isTest:true});
- await h.db.db.insert(users).values({id:newId(),tenantId,username:'reference-other-manager',displayName:'مدیر آزمون',passwordHash:await hashPassword(TEST_PASSWORD),roles:['service_manager'],isTest:true});
+ await h.db.db.insert(users).values({id:newId(),tenantId,username:'reference-other-manager',displayName:'مدیر آزمون',passwordHash:await hashPassword(TEST_PASSWORD),roles:['system_admin'],isTest:true});
  const other=await h.login('reference-other-manager','reference-other');
  expect((await other.get(`/reference-imports/${p.body.id}`)).status).toBe(404);expect((await other.get(`/reference-imports/${p.body.id}/report`)).status).toBe(404);expect((await other.post(`/reference-imports/${p.body.id}/apply`)).status).toBe(404);
  expect((await other.post('/reference-data/customers/search',{query:'TESTCHS001'})).body.records).toEqual([]);

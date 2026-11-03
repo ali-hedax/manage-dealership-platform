@@ -42,7 +42,7 @@ function History({ id }: { id: string }) {
 
 /** Parts discrepancies: the system flags facts; a person reviews and records the outcome with a reason. */
 export function DiscrepancyQueue() {
-  const { me } = useAuth();
+  const { me, can } = useAuth();
   const toast = useToast();
   const [status, setStatus] = useState<(typeof FILTERS)[number][0]>('active');
   const { data, error, mutate } = useSWR<PartDiscrepancy[]>(`/part-discrepancies?status=${status}`, fetcher);
@@ -95,7 +95,7 @@ export function DiscrepancyQueue() {
                 </Link>
                 {d.plate && <span className="xs muted">{toPersianDigits(d.plate)}</span>}
               </div>
-              {(d.status === 'open' || d.status === 'in_review') && (
+              {can('part.manage') && (d.status === 'open' || d.status === 'in_review') && (
                 <div className="row no-print" style={{ gap: 6 }}>
                   {d.assignee?.id !== me.id && (
                     <button className="btn btn-sm" disabled={busy} onClick={() => void run(() => api(`/part-discrepancies/${d.id}/assign`, { body: { expectedVersion: d.version, assigneeUserId: me.id } }), 'بررسی این مورد به شما سپرده شد')}>

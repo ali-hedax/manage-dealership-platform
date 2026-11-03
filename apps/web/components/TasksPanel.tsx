@@ -10,6 +10,7 @@ import {
   type CaseDetail,
   PART_STATUS_LABELS,
   type Department,
+  type WorkshopStation,
   type Part,
   type Task,
   type TaskAction,
@@ -25,7 +26,7 @@ import { JalaliInput } from './JalaliInput';
 const ACTION_LABELS: Record<TaskAction, string> = {
   start: 'شروع',
   complete: 'اتمام',
-  approve: 'تأیید سرپرست',
+  approve: 'تأیید تحویل',
   reopen: 'بازگشایی',
 };
 
@@ -38,6 +39,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   const { can } = useAuth();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Task | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [at, setAt] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -123,7 +125,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
     <section className="panel">
       <div className="panel-head">
         <h2>
-          فعالیت‌های تعمیر{' '}
+          مسیر و فعالیت‌های تعمیر{' '}
           {(can('task.manage') || can('qc.inspect')) && (
             <Link className="xs no-print" href="/reports?view=workshop">
               گزارش واحدها
@@ -138,6 +140,10 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       </div>
 
       {adding && <AddTask kase={kase} onDone={() => (setAdding(false), onChange())} />}
+      {editing && <AddTask key={editing.id} kase={kase} initial={editing} onDone={() => {setEditing(null);onChange();}} />}
+      <ol className="repair-route" aria-label="مسیر برنامه‌ریزی‌شده تعمیر">
+        {kase.tasks.map(t=><li key={t.id} data-status={t.status}><strong>{t.stationCode || t.department.name}</strong><span>{t.dependsOn.length ? `پس از تأیید ${t.dependsOn.map(id=>byId.get(id)?.stationCode||byId.get(id)?.department.name).join('، ')}` : 'مستقل / قابل اجرای هم‌زمان'}</span></li>)}
+      </ol>
 
       {kase.tasks.length === 0 && !adding && (
         <div className="panel-body muted small">
@@ -148,13 +154,13 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
 
       {kase.tasks.map((t) => {
         const deps = t.dependsOn.map((id) => byId.get(id)).filter(Boolean) as Task[];
-        const waiting = deps.filter((d) => d.status !== 'done' && d.status !== 'approved');
+        const waiting = deps.filter((d) => d.status !== 'approved');
         const openBlocker = kase.blockers.find((b) => b.taskId === t.id && !b.resolvedAt);
         return (
           <div key={t.id} className={`task${t.status === 'blocked' ? ' is-blocked' : ''}`} data-testid="task">
             <div>
               <div className="row" style={{ gap: 8 }}>
-                <span className="dept">{t.department.name}</span>
+                <span className="dept">{t.stationCode?`${t.stationCode} · ${t.stationName}`:t.department.name}</span>
                 <TaskStatusChip status={t.status} />
                 {t.qcInspectionId && <span className="chip chip-amber">کار اصلاحی کنترل کیفیت</span>}
                 {t.title && <span className="small">{t.title}</span>}
@@ -188,6 +194,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
             </div>
             {manage && editable && (
               <div className="actions">
+                <button className="btn btn-sm" disabled={busy} onClick={()=>{setAdding(false);setEditing(t);}}>ویرایش برنامه و ارجاع</button>
                 {t.status === 'pending' && (
                   <button
                     className="btn btn-primary btn-sm"
@@ -205,7 +212,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
                 )}
                 {t.status === 'done' && can('task.approve') && (
                   <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => quick(t, 'approve')}>
-                    تأیید سرپرست
+                    تأیید تحویل
                   </button>
                 )}
                 {(t.status === 'pending' || t.status === 'in_progress' || t.status === 'blocked') && (
@@ -299,25 +306,31 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   );
 }
 
-function AddTask({ kase, onDone }: { kase: CaseDetail; onDone: () => void }) {
+function AddTask({ kase, onDone, initial }: { kase: CaseDetail; onDone: () => void; initial?: Task }) {
   const toast = useToast();
   const { data: departments } = useSWR<Department[]>('/departments', fetcher);
-  const [departmentId, setDepartmentId] = useState('');
-  const [title, setTitle] = useState('');
-  const [technicianName, setTechnicianName] = useState('');
-  const [technicianCode, setTechnicianCode] = useState('');
-  const [plannedStartAt, setPlannedStartAt] = useState<string | null>(null);
-  const [plannedEndAt, setPlannedEndAt] = useState<string | null>(null);
-  const [dependsOn, setDependsOn] = useState<string[]>([]);
+  const [departmentId, setDepartmentId] = useState(initial?.department.id ?? '');
+  const {data:stations}=useSWR<WorkshopStation[]>('/workshop/stations',fetcher);
+  const {data:staff}=useSWR<{id:string;displayName:string}[]>('/workshop/staff',fetcher);
+  const [stationId,setStationId]=useState(initial?.stationId??''),[assignedUserId,setAssignedUserId]=useState(initial?.assignedUserId??''),[durationMinutes,setDurationMinutes]=useState(''),[scheduleReason,setScheduleReason]=useState('');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [technicianName, setTechnicianName] = useState(initial?.technicianName ?? '');
+  const [technicianCode, setTechnicianCode] = useState(initial?.technicianCode ?? '');
+  const [plannedStartAt, setPlannedStartAt] = useState<string | null>(initial?.plannedStartAt ?? null);
+  const [plannedEndAt, setPlannedEndAt] = useState<string | null>(initial?.plannedEndAt ?? null);
+  const [dependsOn, setDependsOn] = useState<string[]>(initial?.dependsOn ?? []);
   const [weight, setWeight] = useState(1);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
     try {
-      await api(`/cases/${kase.id}/tasks`, {
+      await api(initial ? `/tasks/${initial.id}` : `/cases/${kase.id}/tasks`, {
+        method: initial ? 'PATCH' : 'POST',
         body: {
-          departmentId,
+          expectedVersion: initial?.version,
+          scheduleReason: initial ? scheduleReason : undefined,
+          departmentId, stationId:stationId||null, assignedUserId:assignedUserId||null, durationMinutes:durationMinutes?Number(durationMinutes):undefined,
           title: title || null,
           technicianName: technicianName || null,
           technicianCode: technicianCode || null,
@@ -339,7 +352,7 @@ function AddTask({ kase, onDone }: { kase: CaseDetail; onDone: () => void }) {
     <div className="panel-body grid-3" style={{ borderBlockEnd: '1px solid var(--silver)', background: '#fafbfc' }}>
       <label className="field">
         <span>واحد *</span>
-        <select className="input" name="departmentId" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+        <select className="input" name="departmentId" value={departmentId} onChange={(e) => {setDepartmentId(e.target.value);setStationId('');}}>
           <option value="">انتخاب واحد</option>
           {departments?.map((d) => (
             <option key={d.id} value={d.id}>
@@ -362,6 +375,9 @@ function AddTask({ kase, onDone }: { kase: CaseDetail; onDone: () => void }) {
           <input className="input ltr-input" name="technicianCode" value={technicianCode} onChange={(e) => setTechnicianCode(e.target.value)} />
         </label>
       </div>
+      <label className="field"><span>جایگاه دارای کد</span><select className="input" name="stationId" value={stationId} onChange={e=>{setStationId(e.target.value);const s=stations?.find(s=>s.id===e.target.value);if(s){setAssignedUserId(s.responsibleUserId??'');setDepartmentId(s.departmentId);}}}><option value="">انتخاب جایگاه</option>{stations?.filter(s=>s.isActive&&(!departmentId||s.departmentId===departmentId)).map(s=><option value={s.id} key={s.id}>{s.code} · {s.name}</option>)}</select></label>
+      <label className="field"><span>حساب تعمیرکار</span><select className="input" name="assignedUserId" value={assignedUserId} onChange={e=>{setAssignedUserId(e.target.value);setTechnicianName(staff?.find(u=>u.id===e.target.value)?.displayName??'');}}><option value="">ثبت توسط مسئول / بدون حساب تعمیرکار</option>{staff?.map(u=><option value={u.id} key={u.id}>{u.displayName}</option>)}</select></label>
+      <label className="field"><span>مدت کار به دقیقه کاری</span><input name="durationMinutes" className="input" type="number" min={1} max={100000} value={durationMinutes} onChange={e=>setDurationMinutes(e.target.value)}/><span className="small muted">با تعیین شروع، پایان طبق تقویم محاسبه می‌شود.</span></label>
       <JalaliInput label="شروع برنامه‌ای" value={plannedStartAt} onChange={setPlannedStartAt} withTime />
       <JalaliInput label="پایان برنامه‌ای" value={plannedEndAt} onChange={setPlannedEndAt} withTime />
       <label className="field">
@@ -378,9 +394,9 @@ function AddTask({ kase, onDone }: { kase: CaseDetail; onDone: () => void }) {
       </label>
       {kase.tasks.length > 0 && (
         <div className="field span-all">
-          <span>بعد از اتمام این فعالیت‌ها شروع شود</span>
+          <span>پس از تأیید تحویل این فعالیت‌ها شروع شود</span>
           <div className="row">
-            {kase.tasks.map((t) => (
+            {kase.tasks.filter(t=>t.id!==initial?.id).map((t) => (
               <label key={t.id} className="check">
                 <input
                   type="checkbox"
@@ -396,9 +412,10 @@ function AddTask({ kase, onDone }: { kase: CaseDetail; onDone: () => void }) {
           </div>
         </div>
       )}
+      {initial&&<label className="field span-all">دلیل تغییر برنامه<textarea className="input" value={scheduleReason} onChange={e=>setScheduleReason(e.target.value)} maxLength={1000}/></label>}
       <div className="row span-all">
-        <button className="btn btn-primary" disabled={busy || !departmentId} onClick={save} type="button">
-          ذخیره فعالیت
+        <button className="btn btn-primary" disabled={busy || !departmentId || (!!initial&&!scheduleReason.trim())} onClick={save} type="button">
+          {initial ? 'ذخیره تغییر برنامه' : 'ذخیره فعالیت'}
         </button>
       </div>
     </div>

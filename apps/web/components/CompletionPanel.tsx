@@ -202,7 +202,7 @@ export function CompletionPanel({ kase, onChange }: { kase: CaseDetail; onChange
             {can('finance.close') && !c.financial.valid && (
               <button
                 className="btn btn-sm"
-                disabled={financialOthers.length > 0 || (!!balance && !can('finance.approve'))}
+                disabled={financialOthers.length > 0 || (!!balance && !can('finance.approve') && !can('case.release_authorize'))}
                 onClick={() => start('financial')}
               >
                 بستن مالی
@@ -389,7 +389,7 @@ export function CompletionPanel({ kase, onChange }: { kase: CaseDetail; onChange
             {balance && (
               <label className="check">
                 <input type="checkbox" checked={waive} onChange={(e) => setWaive(e.target.checked)} />
-                <span>بستن با مانده {rial(balance.amountRial ?? 0)} (تصمیم مدیر خدمات؛ دلیل الزامی)</span>
+                <span>بستن با مانده {rial(balance.amountRial ?? 0)} (تأیید مسئول مجاز خروج؛ دلیل الزامی)</span>
               </label>
             )}
             <label className="field">

@@ -98,6 +98,12 @@ jobs:
         run: |
           PGPASSWORD=ci-only psql -h localhost -U manage -d manage -c "create database manage_daily"
           cd apps/api && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testRegex 'test/daily-reports-postgres\.e2e-spec\.ts$'
+      - name: Workshop plan and authorization locks on real PostgreSQL
+        env:
+          WORKSHOP_PG_TEST_URL: postgres://manage:ci-only@localhost:5432/manage_workshop
+        run: |
+          PGPASSWORD=ci-only psql -h localhost -U manage -d manage -c "create database manage_workshop"
+          cd apps/api && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testRegex 'test/workshop-postgres\.e2e-spec\.ts$'
 
   e2e:
     name: End-to-end (Playwright, Chromium)

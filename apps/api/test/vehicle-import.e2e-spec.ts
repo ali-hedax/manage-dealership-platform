@@ -47,7 +47,7 @@ const complete = (adm: string, chs: string, extra: SheetRow = {}): SheetRow => (
 
 beforeAll(async () => {
   h = await createHarness();
-  [manager, expert] = await Promise.all(['manager', 'expert'].map((u) => h.login(u)));
+  [manager, expert] = await Promise.all(['admin', 'expert'].map((u) => h.login(u)));
 });
 afterAll(async () => {
   await h?.close();
@@ -265,7 +265,7 @@ describe('existing-vehicle import: dealership isolation', () => {
       username: 'manager-other',
       displayName: 'مدیر دیگر',
       passwordHash: await hashPassword(TEST_PASSWORD),
-      roles: ['service_manager'],
+      roles: ['system_admin'],
       isTest: true,
     });
     const other = await h.login('manager-other', 'other-import');

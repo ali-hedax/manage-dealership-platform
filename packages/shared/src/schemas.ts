@@ -140,6 +140,10 @@ export const caseListQuerySchema = z.object({
 export type CaseListQuery = z.infer<typeof caseListQuerySchema>;
 
 export const createTaskSchema = z.object({
+  stationId: uuid.nullish(),
+  assignedUserId: uuid.nullish(),
+  durationMinutes: z.number().int().min(1).max(100000).optional(),
+  scheduleReason: optionalText(1000),
   departmentId: uuid,
   title: optionalText(200),
   technicianName: optionalText(120),

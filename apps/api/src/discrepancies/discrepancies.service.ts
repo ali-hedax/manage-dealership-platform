@@ -178,7 +178,7 @@ export class DiscrepanciesService {
   // ------------------------------------------------------------- commands
 
   async assign(actor: Actor, id: string, input: DiscrepancyAssignInput): Promise<PartDiscrepancy> {
-    if (!canReview(actor.user.permissions)) throw forbidden();
+    if (!actor.user.permissions.has('part.manage')) throw forbidden();
     await this.db.transaction(async (tx) => {
       const row = await this.load(tx, actor, id, input.expectedVersion);
       if (row.status === 'resolved' || row.status === 'dismissed') throw badRequest('DISCREPANCY_CLOSED', 'این مغایرت قبلاً تعیین تکلیف شده است');
@@ -206,7 +206,7 @@ export class DiscrepanciesService {
 
   /** Only a person closes an item, with the reason and what was checked. */
   async resolve(actor: Actor, id: string, input: DiscrepancyResolveInput): Promise<PartDiscrepancy> {
-    if (!canReview(actor.user.permissions)) throw forbidden();
+    if (!actor.user.permissions.has('part.manage')) throw forbidden();
     await this.db.transaction(async (tx) => {
       const row = await this.load(tx, actor, id, input.expectedVersion);
       if (row.status === 'resolved' || row.status === 'dismissed') throw badRequest('DISCREPANCY_CLOSED', 'این مغایرت قبلاً تعیین تکلیف شده است');

@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] — accident workflow redesign
+
+- Unified accident coordinator desk and default responsibilities; parts operations remain with parts, the service manager receives reporting access, and system support assists operations without owner-only access administration. Existing accounts and custom access templates are not migrated.
+- Added coded repair stations, an effective-dated Tehran work calendar, explicit holiday review, working-minute planning, parallel/dependent repair work, immutable original deadlines and recorded rescheduling reasons.
+- Added a restricted technician phone page for assigned start/end actions, separate coordinator handover confirmation, station delay/transfer reports and per-case union of blocker intervals.
+- Added parts market quotes and coordinator-recorded payer decisions; purchase requires matching, unexpired authorization, including price increases above the assessment. Customer receipts and release authority belong to the coordinator; spending exceptions remain separately controlled.
+- Added the [Persian workflow guide](docs/ACCIDENT_WORKFLOW_FA.md). This version is not deployed; real staff access, holiday data and LAN/mobile rollout require separate review.
+
 ## [Released on Manage] — daily parts reports, 2026-11-03
 
 - Published tested 40b389f (CI 41614528596, all six jobs successful) with the operational environment and existing accounts/cases preserved. Added daily stock/Emdad upload and review, exact-SKU reservations/reconciliation, audited family aliases, internal 11:00 Tehran reminders and a Persian staff guide.

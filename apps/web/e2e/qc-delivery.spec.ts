@@ -29,7 +29,7 @@ test('QC history, settlement, financial close and handover archive the case', as
   await openCase5(page, 'cashier');
   await expect(panel).toContainText('سهم مشتری کامل دریافت نشده است');
   await expect(panel.getByRole('button', { name: 'بستن مالی' })).toBeDisabled();
-  await page.getByTestId('finance-panel').getByRole('button', { name: 'ثبت دریافت تسویه' }).click();
+  await page.getByTestId('finance-panel').getByRole('button', { name: 'ثبت دریافت از مشتری' }).click();
   await expect(dialog.getByLabel('مبلغ دریافتی (ریال) *')).toHaveValue('8000000');
   await dialog.getByLabel('شماره پیگیری / رسید پرداخت *').fill('POS-E2E-5');
   await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();

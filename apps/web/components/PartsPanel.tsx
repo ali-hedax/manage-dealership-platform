@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { QuotePanel, QuoteProposal } from './WorkshopQuotes';
 import { useState } from 'react';
 import useSWR from 'swr';
 import {
@@ -257,6 +258,8 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
 
   return (
     <section className="panel" data-testid="parts-panel">
+      {editable&&<QuoteProposal parts={parts??[]} onChange={onChange}/>}
+      <QuotePanel caseId={kase.id}/>
       <div className="panel-head">
         <h2>
           قطعات{' '}

@@ -3,6 +3,8 @@
    (inline-start = right in RTL) so a future LTR locale needs no rewrite. */
 
 :root {
+  --workshop-accent: #24616b;
+  --workshop-soft: #edf5f5;
   --carbon: #1a202c;
   --carbon-2: #232b3a;
   --carbon-3: #2d3748;
@@ -36,6 +38,65 @@
   --fs-xxl: 28px;
 
   --sidebar-w: 248px;
+}
+
+/* Repair operations: route and timing take precedence over decorative tiles. */
+.workshop-page { --blue-strong:var(--workshop-accent); }
+.workshop-heading { display:flex; justify-content:space-between; align-items:center; gap:24px; padding-block:16px 24px; border-block-end:2px solid var(--workshop-accent); }
+.workshop-heading h1 { margin-block:8px 12px; font-size:clamp(24px,3vw,34px); }
+.workshop-heading p { color:var(--steel); margin-block:0; }
+.workshop-kicker { color:var(--workshop-accent); font-weight:600; }
+.workshop-heading-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.workshop-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--silver); background:var(--surface); border-radius:var(--radius-m); overflow:hidden; }
+.workshop-summary>button,.workshop-summary>a { color:var(--ink); background:var(--surface); border:0; border-inline-end:1px solid var(--silver); display:grid; grid-template-columns:24px 1fr; gap:8px 14px; padding:22px; text-align:start; min-block-size:116px; cursor:pointer; }
+.workshop-summary strong { font-size:30px; line-height:1.2; }
+.workshop-summary span { grid-column:2; color:var(--steel); font-size:13px; }
+.workshop-summary .app-icon { color:var(--workshop-accent); margin-block-start:5px; }
+.workshop-summary [aria-pressed=true] { background:var(--workshop-soft); box-shadow:inset 0 -3px var(--workshop-accent); }
+.workshop-filters { display:flex; gap:16px; flex-wrap:wrap; }
+.workshop-filters .field { flex:1; min-inline-size:180px; }
+.workshop-bars>div { display:grid; grid-template-columns:minmax(100px,1fr) 3fr minmax(130px,1fr); align-items:center; gap:16px; margin-block:16px; }
+.workshop-bars meter { inline-size:100%; block-size:22px; accent-color:var(--workshop-accent); }
+.quote-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-block:18px; border-block-end:1px solid var(--silver); }
+.quote-row p { margin-block:7px; }
+.quote-row>div:last-child { display:grid; gap:12px; justify-items:start; }
+.quote-decision { margin-block:18px; padding:20px; background:var(--workshop-soft); border-inline-start:3px solid var(--workshop-accent); }
+.quote-decision h3 { margin-block-start:0; }
+.calendar-week { margin-block:16px 24px; }
+.calendar-day { display:grid; grid-template-columns:100px 1fr auto; align-items:center; gap:16px; padding-block:14px; border-block-end:1px solid var(--silver); }
+.calendar-day>div { display:flex; flex-wrap:wrap; gap:12px 24px; }
+.calendar-day .input { max-inline-size:140px; }
+.workshop-page fieldset { border:0; padding:0; margin:0; min-inline-size:0; }
+.workshop-page legend { font-weight:600; }
+.repair-route { display:flex; flex-wrap:wrap; gap:24px; padding:20px; list-style:none; }
+.repair-route li { display:grid; gap:6px; border-inline-start:2px solid var(--silver); padding-inline-start:14px; }
+.repair-route li[data-status=in_progress] { border-color:var(--workshop-accent); }
+.repair-route li[data-status=approved] { border-color:var(--green); }
+.technician-page { max-inline-size:680px; margin-inline:auto; font-size:17px; }
+.technician-page>header { padding-block:12px 24px; }
+.technician-page h1 { font-size:32px; }
+.technician-job { padding:24px; margin-block-end:20px; background:var(--surface); border:1px solid var(--silver); border-block-start:4px solid var(--workshop-accent); border-radius:12px; }
+.technician-job h2 { margin-block:20px; font-size:24px; }
+.technician-page .technician-action { inline-size:100%; min-block-size:68px; min-height:68px; font-size:22px; margin-block-start:12px; }
+.technician-page .plate { max-inline-size:100%; }
+.workshop-page :is(input,select,textarea),.technician-page :is(input,button) { font-size:16px; }
+.workshop-page :is(button,a):focus-visible,.technician-page button:focus-visible { outline:3px solid var(--workshop-accent); outline-offset:4px; }
+@media(max-width:700px) {
+  .workshop-heading { align-items:flex-start; flex-direction:column; }
+  .workshop-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .workshop-summary>button,.workshop-summary>a { padding:16px; }
+  .calendar-day { grid-template-columns:1fr; }
+  .calendar-day>div { flex-direction:column; }
+  .quote-row { flex-direction:column; align-items:stretch; }
+  .workshop-bars>div { grid-template-columns:1fr 2fr; gap:8px; }
+  .workshop-bars strong { grid-column:2; }
+  .technician-job { padding:18px; }
+}
+@media print {
+  .workshop-summary { break-inside:avoid; }
+  .workshop-page .workshop-filters,.workshop-page .quote-decision { display:none; }
+  .workshop-page .table-scroll { overflow:visible; }
+  .workshop-page .panel { break-inside:auto; }
 }
 
 /* Unit navigation and staff workspaces use the existing HEDAX palette. */
@@ -1487,3 +1548,8 @@ tr.is-late td { background:var(--red-soft); }
     border-color: #000;
   }
 }
+
+.workshop-schedule-table { inline-size:100%; border-collapse:collapse; }
+.workshop-schedule-table :is(th,td) { text-align:start; padding:12px 8px; border-block-end:1px solid var(--silver); }
+
+.case-current-route { display:grid; gap:14px; padding:20px; border-inline-start:4px solid var(--workshop-accent); background:var(--surface); }

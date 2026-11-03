@@ -1,5 +1,11 @@
 # Database
 
+## 0014: repair workflow, station codes and market-price approvals
+
+`0014_parallel_mattie_franklin.sql` adds tenant-scoped `work_calendars` (append-only effective revisions), `workshop_stations` (mutable/versioned), and `part_quotes` (versioned proposal and external-decision history). Task rows gain station/assignee references, a station snapshot, a frozen calendar snapshot and immutable original planned start/end timestamps. Existing tasks retain null snapshots/baselines; no historical durations, assignments or customer data are invented. Every mutation writes audit and change-log snapshots in the same transaction. Cross-tenant station, staff, quote and case references are validated by services. Code uniqueness is scoped to the tenant.
+
+Matching rollback: `apps/api/src/db/down/0014_parallel_mattie_franklin.sql`. It drops the new history and task columns; it is destructive and requires preservation/review before any real execution. The SQL migration does not modify real accounts, role assignments, permission templates, passwords or MFA. New default role permissions still require an effective-access review before rollout, because pre-existing templates/overrides take precedence. See [workflow guide](ACCIDENT_WORKFLOW_FA.md).
+
 Migration `0013_stock_code_aliases` adds tenant-scoped, versioned human-approved family aliases for nonstandard stock codes. A nullable base detaches an alias without losing its audited history. Snapshot quantities, source codes and existing reservations are unchanged. Permission: `daily_reports.settings`; every update records approver, reason, time and audit/change-log in the same transaction. Down script is for an isolated rehearsal only. Migrations 0012 and 0013 were restored/rehearsed and installed in production on 2026-11-03 with release 40b389f; sample daily reports were applied only to the isolated copy, never production.
 
 PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts). Migrations: [`apps/api/src/db/migrations`](../apps/api/src/db/migrations) (applied by Drizzle's migrator, tracked in `drizzle.__drizzle_migrations`). Rollback scripts: [`apps/api/src/db/down`](../apps/api/src/db/down).

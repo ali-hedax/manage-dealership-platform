@@ -2,6 +2,8 @@
 // used in the API; Persian display labels live in labels.ts.
 
 export const ROLES = [
+  'accident_coordinator', // Unified accident responsibility; legacy roles remain readable.
+  'technician',
   'accident_expert', // کارشناس تصادفات
   'accident_supervisor', // مسئول پیگیری / سرپرست تصادفات
   'service_manager', // مدیر خدمات
@@ -132,6 +134,7 @@ export const DEFAULT_DEPARTMENTS = [
   { code: 'mechanical', name: 'مکانیکی' },
   { code: 'electrical', name: 'برق و باتری‌سازی' },
   { code: 'suspension', name: 'جلوبندی' },
+  { code:'engine_tuning',name:'تنظیم موتور' },
   { code: 'assembly', name: 'مونتاژ و دمونتاژ' },
   { code: 'qc', name: 'کنترل کیفیت' },
 ] as const;

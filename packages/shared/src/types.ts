@@ -84,6 +84,11 @@ export interface Paged<T> {
 }
 
 export interface Task {
+  stationId?: string | null;
+  stationCode?: string | null;
+  stationName?: string | null;
+  assignedUserId?: string | null;
+  baselineEndAt?: string | null;
   id: string;
   caseId: string;
   department: { id: string; code: string; name: string };

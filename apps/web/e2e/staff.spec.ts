@@ -5,9 +5,9 @@ test('owner sends and retries an employee invitation from کارکنان without
   await login(page,'admin');
   await page.route('**/api/v1/auth/invitations/email/status',r=>r.fulfill({json:{configured:true}}));
   let sent=false;
-  await page.route('**/api/v1/auth/invitations',r=>r.fulfill({json:sent?[{id:'synthetic',email:'worker@example.test',displayName:'همکار آزمون',roles:['accident_expert'],isActive:false,invitationDelivery:'sent',invitationExpiresAt:new Date(Date.now()+86400000).toISOString()}]:[]}));
+  await page.route('**/api/v1/auth/invitations',r=>r.fulfill({json:sent?[{id:'synthetic',email:'worker@example.test',displayName:'همکار آزمون',roles:['accident_coordinator'],isActive:false,invitationDelivery:'sent',invitationExpiresAt:new Date(Date.now()+86400000).toISOString()}]:[]}));
   await page.route('**/api/v1/auth/invitations/email',async r=>{
-    expect(r.request().postDataJSON()).toEqual({email:'worker@example.test',displayName:'همکار آزمون',roles:['accident_expert']});
+    expect(r.request().postDataJSON()).toEqual({email:'worker@example.test',displayName:'همکار آزمون',roles:['accident_coordinator']});
     sent=true;await r.fulfill({json:{id:'synthetic',status:'invited',emailDelivery:'sent'}});
   });
   await page.goto('/users');await expect(page.getByRole('heading',{name:'کارکنان',exact:true})).toBeVisible();
@@ -51,7 +51,7 @@ test('owner can invite privately while email setup is unavailable',async({page})
 test('owner sees why email failed and can check the connection without sending',async({page})=>{
   await login(page,'admin');
   await page.route('**/api/v1/auth/invitations/email/status',r=>r.fulfill({json:{configured:true}}));
-  await page.route('**/api/v1/auth/invitations',r=>r.fulfill({json:[{id:'synthetic',email:'worker@example.test',displayName:'همکار آزمون',roles:['accident_expert'],isActive:false,invitationDelivery:'failed',invitationFailure:'connection_blocked',invitationExpiresAt:new Date(Date.now()+86400000).toISOString()}]}));
+  await page.route('**/api/v1/auth/invitations',r=>r.fulfill({json:[{id:'synthetic',email:'worker@example.test',displayName:'همکار آزمون',roles:['accident_coordinator'],isActive:false,invitationDelivery:'failed',invitationFailure:'connection_blocked',invitationExpiresAt:new Date(Date.now()+86400000).toISOString()}]}));
   let checks=0;
   await page.route('**/api/v1/auth/invitations/email/check',r=>{checks++;return r.fulfill({json:{status:'failed',failure:'connection_blocked'}});});
   await page.goto('/users');

@@ -12,7 +12,7 @@ it('preserves default roles and restricts access administration to the actual ow
  expect((await qc.get('/auth/me')).body.permissions.sort()).toEqual([...permissionsFor(['qc_inspector'])].sort());
  const me=(await owner.get('/auth/me')).body;expect(me.isOwner).toBe(true);expect(me.permissions.sort()).toEqual([...PERMISSIONS].sort());
  expect((await qc.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون',source:'company'})).status).toBe(403);
- expect((await admin.post('/auth/invitations',{email:'overreach@example.test',displayName:'دعوت فراتر از مجوز آزمون',roles:['service_manager']})).status).toBe(403);
+ expect((await admin.post('/auth/invitations',{email:'overreach@example.test',displayName:'دعوت فراتر از مجوز آزمون',roles:['accident_coordinator']})).status).toBe(403);
 });
 it('applies per-user additions/removals to existing sessions, including actual mutations and PII masking',async()=>{
  expect((await update({allow:['part.request','reference.parts.read','customer.pii.read'],deny:['qc.inspect']})).status).toBe(200);

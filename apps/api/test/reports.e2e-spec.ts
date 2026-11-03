@@ -59,7 +59,7 @@ describe('reports: access', () => {
     expect((await manager.get('/reports/views')).body).toMatchObject({ views: ['manager', 'parts', 'accident', 'workshop'], defaultView: 'manager' });
     expect((await parts.get('/reports/views')).body).toMatchObject({ views: ['parts'], defaultView: 'parts' });
     expect((await qc.get('/reports/views')).body).toMatchObject({ views: ['workshop'], defaultView: 'workshop' });
-    expect((await expert.get('/reports/views')).body).toMatchObject({ views: ['accident'], defaultResponsible: 'me' });
+    expect((await expert.get('/reports/views')).body).toMatchObject({ views: ['accident','workshop'], defaultResponsible: 'me' });
     expect((await cashier.get('/reports/views')).body.views).toEqual([]);
     expect((await parts.get('/reports?view=manager')).status).toBe(403);
     expect((await parts.get('/reports/export?view=manager')).status).toBe(403);
@@ -76,7 +76,7 @@ describe('reports: consistent figures', () => {
       expect((await supervisor.post(`/cases/${c.id}/blockers`, { reason, description: 'آزمون' })).status).toBe(201);
     }
     for (const d of ['چراغ جلو', 'سپر جلو']) {
-      expect((await parts.post(`/cases/${c.id}/parts`, { description: d, source: 'stock', quantity: 2 })).status).toBe(201);
+      expect((await expert.post(`/cases/${c.id}/parts`, { description: d, source: 'stock', quantity: 2 })).status).toBe(201);
     }
     await newCase({ forecastDeliveryAt: daysAgo(2) }); // late only against the forecast
     await newCase(); // no due date at all

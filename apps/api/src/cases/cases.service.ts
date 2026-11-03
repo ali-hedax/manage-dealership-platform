@@ -55,7 +55,7 @@ export interface CaseImportFields {
 type VehicleInput = NonNullable<CreateCaseInput['vehicle']>;
 type CustomerInput = NonNullable<CreateCaseInput['customer']>;
 
-const RESPONSIBLE_ROLES: Role[] = ['accident_expert', 'accident_supervisor', 'service_manager'];
+const RESPONSIBLE_ROLES: Role[] = ['accident_coordinator','accident_expert', 'accident_supervisor', 'system_admin'];
 const FUTURE_TOLERANCE_MS = 10 * 60_000;
 // The UI records times to the minute; ordering checks accept that precision.
 export const MINUTE_TOLERANCE_MS = 60_000;
@@ -535,6 +535,7 @@ export class CasesService {
       title: t.title,
       technicianName: t.technicianName,
       technicianCode: t.technicianCode,
+      stationId:t.stationId, stationCode:t.stationSnapshot?.code ?? null, stationName:t.stationSnapshot?.name ?? null, assignedUserId:t.assignedUserId, baselineEndAt:iso(t.baselineEndAt),
       status: t.status as Task['status'],
       plannedStartAt: iso(t.plannedStartAt),
       plannedEndAt: iso(t.plannedEndAt),
@@ -588,7 +589,7 @@ export class CasesService {
       .select()
       .from(cases)
       .where(and(eq(cases.id, id), eq(cases.tenantId, tenantId)))
-      .limit(1);
+      .limit(1).for('update');
     if (!row) throw notFound('پرونده');
     if (expectedVersion !== undefined && row.version !== expectedVersion) throw versionConflict(row.version);
     if (row.status !== 'open') throw badRequest('CASE_NOT_OPEN', 'این پرونده بسته یا لغو شده است');

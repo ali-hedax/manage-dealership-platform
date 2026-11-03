@@ -3,7 +3,7 @@ import {writeSheet} from '../../api/src/parts/xlsx';
 import {login} from './helpers';
 
 test('imports a parts catalog, then selects a technical code while adding a case part',async({page})=>{
- await login(page,'manager');await page.goto('/reference-data');
+ await login(page,'admin');await page.goto('/reference-data');
  await page.getByLabel('فایل اکسل اطلاعات پایه').setInputFiles({name:'synthetic-parts.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(writeSheet('قطعات',[['کد فنی','نام قطعه','موجودی'],['00042','چراغ آزمون مرجع','7']]))});
  await page.getByRole('combobox',{name:'کد فنی',exact:true}).selectOption('0');await page.getByRole('combobox',{name:'نام قطعه',exact:true}).selectOption('1');await page.getByRole('combobox',{name:'موجودی فایل',exact:true}).selectOption('2');
  await page.getByRole('button',{name:'پیش‌نمایش اطلاعات پایه',exact:true}).click();
@@ -16,7 +16,7 @@ test('imports a parts catalog, then selects a technical code while adding a case
 });
 
 test('historical customer lookup fills only empty fields and works on a phone width',async({page})=>{
- await login(page,'manager');
+ await login(page,'admin');
  const input={kind:'customers',fileName:'synthetic-customers.xlsx',fileBase64:Buffer.from(writeSheet('سوابق',[['شاسی','نام','تلفن','مدل'],['TESTARCHIVE01','مالک سابق آزمون','09000000001','مدل سابق آزمون']])).toString('base64'),sheetIndex:0,headerRow:1,mapping:{chassis:0,fullName:1,phone:2,model:3}};
  const p=await page.request.post('/api/v1/reference-imports',{headers:{'x-manage-client':'test'},data:input});expect(p.ok()).toBe(true);const id=(await p.json()).id;expect((await page.request.post(`/api/v1/reference-imports/${id}/apply`,{headers:{'x-manage-client':'test'},data:{}})).ok()).toBe(true);
  await page.setViewportSize({width:390,height:844});await page.goto('/cases/new');await page.getByLabel('نام و نام خانوادگی',{exact:true}).fill('مالک فعلی آزمون');await page.getByLabel('VIN کامل یا شماره شاسی عین سابقه').fill('TESTARCHIVE01');await page.getByRole('button',{name:'جست‌وجو در اطلاعات پایه'}).click();await expect(page.getByText('مالک سابق آزمون — مدل سابق آزمون')).toBeVisible();await page.getByRole('button',{name:'استفاده از اطلاعات این سابقه'}).click();
@@ -25,7 +25,7 @@ test('historical customer lookup fills only empty fields and works on a phone wi
 });
 
 test('long manufacturer trim, editable contacts and admission numbers save without the old 80-character error',async({page})=>{
- await login(page,'manager');await page.goto('/cases/new');
+ await login(page,'admin');await page.goto('/cases/new');
  await page.getByLabel('نام و نام خانوادگی',{exact:true}).fill('مشتری سازمانی آزمون '.repeat(12));
  await page.getByLabel('تیپ',{exact:true}).fill('شرح کامل مشخصات و تجهیزات کارخانه '.repeat(20));
  await page.getByLabel('شماره کارت پذیرش ایران‌خودرو',{exact:true}).fill('1405777777');

@@ -14,7 +14,7 @@ test('department menu exposes only useful workspaces and finance/QC queues work 
  await page.setViewportSize({width:390,height:844});await page.goto('/accidents/quality');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.getByRole('button',{name:'منو',exact:true}).click();const sidebar=page.getByRole('complementary',{name:'منوی اصلی'});
- await expect(sidebar.getByText('واحد تصادفات',{exact:true})).toBeVisible();await expect(sidebar.getByRole('link',{name:'کنترل کیفیت',exact:true})).toBeVisible();
+ await expect(sidebar.getByText('واحد تصادفات',{exact:true})).toBeVisible();await expect(sidebar.getByRole('link',{name:'میز کار من',exact:true})).toBeVisible();
  await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'منو',exact:true})).toBeFocused();
  // A direct section link must scroll after asynchronously loaded case data arrives.
  const cases=await (await page.request.get('/api/v1/cases')).json();

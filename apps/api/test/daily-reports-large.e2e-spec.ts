@@ -15,7 +15,7 @@ afterAll(async () => {
 });
 
 it('uploads, parses and applies a ~23.6 MB SpreadsheetML file within time and memory bounds', async () => {
-  const manager = await h.login('manager');
+  const manager = await h.login('admin');
   const rows = Array.from({ length: 5183 }, (_, i) => emdadRow(i + 1, { 'شرح اختصاصی': `قطعه ساختگی ${i} & ${'x'.repeat(4200)}` }));
   const file = buildEmdadXml(rows);
   expect(file.length).toBeGreaterThan(23_000_000);

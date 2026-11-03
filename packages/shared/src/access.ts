@@ -3,6 +3,8 @@ import { ROLES, type Role } from './enums';
 import { PERMISSIONS, type Permission, type PermissionOverrides, type PermissionTemplates } from './permissions';
 
 export const PERMISSION_LABELS: Record<Permission,string> = {
+ 'case.release_authorize':'تأیید خروج با مانده مشتری و ثبت دلیل',
+ 'workshop.read':'مشاهده مسیر و گزارش جایگاه‌ها','workshop.manage':'تعریف جایگاه تعمیر','calendar.manage':'تنظیم تقویم کاری','task.execute':'شروع و پایان کار محول‌شده به خود','part.quote':'ثبت پیشنهاد قیمت بازار','part.price_authorize':'ثبت تأیید قیمت از پرداخت‌کننده',
  'case.read':'مشاهده پرونده‌ها','case.create':'ثبت پرونده','case.update':'ویرایش پرونده و مرحله',
  'customer.pii.read':'مشاهده تلفن و اطلاعات تماس مشتری','task.manage':'ثبت و پیشبرد فعالیت تعمیر','task.approve':'تأیید فعالیت تعمیر',
  'blocker.report':'ثبت مانع','blocker.manage':'پیگیری و رفع مانع','assessment.manage':'ثبت و نهایی‌کردن کارشناسی و الحاقیه',
@@ -18,12 +20,13 @@ export const PERMISSION_LABELS: Record<Permission,string> = {
  'emdad.read':'مشاهده پیگیری امداد ویژه','emdad.manage':'پیگیری و بررسی اتصال امداد ویژه',
 };
 export const PERMISSION_GROUPS: {title:string;permissions:Permission[]}[] = [
+ {title:'برنامه تعمیر و تأیید خرید',permissions:['workshop.read','workshop.manage','calendar.manage','task.execute','part.quote','part.price_authorize']},
  {title:'پرونده و مشتری',permissions:['case.read','case.create','case.update','customer.pii.read','case.import']},
  {title:'کارشناسی و تعمیر',permissions:['assessment.manage','assessment.authorize','task.manage','task.approve','blocker.report','blocker.manage']},
  {title:'قطعات',permissions:['part.request','part.manage','reference.parts.read','reference.parts.manage']},
  {title:'گزارش‌های روزانه، موجودی و امداد ویژه',permissions:['daily_reports.upload','daily_reports.apply','daily_reports.settings','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage']},
  {title:'مالی و صندوق',permissions:['finance.propose','finance.approve','finance.payment','finance.close']},
- {title:'کنترل کیفیت و تحویل',permissions:['qc.inspect','case.technical_close','case.deliver']},
+ {title:'کنترل کیفیت و تحویل',permissions:['qc.inspect','case.technical_close','case.deliver','case.release_authorize']},
  {title:'گزارش، اطلاعات پایه و مدیریت',permissions:['dashboard.read','report.manager','audit.read','reference.customers.read','reference.customers.manage','user.manage','settings.manage']},
 ];
 const permissionList = z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length).refine(v=>new Set(v).size===v.length,'دسترسی تکراری است');

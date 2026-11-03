@@ -49,7 +49,7 @@ afterAll(async () => {
 describe('parts discrepancy queue', () => {
   it('flags "handover recorded but the unit reports a shortage" once, with the facts, and closes only with a reason', async () => {
     const c = await newCase();
-    let p: Part = (await parts.post(`/cases/${c.id}/parts`, { description: 'چراغ جلو آزمون', source: 'stock' })).body;
+    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'چراغ جلو آزمون', source: 'stock' })).body;
     p = await step(p, 'check_stock', { inStock: true });
     p = await step(p, 'reserve');
     await step(p, 'hand_over', { departmentId: dept('body'), recipientName: 'تکنسین آزمون' });
@@ -71,18 +71,18 @@ describe('parts discrepancy queue', () => {
     const assigned = await parts.post(`/part-discrepancies/${item.id}/assign`, { expectedVersion: item.version, assigneeUserId: (await parts.get('/auth/me')).body.id });
     expect(assigned.status).toBe(201);
     expect(assigned.body).toMatchObject({ status: 'in_review', assignee: { displayName: 'کاربر قطعات نمونه' } });
-    const noReason = await manager.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: assigned.body.version, outcome: 'resolved', reason: '' });
+    const noReason = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: assigned.body.version, outcome: 'resolved', reason: '' });
     expect(noReason.status).toBe(400);
-    const stale = await manager.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: item.version, outcome: 'resolved', reason: 'بررسی شد؛ قطعه در واحد پیدا شد' });
+    const stale = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: item.version, outcome: 'resolved', reason: 'بررسی شد؛ قطعه در واحد پیدا شد' });
     expect(stale.status).toBe(409);
-    const closed = await manager.post(`/part-discrepancies/${item.id}/resolve`, {
+    const closed = await parts.post(`/part-discrepancies/${item.id}/resolve`, {
       expectedVersion: assigned.body.version,
       outcome: 'resolved',
       reason: 'بررسی شد؛ قطعه در قفسه واحد صافکاری پیدا شد، مانع رفع شد',
     });
     expect(closed.status).toBe(201);
-    expect(closed.body).toMatchObject({ status: 'resolved', resolvedBy: { displayName: 'مدیر خدمات نمونه' }, resolutionReason: expect.stringContaining('قفسه') });
-    const again = await manager.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: closed.body.version, outcome: 'dismissed', reason: 'دوباره' });
+    expect(closed.body).toMatchObject({ status: 'resolved', resolvedBy: { displayName: 'کاربر قطعات نمونه' }, resolutionReason: expect.stringContaining('قفسه') });
+    const again = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: closed.body.version, outcome: 'dismissed', reason: 'دوباره' });
     expect(again.body.code).toBe('DISCREPANCY_CLOSED');
 
     // History: detection time and every review step with its actor.
@@ -96,12 +96,12 @@ describe('parts discrepancy queue', () => {
 
   it('flags a wrong or defective part and a contradictory supply record; a vanished condition is marked, not closed', async () => {
     const c = await newCase();
-    let p: Part = (await parts.post(`/cases/${c.id}/parts`, { description: 'سپر مشتری', source: 'customer' })).body;
+    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'سپر مشتری', source: 'customer' })).body;
     p = await step(p, 'order', { supplier: 'مشتری' });
     p = await step(p, 'receive', { inspection: 'defective', note: 'ترک در گوشه' });
     expect(p.status).toBe('rejected');
     // A record that never went through ordering (e.g. entered before Manage): received without an order.
-    let q: Part = (await parts.post(`/cases/${c.id}/parts`, { description: 'گلگیر شرکت', source: 'company' })).body;
+    let q: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'گلگیر شرکت', source: 'company' })).body;
     await h.db.db.update(partRequests).set({ status: 'received', receivedAt: new Date() }).where(eq(partRequests.id, q.id));
 
     const items = (await queue(manager)).filter((d) => d.caseId === c.id);
@@ -127,11 +127,11 @@ describe('parts discrepancy queue', () => {
     expect((await qc.get('/part-discrepancies')).status).toBe(403);
     const any = (await queue(manager, '?status=all'))[0]!;
     expect((await expert.post(`/part-discrepancies/${any.id}/assign`, { expectedVersion: any.version, assigneeUserId: null })).status).toBe(403);
-    expect((await supervisor.get('/part-discrepancies')).status).toBe(200); // supervisor has part.manage
+    expect((await supervisor.get('/part-discrepancies')).status).toBe(403); // coordinator does not manage parts
     const before = await h.db.db.select({ id: partDiscrepancies.id, version: partDiscrepancies.version }).from(partDiscrepancies);
     const tenantId = newId();
     await h.db.db.insert(tenants).values({ id: tenantId, code: 'other-discrepancies', name: 'نمایندگی دیگر آزمون', isTest: true });
-    await h.db.db.insert(users).values({ id: newId(), tenantId, username: 'other-discrepancy-manager', displayName: 'مدیر دیگر آزمون', passwordHash: await hashPassword(TEST_PASSWORD), roles: ['service_manager'], isTest: true });
+    await h.db.db.insert(users).values({ id: newId(), tenantId, username: 'other-discrepancy-manager', displayName: 'مدیر دیگر آزمون', passwordHash: await hashPassword(TEST_PASSWORD), roles: ['parts_clerk'], isTest: true });
     const other = await h.login('other-discrepancy-manager', 'other-discrepancies');
     expect((await other.get('/part-discrepancies')).body).toEqual([]);
     expect((await other.get(`/part-discrepancies/${any.id}/history`)).status).toBe(404);

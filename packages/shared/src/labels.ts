@@ -33,8 +33,10 @@ import type {
 } from './enums';
 
 export const ROLE_LABELS: Record<Role, string> = {
-  accident_expert: 'کارشناس تصادفات',
-  accident_supervisor: 'سرپرست تصادفات',
+  accident_coordinator: 'مسئول تصادفات',
+  technician: 'تعمیرکار',
+  accident_expert: 'مسئول تصادفات (سمت قدیمی کارشناس)',
+  accident_supervisor: 'مسئول تصادفات (سمت قدیمی سرپرست)',
   service_manager: 'مدیر خدمات',
   parts_clerk: 'قطعات',
   cashier: 'مالی و صندوق',
@@ -193,6 +195,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
 };
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  'part_quote.proposed':'ثبت قیمت بازار برای تأیید','part_quote.approved':'ثبت تأیید قیمت از پرداخت‌کننده','part_quote.rejected':'ثبت رد قیمت','part_quote.superseded':'جایگزینی پیشنهاد قیمت','part.quote_version_changed':'به‌روزرسانی نسخه نیاز قطعه پس از قیمت‌گیری','work_calendar.created':'ثبت نسخه تقویم کاری','workshop_station.created':'تعریف جایگاه','workshop_station.updated':'ویرایش جایگاه',
   'case.created': 'ایجاد پرونده',
   'case.updated': 'ویرایش پرونده',
   'case.stage_changed': 'تغییر مرحله',

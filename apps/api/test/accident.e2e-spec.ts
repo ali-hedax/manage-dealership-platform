@@ -229,6 +229,7 @@ describe('acceptance 6: multiple departments, parallel and dependent work', () =
 
     const b2 = (await act(b1, 'complete')).body as Task;
     expect(b2.status).toBe('done');
+    expect((await act(b2,'approve')).status).toBe(201);
     const p1 = await act(paint, 'start');
     expect(p1.status).toBe(201);
 
@@ -236,7 +237,8 @@ describe('acceptance 6: multiple departments, parallel and dependent work', () =
     expect(detail.progressPercent).toBe(50); // 3 of 6 weight units done
 
     const cycle = await supervisor.patch(`/tasks/${body.id}`, {
-      expectedVersion: b2.version,
+      expectedVersion: b2.version+1,
+      scheduleReason: 'آزمون چرخه وابستگی',
       dependsOn: [paint.id],
     });
     expect(cycle.body.code).toBe('DEPENDENCY_CYCLE');
@@ -292,7 +294,7 @@ describe('blockers: occurrence, follow-up and resolution timing', () => {
     ).body;
     expect(new Date(b.recordedAt).getTime() - new Date(b.occurredAt).getTime()).toBeGreaterThan(86_400_000);
 
-    const f = await manager.post(`/blockers/${b.id}/follow-up`, { note: 'پیگیری با واحد' });
+    const f = await supervisor.post(`/blockers/${b.id}/follow-up`, { note: 'پیگیری با واحد' });
     expect(f.body.followUpCount).toBe(1);
 
     expect((await supervisor.post(`/blockers/${b.id}/resolve`, {})).status).toBe(400);
@@ -336,16 +338,17 @@ describe('acceptance 10: roles and access control (enforced by the API)', () => 
     const c = await newCase();
     expect((await parts.post('/cases', { admittedAt: daysAgo(0), coverageType: 'personal' })).status).toBe(403);
     expect((await parts.post(`/cases/${c.id}/tasks`, { departmentId: dept('body') })).status).toBe(403);
-    expect((await expert.post(`/cases/${c.id}/tasks`, { departmentId: dept('body') })).status).toBe(403);
+    expect((await expert.post(`/cases/${c.id}/tasks`, { departmentId: dept('body') })).status).toBe(201);
+    expect((await manager.post(`/cases/${c.id}/tasks`, { departmentId: dept('body') })).status).toBe(403);
   });
 
-  it('expert can report a case-level blocker but not block a repair activity', async () => {
+  it('unified coordinator can report and resolve repair blockers', async () => {
     const c = await newCase();
     const t = await addTask(c.id, { departmentId: dept('body') });
     expect((await expert.post(`/cases/${c.id}/blockers`, { reason: 'financial' })).status).toBe(201);
-    expect((await expert.post(`/cases/${c.id}/blockers`, { reason: 'capacity', taskId: t.id })).status).toBe(403);
+    expect((await expert.post(`/cases/${c.id}/blockers`, { reason: 'capacity', taskId: t.id })).status).toBe(201);
     const b = (await supervisor.get(`/cases/${c.id}`)).body.blockers[0];
-    expect((await expert.post(`/blockers/${b.id}/resolve`, { note: 'x' })).status).toBe(403);
+    expect((await expert.post(`/blockers/${b.id}/resolve`, { note: 'x' })).status).toBe(201);
   });
 
   it('parts clerk sees cases but customer phone is masked', async () => {
@@ -357,9 +360,10 @@ describe('acceptance 10: roles and access control (enforced by the API)', () => 
     expect((await parts.get(`/cases/${c.id}/timeline`)).status).toBe(403);
   });
 
-  it('system admin cannot read customer cases (least privilege)', async () => {
-    expect((await admin.get('/cases')).status).toBe(403);
-    expect((await admin.get('/dashboard')).status).toBe(403);
+  it('system admin supports case operations without owner access management', async () => {
+    expect((await admin.get('/cases')).status).toBe(200);
+    expect((await admin.get('/dashboard')).status).toBe(200)
+    expect((await admin.get('/access')).status).toBe(403);
   });
 
   it('isolates tenants: another dealership cannot see or change these cases', async () => {

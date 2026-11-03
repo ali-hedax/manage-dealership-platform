@@ -6,6 +6,7 @@ import type {Action} from '@/lib/workspaces';
 import {AppIcon} from './AppIcon';
 export function PageActions(){
  const path=usePathname(),{can,me}=useAuth();if(path.startsWith('/accidents'))return null;
+ if(path.startsWith('/workshop'))return null;
  let label='واحد تصادفات';let actions:Action[]=[];
  const match=path.match(/^\/cases\/([^/]+)$/);
  if(match&&!['new','import'].includes(match[1]))actions=[{label:'کارشناسی',detail:'',href:'#case-assessment',icon:'file',permission:can('assessment.manage')?'assessment.manage':'assessment.authorize'},{label:'قطعات',detail:'',href:'#case-parts',icon:'box',permission:can('part.request')?'part.request':'part.manage'},{label:'فعالیت‌های تعمیر',detail:'',href:'#case-tasks',icon:'team',permission:can('task.manage')?'task.manage':'task.approve'},{label:'موانع',detail:'',href:'#case-blockers',icon:'alert',permission:can('blocker.report')?'blocker.report':'blocker.manage'},{label:'کنترل کیفیت و تحویل',detail:'',href:'#case-quality',icon:'check',permission:can('qc.inspect')?'qc.inspect':'case.technical_close'},{label:'مالی و پیش‌پرداخت',detail:'',href:'#case-finance',icon:'money',permission:can('finance.payment')?'finance.payment':can('finance.propose')?'finance.propose':can('finance.approve')?'finance.approve':'finance.close'}];

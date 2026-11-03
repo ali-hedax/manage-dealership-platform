@@ -62,7 +62,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
 
   await task.getByRole('button', { name: 'اتمام' }).click();
   await expect(task).toContainText('اتمام (منتظر تأیید)');
-  await task.getByRole('button', { name: 'تأیید سرپرست' }).click();
+  await task.getByRole('button', { name: 'تأیید تحویل' }).click();
   await expect(task).toContainText('تأییدشده');
   await expect(page.getByLabel('زمان‌ها')).toContainText('۱۰۰٪');
 

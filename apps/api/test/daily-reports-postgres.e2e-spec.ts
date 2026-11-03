@@ -52,7 +52,7 @@ suite('daily reports on real PostgreSQL', () => {
   let snapshotId: string;
   beforeAll(async () => {
     h = await createHarness({ config: { DB_DRIVER: 'postgres', DATABASE_URL: url! } });
-    [manager, parts, expert] = await Promise.all(['manager', 'parts', 'expert'].map((u) => h.login(u)));
+    [manager, parts, expert] = await Promise.all(['admin', 'parts', 'expert'].map((u) => h.login(u)));
     const ownerName = `daily-pg-owner-${Date.now()}`;
     owner = await h.loginAs(ownerName, ['service_manager']);
     const p = await preview(['01', '02', '03'].map((s) => sku(s, '3')));

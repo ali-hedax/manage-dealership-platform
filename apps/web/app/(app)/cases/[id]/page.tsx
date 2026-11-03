@@ -181,11 +181,12 @@ export default function CaseDetailPage() {
         </div>
       )}
 
+      <div className="case-current-route"><strong>فعالیت‌های جاری خودرو</strong><div className="row">{kase.tasks.filter(t=>['in_progress','blocked','done'].includes(t.status)).map(t=><a className="chip" key={t.id} href="#case-tasks">{t.stationCode||t.department.name} · {t.status==='done'?'منتظر تأیید تحویل':t.status==='blocked'?'دارای مانع':'در حال انجام'}</a>)}{!kase.tasks.some(t=>['in_progress','blocked','done'].includes(t.status))&&<span className="muted small">کار جاری ثبت نشده؛ محل خودرو از روی فعالیت‌ها مشخص نیست.</span>}</div></div>
       <div className="grid-3" style={{ alignItems: 'start' }}>
         <div className="stack span-2">
           <div id="case-assessment"><AssessmentPanel kase={kase} onChange={refresh} /></div>
           <div id="case-parts"><PartsPanel kase={kase} onChange={refresh} /></div>
-          <CaseStockPanel kase={kase} />
+          {can('part.manage')&&<CaseStockPanel kase={kase} />}
           <div id="case-tasks"><TasksPanel kase={kase} onChange={refresh} /></div>
           <div id="case-blockers"><BlockersPanel kase={kase} onChange={refresh} /></div>
           <div id="case-quality"><CompletionPanel kase={kase} onChange={refresh} /></div>

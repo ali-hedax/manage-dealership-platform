@@ -66,7 +66,7 @@ async function need(caseId: string, partNumber: string, quantity = 2): Promise<P
 
 beforeAll(async () => {
   h = await createHarness({ config: { DAILY_REPORT_MAX_BYTES: '3000000' } });
-  [manager, parts, admin, qc, expert] = await Promise.all(['manager', 'parts', 'admin', 'qc', 'expert'].map((u) => h.login(u)));
+  [manager, parts, admin, qc, expert] = await Promise.all(['admin', 'parts', 'admin', 'qc', 'expert'].map((u) => h.login(u)));
   owner = await h.loginAs('daily-owner', ['service_manager']);
   await h.db.db.update(users).set({ isOwner: true }).where(eq(users.username, 'daily-owner'));
 });
@@ -89,11 +89,11 @@ describe('upload and preview', () => {
     expect((await upload(qc, 'stock', buildStockXlsx(family('11111111')))).status).toBe(403);
   });
 
-  it('lets the system admin upload without finance or customer access', async () => {
+  it('lets system support upload and inspect operational stock', async () => {
     const p = await previewOf('stock', buildStockXlsx([sku('22222222', '01')]), admin);
     expect(p.status).toBe('preview');
-    expect((await admin.get('/stock/options')).status).toBe(403);
-    expect((await admin.post('/emdad/requests/search', {})).status).toBe(403);
+    expect((await admin.get('/stock/options')).status).toBe(200);
+    expect((await admin.post('/emdad/requests/search', {})).status).toBe(201);
     expect((await admin.post(`/daily-reports/imports/${p.id}/discard`)).status).toBe(201);
   });
 
@@ -425,9 +425,10 @@ describe('11:00 Tehran tasks and reminders', () => {
     expect(await h.db.db.select().from(dailyTasks).where(eq(dailyTasks.localDate, '2026-12-02'))).toHaveLength(0);
     await svc.tick(at('2026-12-01T20:30:00Z'));
     expect(await h.db.db.select().from(dailyTasks).where(eq(dailyTasks.localDate, '2026-12-02'))).toHaveLength(2 * tenantRows.length);
-    const inbox = await parts.get('/notifications');
+    const inbox = await admin.get('/notifications');
     expect(inbox.body.unread).toBeGreaterThan(0);
-    expect((await parts.post('/notifications/read', { ids: 'all' })).body.unread).toBe(0);
+    expect((await admin.post('/notifications/read', { ids: 'all' })).body.unread).toBe(0);
+    expect((await parts.get('/notifications')).body.unread).toBe(0);
     expect((await admin.get('/notifications')).body.items.some((n: { link: string }) => n.link.startsWith('/daily-reports'))).toBe(true);
     expect((await expert.get('/notifications')).body.items).toHaveLength(0);
   });
@@ -514,7 +515,7 @@ describe('isolation', () => {
   it('keeps imports, stock and Emdad rows inside their dealership', async () => {
     const tenantId = newId();
     await h.db.db.insert(tenants).values({ id: tenantId, code: 'daily-other', name: 'نمایندگی آزمون دیگر', isTest: true });
-    await h.db.db.insert(users).values({ id: newId(), tenantId, username: 'daily-other-manager', displayName: 'مدیر آزمون', passwordHash: await hashPassword(TEST_PASSWORD), roles: ['service_manager'], isTest: true });
+    await h.db.db.insert(users).values({ id: newId(), tenantId, username: 'daily-other-manager', displayName: 'مدیر آزمون', passwordHash: await hashPassword(TEST_PASSWORD), roles: ['system_admin'], isTest: true });
     const other = await h.login('daily-other-manager', 'daily-other');
     const mine = (await manager.get('/daily-reports/imports')).body[0];
     expect((await other.get(`/daily-reports/imports/${mine.id}`)).status).toBe(404);

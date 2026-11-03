@@ -27,7 +27,7 @@ export default function UsersPage(){
   const {data,error:listError,mutate,isLoading}=useSWR<UserRow[]>(allowed?'/auth/invitations':null,fetcher);
   const {data:presets}=useSWR<{templates:PermissionTemplates;assignableRoles?:Role[]}>(allowed?'/access/presets':null,fetcher);
   const {data:mail,error:mailError}=useSWR<{configured:boolean}>(allowed?'/auth/invitations/email/status':null,fetcher);
-  const [email,setEmail]=useState(''),[displayName,setName]=useState(''),[roles,setRoles]=useState<Role[]>(['accident_expert']);
+  const [email,setEmail]=useState(''),[displayName,setName]=useState(''),[roles,setRoles]=useState<Role[]>(['accident_coordinator']);
   const [busyEmail,setBusyEmail]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [privateLink,setPrivateLink]=useState('');
   const [check,setCheck]=useState<MailCheck|null>(null),[checking,setChecking]=useState(false);
@@ -68,7 +68,7 @@ export default function UsersPage(){
           <input id="staff-email" name="email" className="input ltr-input" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/>
           <fieldset aria-describedby="staff-role-help" style={{minInlineSize:0}}><legend>دسترسی کارمند</legend>
             <p id="staff-role-help">فقط سمت‌های موردنیاز را انتخاب کنید. مدیر سیستم می‌تواند دعوت بسازد؛ پس از تعیین مالک، دعوت او نمی‌تواند دسترسی بیشتری از مجوزهای خودش بدهد.</p>
-            {ROLES.map(role=><label key={role} style={{display:'flex',alignItems:'center',gap:8,minHeight:44}}><input name="roles" value={role} type="checkbox" disabled={presets?.assignableRoles&&!presets.assignableRoles.includes(role)} checked={roles.includes(role)} onChange={e=>setRoles(e.target.checked?[...roles,role]:roles.filter(r=>r!==role))}/> {ROLE_LABELS[role]}</label>)}
+            {ROLES.filter(r=>!['accident_expert','accident_supervisor'].includes(r)).map(role=><label key={role} style={{display:'flex',alignItems:'center',gap:8,minHeight:44}}><input name="roles" value={role} type="checkbox" disabled={presets?.assignableRoles&&!presets.assignableRoles.includes(role)} checked={roles.includes(role)} onChange={e=>setRoles(e.target.checked?[...roles,role]:roles.filter(r=>r!==role))}/> {ROLE_LABELS[role]}</label>)}
             {!roles.length&&<p role="status">حداقل یک نقش انتخاب کنید.</p>}
             <details><summary>مشاهده مجوزهای پیشنهادی سمت انتخاب‌شده</summary><p>{presets?[...permissionsFor(roles,presets.templates)].map(p=>PERMISSION_LABELS[p]).join('، '):'در حال دریافت الگوی جاری…'}</p><p>{me.isOwner?'پس از ایجاد حساب، از بخش دسترسی کارکنان مجوزهای همین فرد را تغییر دهید.':'الگوهای جاری سمت توسط مالک تعیین می‌شود.'}</p></details>
           </fieldset>

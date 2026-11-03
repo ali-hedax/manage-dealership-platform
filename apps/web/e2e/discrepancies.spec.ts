@@ -5,7 +5,7 @@ import { login } from './helpers';
 // unit still reports it missing; the parts clerk takes the review, records the
 // outcome with a reason, and the history shows each step.
 test('parts clerk reviews a handover-vs-shortage discrepancy and records the outcome with a reason', async ({ page }, testInfo) => {
-  await login(page, 'manager');
+  await login(page, 'admin');
   const api = (path: string, data?: object) =>
     data
       ? page.request.post(`/api/v1${path}`, { data, headers: { 'x-manage-client': 'web' } })

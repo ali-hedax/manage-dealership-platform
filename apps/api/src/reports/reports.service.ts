@@ -54,7 +54,7 @@ const AGE_BUCKETS: [number, number, string][] = [
 /** Who may open which view (the API decides; the web app only hides tabs). */
 export function allowedViews(permissions: Set<string>): ReportView[] {
   const views: ReportView[] = [];
-  if (permissions.has('report.manager')) views.push('manager');
+  if (permissions.has('report.manager')) return ['manager','parts','accident','workshop'];
   if (permissions.has('part.manage')) views.push('parts');
   if (permissions.has('case.update')) views.push('accident');
   if (permissions.has('task.manage') || permissions.has('qc.inspect')) views.push('workshop');

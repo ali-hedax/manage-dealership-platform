@@ -22,7 +22,7 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, departments, partRequests, users } from '../db/schema';
+import { assessmentItems, assessments, blockers, departments, partRequests, partQuotes, users } from '../db/schema';
 import { FinanceService, PURCHASE_SOURCES } from '../finance/finance.service';
 import { readFirstSheet, XlsxError } from './xlsx';
 
@@ -339,12 +339,17 @@ export class PartsService {
     }
     const unitPrice = input.unitPriceRial;
     const aboveApproved = p.approvedUnitPriceRial !== null && unitPrice > p.approvedUnitPriceRial;
-    if (aboveApproved && (!input.priceApprovalRef || !input.priceApprovedBy)) {
-      throw badRequest(
-        'PRICE_ABOVE_APPROVED',
-        'قیمت از مبلغ تأییدشده بیشتر است؛ نام کارشناس تأییدکننده و شماره تأیید را ثبت کنید یا الحاقیه بزنید',
-        { approvedUnitPriceRial: p.approvedUnitPriceRial, unitPriceRial: unitPrice },
-      );
+    const needsMarketApproval=source==='external'||aboveApproved;
+    const quotes=await tx.select().from(partQuotes).where(and(eq(partQuotes.partId,p.id),eq(partQuotes.tenantId,tenantId))).orderBy(desc(partQuotes.createdAt),desc(partQuotes.id));
+    const quote=needsMarketApproval?quotes[0]:undefined;
+    if(needsMarketApproval) {
+      const kase=await this.loadOpenCase(tx,tenantId,p.caseId);
+      const payer=kase.coverageType==='golden_card'?'golden_card':kase.coverageType==='insurance'?'insurer':kase.coverageType==='personal'?'customer':null;
+      if(quote&&payer&&quote.source!==payer)throw badRequest('MARKET_APPROVAL_REQUIRED','پوشش پرونده تغییر کرده است؛ تأیید پرداخت‌کننده فعلی لازم است');
+      if(!quote || quote.status!=='approved' || quote.unitPriceRial!==unitPrice || quote.quantity!==p.quantity || quote.supplier!==(input.supplier??'') || quote.validUntil<new Date()) {
+        throw badRequest(aboveApproved?'PRICE_ABOVE_APPROVED':'MARKET_APPROVAL_REQUIRED','خرید بازار یا افزایش قیمت به تأیید ثبت‌شده همین مبلغ، تعداد و فروشنده توسط مسئول تصادفات نیاز دارد');
+      }
+      if(quote.decidedAt && at<quote.decidedAt)throw badRequest('ORDER_BEFORE_APPROVAL','زمان خرید نمی‌تواند پیش از تأیید قیمت باشد');
     }
     const gate = await this.finance.gate(tx, tenantId, p.caseId, unitPrice * p.quantity);
     if (!gate.open) {
@@ -353,8 +358,8 @@ export class PartsService {
     return {
       ...common,
       unitPriceRial: unitPrice,
-      priceApprovalRef: aboveApproved ? input.priceApprovalRef! : null,
-      priceApprovedBy: aboveApproved ? input.priceApprovedBy! : null,
+      priceApprovalRef: quote?.reference ?? (aboveApproved ? input.priceApprovalRef! : null),
+      priceApprovedBy: quote?.approver ?? (aboveApproved ? input.priceApprovedBy! : null),
       financeBasis: gate.reason,
       financeExceptionId: gate.exceptionId ?? null,
     };
@@ -439,7 +444,7 @@ export class PartsService {
     const [p] = await tx
       .select()
       .from(partRequests)
-      .where(and(eq(partRequests.id, id), eq(partRequests.tenantId, tenantId)));
+      .where(and(eq(partRequests.id, id), eq(partRequests.tenantId, tenantId))).for('update');
     if (!p) throw notFound('قطعه');
     if (p.version !== expectedVersion) throw versionConflict(p.version);
     await this.cases.loadForWrite(tx, tenantId, p.caseId);
@@ -450,7 +455,7 @@ export class PartsService {
     const [row] = await tx
       .update(partRequests)
       .set({ ...patch, updatedAt: new Date(), version: p.version + 1 })
-      .where(and(eq(partRequests.id, p.id), eq(partRequests.version, p.version)))
+      .where(and(eq(partRequests.id, p.id),eq(partRequests.tenantId,p.tenantId), eq(partRequests.version, p.version)))
       .returning();
     if (!row) throw versionConflict();
     return row;

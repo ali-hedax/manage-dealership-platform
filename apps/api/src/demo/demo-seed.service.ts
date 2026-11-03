@@ -22,6 +22,7 @@ export const DEMO_TENANT_CODE = 'demo';
 export const CREDENTIALS_FILE = resolve(__dirname, '../../.data/demo-credentials.local.txt');
 
 const DEMO_USERS: { username: string; displayName: string; roles: Role[] }[] = [
+  { username:'technician',displayName:'تعمیرکار نمونه',roles:['technician'] },
   { username: 'expert', displayName: 'کارشناس نمونه', roles: ['accident_expert'] },
   { username: 'supervisor', displayName: 'سرپرست نمونه', roles: ['accident_supervisor'] },
   { username: 'manager', displayName: 'مدیر خدمات نمونه', roles: ['service_manager'] },

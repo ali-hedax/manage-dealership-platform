@@ -13,7 +13,7 @@ import {AppIcon} from '@/components/AppIcon';
 import {WorkspaceLauncher} from '@/components/WorkspaceLauncher';
 import {DailyStatusPanel} from '@/components/DailyStatusPanel';
 export default function AccidentWorkspace(){
- const {workspace}=useParams<{workspace?:string[]}>(),key=workspace?.[0];const {me,can}=useAuth();const w=WORKSPACES.find(x=>x.key===key),allowed=!!w&&workspaceVisible(w,me);
+ const {workspace}=useParams<{workspace?:string[]}>(),key=workspace?.[0]==='supervisor'?'expert':workspace?.[0];const {me,can}=useAuth();const w=WORKSPACES.find(x=>x.key===key),allowed=!!w&&workspaceVisible(w,me);
  const [term,setTerm]=useState(''),[query,setQuery]=useState(''),[page,setPage]=useState(1);
  const params=new URLSearchParams(w?.queue.replace('responsibleUserId=me',`responsibleUserId=${me.id}`)||'');if(query)params.set('q',query);params.set('page',String(page));params.set('pageSize','25');
  const {data,error,isLoading}=useSWR<Paged<CaseListItem>>(allowed&&can('case.read')&&w?.key!=='admin'?`/cases?${params}`:null,fetcher);

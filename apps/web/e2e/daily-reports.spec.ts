@@ -168,14 +168,13 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
 });
 
 test('permissions, a full-size file through the web proxy and internal reminders', async ({ page }) => {
-  // The system admin uploads without seeing stock or Emdad.
+  // System support can upload and inspect stock and Emdad.
   await login(page, 'admin');
   await page.goto('/daily-reports');
   await expect(page.getByLabel('انتخاب فایل')).toBeVisible();
   await page.goto('/stock');
-  await expect(page.getByRole('heading', { name: 'موجودی و رزرو' })).toBeVisible();
-  await expect(page.getByText('برای این بخش مجوز ندارید')).toBeVisible();
-  expect((await page.request.post('/api/v1/emdad/requests/search', { headers, data: {} })).status()).toBe(403);
+  await expect(page.getByRole('heading', { name: 'موجودی روزانه و رزرو' })).toBeVisible();
+  expect((await page.request.post('/api/v1/emdad/requests/search', { headers, data: {} })).status()).toBe(201);
 
   // Quality control sees neither, and direct API calls are refused.
   await login(page, 'qc');
@@ -185,7 +184,7 @@ test('permissions, a full-size file through the web proxy and internal reminders
   expect((await page.request.post('/api/v1/daily-reports/uploads?kind=stock', { headers: { ...headers, 'content-type': 'application/octet-stream' }, data: Buffer.from(buildStockXlsx([sku('01')])) })).status()).toBe(403);
 
   // ~23.6 MB of synthetic SpreadsheetML through the proxy: raw upload, background parsing, paged rows.
-  await login(page, 'parts');
+  await login(page, 'admin');
   const big = Buffer.from(buildEmdadXml(Array.from({ length: 5183 }, (_, i) => emdadRow(i + 100, { 'شرح اختصاصی': `قطعه ${i} & ${'x'.repeat(4200)}` }))));
   expect(big.length).toBeGreaterThan(23_000_000);
   const u = await page.request.post('/api/v1/daily-reports/uploads?kind=emdad&fileName=large.xls', { headers: { ...headers, 'content-type': 'application/octet-stream' }, data: big, timeout: 120_000 });
