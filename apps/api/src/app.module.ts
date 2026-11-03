@@ -14,6 +14,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { AccidentModule } from './accident/accident.module';
+import { DailyReportsModule } from './daily-reports/daily-reports.module';
 import { AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -109,6 +110,7 @@ export class AppModule {
         }),
         ThrottlerModule.forRoot([{ ttl: 60_000, limit: cfg.APP_ENV === 'test' ? 10_000 : 600 }]),
         AccidentModule,
+        DailyReportsModule,
       ],
       controllers: [AuthController, EmailAuthController, HealthController, ReferenceController, AccessController],
       providers: [

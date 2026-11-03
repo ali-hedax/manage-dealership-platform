@@ -7,7 +7,7 @@ import { normalizePersian, parseBasePartNumber, parseDecimal, parseStockCode, to
 
 export const PARSER_VERSION = 'daily-reports/1';
 
-export type RowOutcome = 'valid' | 'needs_mapping' | 'duplicate' | 'invalid' | 'ambiguous' | 'total_row';
+export type RowOutcome = 'valid' | 'new' | 'changed' | 'unchanged' | 'needs_mapping' | 'duplicate' | 'invalid' | 'ambiguous' | 'total_row';
 export interface ParsedRow<T> {
   rowNo: number;
   outcome: RowOutcome;

@@ -32,6 +32,15 @@ export const PERMISSIONS = [
   'reference.parts.manage',
   'reference.customers.read',
   'reference.customers.manage',
+  'daily_reports.upload', // upload and preview the daily stock and Emdad files (no customer contact data)
+  'daily_reports.apply', // publish a previewed daily file
+  'daily_reports.settings', // reminder time/assignee; stock confirmations also need the owner
+  'stock.read', // stock options, availability and Manage reservations
+  'stock.reserve', // reserve an exact stock code for a part need
+  'stock.release', // release a reservation or cancel a recorded issue
+  'stock.issue', // record the issue from the warehouse and its reflection in the stock report
+  'emdad.read', // Emdad Vijeh follow-up list and history
+  'emdad.manage', // internal follow-up fields and review of case matching
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -51,6 +60,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'case.deliver',
     'dashboard.read',
     'audit.read',
+    'stock.read',
+    'emdad.read',
   ],
   accident_supervisor: [
     'reference.parts.read',
@@ -73,6 +84,11 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'case.deliver',
     'dashboard.read',
     'audit.read',
+    'stock.read',
+    'stock.reserve',
+    'stock.release',
+    'emdad.read',
+    'emdad.manage',
   ],
   service_manager: [
     'reference.parts.read',
@@ -102,13 +118,23 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'dashboard.read',
     'audit.read',
     'settings.manage',
+    'daily_reports.upload',
+    'daily_reports.apply',
+    'daily_reports.settings',
+    'stock.read',
+    'stock.reserve',
+    'stock.release',
+    'stock.issue',
+    'emdad.read',
+    'emdad.manage',
   ],
   // Support roles see cases without customer contact details.
-  parts_clerk: ['case.read', 'blocker.report', 'part.request', 'part.manage', 'dashboard.read', 'reference.parts.read', 'reference.parts.manage'],
+  parts_clerk: ['case.read', 'blocker.report', 'part.request', 'part.manage', 'dashboard.read', 'reference.parts.read', 'reference.parts.manage', 'daily_reports.upload', 'daily_reports.apply', 'stock.read', 'stock.reserve', 'stock.release', 'stock.issue', 'emdad.read', 'emdad.manage'],
   cashier: ['case.read', 'customer.pii.read', 'finance.payment', 'finance.close', 'dashboard.read'],
   qc_inspector: ['case.read', 'blocker.report', 'qc.inspect', 'dashboard.read'],
   // Least privilege: administers accounts, does not read customer cases.
-  system_admin: ['user.manage', 'settings.manage'],
+  // Uploading the daily files needs neither finance nor customer contact access.
+  system_admin: ['user.manage', 'settings.manage', 'daily_reports.upload', 'daily_reports.apply'],
 };
 
 export type PermissionTemplates = Partial<Record<Role, Permission[]>>;

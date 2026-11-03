@@ -1,5 +1,5 @@
 {
-  "id": "4cf40f3f-e56a-4044-a0c6-8267449ec82e",
+  "id": "2dcee9a2-2528-4e97-a796-616617c224fe",
   "prevId": "0f2222e5-0463-4b15-8919-ccbbad6c8964",
   "version": "7",
   "dialect": "postgresql",
@@ -3154,6 +3154,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "match_source": {
+          "name": "match_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'auto'"
+        },
         "match_note": {
           "name": "match_note",
           "type": "text",
@@ -5598,6 +5605,12 @@
         "currency": {
           "name": "currency",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax_included": {
+          "name": "tax_included",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": false
         },

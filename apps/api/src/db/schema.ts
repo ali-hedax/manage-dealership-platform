@@ -899,6 +899,7 @@ export const stockSnapshots = pgTable(
     completeness: text('completeness'), // full | partial | null (unconfirmed)
     quantityMeaning: text('quantity_meaning'), // on_hand | available | null (unconfirmed)
     currency: text('currency'), // IRR | IRT | null (unconfirmed)
+    taxIncluded: boolean('tax_included'),
     status: text('status').notNull().default('active'), // active | superseded
     itemCount: integer('item_count').notNull(),
     publishedAt: ts('published_at').notNull().defaultNow(),
@@ -939,6 +940,9 @@ export const stockSnapshotItems = pgTable(
     quantity: qty('quantity').notNull(),
     avgPrice: money('avg_price'),
     salePrice: money('sale_price'),
+    // Partial or unconfirmed reports: a code missing today keeps its last reported row, labelled with its source.
+    carriedFromSnapshotId: uuid('carried_from_snapshot_id'),
+    carriedReportedAt: ts('carried_reported_at'),
   },
   (t) => [
     uniqueIndex('stock_snapshot_items_code_loc_uq').on(t.snapshotId, t.fullStockCode, t.locationAddress),
@@ -1027,6 +1031,7 @@ export const emdadRequests = pgTable(
     caseId: uuid('case_id').references(() => cases.id),
     partRequestId: uuid('part_request_id').references(() => partRequests.id),
     matchStatus: text('match_status').notNull(), // matched | unmatched | ambiguous | needs_review
+    matchSource: text('match_source').notNull().default('auto'), // auto | manual (a manual decision is never re-matched)
     matchNote: text('match_note'),
     // Internal follow-up, never overwritten by an import.
     assigneeUserId: uuid('assignee_user_id').references(() => users.id),

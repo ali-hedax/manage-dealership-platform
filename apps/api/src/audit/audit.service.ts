@@ -8,7 +8,7 @@ import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { auditEvents, changeLog, users } from '../db/schema';
 
 export interface AuditEntry {
-  entityType: 'case' | 'task' | 'blocker' | 'user' | 'customer' | 'vehicle' | 'assessment' | 'part' | 'finance' | 'qc' | 'discrepancy' | 'reference';
+  entityType: 'case' | 'task' | 'blocker' | 'user' | 'customer' | 'vehicle' | 'assessment' | 'part' | 'finance' | 'qc' | 'discrepancy' | 'reference' | 'daily_report' | 'emdad';
   entityId: string;
   caseId?: string | null;
   action: string;

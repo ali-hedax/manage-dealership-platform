@@ -8,3 +8,4 @@ export * from './jalali';
 export * from './reference-data';
 export * from './access';
 export * from './stock-code';
+export * from './daily-reports';
