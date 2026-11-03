@@ -1,5 +1,5 @@
 {
-  "id": "2dcee9a2-2528-4e97-a796-616617c224fe",
+  "id": "88d5dfaa-4953-4295-9d63-222e26226d9d",
   "prevId": "0f2222e5-0463-4b15-8919-ccbbad6c8964",
   "version": "7",
   "dialect": "postgresql",
@@ -5441,6 +5441,18 @@
         "sale_price": {
           "name": "sale_price",
           "type": "numeric(24, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carried_from_snapshot_id": {
+          "name": "carried_from_snapshot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carried_reported_at": {
+          "name": "carried_reported_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         }

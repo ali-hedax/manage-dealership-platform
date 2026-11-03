@@ -60,8 +60,8 @@ export class DailyReportsController {
   }
 
   @Get('daily-reports/imports')
-  list(@CurrentActor() a: Actor, @Query('kind', new ZodPipe(z.enum(DAILY_REPORT_KINDS).optional())) kind?: DailyReportKind) {
-    return this.reports.list(a, kind);
+  list(@CurrentActor() a: Actor, @Query(new ZodPipe(z.object({ kind: z.enum(DAILY_REPORT_KINDS).optional() }))) q: { kind?: DailyReportKind }) {
+    return this.reports.list(a, q.kind);
   }
 
   @Get('daily-reports/imports/:id')

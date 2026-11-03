@@ -166,7 +166,9 @@ CREATE TABLE "stock_snapshot_items" (
 	"base_status" text,
 	"quantity" numeric(20, 4) NOT NULL,
 	"avg_price" numeric(24, 3),
-	"sale_price" numeric(24, 3)
+	"sale_price" numeric(24, 3),
+	"carried_from_snapshot_id" uuid,
+	"carried_reported_at" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "stock_snapshots" (
