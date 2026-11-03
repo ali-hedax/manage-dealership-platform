@@ -85,6 +85,13 @@
       "when": 1793683743128,
       "tag": "0011_staff_access",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793690452252,
+      "tag": "0012_daily_parts_reports",
+      "breakpoints": true
     }
   ]
 }
