@@ -1,5 +1,26 @@
 # Test report
 
+## Daily parts reports — in progress, not done, not released (2026-11-03)
+
+Local runs on `feature/daily-parts-reports` at `defcb9f` plus the uncommitted web UI. The branch is not pushed, so there is **no CI run**. See [the handoff](../HANDOFF_DAILY_PARTS.md).
+
+| Check | Result |
+| --- | --- |
+| API daily reports (jest, `daily-reports` only, PGlite) | 5 suites passed: **39 passed, 5 skipped** |
+| Real PostgreSQL locks (`daily-reports-postgres.e2e-spec.ts`) | **Not run** (the 5 skipped); needs `DAILY_PG_TEST_URL`, set only in CI |
+| Shared | 12/12 |
+| API typecheck and lint; web typecheck and build | Passed |
+| `node scripts/check-docs.mjs` | Passed after `--write` regenerated `docs/API.md` |
+| Browser, `playwright.daily.config.ts` (desktop, Edge) | **1 passed, 1 failed** |
+| Full API suite, main Playwright suite, Docker/HTTPS smoke | **Not run** on this branch |
+| Private preflight of the owner's real files with this code | **Not run** in this session |
+
+Failure: `apps/web/e2e/daily-reports.spec.ts:100`. After issuing a reservation the "unreflected issue" column stays `۰` instead of `۰.۵`, while the reservation row updates correctly. The cause is not established; a stale option list is only a hypothesis. The rest of that test, including the 390 px check, did not execute in the browser.
+
+Two UI bugs found by this test were fixed in the uncommitted `daily-reports/page.tsx`: the status panel stayed stale for up to 60 seconds after applying a report, and saving settings right after applying hit a version conflict.
+
+Migration 0012 ran only on in-memory PGlite in these tests. The server was not inspected and nothing was deployed.
+
 ## Department workspaces and configurable access — released 2026-11-03
 
 All six jobs passed for `e7319eb` in [CI 41587736101](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41587736101): API **118/118** (17 suites), shared **9/9**, browser **23 passed / 2 optional documentation captures skipped**, lint/types/build, security, docs/API inventory, PostgreSQL migration/seed/reset and Docker/Compose/HTTPS smoke. Local targeted access API **5/5** and workspace/owner browser **2/2** passed. Local full API attempt exhausted Windows/PGlite virtual memory and was stopped; not reported as passing. All tests synthetic.

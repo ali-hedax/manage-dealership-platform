@@ -1,5 +1,15 @@
 # PROGRESS — Manage by HEDAX
 
+## کار جاری: گزارش‌های روزانه قطعات — تحویل به Codex — ۱۴۰۵/۰۸/۱۲
+
+**منتشر نشده و عملیاتی نیست.** جزئیات کامل و اولین قدم: [HANDOFF_DAILY_PARTS.md](HANDOFF_DAILY_PARTS.md).
+
+- شاخه `feature/daily-parts-reports` فقط محلی است؛ PR و CI ندارد. آخرین commit کد `defcb9f` است.
+- API و تست‌ها commit شده‌اند. UI (صفحه‌های `daily-reports`، `stock`، `emdad` و کامپوننت‌ها) عمداً ثبت‌نشده مانده است؛ آن را پاک نکنید.
+- آزمون: API روزانه ۳۹ پاس و ۵ skip (قفل PostgreSQL واقعی اجرا نشد)؛ shared ۱۲/۱۲؛ typecheck و build وب موفق؛ مرورگر ۱ پاس و ۱ شکست در `apps/web/e2e/daily-reports.spec.ts:100`. کل API، Playwright اصلی و Docker/HTTPS روی این شاخه اجرا نشده‌اند.
+- migration 0012 فقط روی PGlite حافظه‌ای تست‌ها اجرا شده است. سرور در این جلسه بررسی نشد؛ نسخه عملیاتی ثبت‌شده همچنان بخش بعدی این فایل است.
+- گام بعد: رفع خطای خط ۱۰۰، ثبت UI، اجرای آزمون‌ها، push و PR با پایه `feature/department-workspaces`. انتشار و ادغام main نیازمند تأیید تازه مالک‌اند.
+
 ## نسخه عملیاتی جاری — واحد تصادفات و دسترسی مالک — ۱۴۰۵/۰۸/۱۲
 
 با درخواست و مجوز مالک تا انتشار، نسخه `e7319eb3c760615cdf0406985596421fd61fe838` از شاخه `feature/department-workspaces` روی Manage عملیاتی نصب شد؛ PR #34 روی `feature/reference-data` است و main ادغام نشده. هر شش بررسی [CI 41587736101](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41587736101) موفق: API ۱۱۸/۱۱۸ (۱۷ suite)، shared ۹/۹، مرورگر ۲۳ موفق و دو تصویر مستندات اختیاری عمداً skipped، lint/types/build، امنیت، مستندات، PostgreSQL و Docker/HTTPS. CI merge `90d1e0e6` با head همان درخت را دارد؛ checksum آرشیو و شناسه imageها کنترل شد.
