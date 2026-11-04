@@ -79,7 +79,7 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   await dialog.getByLabel('همین کد کامل و مقدار').check();
   await page.screenshot({ path: info.outputPath('reserve-option-desktop.png') });
   await page.getByRole('button', { name: 'ثبت رزرو داخلی' }).click();
-  await expect(panel.getByTestId('reservation')).toContainText('رزرو داخلی منیج');
+  await panel.getByText(/مشاهده رزروها و خروج قطعات/).click();await expect(panel.getByTestId('reservation')).toContainText('رزرو داخلی منیج');
 
   // Above the need is refused with a clear message and the dialog keeps the choice.
   await panel.getByRole('button', { name: 'انتخاب گزینه و رزرو' }).click();
@@ -155,7 +155,7 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   // The case now shows both identifiers and the linked request.
   await page.goto(`/cases/${kase.id}#case-parts`);
   await expect(panel).toContainText('۹۱۰۰۰۱');
-  await expect(panel.getByTestId('case-emdad')).toContainText('آماده جمع آوری');
+  await panel.getByText(/امداد مرتبط با قطعات کارشناسی/).click();await expect(panel.getByTestId('case-emdad')).toContainText('آماده جمع آوری');
 
   // Parts desk header.
   await page.goto('/accidents/parts');

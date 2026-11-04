@@ -27,6 +27,8 @@ import { faNum, formatJalali, parseAmount, rial, toPersianDigits } from '@/lib/f
 import { useToast } from '@/lib/toast';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
+import { AssessmentImport } from './AssessmentImport';
+import { StockFamilyPreview } from './CaseStockPanel';
 
 const AUTH_TONE: Record<AuthorizationStatus, string> = {
   not_required: 'chip-green',
@@ -82,6 +84,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const { data: departments } = useSWR<Department[]>('/departments', fetcher);
   const [mode, setMode] = useState<Mode>(null);
   const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // Dialog state.
   const [assessorName, setAssessorName] = useState('');
@@ -285,6 +288,8 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
       )}
 
       {current && (
+        <>
+        {manage && editable && current.status === 'draft' && <div className="assessment-import-entry"><button type="button" className="btn btn-sm" onClick={() => setImporting(true)}>دریافت اکسل کارشناسی</button><span className="xs muted">قطعات و اجرت از خروجی PDF</span></div>}
         <Version
           a={current}
           editable={editable}
@@ -295,7 +300,10 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
           onFinalize={() => start({ kind: 'finalize', a: current })}
           onAuthorize={() => start({ kind: 'authorize', a: current })}
         />
+        </>
       )}
+
+      {importing && current && <AssessmentImport assessment={current} onClose={() => setImporting(false)} onDone={() => { setImporting(false); void mutate(); onChange(); toast('اقلام اکسل به پیش‌نویس اضافه شدند؛ نهایی‌سازی و مجوز جداگانه است'); }} />}
 
       {older.length > 0 && (
         <details>
@@ -653,8 +661,9 @@ function Version({
                     </div>
                     <div className="xs muted">
                       {i.partNumber && <span className="ltr">{i.partNumber}</span>}
+                      {i.action === 'replace' && i.partNumber && <StockFamilyPreview partNumber={i.partNumber} />}
                       {i.labourDepartment && ` · ${i.labourDepartment.name}`}
-                      {i.evidence && ` · مدرک: ${i.evidence}`}
+                      {i.evidence && <details className="compact-disclosure"><summary>منبع و مدرک</summary><p>{i.evidence}</p></details>}
                     </div>
                   </td>
                   <td className="num" data-label="تعداد">{faNum(i.quantity)}</td>

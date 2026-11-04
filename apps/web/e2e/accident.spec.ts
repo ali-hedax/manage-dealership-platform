@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseSections } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -38,6 +38,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await expect(page.getByText('نیازمند تکمیل:')).toHaveCount(0);
 
   // Add a body-shop activity and record start.
+  await openCaseSections(page,'tasks','blockers','history');
   await page.getByRole('button', { name: 'افزودن فعالیت' }).click();
   await page.locator('select[name="departmentId"]').selectOption({ label: 'صافکاری' });
   await page.locator('input[name="technicianName"]').fill('تکنسین آزمون');
@@ -106,7 +107,8 @@ test('parts clerk: read-only view with masked customer phone and no create actio
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await page.locator('tbody tr').first().click();
   // Details panel (the finance panel has its own list).
-  const details = page.locator('section').filter({ has: page.getByRole('heading', { name: 'مشخصات' }) });
+  await openCaseSections(page,'info');
+  const details = page.locator('#case-info');
   await expect(details.locator('dl')).toContainText('***');
   await expect(page.getByRole('button', { name: 'افزودن فعالیت' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'ویرایش پرونده' })).toHaveCount(0);

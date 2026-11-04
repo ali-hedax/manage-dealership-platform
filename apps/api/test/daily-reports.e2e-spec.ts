@@ -352,6 +352,17 @@ describe('Emdad Vijeh follow-up', () => {
     const by = (adm: string) => all.items.filter((r: { admissionNo: string }) => r.admissionNo === adm);
     expect(by('900001')[0]).toMatchObject({ matchStatus: 'matched', caseNumber: matched.caseNumber });
     expect(by('900001')[0].partRequestId).toBeTruthy();
+    const [original] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.id, by('900001')[0].id));
+    const unrelatedId = newId();
+    await h.db.db.insert(emdadRequests).values({...original!,id:unrelatedId,externalKey:'synthetic-unrelated-case-part',partRequestId:null,
+      official:{...original!.official,partCode:'99887766',initialCode:'99887766',fullCode:'9988776601',fullCodeBase:'99887766'}});
+    try {
+      expect((await parts.post('/emdad/requests/search',{caseId:matched.id})).body.total).toBe(2);
+      const relevant = await parts.post('/emdad/requests/search',{caseId:matched.id,relatedPartsOnly:true});
+      expect(relevant.body.total).toBe(1); expect(relevant.body.items[0].id).toBe(original!.id);
+      expect((await parts.post('/emdad/requests/search',{caseId:matched.id,partRequestId:newId(),relatedPartsOnly:true})).body.total).toBe(0);
+      expect((await parts.post('/emdad/requests/search',{relatedPartsOnly:true})).body.code).toBe('CASE_REQUIRED');
+    } finally { await h.db.db.delete(emdadRequests).where(eq(emdadRequests.id, unrelatedId)); }
     expect(by('900002')[0]).toMatchObject({ matchStatus: 'needs_review', caseId: null });
     expect(by('900003')[0]).toMatchObject({ matchStatus: 'ambiguous', caseId: null });
     expect(by('900004')[0]).toMatchObject({ matchStatus: 'unmatched' });

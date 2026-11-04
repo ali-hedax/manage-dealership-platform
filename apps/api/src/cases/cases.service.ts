@@ -404,6 +404,13 @@ export class CasesService {
 
   async list(actor: Actor, q: CaseListQuery): Promise<Paged<CaseListItem>> {
     const conditions: SQL[] = [eq(cases.tenantId, actor.user.tenantId)];
+    if (q.vehicleIdentity) {
+      const identity = idKey(q.vehicleIdentity);
+      if (identity.length < 6) throw badRequest('VEHICLE_IDENTITY_INVALID', 'VIN یا شماره شاسی کامل را وارد کنید');
+      conditions.push(sql`exists (select 1 from vehicles vh where vh.id = ${cases.vehicleId} and vh.tenant_id = ${actor.user.tenantId}
+        and (upper(regexp_replace(coalesce(vh.vin,''), '[[:space:]_./-]', '', 'g')) = ${identity}
+          or upper(regexp_replace(translate(coalesce(vh.chassis_ref,''), '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789'), '[[:space:]_./-]', '', 'g')) = ${identity}))`);
+    }
     if (q.status !== 'all') conditions.push(eq(cases.status, q.status));
     if (q.stage) conditions.push(eq(cases.stage, q.stage));
     if (q.coverage) conditions.push(eq(cases.coverageType, q.coverage));

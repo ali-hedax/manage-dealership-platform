@@ -14,7 +14,7 @@ import type { Actor } from '../auth/auth.types';
 import { AuditService, diff } from '../audit/audit.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { cases, dailyReportImports, emdadRequestEvents, emdadRequests, partRequests, users, vehicles } from '../db/schema';
+import { assessmentItems, assessments, cases, dailyReportImports, emdadRequestEvents, emdadRequests, partRequests, users, vehicles } from '../db/schema';
 import { idKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 import { writeSheet } from '../parts/xlsx';
 import type { EmdadOfficial } from './report-rows';
@@ -162,7 +162,24 @@ export class EmdadService {
   }
 
   async search(actor: Actor, q: EmdadSearchInput): Promise<{ items: EmdadRequest[]; total: number; page: number; pageSize: number }> {
-    const where = this.where(actor, q);
+    let where = this.where(actor, q);
+    if (q.relatedPartsOnly || q.partRequestId) {
+      if (!q.caseId) throw badRequest('CASE_REQUIRED', 'برای امداد مرتبط، پرونده را مشخص کنید');
+      const tenantId = actor.user.tenantId;
+      const requested = await this.db.select({ partNumber: partRequests.partNumber }).from(partRequests)
+        .where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.caseId, q.caseId), ne(partRequests.status, 'cancelled'),
+          q.partRequestId ? eq(partRequests.id, q.partRequestId) : undefined));
+      const assessed = q.partRequestId ? [] : await this.db.select({ partNumber: assessmentItems.partNumber }).from(assessmentItems)
+        .innerJoin(assessments, eq(assessmentItems.assessmentId, assessments.id))
+        .where(and(eq(assessmentItems.tenantId, tenantId), eq(assessments.tenantId, tenantId), eq(assessments.caseId, q.caseId),
+          ne(assessments.status, 'superseded'), eq(assessmentItems.action, 'replace'), ne(assessmentItems.approvalStatus, 'rejected'),
+          sql`${assessments.versionNo} = (select max(a2.version_no) from assessments a2 where a2.tenant_id = ${tenantId} and a2.case_id = ${q.caseId})`));
+      const candidates = await this.db.select({ id: emdadRequests.id, official: emdadRequests.official }).from(emdadRequests)
+        .where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.caseId, q.caseId)));
+      const codes = [...requested, ...assessed].map(p => p.partNumber).filter((p): p is string => !!p);
+      const relevant = candidates.filter(r => codes.some(code => emdadMatchesNeed(r.official as EmdadOfficial, code))).map(r => r.id);
+      where = and(where, relevant.length ? inArray(emdadRequests.id, relevant) : sql`false`)!;
+    }
     const [{ total }] = (await this.db
       .select({ total: sql<number>`count(*)::int` })
       .from(emdadRequests)
@@ -344,4 +361,14 @@ export class EmdadService {
       ]),
     ]);
   }
+}
+
+/** A vehicle/case match alone never makes an Emdad row relevant to a repair need. */
+export function emdadMatchesNeed(official: Pick<EmdadOfficial, 'partCode' | 'initialCode' | 'fullCodeBase'> & { fullCode?: string | null }, need: string): boolean {
+  const base = confirmedBase(official);
+  if (!base) return false;
+  const requested = parseStockCode(need);
+  const full = parseStockCode(official.fullCode);
+  if (requested?.basePartNumber) return requested.basePartNumber === base && requested.fullStockCode === full?.fullStockCode;
+  return parseBasePartNumber(need) === base;
 }

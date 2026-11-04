@@ -1,5 +1,11 @@
 # Test report
 
+## Assessment intake and compact workbench — 2026-11-04 — candidate, not deployed
+
+Targeted API/parser suites: **40 passed**. Covers sparse/reordered/repeated headers, separate priced labour, explicit currency, correction/rejected/equivalent rows, validation and duplicate detection, exact Emdad technical-code relevance including differing full options, read-only preview, permission denial, version conflicts and atomic audited apply. The owner workbook was inspected locally read-only: **3 valid part rows, 0 errors, 41 review/skipped notices** (including the equivalent-section notice); no private values were copied into fixtures, logs, tests or production.
+
+Full API, lint/types/build and browser regression results are being collected. The new compact-case browser scenario already passed with desktop/390px synthetic captures, assessment upload/preview/apply and safe profile prefill. Legacy scenarios initially assumed every section was expanded; their navigation now explicitly opens the required section. Final rerun and CI remain required before publication.
+
 ## Released PWA and complete support desk — 2026-11-04, 9e82246
 
 All six [CI 41783453350](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41783453350) jobs passed on the published application: API **171 passed / 9 PostgreSQL-only skips** in the main job, with real PostgreSQL migration/concurrency passing separately; main browser **29 passed / 2 optional screenshot skips**, daily/support browser **3/3**; shared/lint/types/build, docs/security and Docker/HTTPS passed. The docs-only `01c0e58` also passed all six CI 41784219492 jobs. Exact CI source tree, archive SHA256 and running image IDs matched; [release evidence](RELEASE_PWA_20261104.md).

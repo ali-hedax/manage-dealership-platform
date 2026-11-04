@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseSections } from './helpers';
 
 // Issues #9 and #10 in the browser, on demo case 3 (personal payment): the
 // customer approved the estimate and the expert proposed an advance.
@@ -11,6 +11,7 @@ async function openCase3(page: Page, user: string) {
   await login(page, user);
   await page.goto('/cases?q=' + encodeURIComponent('مشتری نمونه سه'));
   await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه سه' }).click();
+  await openCaseSections(page,'parts','finance','history');
   await expect(page.getByTestId('finance-panel')).toBeVisible();
 }
 

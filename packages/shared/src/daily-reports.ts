@@ -183,6 +183,8 @@ export const emdadSearchSchema = z
     match: z.enum(EMDAD_MATCH_STATUSES).optional(),
     assignee: z.union([uuid, z.literal('me'), z.literal('none')]).optional(),
     caseId: uuid.optional(),
+    relatedPartsOnly: z.boolean().optional(),
+    partRequestId: uuid.optional(),
     openOnly: z.boolean().optional(),
     dueToday: z.boolean().optional(),
     review: z.boolean().optional(),

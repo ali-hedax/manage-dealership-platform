@@ -212,6 +212,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'assessment.created': 'شروع کارشناسی',
   'assessment.supplement_created': 'شروع الحاقیه (آسیب پنهان)',
   'assessment.item_added': 'افزودن قلم کارشناسی',
+  'assessment.items_imported': 'ورود اقلام کارشناسی از اکسل',
   'assessment.item_updated': 'ویرایش قلم کارشناسی',
   'assessment.item_removed': 'حذف قلم از پیش‌نویس',
   'assessment.finalized': 'نهایی‌شدن کارشناسی',

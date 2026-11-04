@@ -1,5 +1,6 @@
 import type { Assessment, CaseDetail, Department, TimelineEvent } from '@manage/shared';
 import { Client, createHarness, daysAgo, daysAhead, type Harness } from './harness';
+import { writeSheet } from '../src/parts/xlsx';
 
 // Issue #8: versioned assessments and supplements (acceptance scenario 5).
 
@@ -81,6 +82,43 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await h?.close();
+});
+
+describe('assessment Excel import', () => {
+  it('looks up a vehicle by exact identity across admissions without a fuzzy match', async () => {
+    const vin = 'TESTVIN00000088A1';
+    const c = await newCase({vehicle:{vin,model:'تارا'}});
+    const exact = await expert.get(`/cases?status=all&vehicleIdentity=${vin}`);
+    expect(exact.body.items.map((v:{id:string})=>v.id)).toEqual([c.id]);
+    expect((await expert.get('/cases?status=all&vehicleIdentity=00000088A1')).body.total).toBe(0);
+    expect((await expert.get('/cases?status=all&vehicleIdentity=------')).body.code).toBe('VEHICLE_IDENTITY_INVALID');
+  });
+  it('previews without writes, imports atomically with version/audit and rejects repeats or an unauthorized role', async () => {
+    const c = await newCase();
+    const a = (await expert.post(`/cases/${c.id}/assessments`, {kind:'initial',assessorName:'کارشناس آزمون'})).body as Assessment;
+    const fileBase64 = Buffer.from(writeSheet('آزمون', [['شرح قطعه','شماره فنی','تعداد','فی','مبلغ'],['قطعه ساختگی','00123456','2','100','200']])).toString('base64');
+    const body = {fileBase64, currency:'rial', expectedVersion:a.version, dryRun:true};
+    const preview = await expert.post(`/assessments/${a.id}/import`,body);
+    expect(preview.status).toBe(201); expect(preview.body.rows).toHaveLength(1); expect(preview.body.applied).toBe(false);
+    expect((await expert.get(`/cases/${c.id}/assessments`)).body[0].items).toHaveLength(0);
+    expect((await parts.post(`/assessments/${a.id}/import`,body)).status).toBe(403);
+    const applied = await expert.post(`/assessments/${a.id}/import`,{...body,dryRun:false});
+    expect(applied.status).toBe(201); expect(applied.body.applied).toBe(true);
+    expect((await expert.post(`/assessments/${a.id}/import`,{...body,dryRun:false})).status).toBe(409);
+    const saved = (await expert.get(`/cases/${c.id}/assessments`)).body[0] as Assessment;
+    expect(saved.items).toHaveLength(1); expect(saved.authorizationStatus).not.toBe('approved');
+    expect((await expert.post(`/assessments/${a.id}/import`,{...body,expectedVersion:saved.version})).body.errors).toHaveLength(1);
+    expect((await expert.post(`/assessments/${a.id}/import`,{...body,expectedVersion:saved.version,dryRun:false})).body.code).toBe('ASSESSMENT_IMPORT_INVALID');
+    const timeline = (await expert.get(`/cases/${c.id}/timeline`)).body as TimelineEvent[];
+    expect(JSON.stringify(timeline)).toContain('assessment.items_imported');
+  });
+  it('does not write any valid row if another row is invalid', async () => {
+    const c = await newCase();
+    const a = (await expert.post(`/cases/${c.id}/assessments`,{kind:'initial',assessorName:'کارشناس آزمون'})).body as Assessment;
+    const fileBase64 = Buffer.from(writeSheet('آزمون',[['شرح قطعه','شماره فنی','تعداد','فی','مبلغ'],['سالم','00123456','1','100','100'],['خطادار','00123457','0','100','100']])).toString('base64');
+    expect((await expert.post(`/assessments/${a.id}/import`,{fileBase64,currency:'rial',expectedVersion:a.version,dryRun:false})).body.code).toBe('ASSESSMENT_IMPORT_INVALID');
+    expect((await expert.get(`/cases/${c.id}/assessments`)).body[0].items).toHaveLength(0);
+  });
 });
 
 describe('initial assessment', () => {

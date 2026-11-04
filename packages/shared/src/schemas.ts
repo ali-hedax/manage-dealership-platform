@@ -127,6 +127,7 @@ export const CASE_FLAGS = [
 export type CaseFlag = (typeof CASE_FLAGS)[number];
 
 export const caseListQuerySchema = z.object({
+  vehicleIdentity: z.string().trim().min(6).max(32).optional(),
   stationCode:z.string().trim().min(1).max(32).optional(),
   q: z.string().trim().max(100).optional(),
   stage: z.enum(CASE_STAGES).optional(),
@@ -243,6 +244,14 @@ export const assessmentItemSchema = z.object({
   expectedVersion: z.number().int().min(1),
 });
 export type AssessmentItemInput = z.infer<typeof assessmentItemSchema>;
+
+export const importAssessmentSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  fileBase64: z.string().min(1).max(7_000_000).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+  dryRun: z.boolean().default(true),
+  currency: z.enum(['rial', 'toman']),
+}).strict();
+export type ImportAssessmentInput = z.infer<typeof importAssessmentSchema>;
 
 export const updateAssessmentItemSchema = z.object({
   action: assessmentItemFields.action.optional(),

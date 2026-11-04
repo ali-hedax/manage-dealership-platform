@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseSections } from './helpers';
 
 // Issue #12 in the browser, on demo case 5 (personal): QC failed once, the
 // corrective activity was approved, round 2 passed and the case is technically
@@ -10,6 +10,7 @@ async function openCase5(page: Page, user: string) {
   await login(page, user);
   await page.goto('/cases?q=' + encodeURIComponent('مشتری نمونه پنج'));
   await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه پنج' }).click();
+  await openCaseSections(page,'quality','tasks','finance','history');
   await expect(page.getByTestId('completion-panel')).toBeVisible();
 }
 

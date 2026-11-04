@@ -3,6 +3,8 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   toPersianDigits,
+  type ImportAssessmentInput,
+  type AssessmentImportPreview,
   type Assessment,
   type AssessmentItem,
   type AssessmentItemInput,
@@ -22,6 +24,7 @@ import { badRequest, conflict, notFound, versionConflict } from '../common/error
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { assessmentItems, assessments, blockers, departments, users } from '../db/schema';
+import { parseAssessmentSheet } from './assessment-sheet';
 
 type AssessmentRow = typeof assessments.$inferSelect;
 type ItemRow = typeof assessmentItems.$inferSelect;
@@ -155,6 +158,39 @@ export class AssessmentsService {
       }
     });
     return this.get(actor, id);
+  }
+
+  async importSheet(actor: Actor, assessmentId: string, input: ImportAssessmentInput): Promise<AssessmentImportPreview> {
+    const result = parseAssessmentSheet(Buffer.from(input.fileBase64, 'base64'), input.currency);
+    await this.db.transaction(async tx => {
+      const tenantId = actor.user.tenantId;
+      const a = await this.loadDraft(tx, tenantId, assessmentId, input.expectedVersion);
+      const previous = await tx.select().from(assessmentItems).where(and(eq(assessmentItems.tenantId, tenantId), eq(assessmentItems.assessmentId, a.id)));
+      for (const row of result.rows) {
+        if (previous.some(p => p.action === row.action && p.description === row.description && p.partNumber === row.partNumber)) {
+          result.errors.push({ sheet: row.sheet, row: row.row, message: 'این قلم قبلاً در پیش‌نویس وجود دارد؛ برای اصلاح آن از ویرایش استفاده کنید' });
+        }
+      }
+      if (input.dryRun) return;
+      if (result.errors.length || !result.rows.length) throw badRequest('ASSESSMENT_IMPORT_INVALID', 'فایل خطا دارد؛ هیچ قلمی وارد نشد. پیش‌نمایش را دوباره بررسی کنید');
+      const offset = Math.max(0, ...previous.map(p => p.lineNo));
+      const items = result.rows.map((r, index) => ({
+        id: newId(), tenantId, assessmentId: a.id, lineNo: offset + index + 1,
+        action: r.action, description: r.description, partNumber: r.partNumber,
+        quantity: r.quantity, unitPriceRial: r.unitPriceRial, labourRial: r.labourRial,
+        evidence: r.evidence, isTest: actor.user.isTestTenant,
+      }));
+      await tx.insert(assessmentItems).values(items);
+      const saved = await this.touch(tx, a);
+      await this.audit.record(tx, actor, {
+        entityType: 'assessment', entityId: a.id, caseId: a.caseId,
+        action: 'assessment.items_imported',
+        after: { currency: input.currency, items, skipped: result.skipped.length },
+        snapshot: { version: saved.version, row: saved },
+      });
+      result.applied = true;
+    });
+    return result;
   }
 
   async addItem(actor: Actor, assessmentId: string, input: AssessmentItemInput): Promise<Assessment> {

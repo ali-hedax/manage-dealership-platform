@@ -110,6 +110,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/assessment-items/:id/remove` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/authorization` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/finalize` | [source](../apps/api/src/assessments/assessments.controller.ts) |
+| POST | `/api/v1/assessments/:id/import` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/items` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/auth/email/login` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/email/verify` | [source](../apps/api/src/auth/email-auth.controller.ts) |

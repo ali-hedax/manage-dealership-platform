@@ -23,7 +23,7 @@ import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali, parseAmount, rial, toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
-import { StockFamilyPreview } from './CaseStockPanel';
+import { StockFamilyPreview, PartEmdadPreview } from './CaseStockPanel';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
 import { ReferenceLookup } from './ReferenceLookup';
@@ -323,7 +323,10 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
               </div>
             )}
           </div>
-          <div className="xs muted meta">
+          {p.partNumber && <div className="small muted"><bdi>{p.partNumber}</bdi></div>}
+          {p.partNumber && <StockFamilyPreview partNumber={p.partNumber} />}
+          {p.partNumber && <PartEmdadPreview caseId={kase.id} partId={p.id} />}
+          <details className="compact-disclosure"><summary>جزئیات پیگیری قطعه</summary><div className="xs muted meta">
             {p.partNumber && <span className="ltr">{p.partNumber}</span>}
             <span>نیاز: {formatJalali(p.createdAt, { time: true })}</span>
             {p.stockCheckedAt && <span>انبار: {p.inStock ? 'موجود' : 'ناموجود'}</span>}
@@ -367,6 +370,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
             )}
             {p.cancelReason && <span>لغو: {p.cancelReason}</span>}
           </div>
+          </details>
         </div>
       ))}
 
@@ -387,7 +391,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       >
         {mode?.kind === 'new' && (
           <>
-            {can('reference.parts.read') && <ReferenceLookup kind="parts" onSelect={r=>{setPartNumber(r.data.partNumber||'');setDescription(r.data.description||'');toast('کد و نام قطعه انتخاب شد؛ تعداد و منبع را مشخص کنید');}}/>}
+            {can('reference.parts.read') && <details className="compact-disclosure"><summary>انتخاب از کاتالوگ قطعات</summary><ReferenceLookup kind="parts" onSelect={r=>{setPartNumber(r.data.partNumber||'');setDescription(r.data.description||'');toast('کد و نام قطعه انتخاب شد؛ تعداد و منبع را مشخص کنید');}}/></details>}
             <label className="field">
               <span>شرح قطعه *</span>
               <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -415,6 +419,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
         {mode?.kind === 'import' && (
           <>
             <div className="small">
+              <p>برای خروجی کارشناسی کپی‌شده از PDF، از «دریافت اکسل کارشناسی» در بخش کارشناسی و الحاقیه استفاده کنید. این قالب مخصوص درخواست قطعه است.</p>
               ستون‌های ردیف اول: شرح قطعه، شماره فنی، تعداد، منبع، قیمت تأییدشده واحد (ریال)، توضیح.{' '}
               <a href={sampleHref} download>
                 دریافت فایل نمونه
