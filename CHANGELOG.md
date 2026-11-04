@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased] — online mobile installation
+
+- Added installation metadata and existing-brand Android/Apple icons, standalone display, role-aware launch, optional browser installation and manual Safari instructions from login and account menus.
+- Added a network-loss warning; technician actions still require a successful server response and clear earlier success text before retrying. No offline queue, service-worker data cache or phone Push is included.
+- Public branding metadata passes the personal-auth gate while launch and operational APIs remain protected. [Installation guide](docs/PWA_FA.md). Native installation on actual phones and publication remain pending.
+
 ## [Unreleased] — complete system support desk
 
 - Grouped system support work into daily reports/parts, cases/repairs and oversight/support; added searchable case queue and permission-gated access to operational desks while keeping the owner desk protected.

@@ -57,7 +57,7 @@ export function createGate(config) {
       if (!url.pathname.startsWith(UPLOAD_PATH)) req.setTimeout(15000,()=>req.destroy());
       if (url.pathname === '/__preview/health') return send(200, 'ok');
       if (config.totpAuth) {
-        const publicPath=['/login','/activate','/reset-password'].includes(url.pathname)||url.pathname.startsWith('/_next/')||url.pathname.startsWith('/brand/')||url.pathname.startsWith('/api/v1/auth/');
+        const publicPath=['/login','/activate','/reset-password','/manifest.webmanifest','/favicon.ico'].includes(url.pathname)||url.pathname.startsWith('/_next/')||url.pathname.startsWith('/brand/')||url.pathname.startsWith('/api/v1/auth/');
         if(!publicPath){
           let ok=false;
           try { const result=await fetch(config.authApi??'http://api:4000/api/v1/auth/me',{headers:{Cookie:String(req.headers.cookie??'')},redirect:'manual',signal:AbortSignal.timeout(5000)});ok=result.status===200&&(await result.json()).authentication==='totp'; } catch { return send(503,'سرویس ورود در دسترس نیست. دوباره تلاش کنید.'); }

@@ -1,5 +1,13 @@
 # Test report
 
+## Online mobile installation — 2026-11-04 — not deployed
+
+Edge PWA browser **4/4** passed: manifest linkage/MIME, real PNG dimensions and Apple icon; help at 390px, keyboard Escape/focus return, prompt dismissal/acceptance and installed-event state; manual iPhone instructions and standalone display; role-aware technician/manager launch, network-loss warning and rejected technician action without success text. Native install events and iPhone flags were simulated on Edge; native OS installation and real Safari/phones are not claimed verified. No service worker is registered.
+
+Workshop/mobile regressions **3/3** passed; web typecheck/build passed. Gate **2/2** passed, including public branding/manifest, denial of `/manifest.webmanifest/private`, protected launch/private API and retained TOTP/session rules. No new API/database behavior, dependencies or migrations. Final CI and owner-approved publication remain required. [Guide](PWA_FA.md).
+
+Support prerequisite `db5ce5b` passed all six [CI 41782198650](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41782198650) jobs, including API, PostgreSQL, browser and Docker/HTTPS. The support UI remains unpublished at this record; its real 45-permission template is already active.
+
 ## System support workbench — 2026-11-04 — UI not yet deployed
 
 Focused API **3/3** passed: a non-owner with the owner-configured full permission template can use operational endpoints and reminder settings; access catalog/template/user edits and owner stock definitions still return 403; the daily scheduler sends both pending report reminders to support at 11:00 Tehran and does not duplicate them. The initial fixture used an invalid currency token, then was corrected to IRR to test the owner boundary with valid input.

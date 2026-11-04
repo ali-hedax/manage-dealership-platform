@@ -1557,3 +1557,16 @@ tr.is-late td { background:var(--red-soft); }
 /* The support desk groups daily work without adding owner administration. */
 .workspace-action-sections { display:grid; gap:28px; }
 .workspace-action-sections h2 { font-size:var(--fs-xl); margin-block:0 12px; }
+
+/* Installation uses the existing identity and native accessible dialog. */
+.install-brand { display:flex; align-items:center; gap:14px; }
+.install-brand img { border-radius:12px; flex-shrink:0; }
+.install-brand p { margin-block:6px 0; color:var(--steel); }
+.install-heading { font-size:var(--fs-l); margin-block:0 10px; }
+.install-steps { margin-block:0; padding-inline-start:24px; }
+.install-steps li { padding-inline-start:4px; margin-block:10px; line-height:1.9; }
+.install-touch { min-block-size:48px; }
+.install-login { margin-block-start:8px; padding-block-start:16px; border-block-start:1px solid var(--silver); }
+.account .install-touch { margin-block-end:8px; }
+.network-status { position:sticky; inset-block-start:0; z-index:60; padding:12px max(16px,env(safe-area-inset-right)) 12px max(16px,env(safe-area-inset-left)); background:var(--amber-soft); color:#744210; border-block-end:1px solid #eed8a5; font-size:var(--fs-m); }
+@media (display-mode:standalone) { body { padding-block-start:env(safe-area-inset-top); padding-block-end:env(safe-area-inset-bottom); } }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import type {Me} from '@manage/shared';
 import {workspaceHome} from '@/lib/workspaces';
+import {InstallButton} from '@/components/InstallApp';
 
 function LoginForm() {
   const router = useRouter();
@@ -104,6 +105,7 @@ function LoginForm() {
       </button>
       {challenge && <><p className="small muted">کد در برنامه هر ۳۰ ثانیه عوض می‌شود. اگر کد قبلی را استفاده کرده‌اید، منتظر کد تازه بمانید.</p><button className="btn" type="button" onClick={()=>{setChallenge(null);setCode('');setError('');}}>بازگشت به ایمیل و رمز</button></>}
       {emailEnabled && !challenge && <Link className="small" href="/reset-password">رمزم را فراموش کرده‌ام</Link>}
+      {!challenge&&<div className="install-login"><InstallButton/></div>}
     </form>
   );
 }

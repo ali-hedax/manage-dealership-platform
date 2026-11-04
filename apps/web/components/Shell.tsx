@@ -9,6 +9,7 @@ import {visibleWorkspaces} from '@/lib/workspaces';
 import {AppIcon,type IconName} from './AppIcon';
 import {NotificationBar} from './NotificationBar';
 import {PageActions} from './PageActions';
+import {InstallButton} from './InstallApp';
 export function Shell({children}:{children:ReactNode}){
  const {me,can}=useAuth(),pathname=usePathname(),router=useRouter();const [open,setOpen]=useState(false),[mobile,setMobile]=useState(false);const menu=useRef<HTMLButtonElement>(null);
  useEffect(()=>{const media=window.matchMedia('(max-width: 860px)');const sync=()=>setMobile(media.matches);sync();media.addEventListener('change',sync);return ()=>media.removeEventListener('change',sync);},[]);
@@ -30,7 +31,7 @@ export function Shell({children}:{children:ReactNode}){
  {(can('user.manage')||can('reference.parts.read')||can('reference.customers.read')||me.isOwner)&&<details className="nav-unit" open={pathname==='/users'||pathname==='/reference-data'}><summary><AppIcon name="settings"/><span>مدیریت و اطلاعات پایه</span></summary><div className="nav-sub">{nav('/users','کارکنان','team',can('user.manage'))}{nav('/users#access-control','مدیریت دسترسی‌ها','shield',!!me.isOwner)}{nav('/reference-data','اطلاعات پایه','database',can('reference.parts.read')||can('reference.customers.read'))}</div></details>}
  <details className="nav-unit planned-units"><summary><AppIcon name="box"/><span>سایر واحدها</span></summary><p className="nav-caption">واحدهای زیر هنوز در دست توسعه‌اند</p><div className="nav-sub">{me.modules.filter(m=>m.status==='planned').map(m=><Link key={m.key} href={`/modules/${m.key}`} className="planned" aria-current={pathname===`/modules/${m.key}`?'page':undefined}><span>{MODULE_LABELS[m.key]}</span><span className="tag-dev">در دست توسعه</span></Link>)}</div></details>
  </>}
- </nav><div className="account"><div className="name">{me.displayName}</div><div className="xs">{me.isOwner?'مالک سامانه':me.roles.map(r=>ROLE_LABELS[r]).join('، ')}</div><div className="sync"><i aria-hidden="true"/>همگام‌سازی محلی: هنوز فعال نشده</div><button type="button" className="btn btn-sm" onClick={logout}>خروج</button></div></aside>
+ </nav><div className="account"><div className="name">{me.displayName}</div><div className="xs">{me.isOwner?'مالک سامانه':me.roles.map(r=>ROLE_LABELS[r]).join('، ')}</div><div className="sync"><i aria-hidden="true"/>همگام‌سازی محلی: هنوز فعال نشده</div><InstallButton/><button type="button" className="btn btn-sm" onClick={logout}>خروج</button></div></aside>
  <div className="main"><div className="topbar"><img src="/brand/logo-dark.png" alt="Manage by HEDAX" width={104} height={35}/><button ref={menu} type="button" className="btn btn-sm" aria-controls="main-navigation" aria-expanded={open} onClick={()=>setOpen(!open)}>منو</button></div>{me.environment!=='production'&&<div className="env-banner" role="note">نسخه آزمایشی — داده‌های این محیط ساختگی‌اند و جای سامانه‌های رسمی را نمی‌گیرند.</div>}
  <main className="page" id="page-content" tabIndex={-1}><NotificationBar/><PageActions/>{children}</main></div></div>;
 }
