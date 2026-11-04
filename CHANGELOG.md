@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] — complete system support desk
+
+- Grouped system support work into daily reports/parts, cases/repairs and oversight/support; added searchable case queue and permission-gated access to operational desks while keeping the owner desk protected.
+- Separately, the owner requested all operational permissions for the existing real system-admin template (32→45); applied through the owner UI and backed up. The owner flag and owner-only API protections remain separate. Daily reminders include the newly authorized uploader at the configured due time. [Guide](docs/SYSTEM_ADMIN_FA.md).
+
 ## [Released on Manage] — accident workflow redesign, 2026-11-04
 
 - Unified accident coordinator desk and default responsibilities; parts operations remain with parts, the service manager receives reporting access, and system support assists operations without owner-only access administration. Existing accounts and custom access templates are not migrated.

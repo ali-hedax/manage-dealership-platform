@@ -10,7 +10,7 @@ const channel = process.env.PW_CHANNEL || (process.platform === 'win32' ? 'msedg
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: /daily-reports\.spec\.ts/,
+  testMatch: /(daily-reports|system-admin)\.spec\.ts/,
   timeout: 240_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,

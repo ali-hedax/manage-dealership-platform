@@ -12,7 +12,7 @@ const channel = process.env.PW_CHANNEL || (process.platform === 'win32' ? 'msedg
 export default defineConfig({
   testDir: './e2e',
   // Needs an owner in the seed, which changes staff rules: playwright.daily.config.ts.
-  testIgnore: /daily-reports\.spec\.ts/,
+  testIgnore: /(daily-reports|system-admin)\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -30,7 +30,7 @@ export default defineConfig({
     {
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], channel, viewport: { width: 1366, height: 860 } },
-      testIgnore: /mobile\.spec\.ts|daily-reports\.spec\.ts/,
+      testIgnore: /mobile\.spec\.ts|(daily-reports|system-admin)\.spec\.ts/,
     },
     { name: 'mobile', use: { ...devices['Pixel 7'], channel }, testMatch: /(mobile|screenshots)\.spec\.ts/ },
   ],

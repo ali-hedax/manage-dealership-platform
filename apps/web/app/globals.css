@@ -1553,3 +1553,7 @@ tr.is-late td { background:var(--red-soft); }
 .workshop-schedule-table :is(th,td) { text-align:start; padding:12px 8px; border-block-end:1px solid var(--silver); }
 
 .case-current-route { display:grid; gap:14px; padding:20px; border-inline-start:4px solid var(--workshop-accent); background:var(--surface); }
+
+/* The support desk groups daily work without adding owner administration. */
+.workspace-action-sections { display:grid; gap:28px; }
+.workspace-action-sections h2 { font-size:var(--fs-xl); margin-block:0 12px; }
