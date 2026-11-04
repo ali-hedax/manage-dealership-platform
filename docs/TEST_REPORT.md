@@ -2,6 +2,8 @@
 
 ## Online mobile installation — 2026-11-04 — not deployed
 
+**Final application CI:** all six jobs passed for release candidate `9e822467d20fe03cb8f6c078958f0c13165d1a0f` in [CI 41783453350](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41783453350): API/shared/lint/types/build, security, documentation, real PostgreSQL migration/concurrency, full browser and Docker/HTTPS. [PR #38](https://github.com/ali-hedax/manage-dealership-platform/pull/38) contains the PWA above the tested support-desk prerequisite. The subsequent record changes documentation only; production publication still requires explicit owner approval. Live access configuration is already applied separately.
+
 Edge PWA browser **4/4** passed: manifest linkage/MIME, real PNG dimensions and Apple icon; help at 390px, keyboard Escape/focus return, prompt dismissal/acceptance and installed-event state; manual iPhone instructions and standalone display; role-aware technician/manager launch, network-loss warning and rejected technician action without success text. Native install events and iPhone flags were simulated on Edge; native OS installation and real Safari/phones are not claimed verified. No service worker is registered.
 
 Workshop/mobile regressions **3/3** passed; web typecheck/build passed. Gate **2/2** passed, including public branding/manifest, denial of `/manifest.webmanifest/private`, protected launch/private API and retained TOTP/session rules. No new API/database behavior, dependencies or migrations. Final CI and owner-approved publication remain required. [Guide](PWA_FA.md).
