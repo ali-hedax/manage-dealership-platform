@@ -1,5 +1,13 @@
 # Test report
 
+## Released PWA and complete support desk — 2026-11-04, 9e82246
+
+All six [CI 41783453350](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41783453350) jobs passed on the published application: API **171 passed / 9 PostgreSQL-only skips** in the main job, with real PostgreSQL migration/concurrency passing separately; main browser **29 passed / 2 optional screenshot skips**, daily/support browser **3/3**; shared/lint/types/build, docs/security and Docker/HTTPS passed. The docs-only `01c0e58` also passed all six CI 41784219492 jobs. Exact CI source tree, archive SHA256 and running image IDs matched; [release evidence](RELEASE_PWA_20261104.md).
+
+Production verification passed: restored-copy migration probe without changing existing data, all existing operational/account fingerprints equal through installation, byte-identical environment, Production/PostgreSQL health, valid owner session and role-aware launch, grouped support desk/case queue, public HTTPS manifest, protected anonymous API and working install help/icon. No production migration or seed, real-case mutation, sample upload or native OS installation was performed for testing. A new existing personal denial of user.manage was preserved: template 45, effective support access 44, non-owner unchanged.
+
+Final backup operational/20261104T062953Z restored with matching operational/account fingerprints, scratch databases removed; off-server recovery encrypted/decrypted/checksummed with CurrentUser DPAPI and local plaintext removed. Actual Android/iPhone/Safari installation, LAN/offline and Push remain unverified/unimplemented as applicable. Later pre-release entries document history, not current deployment status.
+
 ## Online mobile installation — 2026-11-04 — not deployed
 
 **Final application CI:** all six jobs passed for release candidate `9e822467d20fe03cb8f6c078958f0c13165d1a0f` in [CI 41783453350](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41783453350): API/shared/lint/types/build, security, documentation, real PostgreSQL migration/concurrency, full browser and Docker/HTTPS. [PR #38](https://github.com/ali-hedax/manage-dealership-platform/pull/38) contains the PWA above the tested support-desk prerequisite. The subsequent record changes documentation only; production publication still requires explicit owner approval. Live access configuration is already applied separately.

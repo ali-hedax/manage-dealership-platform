@@ -1,15 +1,16 @@
 # Changelog
 
-## [Unreleased] — online mobile installation
+## [Released on Manage] — online mobile installation, 2026-11-04
 
 - Added installation metadata and existing-brand Android/Apple icons, standalone display, role-aware launch, optional browser installation and manual Safari instructions from login and account menus.
 - Added a network-loss warning; technician actions still require a successful server response and clear earlier success text before retrying. No offline queue, service-worker data cache or phone Push is included.
-- Public branding metadata passes the personal-auth gate while launch and operational APIs remain protected. [Installation guide](docs/PWA_FA.md). Native installation on actual phones and publication remain pending.
+- Public branding metadata passes the personal-auth gate while launch and operational APIs remain protected. Published tested `9e82246` with verified backups and existing authentication/data preserved. [Installation guide](docs/PWA_FA.md), [release record](docs/RELEASE_PWA_20261104.md). Native installation on actual phones remains to be checked.
 
-## [Unreleased] — complete system support desk
+## [Released on Manage] — complete system support desk, 2026-11-04
 
 - Grouped system support work into daily reports/parts, cases/repairs and oversight/support; added searchable case queue and permission-gated access to operational desks while keeping the owner desk protected.
 - Separately, the owner requested all operational permissions for the existing real system-admin template (32→45); applied through the owner UI and backed up. The owner flag and owner-only API protections remain separate. Daily reminders include the newly authorized uploader at the configured due time. [Guide](docs/SYSTEM_ADMIN_FA.md).
+- Preserved a later personal denial of staff administration during release: the template has 45 operational permissions and the current support account has 44 effective permissions. Existing owner-only controls remain enforced.
 
 ## [Released on Manage] — accident workflow redesign, 2026-11-04
 

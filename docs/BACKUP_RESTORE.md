@@ -1,6 +1,6 @@
 # Backup and restore
 
-**Current status:** backup/restore has been exercised on Manage Production. The latest pre-release and post-configuration restores passed on 2026-11-04; the final backup includes calendar and owner-approved access settings. See the [release record](RELEASE_ACCIDENT_20261104.md). The generic examples below must use the operational wrapper on the current host.
+**Current status:** backup/restore has been exercised on Manage Production. The latest final restore passed for `operational/20261104T062953Z`, including published PWA/support metadata, existing daily reports and the preserved personal staff-administration denial. See the [release record](RELEASE_PWA_20261104.md). The generic examples below must use the operational wrapper on the current host.
 
 ## What to back up
 
@@ -40,6 +40,7 @@ Record date, dump file, row counts and result in the table below. The `audit_eve
 
 | Date | Environment | Dump | Rows (cases / audit) | Result |
 | --- | --- | --- | --- | --- |
+| 2026-11-04 | Isolated copy of Manage Production | operational/20261104T062953Z | Counts/fingerprints recorded privately and matched | Full operational/account comparison passed; scratch DB removed, encrypted off-server recovery verified. |
 | 2026-11-04 | Isolated copy of Manage Production | operational/20261104T051806Z | 15 / 54012 | Operational/account/calendar/access fingerprints matched; encrypted off-server recovery verified. |
 
 ## Verified Preview restore drill — 2026-11-02
