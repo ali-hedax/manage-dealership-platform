@@ -1,13 +1,13 @@
 # Changelog
 
-## [Unreleased] — accident workflow redesign
+## [Released on Manage] — accident workflow redesign, 2026-11-04
 
 - Unified accident coordinator desk and default responsibilities; parts operations remain with parts, the service manager receives reporting access, and system support assists operations without owner-only access administration. Existing accounts and custom access templates are not migrated.
 - Added coded repair stations, an effective-dated Tehran work calendar, explicit holiday review, working-minute planning, parallel/dependent repair work, immutable original deadlines and recorded rescheduling reasons.
 - Added a restricted technician phone page for assigned start/end actions, separate coordinator handover confirmation, station delay/transfer reports and per-case union of blocker intervals.
 - Added parts market quotes and coordinator-recorded payer decisions; purchase requires matching, unexpired authorization, including price increases above the assessment. Customer receipts and release authority belong to the coordinator; spending exceptions remain separately controlled.
 - Station-code filtering now follows the report into matching case lists, event counts, Excel and Persian PDF; unknown station codes are explicitly shown as unknown.
-- Added the [Persian workflow guide](docs/ACCIDENT_WORKFLOW_FA.md). This version is not deployed; real staff access, holiday data and LAN/mobile rollout require separate review.
+- Published tested `880b121` with all six CI checks passing; restored-copy migration and final backup recovery verified, existing records and authentication preserved. Owner saved the weekly work schedule and separately approved five additions to the existing system-support template. Added the [Persian workflow guide](docs/ACCIDENT_WORKFLOW_FA.md) and [release record](docs/RELEASE_ACCIDENT_20261104.md). Actual station codes, reviewed holidays and technician phone/LAN rollout remain operational setup.
 
 ## [Released on Manage] — daily parts reports, 2026-11-03
 

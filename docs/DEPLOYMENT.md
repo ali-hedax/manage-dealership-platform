@@ -1,6 +1,6 @@
 # Deployment
 
-**Current state:** isolated ArvanCloud Preview deployed on 2026-11-01 after owner approval. URL, exact application SHA, security settings, installation fixes and verification: [deployment record](PREVIEW_DEPLOYMENT_20261101.md). Production and Source by HEDAX remain unchanged; final domain/DNS is not approved.
+**Current state:** the dedicated Manage host is Production with real data. Owner-approved accident redesign `880b121` was installed on 2026-11-04 using tested CI images, explicit additive migration, verified backup restores and the operational wrapper. See the [current release record](RELEASE_ACCIDENT_20261104.md) and [real-start boundary](REAL_START_FA.md). The Preview instructions below are historical; do not run its reset/deploy script on Production. Source and DNS remain unchanged.
 
 ## Local Preview (available now)
 
@@ -92,6 +92,7 @@ On the LAN without a public domain: an internal CA certificate or a reverse prox
 
 | Date | Environment | Commit | Operator | Migrations | Result |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-04 | Manage Production | 880b121 | Owner-approved release | 0014 (15 total) | Healthy; source/image IDs, restored backups, preserved auth/data and owner browser verified. [Record](RELEASE_ACCIDENT_20261104.md) |
 | 2026-11-01 | Isolated Preview | 58ad08c | Previous approved rollout | Through 0005_personal_auth | Healthy; owner later confirmed personal login. [Full record](PREVIEW_DEPLOYMENT_20261101.md) |
 
 

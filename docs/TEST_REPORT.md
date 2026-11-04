@@ -1,6 +1,14 @@
 # Test report
 
-## Accident workflow redesign — 2026-11-03 — verified implementation, not deployed
+## Released accident workflow redesign — 2026-11-04, 880b121
+
+All six final-head checks passed in [CI 41649871911](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41649871911). API 168 passes (9 PostgreSQL-only skips in the main job, all 9 separately passed on PostgreSQL 16), shared 17/17; main Chromium 25 passes / 2 optional screenshot skips; daily browser 2/2; security, docs, lint/types/build and Docker/HTTPS passed. The exact CI image IDs and source tree were verified before installation; see the [release record](RELEASE_ACCIDENT_20261104.md).
+
+Production verification passed: pre-install restored-copy migration 0014 and WorkshopService read probes; all existing business/auth/policy fingerprints unchanged through installation; .env byte equality, Production/PostgreSQL health and healthy containers; owner browser session persisted, merged desk, workshop/calendar, an existing case and manager report station filter loaded. Calendar revision 1 and the missing engine-tuning trade were recorded from the owner UI. The owner separately approved exactly five additions to the existing system_admin template; saved 27→32, database comparison proved no removals or changes to other templates and no new price/release authority. No real case, purchase, payment or task was modified for testing.
+
+Final backup `operational/20261104T051806Z` restored into a separate database, including calendar and approved permissions, with matching operational/account fingerprints. Three audited setup actions account for the only changes in departments, tenants, audit/change-log and idempotency rows. Fifteen cases and nine accounts remain. Scratch databases removed; encrypted off-server recovery copy decrypted/checksummed in memory and local plaintext removed. Actual technician phones/LAN, reviewed official holidays and generative AI are not claimed complete. No main merge or Source/DNS change. Application code was not changed by the release documentation.
+
+## Accident workflow redesign — 2026-11-03 — historical pre-release validation
 
 Implementation commits `09aa3dd`, `2a3908d`, `ce8f324` and `45b907c`, branch `feature/accident-workflow-redesign`, based on `9b07cb0` (the released daily-parts branch). Final-head CI, including real PostgreSQL and Docker, is linked from [PR #36 checks](https://github.com/ali-hedax/manage-dealership-platform/pull/36/checks). No production operation, real-data import or real account/permission change.
 
