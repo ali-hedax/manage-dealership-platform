@@ -355,7 +355,7 @@ describe('Emdad Vijeh follow-up', () => {
     const [original] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.id, by('900001')[0].id));
     const unrelatedId = newId();
     await h.db.db.insert(emdadRequests).values({...original!,id:unrelatedId,externalKey:'synthetic-unrelated-case-part',partRequestId:null,
-      official:{...original!.official,partCode:'99887766',initialCode:'99887766',fullCode:'9988776601',fullCodeBase:'99887766'}});
+      official:{...(original!.official as Record<string,unknown>),partCode:'99887766',initialCode:'99887766',fullCode:'9988776601',fullCodeBase:'99887766'}});
     try {
       expect((await parts.post('/emdad/requests/search',{caseId:matched.id})).body.total).toBe(2);
       const relevant = await parts.post('/emdad/requests/search',{caseId:matched.id,relatedPartsOnly:true});
