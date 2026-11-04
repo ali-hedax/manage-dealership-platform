@@ -1,5 +1,9 @@
 # Test report
 
+## Short vehicle labels — 2026-11-04 — in verification
+
+Shared/API/web builds passed. Existing long-trim browser regression now verifies that the full manufacturer trim survives editing while the case-list cell shows brand/model and excludes the trim. Targeted browser and CI results pending; production unchanged at this record.
+
 ## Published assessment intake and compact workbench — 2026-11-04, d0a66b2
 
 Owner-approved publication completed using the exact CI 41849047449 images. GitHub artifact ZIP digest, inner archive SHA256, source tree and running image IDs matched. Restored-copy new-image read-only probes passed (exact vehicle lookup, relevant Emdad, assessment reads and a synthetic in-memory parser row); all table/migration fingerprints remained identical. No production migration or seed. All data, users, sessions and byte-identical environment matched through installation; 15 migrations retained, TOTP and effective support access 44 preserved. Health and public/private HTTP boundaries passed. [Release evidence](RELEASE_ASSESSMENT_20261104.md).

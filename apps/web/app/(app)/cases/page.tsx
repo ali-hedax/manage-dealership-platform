@@ -209,7 +209,7 @@ function CasesList() {
                     <Plate value={c.plate} />
                   </td>
                   <td>
-                    <div>{toPersianDigits(c.vehicleLabel)}</div>
+                    <div>{toPersianDigits(c.vehicleSummary ?? c.vehicleLabel)}</div>
                     <div className="xs muted">{c.customerName ?? 'مالک نامشخص'}</div>
                   </td>
                   <td className="hide-sm">

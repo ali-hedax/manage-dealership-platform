@@ -66,6 +66,8 @@ export interface CaseListItem {
   forecastDeliveryAt: string | null;
   customerName: string | null;
   vehicleLabel: string;
+  /** Compact list label from brand/model only; never inferred from the manufacturer trim. */
+  vehicleSummary?: string;
   plate: string | null;
   vin: string | null;
   responsible: UserRef | null;

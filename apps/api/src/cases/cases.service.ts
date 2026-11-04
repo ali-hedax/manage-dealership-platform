@@ -622,6 +622,7 @@ export class CasesService {
       officialDeadlineAt: iso(c.officialDeadlineAt),
       forecastDeliveryAt: iso(c.forecastDeliveryAt),
       vehicleLabel: [v.brand, v.model, v.trim].filter(Boolean).join(' ') || 'خودرو (مدل نامشخص)',
+      vehicleSummary: [v.brand, v.model || 'مدل نامشخص'].filter(Boolean).join(' '),
       plate: v.plate,
       vin: v.vin,
       responsible: c.responsibleUserId ? { id: c.responsibleUserId, displayName: responsibleName! } : null,

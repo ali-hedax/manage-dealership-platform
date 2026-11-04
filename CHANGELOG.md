@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased] — short vehicle labels in case lists, 2026-11-04
+
+- Case lists and accident-desk queues show brand/model above the owner name, using a separate summary instead of the long manufacturer trim. Full trim and search/detail data are retained.
+
 ## [Released on Manage] — assessment intake and compact case workbench, 2026-11-04
 
 - Added header-driven XLSX assessment preview/import for sparse PDF-copy tables, separate labour and parts, explicit currency, rejected/correction/equivalent-row review, validation and atomic versioned audited draft insertion.
