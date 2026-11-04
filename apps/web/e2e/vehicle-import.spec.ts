@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseSections } from './helpers';
 
 // Existing-vehicle Excel import in the browser with the synthetic sample:
 // preview categories, apply, issued case numbers, provenance on the case.
@@ -38,9 +38,10 @@ test('system support previews and applies the vehicle sheet, then sees provenanc
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await caseLink.click();
-  await expect(page.getByText('شماره کارت پذیرش', { exact: true })).toBeVisible();
+  await openCaseSections(page,'info','provenance','tasks');
+  await expect(page.locator('#case-info').getByText('شماره کارت پذیرش', { exact: true })).toBeVisible();
   // The same source identifier can also occur in the import-history panel.
-  const details = page.locator('section.panel').filter({ has: page.getByRole('heading', { name: 'مشخصات', exact: true }) });
+  const details = page.locator('#case-info');
   await expect(details).toHaveCount(1);
   await expect(details.getByText('TST00001', { exact: true })).toBeVisible();
   const prov = page.getByTestId('provenance-panel');
