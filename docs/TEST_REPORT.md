@@ -1,5 +1,11 @@
 # Test report
 
+## Published assessment intake and compact workbench — 2026-11-04, d0a66b2
+
+Owner-approved publication completed using the exact CI 41849047449 images. GitHub artifact ZIP digest, inner archive SHA256, source tree and running image IDs matched. Restored-copy new-image read-only probes passed (exact vehicle lookup, relevant Emdad, assessment reads and a synthetic in-memory parser row); all table/migration fingerprints remained identical. No production migration or seed. All data, users, sessions and byte-identical environment matched through installation; 15 migrations retained, TOTP and effective support access 44 preserved. Health and public/private HTTP boundaries passed. [Release evidence](RELEASE_ASSESSMENT_20261104.md).
+
+Live owner UI verified the compact desk, disclosures, related Emdad and repeat-admission lookup. No real assessment was created or sample uploaded; full upload/apply remains validated by the synthetic browser/API tests below, not claimed exercised on real records. Final backup operational/20261104T151335Z restored with matching full fingerprints; scratch DBs removed and off-server CurrentUser DPAPI recovery decrypted/checksummed in memory. Temporary local download chunks removed, test processes closed. Actual OS phone installation, LAN/offline, Push, SMTP and domain work remain outside this release.
+
 ## Assessment intake and compact workbench — 2026-11-04 — candidate, not deployed
 
 **Final candidate `d0a66b2`: all six [CI 41849047449](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41849047449) jobs passed**, including API **181 passed / 9 PostgreSQL-only skips** in the main job and those **9/9** passing separately on real PostgreSQL; shared **17/17**; main browser **30 passed / 2 optional screenshot skips**, daily/support browser **3/3**; lint/types/build, documentation/security and Docker/HTTPS. [PR #39](https://github.com/ali-hedax/manage-dealership-platform/pull/39). No migration, new dependency or production change.

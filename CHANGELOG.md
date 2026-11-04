@@ -1,11 +1,11 @@
 # Changelog
 
-## [Unreleased] — assessment intake and compact case workbench, 2026-11-04
+## [Released on Manage] — assessment intake and compact case workbench, 2026-11-04
 
 - Added header-driven XLSX assessment preview/import for sparse PDF-copy tables, separate labour and parts, explicit currency, rejected/correction/equivalent-row review, validation and atomic versioned audited draft insertion.
 - Collapsed secondary case information, part stock suggestions, Emdad, reservations, evidence and tracking; preserved role-specific primary work, deep links, printing and all permissions. Desk overflow actions remain available on demand.
 - Scoped case/part Emdad results to relevant technical codes in the API, keeping independent history intact. Added exact vehicle-history lookup and safe repeat-admission profile prefill without copying prior damage, coverage, money or workflow.
-- No database migration, dependency change, production publication, account change, DNS or email configuration is part of this candidate.
+- Published owner-approved `d0a66b2` using the exact verified CI images, with restored backups, unchanged data/authentication/settings and a 39-second switch. No database migration, dependency/account change, main merge, DNS or email configuration. [Release record](docs/RELEASE_ASSESSMENT_20261104.md).
 
 ## [Released on Manage] — online mobile installation, 2026-11-04
 

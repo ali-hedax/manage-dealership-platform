@@ -1,6 +1,6 @@
 # دریافت کارشناسی و پرونده جمع‌وجور
 
-وضعیت: نسخه آزموده روی شاخه `feature/assessment-intake-simplification`، [PR #39](https://github.com/ali-hedax/manage-dealership-platform/pull/39) و هر شش بررسی CI موفق؛ هنوز روی سامانه عملیاتی منتشر نشده است.
+وضعیت: نسخه `d0a66b2` با تأیید مالک منتشر شده است؛ [PR #39](https://github.com/ali-hedax/manage-dealership-platform/pull/39) و هر شش بررسی CI موفق. [گزارش انتشار](RELEASE_ASSESSMENT_20261104.md).
 
 ## دریافت فایل کارشناسی
 
