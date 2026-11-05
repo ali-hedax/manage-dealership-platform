@@ -57,24 +57,34 @@ function ReserveDialog({part,reserved,onClose,onDone}:{part:Part;reserved:number
  </div></Dialog>;
 }
 
+/** One stock entry point next to its actual request; never duplicate the case's parts list. */
+export function PartStockActions({part,caseId,editable}:{part:Part;caseId:string;editable:boolean}){
+ const {can}=useAuth();const [expanded,setExpanded]=useState(false),[picking,setPicking]=useState(false);
+ const {data,error,mutate}=useSWR<{items:StockReservation[]}>(expanded&&can('stock.read')?`/stock/reservations?caseId=${caseId}`:null,fetcher);
+ if(!can('stock.read'))return null;
+ const items=(data?.items??[]).filter(r=>r.partRequestId===part.id);
+ const reserved=items.filter(r=>r.status==='reserved'||r.status==='issued').reduce((n,r)=>n+Number(r.quantity),0);
+ const base=baseOf(part.partNumber);
+ return <details className="compact-disclosure" open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} data-testid="part-stock"><summary>موجودی و رزرو این قطعه</summary>{expanded&&<div className="stack">
+  {base&&<StockFamilyOptions base={base}/>}
+  {error&&<p role="alert">دریافت رزروها ناموفق بود. <button type="button" className="btn" onClick={()=>void mutate()}>تلاش دوباره</button></p>}
+  {data&&<><p className="small">نیاز {faNum(part.quantity)} · رزرو/خروج {faNum(reserved)}</p>{can('stock.reserve')&&editable&&!['cancelled','handed_over'].includes(part.status)&&reserved<part.quantity&&<button type="button" className="btn" onClick={()=>setPicking(true)}>انتخاب گزینه و رزرو</button>}{!!items.length&&<ReservationsTable items={items} caseColumn={false} onChange={()=>void mutate()}/>}</>}
+  {!data&&!error&&<p role="status">در حال دریافت رزروها…</p>}
+ </div>}{picking&&<ReserveDialog part={part} reserved={reserved} onClose={()=>setPicking(false)} onDone={()=>{setPicking(false);void mutate();}}/>}</details>;
+}
+
 /** Daily stock choice, reservations and Emdad follow-up of one case, side by side with both identifiers. */
 export function CaseStockPanel({kase}:{kase:CaseDetail}){
- const {can}=useAuth();const canStock=can('stock.read'),canEmdad=can('emdad.read'),reserve=can('stock.reserve');
- const {data:parts}=useSWR<Part[]>(canStock?`/cases/${kase.id}/parts`:null,fetcher);
+ const {can}=useAuth();const canStock=can('stock.read'),canEmdad=can('emdad.read');
  const {data:res,mutate}=useSWR<{items:StockReservation[]}>(canStock?`/stock/reservations?caseId=${kase.id}`:null,fetcher);
  const {data:emdad,mutate:mutateEmdad}=useSWR<Paged<EmdadRequest>>(canEmdad?['/emdad/requests/search',kase.id,'related']:null,([path,id]:[string,string,string])=>api<Paged<EmdadRequest>>(path,{body:{caseId:id,relatedPartsOnly:true,pageSize:100}}));
- const [picking,setPicking]=useState<Part|null>(null),[open,setOpen]=useState<string|null>(null);
+ const [open,setOpen]=useState<string|null>(null);
  if(!canStock&&!canEmdad)return null;
- const editable=kase.status==='open'&&kase.stage!=='delivered';
- const active=(p:Part)=>(res?.items??[]).filter(r=>r.partRequestId===p.id&&(r.status==='reserved'||r.status==='issued'));
- const sum=(p:Part)=>active(p).reduce((n,r)=>n+Number(r.quantity),0);
- const open_parts=(parts??[]).filter(p=>!['cancelled','handed_over'].includes(p.status));
  return <section className="panel" data-testid="case-stock"><div className="panel-head"><div><h2>موجودی روزانه، رزرو و امداد ویژه</h2><p className="xs muted">پرونده منیج <bdi>{toPersianDigits(kase.caseNumber)}</bdi> · پذیرش ایران‌خودرو <bdi>{kase.admissionNo?toPersianDigits(kase.admissionNo):'ثبت نشده'}</bdi> · شاسی <bdi>{kase.vehicle.chassisRef?toPersianDigits(kase.vehicle.chassisRef):kase.vehicle.vin?toPersianDigits(kase.vehicle.vin):'ثبت نشده'}</bdi></p></div></div>
  <div className="panel-body stack">
-  {canStock&&<>{parts&&!open_parts.length&&<p className="muted small">نیاز قطعه بازی برای انتخاب گزینه نیست.</p>}{open_parts.map(p=><div key={p.id} className="row" style={{justifyContent:'space-between'}} data-testid="case-need"><span className="small"><strong>{p.description}</strong>{p.partNumber&&<> · <bdi>{toPersianDigits(p.partNumber)}</bdi></>} · نیاز {faNum(p.quantity)} · رزرو/خروج {faNum(sum(p))}</span>{reserve&&editable&&sum(p)<p.quantity&&<button type="button" className="btn btn-sm" onClick={()=>setPicking(p)}>انتخاب گزینه و رزرو</button>}</div>)}
+  {canStock&&<>
    {!!res?.items.length&&<details className="compact-disclosure"><summary>مشاهده رزروها و خروج قطعات ({faNum(res.items.length)})</summary><ReservationsTable items={res.items} caseColumn={false} onChange={()=>void mutate()}/></details>}</>}
   {canEmdad&&<details className="compact-disclosure"><summary>امداد مرتبط با قطعات کارشناسی / درخواست‌شده {emdad ? `(${faNum(emdad.total)})` : ''}</summary><div className="stack">{emdad&&!emdad.total&&<p className="muted small">امداد منطبق با شماره فنی اقلام این پرونده پیدا نشد. سایر سوابق در صفحه امداد قابل جست‌وجو هستند.</p>}{emdad?.items.map(r=><div key={r.id} className="row" style={{justifyContent:'space-between'}} data-testid="case-emdad"><span className="small">امداد <bdi>{toPersianDigits(r.emdadNo??'—')}</bdi> · کد اولیه <bdi>{toPersianDigits(r.initialCode??'—')}</bdi> · کد شرکت <bdi>{toPersianDigits(String(r.official.fullCode||'—'))}</bdi> — {String(r.official.emdadStatus||'وضعیت خالی')} <span className="xs muted">({EMDAD_MATCH_LABELS[r.matchStatus]}، گزارش {formatJalali(r.lastReportAt)}{r.assigneeName?`، مسئول: ${r.assigneeName}`:''})</span></span><button type="button" className="btn btn-sm" onClick={()=>setOpen(r.id)}>جزئیات و تاریخچه</button></div>)}</div></details>}
  </div>
- {picking&&<ReserveDialog part={picking} reserved={sum(picking)} onClose={()=>setPicking(null)} onDone={()=>{setPicking(null);void mutate();}}/>}
  {open&&<EmdadDetail id={open} onClose={()=>setOpen(null)} onChange={()=>void mutateEmdad()}/>}</section>;
 }

@@ -66,7 +66,7 @@ test('iPhone installation has manual Safari instructions and the installed windo
 });
 
 test('installed launch uses the account desk and an offline technician action is never shown as successful',async({page},info)=>{
- await login(page,'technician');await page.goto('/launch');await expect(page).toHaveURL(/\/workshop\/technician$/);
+ await login(page,'technician');await page.goto('/launch');await expect(page).toHaveURL(/\/launch$/);await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:/کارهای من/}).click();await expect(page).toHaveURL(/\/workshop\/technician$/);
  const task={id:'00000000-0000-4000-8000-000000000001',caseId:'00000000-0000-4000-8000-000000000002',caseNumber:'TEST-01',vehicleLabel:'خودرو ساختگی نصب',plate:'TEST-PLATE',title:'کار ساختگی اتصال',departmentName:'صافکاری',status:'pending',version:1,canStart:true,plannedEndAt:null};
  await page.route('**/api/v1/workshop/my-tasks',r=>r.fulfill({json:[task]}));
  await page.route('**/api/v1/workshop/my-tasks/*/actions',r=>r.abort('internetdisconnected'));
@@ -81,5 +81,5 @@ test('installed launch uses the account desk and an offline technician action is
  await page.screenshot({path:info.outputPath('technician-offline.png'),fullPage:true});
  await page.evaluate(()=>{Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>true});window.dispatchEvent(new Event('online'));});
  await expect(page.getByRole('alert').filter({hasText:'اتصال شبکه قطع است'})).toHaveCount(0);
- await login(page,'manager');await page.goto('/launch');await expect(page).toHaveURL(/\/accidents\/manager$/);
+ await login(page,'manager');await page.goto('/launch');await expect(page.getByRole('heading',{name:'از میز کار خود شروع کنید.'})).toBeVisible();await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:/مدیر خدمات/}).click();await expect(page).toHaveURL(/\/accidents\/manager$/);
 });

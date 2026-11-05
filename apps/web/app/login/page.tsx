@@ -5,7 +5,6 @@ import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import type {Me} from '@manage/shared';
-import {workspaceHome} from '@/lib/workspaces';
 import {InstallButton} from '@/components/InstallApp';
 
 function LoginForm() {
@@ -13,6 +12,7 @@ function LoginForm() {
   const params = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword,setShowPassword]=useState(false);
   const [tenantCode, setTenantCode] = useState('');
   const [needTenant, setNeedTenant] = useState(false);
   const [error, setError] = useState('');
@@ -31,16 +31,15 @@ function LoginForm() {
         const step=await api<{challengeId:string;proof:string}>('/auth/email/login',{body:{email:username.trim().toLowerCase(),password}});
         setChallenge(step);setPassword('');setBusy(false);return;
       }
-      let signedIn:Me;
       if (challenge) {
-        signedIn=await api<Me>('/auth/email/verify',{body:{...challenge,code}});
+        await api<Me>('/auth/email/verify',{body:{...challenge,code}});
       } else {
-      signedIn=await api<Me>('/auth/login', {
+      await api<Me>('/auth/login', {
         body: { username: username.trim(), password, tenantCode: tenantCode.trim() || undefined },
       });
       }
       const next = params.get('next');
-      router.replace(next && next.startsWith('/') && !next.startsWith('//') && !/[\\\r\n]/.test(next) ? next : workspaceHome(signedIn));
+      router.replace(next && next.startsWith('/') && !next.startsWith('//') && !/[\\\r\n]/.test(next) ? next : '/launch');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'TENANT_REQUIRED') setNeedTenant(true);
       setError(errorMessage(err));
@@ -87,13 +86,13 @@ function LoginForm() {
         <input
           className="input ltr-input"
           name="password"
-          type="password"
+          type={showPassword?'text':'password'}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
           required
         />
-      </label></>}
+      </label><button type="button" className="btn btn-ghost btn-sm" aria-pressed={showPassword} onClick={()=>setShowPassword(!showPassword)}>{showPassword?'پنهان کردن رمز':'نمایش رمز'}</button></>}
       {challenge && <label className="field"><span>کد تأیید</span><input className="input ltr-input" name="code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value.replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)).replace(/\D/g,''))} maxLength={6} pattern="[0-9]{6}" required autoFocus /></label>}
       {error && (
         <div className="callout callout-red" role="alert">
@@ -112,17 +111,15 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="login">
+    <main className="login entry-login">
       <div className="side">
         <img src="/brand/logo-dark.png" alt="Manage by HEDAX" width={190} height={63} />
-        <div className="claim">هر خودرو، هر مرحله و هر مانع در یک نگاه.</div>
-        <div className="xs" style={{ color: '#a0aec0' }}>
-          سامانه مدیریت عملیات نمایندگی، ماژول خودروهای تصادفی
-        </div>
+        <div className="entry-story"><div className="claim">از پذیرش<br/>تا تحویل،<br/>با دید روشن.</div><p>منیج؛ فضای کار یکپارچهٔ نمایندگی</p><ol className="entry-route"><li>پذیرش و کارشناسی</li><li>تأمین و تعمیر</li><li>کنترل و تحویل</li></ol></div>
+        <p className="entry-signature">Manage by HEDAX</p>
       </div>
       <Suspense>
         <LoginForm />
       </Suspense>
-    </div>
+    </main>
   );
 }

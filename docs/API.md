@@ -95,6 +95,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/vehicle-imports/:id` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | GET | `/api/v1/vehicle-imports/sample` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | GET | `/api/v1/vehicle-imports` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
+| GET | `/api/v1/workshop/calendar/iran-holidays` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/calendar` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/my-tasks` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/overview` | [source](../apps/api/src/workshop/workshop.controller.ts) |

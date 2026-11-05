@@ -8,7 +8,7 @@ test('owner-configured support desk exposes daily upload, all operational queues
  const catalog=await (await page.request.get('/api/v1/access')).json();
  const changed=await page.request.put('/api/v1/access/templates/system_admin',{headers:{'x-manage-client':'test'},data:{expectedVersion:catalog.version,permissions:[...PERMISSIONS]}});
  expect(changed.ok()).toBe(true);
- await login(page,'admin');await expect(page).toHaveURL(/\/accidents\/admin$/);
+ await login(page,'admin');await expect(page).toHaveURL(/\/launch$/);await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:/مدیر سیستم/}).click();
  const me=await (await page.request.get('/api/v1/auth/me')).json();
  expect(me.isOwner).toBe(false);expect(me.permissions).toHaveLength(PERMISSIONS.length);
  const desk=page.getByRole('navigation',{name:'کارهای مدیر سیستم',exact:true});

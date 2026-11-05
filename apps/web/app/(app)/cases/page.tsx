@@ -105,13 +105,15 @@ function CasesList() {
             aria-label="جست‌وجوی پرونده"
             autoFocus
           />
+          {(flag||params.get('stage')||params.get('coverage')||params.get('status'))&&<div className="row" aria-label="فیلترهای فعال">{flag&&<span className="chip chip-blue">{FLAGS.find(f=>f.key===flag)?.label??flag}</span>}{params.get('stage')&&<span className="chip">{STAGE_LABELS[params.get('stage') as keyof typeof STAGE_LABELS]??params.get('stage')}</span>}{params.get('coverage')&&<span className="chip">{COVERAGE_LABELS[params.get('coverage') as keyof typeof COVERAGE_LABELS]??params.get('coverage')}</span>}{params.get('status')&&<span className="chip">وضعیت: {({open:'باز',closed:'بسته',cancelled:'لغوشده',all:'همه'} as Record<string,string>)[params.get('status')!]??params.get('status')}</span>}<button type="button" className="btn btn-sm" onClick={()=>update({flag:null,stage:null,coverage:null,status:null,page:null})}>برداشتن فیلتر</button></div>}
+          <details className="case-filters compact-disclosure"><summary>فیلترها{[flag,params.get('stage'),params.get('coverage'),params.get('status')].filter(Boolean).length?' (فعال)':''}</summary><div className="stack">
           <div className="row">
             {FLAGS.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 className={`chip${flag === f.key ? ' chip-blue' : ''}`}
-                style={{ cursor: 'pointer', fontSize: 'var(--fs-s)', padding: '3px 10px' }}
+                style={{ cursor: 'pointer', fontSize: 'var(--fs-s)', minHeight: 44, padding: '6px 12px' }}
                 aria-pressed={flag === f.key}
                 onClick={() => update({ flag: flag === f.key ? null : f.key, page: null })}
               >
@@ -172,7 +174,7 @@ function CasesList() {
                 حذف فیلترها
               </button>
             )}
-          </div>
+          </div></div></details>
         </div>
       </div>
 

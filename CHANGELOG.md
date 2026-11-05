@@ -1,5 +1,11 @@
 # Changelog
 
+## [In review] — entry and operational workbench, 2026-11-05
+
+- Refined Persian login and explicit selection among permitted desks, with a consistent return destination and fewer duplicate menu entries.
+- Case flags folded behind filters, applied criteria visible; exact-code stock reservation placed beside the actual part request instead of repeating every part below it.
+- Iran public-holiday suggestions from Google, excluding observances and flagging tentative dates; local ICS fallback when the server cannot reach Google. Reviewed changes use existing versioned calendar save; personal calendars and previous repair plans are not changed.
+
 ## [Released on Manage] — short vehicle labels in case lists, 2026-11-05
 
 - Case lists and accident-desk queues show brand/model name above the owner name, omitting the long manufacturer trim and explicit engine/gearbox annotations embedded in model cells. Full model/trim and search/detail data are retained.

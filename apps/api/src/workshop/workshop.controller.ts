@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Patch, Post, Query } from '@nestjs/common';
+import {iranHolidays} from './iran-holidays';
 import { quoteDecisionSchema, quoteSchema, saveCalendarSchema, stationSchema, taskActionSchema } from '@manage/shared';
 import { z } from 'zod';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
@@ -12,6 +13,7 @@ import { WorkshopService } from './workshop.service';
 export class WorkshopController {
   constructor(private readonly workshop:WorkshopService,private readonly tasks:TasksService){}
   @Get('calendar') @RequirePermissions('workshop.read') calendar(@CurrentActor() a:Actor){return this.workshop.calendars(a);}
+  @Get('calendar/iran-holidays') @RequirePermissions('calendar.manage') holidays(){const year=new Date(Date.now()+210*60_000).getUTCFullYear();return iranHolidays(`${year}-01-01`,`${year+1}-12-31`);}
   @Post('calendar') @RequirePermissions('calendar.manage') saveCalendar(@CurrentActor() a:Actor,@Body(new ZodPipe(saveCalendarSchema)) b:z.infer<typeof saveCalendarSchema>){return this.workshop.saveCalendar(a,b);}
   @Get('stations') @RequirePermissions('workshop.read') stations(@CurrentActor() a:Actor){return this.workshop.stations(a);}
   @Post('stations') @RequirePermissions('workshop.manage') createStation(@CurrentActor() a:Actor,@Body(new ZodPipe(stationSchema)) b:z.infer<typeof stationSchema>){return this.workshop.saveStation(a,b);}

@@ -1,5 +1,11 @@
 # Test report
 
+## Entry and operational workbench — 2026-11-05 — validation in progress
+
+Branch `feature/entry-workbench-refresh`, based on the published 696eb6f chain. Initial targeted browser run 9/9; final daily report/reservation/support run 3/3; API workshop/holiday tests 12/12. Shared/API/web builds and lint passed before the ICS fallback addition; final build and lint repeated afterwards. Actual public Google Iran feed parsed as 56 holidays (25 tentative) for 2026–2027. Local Windows fetch HTTP 200; dedicated production host/container timed out against Google; no network changes. Direct server refresh is not claimed working on production. Local-file fallback and final complete browser run still require final validation.
+
+The first daily attempt reached the completed reservation workflow, then failed because a history assertion still used the moved part selector; corrected to the actual history region, final 3/3. A full-browser attempt exposed the report test's old direct-desk assumption and was then invalidated by an overlapping build; it is not release evidence. Run the final built app serially, record results and require every CI job before publication. Live read-only review loaded all 17 existing cases with nine sections each; no business mutations.
+
 ## Short vehicle labels — 2026-11-05 — published, 696eb6f
 
 All six [CI 41969252059](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41969252059) jobs passed: API 181 passed / 9 PostgreSQL-only skips covered separately on PostgreSQL; shared 17/17, full browser, security, docs and Docker/HTTPS. API typecheck/lint and shared/API/web builds passed locally; related browser **3/3** passed. The long-trim scenario verifies preserved source trim, a concise model label, and no engine/gearbox annotations in the list even when those were entered in model.

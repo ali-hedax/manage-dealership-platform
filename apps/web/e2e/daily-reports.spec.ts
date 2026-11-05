@@ -68,7 +68,9 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   const kase = await c.json();
   expect((await page.request.post(`/api/v1/cases/${kase.id}/parts`, { headers, data: { description: 'لنت جلو', partNumber: BASE, quantity: 2, source: 'stock' } })).status()).toBe(201);
   await page.goto(`/cases/${kase.id}#case-parts`);
-  const panel = page.getByTestId('case-stock');
+  const panel = page.getByTestId('part-stock').filter({has:page.getByText('موجودی و رزرو این قطعه',{exact:true})}).first();
+  await expect(page.getByTestId('case-need')).toHaveCount(0);
+  await panel.locator(':scope > summary').click();
   await panel.getByRole('button', { name: 'انتخاب گزینه و رزرو' }).click();
   const dialog = page.getByTestId('reserve-dialog');
   await expect(dialog.getByTestId('stock-option')).toHaveCount(8);
@@ -79,7 +81,7 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   await dialog.getByLabel('همین کد کامل و مقدار').check();
   await page.screenshot({ path: info.outputPath('reserve-option-desktop.png') });
   await page.getByRole('button', { name: 'ثبت رزرو داخلی' }).click();
-  await panel.getByText(/مشاهده رزروها و خروج قطعات/).click();await expect(panel.getByTestId('reservation')).toContainText('رزرو داخلی منیج');
+  await expect(panel.getByTestId('reservation')).toContainText('رزرو داخلی منیج');
 
   // Above the need is refused with a clear message and the dialog keeps the choice.
   await panel.getByRole('button', { name: 'انتخاب گزینه و رزرو' }).click();
@@ -154,8 +156,9 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
 
   // The case now shows both identifiers and the linked request.
   await page.goto(`/cases/${kase.id}#case-parts`);
-  await expect(panel).toContainText('۹۱۰۰۰۱');
-  await panel.getByText(/امداد مرتبط با قطعات کارشناسی/).click();await expect(panel.getByTestId('case-emdad')).toContainText('آماده جمع آوری');
+  const history=page.getByTestId('case-stock');
+  await expect(history).toContainText('۹۱۰۰۰۱');
+  await history.getByText(/امداد مرتبط با قطعات کارشناسی/).click();await expect(history.getByTestId('case-emdad')).toContainText('آماده جمع آوری');
 
   // Parts desk header.
   await page.goto('/accidents/parts');

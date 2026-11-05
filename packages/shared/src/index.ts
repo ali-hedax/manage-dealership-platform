@@ -10,3 +10,5 @@ export * from './access';
 export * from './stock-code';
 export * from './daily-reports';
 export * from './workshop';
+
+export * from './iran-holidays';

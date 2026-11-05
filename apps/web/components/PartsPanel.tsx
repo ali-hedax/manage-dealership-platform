@@ -23,7 +23,7 @@ import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali, parseAmount, rial, toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
-import { StockFamilyPreview, PartEmdadPreview } from './CaseStockPanel';
+import { StockFamilyPreview, PartStockActions, PartEmdadPreview } from './CaseStockPanel';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
 import { ReferenceLookup } from './ReferenceLookup';
@@ -324,7 +324,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
             )}
           </div>
           {p.partNumber && <div className="small muted"><bdi>{p.partNumber}</bdi></div>}
-          {p.partNumber && <StockFamilyPreview partNumber={p.partNumber} />}
+          <PartStockActions part={p} caseId={kase.id} editable={editable}/>
           {p.partNumber && <PartEmdadPreview caseId={kase.id} partId={p.id} />}
           <details className="compact-disclosure"><summary>جزئیات پیگیری قطعه</summary><div className="xs muted meta">
             {p.partNumber && <span className="ltr">{p.partNumber}</span>}

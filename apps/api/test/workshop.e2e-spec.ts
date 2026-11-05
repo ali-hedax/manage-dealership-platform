@@ -11,6 +11,12 @@ beforeAll(async()=>{h=await createHarness();c=await h.loginAs('coordinator-new',
  const res=await c.post('/cases',{vehicle:{model:'خودرو آزمون',vin:'TESTVIN0000099001'},customer:{fullName:'مشتری آزمون',phone:'09000009900'},admittedAt:new Date().toISOString(),coverageType:'golden_card'});expect(res.status).toBe(201);caseId=res.body.id;
 });
 afterAll(async()=>{await h?.close();});
+it('holiday suggestions require calendar authority and never create a calendar revision',async()=>{
+ expect((await manager.get('/workshop/calendar/iran-holidays')).status).toBe(403);
+ const original=globalThis.fetch;let calls=0;
+ globalThis.fetch=async()=>{calls++;return new Response(`BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:${new Date().getUTCFullYear()}1225\r\nDESCRIPTION:Public holiday\r\nSUMMARY:Synthetic holiday\r\nEND:VEVENT\r\nEND:VCALENDAR`);};
+ try{const before=await admin.get('/workshop/calendar');const response=await admin.get('/workshop/calendar/iran-holidays');expect(response.status).toBe(200);expect(response.body.items).toHaveLength(1);expect(calls).toBe(1);expect((await admin.get('/workshop/calendar')).body.version).toBe(before.body.version);}finally{globalThis.fetch=original;}
+});
 it('admin versions calendars; coordinator and manager cannot change them',async()=>{
  const day=new Date(Date.now()+210*60000).toISOString().slice(0,10);
  const body={expectedVersion:0,effectiveFrom:day,calendar:DEFAULT_WORK_CALENDAR,reason:'ساعات مصوب آزمون'};

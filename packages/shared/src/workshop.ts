@@ -11,7 +11,7 @@ const shift = z.object({ start: z.number().int().min(0).max(1439), end: z.number
 export const calendarSchema = z.object({
   // JS weekday: Sunday=0 … Friday=5, Saturday=6. Minutes since Tehran midnight.
   week: z.array(z.array(shift).max(4)).length(7),
-  holidays: z.array(z.object({ date: dateKey, title: z.string().trim().min(1).max(150), official: z.boolean() })).max(1000),
+  holidays: z.array(z.object({ date: dateKey, title: z.string().trim().min(1).max(150), official: z.boolean(), source:z.literal('google_iran').optional() })).max(1000),
   holidaysVerifiedThrough: dateKey.nullable(),
 }).superRefine((v,ctx) => {
   if (!v.week.some(day => day.length)) ctx.addIssue({ code:'custom',message:'حداقل یک بازه کاری لازم است',path:['week'] });

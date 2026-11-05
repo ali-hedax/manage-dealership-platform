@@ -5,7 +5,7 @@ import {useAuth} from '@/lib/auth';
 import type {Action} from '@/lib/workspaces';
 import {AppIcon} from './AppIcon';
 export function PageActions(){
- const path=usePathname(),{can,me}=useAuth();if(path.startsWith('/accidents'))return null;
+ const path=usePathname(),{can,me}=useAuth();if(path==='/launch'||path.startsWith('/accidents'))return null;
  if(path.startsWith('/workshop'))return null;
  let label='واحد تصادفات';let actions:Action[]=[];
  const match=path.match(/^\/cases\/([^/]+)$/);

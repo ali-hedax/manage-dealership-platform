@@ -3,7 +3,7 @@ import {PERMISSIONS,permissionsFor,type AccessCatalog} from '@manage/shared';
 import {login} from './helpers';
 
 test('department menu exposes only useful workspaces and finance/QC queues work on desktop and phone',async({page},info)=>{
- await login(page,'qc');await expect(page).toHaveURL(/\/accidents\/quality$/);await page.goto('/accidents');
+ await login(page,'qc');await expect(page).toHaveURL(/\/launch$/);await page.goto('/accidents');
  await expect(page.getByRole('heading',{name:'واحد تصادفات',exact:true})).toBeVisible();
  const launch=page.getByRole('navigation',{name:'میزهای کار مجاز من'});
  await expect(launch.getByRole('link',{name:/کنترل کیفیت/})).toBeVisible();await expect(launch.getByRole('link',{name:/مالک سامانه|مالی و صندوق/})).toHaveCount(0);
