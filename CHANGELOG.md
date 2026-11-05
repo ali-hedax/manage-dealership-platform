@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] — phase 1 of the role-based plan, 2026-11-05
+
+- Technicians sign in with a username and a 4-digit PIN (no email or Authenticator) and see only their own work. Owner and system administrator create technicians, set a new PIN and deactivate them under «کارکنان». Five wrong PINs lock the account for 15 minutes.
+- Money never blocks a part purchase. The finance state is still recorded and shown as a warning.
+- The accident coordinator answers alerts with one tap («گرفتم / نگرفتم / لازم نیست»): advance not recorded, a costlier supplement after an advance, and parts total above the threshold (default 500,000,000 Rial, set by owner or system administrator in workshop settings; every further multiple asks again). Answers stay in the case history.
+- Parts are priced freely. A recorded payer approval is needed only when golden card or insurance pays and the outside price is above the assessment-approved price.
+- The technician card shows «قطعه آماده است؛ از انبار بگیرید» with the part names, and how many parts are still on the way.
+
 ## [Unreleased] — navy and gold interface, 2026-11-05
 
 - The login, sidebar, dashboard and workspace selection use a navy-and-gold palette with clearer focus states and larger touch targets.

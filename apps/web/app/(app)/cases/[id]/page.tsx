@@ -15,6 +15,7 @@ import { AssessmentPanel } from '@/components/AssessmentPanel';
 import { BlockersPanel } from '@/components/BlockersPanel';
 import { CompletionPanel } from '@/components/CompletionPanel';
 import { FinancePanel } from '@/components/FinancePanel';
+import { AlertsPanel } from '@/components/AlertsPanel';
 import { CaseStockPanel } from '@/components/CaseStockPanel';
 import { CaseSection } from '@/components/CaseSection';
 import { PartsPanel } from '@/components/PartsPanel';
@@ -254,6 +255,7 @@ export default function CaseDetailPage() {
           </section>
           </CaseSection>
 
+          {active && <AlertsPanel caseId={kase.id} />}
           <CaseSection id="case-finance" title="مالی و تسویه" initialOpen={!can('assessment.manage') && !can('part.manage') && can('finance.payment')}><FinancePanel kase={kase} onChange={refresh} /></CaseSection>
 
           <CaseSection id="case-provenance" title="منبع و سابقه ورود اطلاعات"><ProvenancePanel kase={kase} /></CaseSection>

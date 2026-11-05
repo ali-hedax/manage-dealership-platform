@@ -39,7 +39,7 @@ import type { Permission } from './permissions';
 export interface Me {
   id: string;
   isOwner?: boolean;
-  authentication?: 'password' | 'totp';
+  authentication?: 'password' | 'totp' | 'pin';
   username: string;
   displayName: string;
   roles: Role[];
@@ -602,3 +602,19 @@ export interface PartDiscrepancy {
   resolutionReason: string | null;
   version: number;
 }
+
+/** A non-blocking alert for the accident coordinator (see AlertsService). */
+export interface CaseAlert {
+  caseId: string;
+  caseNumber: string;
+  plate: string | null;
+  vehicleLabel: string;
+  coverageType: string;
+  kind: 'advance' | 'parts_amount';
+  level: number;
+  /** parts_amount only: current parts total and the threshold, in Rial. */
+  totalRial: number | null;
+  thresholdRial: number | null;
+}
+
+export const ALERT_RESPONSE_LABELS = { received: 'گرفتم', not_received: 'نگرفتم', not_needed: 'لازم نیست' } as const;

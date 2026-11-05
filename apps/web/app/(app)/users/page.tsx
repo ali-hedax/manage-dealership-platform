@@ -7,6 +7,7 @@ import {useAuth} from '@/lib/auth';
 import {AccessPanel} from '@/components/AccessPanel';
 import {Dialog} from '@/components/Dialog';
 import {permissionsFor,PERMISSION_LABELS,type PermissionTemplates} from '@manage/shared';
+import { TechniciansPanel } from '@/components/TechniciansPanel';
 
 type UserRow={id:string;email:string;displayName:string;roles:Role[];isActive:boolean;invitationDelivery:string;invitationFailure:string|null;invitationExpiresAt:string|null};
 type MailCheck={status:'ready'|'not_configured'|'failed';failure?:string};
@@ -85,6 +86,7 @@ export default function UsersPage(){
       {privateLink&&<div className="callout"><label className="field" htmlFor="private-invitation"><span>لینک دعوت محرمانه</span></label><input id="private-invitation" className="input ltr-input" readOnly value={privateLink} onFocus={e=>e.target.select()}/><button type="button" className="btn" style={{marginBlockStart:12}} onClick={()=>void navigator.clipboard.writeText(privateLink).then(()=>setMessage('لینک دعوت کپی شد؛ فقط برای همان همکار بفرستید.')).catch(()=>setError('کپی خودکار انجام نشد؛ لینک را انتخاب و کپی کنید.'))}>کپی لینک دعوت</button></div>}
       <p>دعوت مخصوص همان فرد است. اگر ایمیل را ندید، پوشه Spam را بررسی کند. ارسال دوباره، لینک قبلی و اتصال ناتمام آن را باطل می‌کند.</p>
     </section>
+    <TechniciansPanel/>
     <section className="card" style={{marginBlockStart:24}}><h2>وضعیت حساب‌ها و دعوت‌ها</h2>
       {isLoading&&<p role="status">در حال دریافت کارکنان…</p>}
       {listError&&<p role="alert">دریافت فهرست کارکنان ناموفق بود. <button type="button" className="btn" onClick={()=>void mutate()}>تلاش دوباره</button></p>}
