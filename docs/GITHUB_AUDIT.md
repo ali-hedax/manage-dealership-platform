@@ -2,7 +2,7 @@
 
 ## Update 2026-11-05 — main is the single base
 
-With explicit owner approval, PR #49 merged the published platform (#28–#48, release `79f6585`) and staff recovery (#47) into main (`1be462f`). The stacked PRs #30 and #32–#48 and the superseded #25 and #27 were then closed with a pointer to #49, and the branches below were deleted. Every commit of a merged branch is reachable from main; a deleted branch can be restored from its closed PR page or with `git push origin <sha>:refs/heads/<name>`.
+With explicit owner approval, PR #49 merged the published platform (#28–#48, release `79f6585`) and staff recovery (#47) into main (`1be462f`). The stacked PRs #30 and #32–#48 and the superseded #25 and #27 were then closed with a pointer to #49. The branches below are no longer needed and are marked for deletion (the session that did the integration could not delete branches; the owner deletes them from GitHub's Branches page). Every commit of a merged branch is reachable from main; a deleted branch can be restored from its closed PR page or with `git push origin <sha>:refs/heads/<name>`.
 
 | Branch | Last commit | Reason |
 | --- | --- | --- |
