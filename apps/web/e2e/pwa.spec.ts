@@ -60,7 +60,7 @@ test('iPhone installation has manual Safari instructions and the installed windo
   await expect(guide.getByRole('button',{name:'نصب برنامه',exact:true})).toHaveCount(0);
   await page.screenshot({path:info.outputPath('install-iphone-guide.png'),fullPage:true});
   await context.addInitScript(()=>{Object.defineProperty(navigator,'standalone',{value:true,configurable:true});});
-  await page.reload();await expect(page.getByRole('heading',{name:'ورود به Manage',exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByRole('heading',{name:'ورود به حساب کاری',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'نصب روی گوشی',exact:true})).toHaveCount(0);
  }finally{await context.close();}
 });

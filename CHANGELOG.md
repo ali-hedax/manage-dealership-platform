@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — login page refresh, 2026-11-05
+
+- Login heading «ورود به حساب کاری», email label «ایمیل کاری», shorter guidance; product descriptor «سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو» under the approved slogan.
+- Show/hide password moved into the password field as an eye icon; «رمز را فراموش کرده‌اید؟» directly under the password; submit button no longer greyed out before typing (native required-field validation instead).
+- Two-factor note under the continue button in personal (email + Authenticator) mode; install action restyled as a quiet phone link.
+- Numbered route (01 پذیرش و کارشناسی · 02 تأمین و تعمیر · 03 کنترل و تحویل) and «محصولی از هداکس» signature on the brand panel. No API, auth or permission change.
+
 ## [Released on Manage] — production domain managebyhedax.ir, 2026-11-05
 
 - Manage now answers at `https://managebyhedax.ir`, with 301 redirects from HTTP, `www`, the raw IP and the former temporary address. Staff sign in once more, and installed mobile apps need reinstalling from the new address. Invitation links use the new address.
