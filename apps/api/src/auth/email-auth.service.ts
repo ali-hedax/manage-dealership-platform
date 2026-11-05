@@ -4,11 +4,11 @@ import {createHmac,randomBytes,timingSafeEqual} from 'node:crypto';
 import QRCode from 'qrcode';
 import {permissionsFor,type Role} from '@manage/shared';
 import {AuditService} from '../audit/audit.service';
-import {AppError,forbidden} from '../common/errors';
+import {AppError,conflict,forbidden,notFound} from '../common/errors';
 import {newId} from '../common/ids';
 import {APP_CONFIG,type AppConfig} from '../config';
 import {DATABASE,type DatabaseHandle,type Tx} from '../db/database';
-import {authChallenges,tenants,users} from '../db/schema';
+import {authChallenges,sessions,tenants,users} from '../db/schema';
 import {DEMO_TENANT_CODE} from '../demo/demo-seed.service';
 import {AuthService} from './auth.service';
 import type {Actor} from './auth.types';
@@ -20,6 +20,7 @@ import {InvitationMailService,MailDeliveryError,type MailFailure} from './invita
 type Meta={ip?:string;requestId?:string;userAgent?:string};
 const invalid=()=>new AppError(401,'INVALID_CREDENTIALS','ایمیل، رمز یا کد تأیید معتبر نیست');
 const equal=(a:string,b:string)=>a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
+const RECOVERY_TTL_MS=3600000;
 @Injectable()
 export class EmailAuthService {
   private readonly dummy=hashPassword(randomBytes(32).toString('hex'));
@@ -130,6 +131,28 @@ export class EmailAuthService {
     return {id:userId,status:'invited',emailDelivery,...(failure?{failure}:{})};
   }
 
+  /**
+   * Owner-issued private link for a staff member who lost the password or the
+   * Authenticator. The old credentials keep working until the person finishes,
+   * so a link made by mistake locks nobody out. The owner account is excluded:
+   * nobody above it can confirm that person's identity.
+   */
+  async issueRecovery(actor:Actor,userId:string){
+    const id=newId(),raw=randomBytes(32).toString('base64url'),expiresAt=new Date(Date.now()+RECOVERY_TTL_MS);
+    await this.db.transaction(async tx=>{
+      const [me]=await tx.select({isOwner:users.isOwner,isActive:users.isActive}).from(users).where(and(eq(users.id,actor.user.id),eq(users.tenantId,actor.user.tenantId)));
+      if(!me?.isOwner||!me.isActive)throw forbidden('ساخت لینک بازیابی فقط برای مالک سامانه مجاز است');
+      const [u]=await tx.select().from(users).where(and(eq(users.id,userId),eq(users.tenantId,actor.user.tenantId))).for('update');
+      if(!u)throw notFound('کاربر');
+      if(u.isOwner)throw conflict('RECOVERY_OWNER','حساب مالک از این مسیر بازیابی نمی‌شود');
+      if(!u.isActive||!u.email||!u.encryptedTotpSecret)throw conflict('RECOVERY_NOT_ACTIVE','این حساب هنوز فعال نشده است؛ به‌جای بازیابی، دعوت تازه بسازید');
+      await tx.update(authChallenges).set({consumedAt:new Date()}).where(and(eq(authChallenges.userId,u.id),isNull(authChallenges.consumedAt)));
+      await tx.insert(authChallenges).values({id,userId:u.id,tenantId:u.tenantId,purpose:'recover',secretHash:this.hash('recover',id,raw),expiresAt});
+      await this.audit.record(tx,actor,{entityType:'user',entityId:u.id,action:'user.recovery_issued',after:{expiresAt:expiresAt.toISOString()}});
+    });
+    return {recoveryUrl:`${this.cfg.PUBLIC_APP_URL.replace(/\/$/,'')}/activate#token=${id}.${raw}&mode=recovery`,expiresAt};
+  }
+
   async enroll(input:PasswordSetInput,meta:Meta){
     const [id,raw]=input.token.split('.');
     const [candidate]=await this.db.select().from(authChallenges).where(eq(authChallenges.id,id!));
@@ -139,10 +162,11 @@ export class EmailAuthService {
     const email=await this.db.transaction(async tx=>{
       const [u]=await tx.select().from(users).where(eq(users.id,candidate.userId)).for('update');
       const [c]=await tx.select().from(authChallenges).where(eq(authChallenges.id,id!)).for('update');
-      if(!u||u.isActive||!c||c.purpose!=='invite'||c.consumedAt||c.expiresAt<=new Date()||!equal(c.secretHash,this.hash('invite',c.id,raw!)))return null;
+      const recovery=c?.purpose==='recover';
+      if(!u||!c||(!recovery&&c.purpose!=='invite')||(recovery?!u.isActive||u.isOwner:u.isActive)||c.consumedAt||c.expiresAt<=new Date()||!equal(c.secretHash,this.hash(c.purpose,c.id,raw!)))return null;
       await tx.update(authChallenges).set({consumedAt:new Date()}).where(eq(authChallenges.id,c.id));
-      await tx.insert(authChallenges).values({id:enrollmentId,userId:u.id,tenantId:u.tenantId,purpose:'enroll',secretHash:this.hash('proof',enrollmentId,proof),passwordHash,encryptedTotpSecret,expiresAt:new Date(Date.now()+10*60000)});
-      await this.record(tx,u.id,'auth.totp_enrollment_started',meta);return u.email;
+      await tx.insert(authChallenges).values({id:enrollmentId,userId:u.id,tenantId:u.tenantId,purpose:recovery?'recover_enroll':'enroll',secretHash:this.hash('proof',enrollmentId,proof),passwordHash,encryptedTotpSecret,expiresAt:new Date(Date.now()+10*60000)});
+      await this.record(tx,u.id,recovery?'auth.recovery_started':'auth.totp_enrollment_started',meta);return u.email;
     });
     if(!email)throw invalid();
     const uri=authenticator(seed,email).toString();
@@ -154,12 +178,14 @@ export class EmailAuthService {
     const ok=await this.db.transaction(async tx=>{
       const [u]=await tx.select().from(users).where(eq(users.id,candidate.userId)).for('update');
       const [c]=await tx.select().from(authChallenges).where(eq(authChallenges.id,input.challengeId)).for('update');
-      if(!u||u.isActive||!c||c.purpose!=='enroll'||c.consumedAt||c.expiresAt<=new Date()||c.attempts>=5||!c.encryptedTotpSecret||!c.passwordHash||!equal(c.secretHash,this.hash('proof',c.id,input.proof)))return false;
+      const recovery=c?.purpose==='recover_enroll';
+      if(!u||!c||(!recovery&&c.purpose!=='enroll')||(recovery?!u.isActive||u.isOwner:u.isActive)||c.consumedAt||c.expiresAt<=new Date()||c.attempts>=5||!c.encryptedTotpSecret||!c.passwordHash||!equal(c.secretHash,this.hash('proof',c.id,input.proof)))return false;
       const step=totpStep(decryptTotp(c.encryptedTotpSecret,this.key()),input.code,-1);
       if(step===null){await tx.update(authChallenges).set({attempts:c.attempts+1}).where(eq(authChallenges.id,c.id));await this.record(tx,u.id,'auth.enrollment_code_failed',meta);return false;}
-      await tx.update(users).set({passwordHash:c.passwordHash,encryptedTotpSecret:c.encryptedTotpSecret,totpLastStep:step,isActive:true,activatedAt:new Date(),updatedAt:new Date(),version:sql`${users.version}+1`}).where(eq(users.id,u.id));
+      await tx.update(users).set({passwordHash:c.passwordHash,encryptedTotpSecret:c.encryptedTotpSecret,totpLastStep:step,failedLoginCount:0,lockedUntil:null,...(recovery?{}:{isActive:true,activatedAt:new Date()}),updatedAt:new Date(),version:sql`${users.version}+1`}).where(eq(users.id,u.id));
       await tx.update(authChallenges).set({consumedAt:new Date()}).where(and(eq(authChallenges.userId,u.id),isNull(authChallenges.consumedAt)));
-      await this.record(tx,u.id,'auth.totp_enrolled',meta);return true;
+      if(recovery)await tx.update(sessions).set({revokedAt:new Date()}).where(and(eq(sessions.userId,u.id),isNull(sessions.revokedAt)));
+      await this.record(tx,u.id,recovery?'auth.recovery_completed':'auth.totp_enrolled',meta);return true;
     });
     if(!ok)throw invalid();return {status:'ok'};
   }

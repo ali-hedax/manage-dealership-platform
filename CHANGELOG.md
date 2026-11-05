@@ -18,6 +18,10 @@ Application `79f6585` published after all six CI checks and restored-copy migrat
 - Dashboard: duplicate desk card removed (the «ورود به میز کار» button remains); each «نیازمند اقدام» row ends in an arrow instead of a repeated «مشاهده».
 - Case page: for overview roles (e.g. service manager) the section matching the current stage opens automatically, and «موانع» opens when blockers are open.
 
+## [Unreleased] — staff access recovery, 2026-11-05
+
+- The owner can make a private one-hour recovery link for a colleague who lost the password or Authenticator. The colleague sets a new password and reconnects Authenticator, and old sessions end. The owner account cannot use this path. Not yet on the server.
+
 ## [Unreleased] — interface polish, 2026-11-05
 
 - SVG logo set (full lockup and compact wordmark); sidebar and phone bar show "by HEDAX" as readable text.
@@ -213,7 +217,6 @@ All notable changes. Versions follow semantic versioning once releases start.
 
 ### Security
 - `drizzle-orm` raised to 0.45.x and `multer` overridden to ≥ 2.5.0 to clear high-severity advisories reported by `pnpm audit`.
-
 
 ## Preview browser sign-in compatibility — 2026-11-01
 

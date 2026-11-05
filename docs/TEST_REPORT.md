@@ -15,6 +15,15 @@ Completed: related API assessment/parts/workshop/new flows 31/31; shared 21/21; 
 
 Local Linux, built API + web: web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped**. First run exposed a duplicate accessible name between the new sidebar search and the case-list search; the sidebar field was renamed «جست‌وجوی سریع از هر صفحه» and the full suite rerun green. After the dashboard and stage-based case sections were added, the full suite was run again: **34 passed, 2 skipped**. Full CI pending on the PR.
 
+## Staff access recovery — 2026-11-05 — not deployed
+
+Branch `feature/staff-access-recovery`. No migration: `auth_challenges.purpose` is free text, and the new values are `recover` and `recover_enroll`.
+
+- `apps/api/test/staff-recovery.e2e-spec.ts` 7/7 locally on PGlite: only the actual owner can issue; owner account, inactive and other-tenant targets refused; password and Authenticator replaced; old sessions, old password and old code refused; link single use; wrong code leaves old credentials working; expired, replaced, deactivated and forged links refused; owner protected if ownership moves mid-way; login and recovery challenges not interchangeable; audit rows present and free of the secret; response not stored by idempotency.
+- Existing `personal-auth.e2e-spec.ts` still passes. API and web typecheck pass; API lint passes.
+- Browser tests added to `personal-auth.spec.ts` and the full suite: see CI on the PR. They mock the API.
+- **Not tested:** the flow on the production images behind Arvan, because it is not deployed.
+
 ## Interface polish — 2026-11-05 — branch `feature/ui-polish`
 
 Local Linux, built API + web (PGlite synthetic seed): web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped (optional screenshots)**; the one initial failure (discrepancy queue filtered by the Latin case number) was updated to the Persian-digit case number and passed on rerun. Full CI pending on the PR.

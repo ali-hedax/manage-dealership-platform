@@ -5,6 +5,7 @@ import {ROLES,ROLE_LABELS,type Role} from '@manage/shared';
 import {api,fetcher,errorMessage} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 import {AccessPanel} from '@/components/AccessPanel';
+import {Dialog} from '@/components/Dialog';
 import {permissionsFor,PERMISSION_LABELS,type PermissionTemplates} from '@manage/shared';
 
 type UserRow={id:string;email:string;displayName:string;roles:Role[];isActive:boolean;invitationDelivery:string;invitationFailure:string|null;invitationExpiresAt:string|null};
@@ -31,6 +32,9 @@ export default function UsersPage(){
   const [busyEmail,setBusyEmail]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [privateLink,setPrivateLink]=useState('');
   const [check,setCheck]=useState<MailCheck|null>(null),[checking,setChecking]=useState(false);
+  const [recoveryFor,setRecoveryFor]=useState<UserRow|null>(null),[recoveryLink,setRecoveryLink]=useState(''),[recoveryBusy,setRecoveryBusy]=useState(false),[recoveryError,setRecoveryError]=useState(''),[recoveryCopied,setRecoveryCopied]=useState(false);
+  function closeRecovery(){if(recoveryBusy)return;setRecoveryFor(null);setRecoveryLink('');setRecoveryError('');setRecoveryCopied(false);}
+  async function issueRecovery(){if(!recoveryFor||recoveryBusy)return;setRecoveryBusy(true);setRecoveryError('');try{setRecoveryLink((await api<{recoveryUrl:string}>(`/auth/users/${recoveryFor.id}/recovery`,{body:{}})).recoveryUrl);}catch(err){setRecoveryError(errorMessage(err));}finally{setRecoveryBusy(false);}}
   useEffect(()=>{if(presets?.assignableRoles)setRoles(current=>{const next=current.filter(r=>presets.assignableRoles!.includes(r));return next.length?next:presets.assignableRoles!.slice(0,1);});},[presets]);
   useEffect(()=>{const section=window.location.hash.slice(1);if(['access-control','invite-staff'].includes(section))document.getElementById(section)?.scrollIntoView({block:'start'});},[me.isOwner]);
   async function checkMail(){setChecking(true);setCheck(null);try{setCheck(await api<MailCheck>('/auth/invitations/email/check',{body:{}}));}catch(err){setError(errorMessage(err));}finally{setChecking(false);}}
@@ -92,7 +96,20 @@ export default function UsersPage(){
         <p>{u.roles.map(r=>ROLE_LABELS[r]).join('، ')}</p>
         {!u.isActive&&<button type="button" className="btn" disabled={busy||!ready} aria-label={`ارسال دوباره دعوت برای ${u.displayName}`} onClick={()=>void invite(u)}>{busyEmail===u.email?'در حال ارسال…':'ارسال دوباره دعوت'}</button>}
         {!u.isActive&&(!ready||u.invitationDelivery==='failed')&&<button type="button" className="btn" disabled={busy} aria-label={`ساخت لینک خصوصی برای ${u.displayName}`} onClick={()=>void invite(u,'manual')}>ساخت لینک خصوصی تازه</button>}
+        {me.isOwner&&u.isActive&&u.id!==me.id&&<button type="button" className="btn" aria-label={`بازیابی دسترسی ${u.displayName}`} onClick={()=>setRecoveryFor(u)}>بازیابی دسترسی</button>}
       </article>)}
     </section>
+    <Dialog open={!!recoveryFor} title={`بازیابی دسترسی ${recoveryFor?.displayName??''}`} onClose={closeRecovery} footer={recoveryLink?<button type="button" className="btn" onClick={closeRecovery}>بستن</button>:<><button type="button" className="btn" disabled={recoveryBusy} onClick={closeRecovery}>انصراف</button><button type="button" className="btn btn-primary" disabled={recoveryBusy} onClick={()=>void issueRecovery()}>{recoveryBusy?'در حال ساخت…':'ساخت لینک بازیابی'}</button></>}>
+      {recoveryLink?<>
+        <label className="field" htmlFor="private-recovery"><span>لینک بازیابی محرمانه</span></label>
+        <input id="private-recovery" className="input ltr-input" readOnly value={recoveryLink} onFocus={e=>e.target.select()}/>
+        <button type="button" className="btn" style={{marginBlockStart:12}} onClick={()=>void navigator.clipboard.writeText(recoveryLink).then(()=>setRecoveryCopied(true))}>کپی لینک</button>
+        <p role="status" className="small">{recoveryCopied?'لینک کپی شد؛ فقط برای همین همکار بفرستید.':'این لینک یک‌بارمصرف است، یک ساعت اعتبار دارد و دوباره نمایش داده نمی‌شود.'}</p>
+      </>:<>
+        <p>پیش از ساخت لینک، هویت این همکار را حضوری یا تلفنی تأیید کنید؛ هر کس لینک را داشته باشد می‌تواند رمز و Authenticator این حساب را عوض کند.</p>
+        <p className="small">تا وقتی همکار بازیابی را تمام نکند، رمز و Authenticator فعلی او کار می‌کنند. پس از پایان، همه نشست‌های قبلی او بسته می‌شوند. لینک تازه، لینک قبلی را باطل می‌کند.</p>
+      </>}
+      {recoveryError&&<div role="alert" className="callout callout-red">{recoveryError}</div>}
+    </Dialog>
   </>;
 }
