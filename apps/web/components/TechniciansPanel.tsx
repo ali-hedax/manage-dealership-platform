@@ -53,7 +53,7 @@ export function TechniciansPanel() {
       {message && <p role="status" className="callout">{message}</p>}
       {error && <p role="alert" className="callout callout-red">{error}</p>}
       <form onSubmit={create} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
-        <label className="field" style={{ flex: '1 1 200px' }}>نام و نام خانوادگی<input name="displayName" className="input" required minLength={2} maxLength={120} placeholder="مثلاً رضا حسینی" /></label>
+        <label className="field" style={{ flex: '1 1 200px' }}>نام تعمیرکار<input name="displayName" className="input" required minLength={2} maxLength={120} placeholder="مثلاً رضا حسینی" /></label>
         <label className="field" style={{ flex: '1 1 160px' }}>نام کاربری<input name="username" className="input" dir="ltr" required pattern="[A-Za-z][A-Za-z0-9._\-]{2,31}" title="با حرف انگلیسی شروع شود؛ ۳ تا ۳۲ حرف یا عدد" placeholder="safkar2" /></label>
         <label className="field" style={{ flex: '0 1 120px' }}>رمز ۴ رقمی<input name="pin" className="input" dir="ltr" inputMode="numeric" required pattern="[0-9۰-۹]{4}" maxLength={4} autoComplete="off" /></label>
         <button type="submit" className="btn btn-primary" disabled={busy}>افزودن تعمیرکار</button>
