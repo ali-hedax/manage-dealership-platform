@@ -35,6 +35,8 @@ export const tenants = pgTable('tenants', {
   isTest: boolean('is_test').notNull().default(false),
   permissionTemplates: jsonb('permission_templates').$type<import('@manage/shared').PermissionTemplates>().notNull().default({}),
   permissionVersion: integer('permission_version').notNull().default(1),
+  /** Owner/system-admin settings such as the parts-amount alert threshold (Rial). */
+  settings: jsonb('settings').$type<{ partsAlertThresholdRial?: number }>().notNull().default({}),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 
@@ -71,6 +73,8 @@ export const users = pgTable(
     totpLastStep: integer('totp_last_step').notNull().default(-1),
     displayName: text('display_name').notNull(),
     passwordHash: text('password_hash').notNull(),
+    /** Technician-only accounts: scrypt hash of the 4-digit PIN (username + PIN sign-in). */
+    pinHash: text('pin_hash'),
     roles: text('roles').array().notNull(),
     isOwner: boolean('is_owner').notNull().default(false),
     permissionOverrides: jsonb('permission_overrides').$type<import('@manage/shared').PermissionOverrides>().notNull().default({allow:[],deny:[]}),
@@ -98,6 +102,8 @@ export const sessions = pgTable(
       .references(() => tenants.id),
     tokenHash: text('token_hash').notNull().unique(),
     verifiedWithTotp: boolean('verified_with_totp').notNull().default(false),
+    /** password | totp | pin — a pin session is valid only for technician-only accounts. */
+    authMethod: text('auth_method').notNull().default('password'),
     createdAt: ts('created_at').notNull().defaultNow(),
     expiresAt: ts('expires_at').notNull(),
     lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
@@ -1157,3 +1163,24 @@ export const partQuotes = pgTable('part_quotes', {
   decidedBy:uuid('decided_by').references(()=>users.id),decidedAt:ts('decided_at'),
   version:integer('version').notNull().default(1),isTest:boolean('is_test').notNull().default(false),
 },t=>[index('part_quotes_tenant_part_idx').on(t.tenantId,t.partId)]);
+
+/**
+ * The coordinator's answer to a non-blocking alert on a case: whether an advance
+ * was taken (advance) or, when the parts total crosses a threshold step, whether
+ * an advance was arranged (parts_amount, one row per step). Append-only.
+ */
+export const caseAlertResponses = pgTable(
+  'case_alert_responses',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+    caseId: uuid('case_id').notNull().references(() => cases.id),
+    kind: text('kind').notNull(),
+    level: integer('level').notNull().default(1),
+    response: text('response').notNull(),
+    note: text('note'),
+    respondedBy: uuid('responded_by').notNull().references(() => users.id),
+    respondedAt: ts('responded_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('case_alert_responses_uq').on(t.caseId, t.kind, t.level), index('case_alert_responses_tenant_idx').on(t.tenantId)],
+);

@@ -22,6 +22,8 @@ import { AccessService } from './auth/access.service';
 import { AccessController } from './auth/access.controller';
 import { EmailAuthController } from './auth/email-auth.controller';
 import { EmailAuthService } from './auth/email-auth.service';
+import { TechniciansController } from './auth/technicians.controller';
+import { TechniciansService } from './auth/technicians.service';
 import { InvitationMailService } from './auth/invitation-mail.service';
 import { SessionGuard } from './auth/session.guard';
 import { HttpExceptionFilter } from './common/http-exception.filter';
@@ -112,9 +114,10 @@ export class AppModule {
         AccidentModule,
         DailyReportsModule,
       ],
-      controllers: [AuthController, EmailAuthController, HealthController, ReferenceController, AccessController],
+      controllers: [AuthController, EmailAuthController, TechniciansController, HealthController, ReferenceController, AccessController],
       providers: [
         AccessService,
+        TechniciansService,
         DemoSeedService,
         Lifecycle,
         { provide: APP_GUARD, useClass: ThrottlerGuard },

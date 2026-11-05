@@ -1,7 +1,7 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
-import { MODULES, permissionsFor, type LoginInput, type Me, type Role } from '@manage/shared';
+import { MODULES, permissionsFor, type LoginInput, type Me, type Role, type TechnicianLoginInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { AppError } from '../common/errors';
@@ -19,6 +19,10 @@ const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 
 const invalidCredentials = () =>
   new AppError(HttpStatus.UNAUTHORIZED, 'INVALID_CREDENTIALS', 'نام کاربری یا رمز عبور نادرست است');
+
+/** A PIN account may hold only the technician role: its PIN opens nothing else. */
+export const isTechnicianOnly = (roles: readonly string[], isOwner = false) =>
+  !isOwner && roles.length > 0 && roles.every((r) => r === 'technician');
 
 @Injectable()
 export class AuthService {
@@ -118,6 +122,72 @@ export class AuthService {
     return { token, expiresAt };
   }
 
+  /**
+   * Technician sign-in with username + 4-digit PIN. Works in both sign-in modes
+   * because the session is limited to technician-only accounts (task.execute).
+   * Five wrong PINs lock the account for 15 minutes (HTTP 423).
+   */
+  async technicianLogin(
+    input: TechnicianLoginInput,
+    meta: { ip?: string; userAgent?: string; requestId?: string },
+  ): Promise<{ token: string; expiresAt: Date }> {
+    const wrong = () => new AppError(HttpStatus.UNAUTHORIZED, 'INVALID_CREDENTIALS', 'نام کاربری یا رمز اشتباه است.');
+    const conditions = [eq(users.username, input.username.toLowerCase())];
+    if (input.tenantCode) conditions.push(eq(tenants.code, input.tenantCode.toLowerCase()));
+    const candidates = await this.db
+      .select({ user: users, tenant: tenants })
+      .from(users)
+      .innerJoin(tenants, eq(tenants.id, users.tenantId))
+      .where(and(...conditions))
+      .limit(2);
+    if (candidates.length > 1) throw new AppError(HttpStatus.BAD_REQUEST, 'TENANT_REQUIRED', 'کد نمایندگی را وارد کنید');
+    const found = candidates[0];
+    if (!found || !found.user.pinHash || !isTechnicianOnly(found.user.roles, found.user.isOwner)) {
+      await verifyPassword(input.pin, await this.dummyHash);
+      this.logger.warn({ username: input.username, ip: meta.ip }, 'technician login failed: no PIN account');
+      throw wrong();
+    }
+    const { user, tenant } = found;
+    const now = new Date();
+    if (user.lockedUntil && user.lockedUntil > now) {
+      throw new AppError(HttpStatus.LOCKED, 'ACCOUNT_LOCKED', 'چند بار اشتباه وارد شد؛ ۱۵ دقیقه دیگر دوباره امتحان کنید.');
+    }
+    const ok = await verifyPassword(input.pin, user.pinHash!);
+    if (!ok || !user.isActive) {
+      const failed = user.failedLoginCount + 1;
+      const lock = failed >= MAX_FAILED_LOGINS;
+      await this.db
+        .update(users)
+        .set({ failedLoginCount: lock ? 0 : failed, lockedUntil: lock ? new Date(now.getTime() + LOCK_MINUTES * 60_000) : null })
+        .where(eq(users.id, user.id));
+      this.logger.warn({ userId: user.id, ip: meta.ip, failed }, 'technician login failed');
+      if (lock) throw new AppError(HttpStatus.LOCKED, 'ACCOUNT_LOCKED', 'چند بار اشتباه وارد شد؛ ۱۵ دقیقه دیگر دوباره امتحان کنید.');
+      throw wrong();
+    }
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(now.getTime() + this.cfg.SESSION_TTL_HOURS * 3_600_000);
+    const sessionId = newId();
+    await this.db.transaction(async (tx) => {
+      await tx.insert(sessions).values({
+        id: sessionId,
+        userId: user.id,
+        tenantId: tenant.id,
+        tokenHash: sha256(token),
+        authMethod: 'pin',
+        expiresAt,
+        ip: meta.ip ?? null,
+        userAgent: meta.userAgent?.slice(0, 300) ?? null,
+      });
+      await tx.update(users).set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: now }).where(eq(users.id, user.id));
+      await this.audit.record(
+        tx,
+        { user: this.toAuthUser(user, tenant, sessionId), requestId: meta.requestId, ip: meta.ip },
+        { entityType: 'user', entityId: user.id, action: 'auth.pin_login' },
+      );
+    });
+    return { token, expiresAt };
+  }
+
   async logout(token: string | undefined): Promise<void> {
     if (!token) return;
     await this.db
@@ -140,7 +210,10 @@ export class AuthService {
       .limit(1);
     const row = rows[0];
     if (!row || !row.user.isActive) return null;
-    if (this.cfg.TOTP_AUTH_ENABLED && !row.session.verifiedWithTotp) return null;
+    const pinSession = row.session.authMethod === 'pin';
+    // A PIN session stays valid only while the account is technician-only with a PIN.
+    if (pinSession && (!row.user.pinHash || !isTechnicianOnly(row.user.roles, row.user.isOwner))) return null;
+    if (this.cfg.TOTP_AUTH_ENABLED && !row.session.verifiedWithTotp && !pinSession) return null;
 
     if (now.getTime() - row.session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
       await this.db
@@ -151,7 +224,11 @@ export class AuthService {
         })
         .where(eq(sessions.id, row.session.id));
     }
-    return {...this.toAuthUser(row.user, row.tenant, row.session.id),verifiedWithTotp:row.session.verifiedWithTotp};
+    return {
+      ...this.toAuthUser(row.user, row.tenant, row.session.id),
+      verifiedWithTotp: row.session.verifiedWithTotp,
+      authMethod: pinSession ? 'pin' : row.session.verifiedWithTotp ? 'totp' : 'password',
+    };
   }
 
   me(user: AuthUser): Me {
@@ -159,7 +236,7 @@ export class AuthService {
       id: user.id,
       isOwner: user.isOwner,
       username: user.username,
-      authentication: user.verifiedWithTotp ? 'totp' : 'password',
+      authentication: user.authMethod ?? (user.verifiedWithTotp ? 'totp' : 'password'),
       displayName: user.displayName,
       roles: user.roles,
       permissions: [...user.permissions],

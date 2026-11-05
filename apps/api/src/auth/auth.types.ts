@@ -14,6 +14,7 @@ export interface AuthUser {
   permissions: Set<Permission>;
   sessionId: string;
   verifiedWithTotp?: boolean;
+  authMethod?: 'password' | 'totp' | 'pin';
 }
 
 /** Who did something, from where — attached to every audited change. */

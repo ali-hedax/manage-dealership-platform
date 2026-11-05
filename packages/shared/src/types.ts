@@ -39,7 +39,7 @@ import type { Permission } from './permissions';
 export interface Me {
   id: string;
   isOwner?: boolean;
-  authentication?: 'password' | 'totp';
+  authentication?: 'password' | 'totp' | 'pin';
   username: string;
   displayName: string;
   roles: Role[];

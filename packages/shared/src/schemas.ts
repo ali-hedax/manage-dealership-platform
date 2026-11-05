@@ -48,6 +48,30 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+/** Persian/Arabic-Indic digits to ASCII, for PINs typed on a Persian keyboard. */
+const asciiDigits = (v: string) =>
+  v.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)).replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+const pinSchema = z.string().trim().transform(asciiDigits).pipe(z.string().regex(/^[0-9]{4}$/, 'رمز باید ۴ رقم باشد'));
+
+/** Technician sign-in: username + 4-digit PIN, no email or Authenticator. */
+export const technicianLoginSchema = z.object({
+  tenantCode: z.string().trim().max(32).optional(),
+  username: z.string().trim().min(1).max(64),
+  pin: pinSchema,
+});
+export type TechnicianLoginInput = z.infer<typeof technicianLoginSchema>;
+
+/** Owner/system admin creates a technician account (no email). */
+export const technicianAccountSchema = z.object({
+  displayName: z.string().trim().min(2).max(120),
+  username: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9._-]{2,31}$/, 'نام کاربری با حرف انگلیسی شروع شود و ۳ تا ۳۲ حرف، عدد، نقطه یا خط تیره باشد'),
+  pin: pinSchema,
+});
+export type TechnicianAccountInput = z.infer<typeof technicianAccountSchema>;
+
+export const technicianPinSchema = z.object({ pin: pinSchema });
+export type TechnicianPinInput = z.infer<typeof technicianPinSchema>;
+
 export const customerInputSchema = z.object({
   fullName: optionalText(500),
   phone: optionalText(32),
