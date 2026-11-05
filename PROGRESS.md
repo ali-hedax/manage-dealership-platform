@@ -1,5 +1,13 @@
 # PROGRESS — Manage by HEDAX
 
+## فاز ۱ طرح نقش‌محور — ساخته شد، منتشر نشده — 2026-11-05
+
+شاخه `feature/phase1-roles` از main `6ae461f`، به درخواست مالک. ورود تعمیرکار با نام کاربری + رمز ۴ رقمی و مدیریت آن در «کارکنان»؛ برداشتن قفل مالی خرید و جایگزینی با هشدار پیش‌پرداخت و مبلغ قطعات (آستانه ۵۰۰٬۰۰۰٬۰۰۰ ریال، قابل تنظیم)؛ قیمت آزاد قطعه با مجوز فقط برای کارت طلایی/بیمه بالای مبلغ تأییدشده؛ خبر «قطعه آماده است» روی کارت تعمیرکار. Migration افزایشی 0016. [راهنما](docs/PHASE1_ROLES_FA.md)، [آزمون](docs/TEST_REPORT.md).
+
+هم‌زمان GPT/Codex روی `feature/new-look` فقط ظاهر (رنگ، منو، صفحه ورود با زبانهٔ تعمیرکار) را می‌سازد؛ مرز فایل‌ها در پرامپت مالک مشخص است.
+
+**قدم دقیق بعد:** CI سبز هر دو PR → ادغام با تأیید مالک → انتشار شنبه طبق [راهنمای انتشار](docs/RELEASE_RUNBOOK_20261107_FA.md)؛ چون migration 0016 دارد، تمرین migration روی نسخهٔ بازیابی‌شده الزامی است.
+
 ## یکپارچه‌سازی شاخه‌ها در main — 2026-11-05
 
 به دستور صریح مالک («همه را یکی کن و نسخه نهایی را منتشر کن») شاخه `release/integrate-20261105` ساخته شد: پایه آخرین نسخه منتشرشده `feature/assessment-parts-dispatch` (اپلیکیشن `79f6585`، شامل کل زنجیره #28 تا #48 و main قبلی) + ادغام `feature/staff-access-recovery` (#47). تعارض فقط در CHANGELOG/PROGRESS/TEST_REPORT بود و هر دو طرف حفظ شد. شاخه‌های نمونه اولیه (`feature/nobat-dahi`، `chore/rename-index-html`، `feature/b2b-auto-report`، `chore/preserve-local-prototype-20261101`، `docs/github-professional-20261012`) طبق قاعده AGENTS جدا ماندند؛ شاخه‌های فقط-ساخت تصویر (`build/*`، `fix/preview-image-artifacts`) و `docs/staff-preview-release-record` قدیمی ادغام نشدند. هیچ شاخه یا PR حذف/بسته نشد.

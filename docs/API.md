@@ -56,10 +56,12 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | --- | --- | --- |
 | GET | `/api/v1/access/presets` | [source](../apps/api/src/auth/access.controller.ts) |
 | GET | `/api/v1/access` | [source](../apps/api/src/auth/access.controller.ts) |
+| GET | `/api/v1/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | GET | `/api/v1/auth/invitations/email/status` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/me` | [source](../apps/api/src/auth/auth.controller.ts) |
 | GET | `/api/v1/auth/options` | [source](../apps/api/src/auth/email-auth.controller.ts) |
+| GET | `/api/v1/cases/:id/alerts/history` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | GET | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | GET | `/api/v1/cases/:id/completion` | [source](../apps/api/src/completion/completion.controller.ts) |
 | GET | `/api/v1/cases/:id/finance` | [source](../apps/api/src/finance/finance.controller.ts) |
@@ -89,6 +91,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reports/pdf` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/views` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports` | [source](../apps/api/src/reports/reports.controller.ts) |
+| GET | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
+| GET | `/api/v1/staff/technicians` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | GET | `/api/v1/stock/options` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/stock/reservations/export` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -124,9 +128,11 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/login` | [source](../apps/api/src/auth/auth.controller.ts) |
 | POST | `/api/v1/auth/logout` | [source](../apps/api/src/auth/auth.controller.ts) |
+| POST | `/api/v1/auth/technician-login` | [source](../apps/api/src/auth/auth.controller.ts) |
 | POST | `/api/v1/auth/users/:id/recovery` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/blockers/:id/follow-up` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/blockers/:id/resolve` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/cases/:id/alerts/respond` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | POST | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/cases/:id/blockers` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/delivery` | [source](../apps/api/src/completion/completion.controller.ts) |
@@ -158,6 +164,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reference-imports/:id/apply` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
+| POST | `/api/v1/staff/technicians` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | POST | `/api/v1/stock/aliases` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations/:id/actions` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -173,6 +180,9 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PUT | `/api/v1/access/templates/:role` | [source](../apps/api/src/auth/access.controller.ts) |
 | PUT | `/api/v1/access/users/:id` | [source](../apps/api/src/auth/access.controller.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
+| PUT | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
+| PUT | `/api/v1/staff/technicians/:id/active` | [source](../apps/api/src/auth/technicians.controller.ts) |
+| PUT | `/api/v1/staff/technicians/:id/pin` | [source](../apps/api/src/auth/technicians.controller.ts) |
 <!-- routes:end -->
 
 ## Staff invitation email

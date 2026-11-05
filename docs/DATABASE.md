@@ -95,3 +95,8 @@ Additive `tenants.permission_templates` (role presets) and `permission_version`,
 ## 0015 — repair-day plan snapshot
 
 `cases.repair_plan` is nullable JSONB: entered working-day duration, equivalent working minutes, admission anchor/end, and immutable calendar revision. Existing cases remain null and existing official/forecast dates are not rewritten. New/explicitly revised plans compute the internal forecast server-side; changes are versioned/audited and revisions require a reason. Rollback: `apps/api/src/db/down/0015_fancy_mongoose.sql` drops only the added column; export plan data before an owner-authorized rollback.
+
+## 0016 — technician PIN, session method, alert settings and answers
+
+Additive only. `users.pin_hash` (nullable; scrypt hash of a technician's 4-digit PIN), `sessions.auth_method` (`password` default for all existing sessions; `pin` for technician sign-in), `tenants.settings` (JSONB, default `{}`; `partsAlertThresholdRial`), and the append-only table `case_alert_responses` (one coordinator answer per case, kind and level; unique on case + kind + level). No backfill; existing users, sessions and tenants keep their values. A PIN session is accepted only while the account holds the technician role alone and has a PIN. Rollback: `apps/api/src/db/down/0016_natural_nuke.sql`; export alert answers first.
+

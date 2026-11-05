@@ -44,6 +44,9 @@ it('dispatches selected draft needs without approval, is repeat/concurrency safe
 });
 
 it('computes day-only case and station plans with short Thursday/holiday and counts overlapping allocations once',async()=>{
+ // The expected dates are fixed; pin the clock (Date only) to the day they were written for.
+ jest.useFakeTimers({now:new Date('2026-11-05T05:30:00Z'),doNotFake:['setTimeout','clearTimeout','setInterval','clearInterval','setImmediate','clearImmediate','queueMicrotask','nextTick','hrtime','performance']});
+ try{
  const calendar=structuredClone(DEFAULT_WORK_CALENDAR);calendar.holidays=[{date:'2026-11-07',title:'تعطیلی آزمون',official:false}];calendar.holidaysVerifiedThrough='2026-11-30';
  expect((await admin.post('/workshop/calendar',{expectedVersion:0,effectiveFrom:'2026-11-05',calendar,reason:'تقویم ساختگی آزمون'})).status).toBe(201);
  const c=await newCase({repairDurationDays:10});expect(c.repairPlan?.durationMinutes).toBe(4800);expect(c.forecastDeliveryAt).toBe(new Date('2026-11-18T16:30:00+03:30').toISOString());expect(c.officialDeadlineAt).toBeNull();
@@ -56,6 +59,7 @@ it('computes day-only case and station plans with short Thursday/holiday and cou
  const latest=(await expert.get(`/cases/${c.id}`)).body as CaseDetail;
  expect((await expert.patch(`/cases/${c.id}`,{expectedVersion:latest.version,repairDurationDays:11})).body.code).toBe('REASON_REQUIRED');
  const changed=await expert.patch(`/cases/${c.id}`,{expectedVersion:latest.version,damageDescription:'شرح اصلاح‌شده'});expect(changed.status).toBe(200);expect(changed.body.repairPlan).toEqual(c.repairPlan);
+ }finally{jest.useRealTimers();}
 });
 
 it('clears only an explicitly confirmed legacy technical wait without issuing an external approval',async()=>{

@@ -216,7 +216,7 @@ describe('acceptance 3: body insurance, price change approved by the assessor', 
 });
 
 describe('acceptance 4 and 8: personal case, advance payment and the purchase gate', () => {
-  it('blocks purchases until the advance is approved and received; no-cost work continues', async () => {
+  it('records the advance state without blocking purchases (owner rule 2026-11-05); no-cost work continues', async () => {
     const c = await newCase({ coverageType: 'personal' });
     let f = await financeOf(c.id);
     expect(f.gate).toMatchObject({ open: false, reason: 'no_estimate' });
@@ -236,9 +236,9 @@ describe('acceptance 4 and 8: personal case, advance payment and the purchase ga
     expect(f).toMatchObject({ estimateRial: 12_000_000, customerShareRial: 12_000_000, customerShareDerived: true });
     expect(f.gate).toMatchObject({ open: false, reason: 'advance_missing' });
 
-    const blocked = await partAct(mirror!, 'order', { unitPriceRial: 8_000_000 });
-    expect(blocked.body.code).toBe('FINANCE_GATE');
-    expect(blocked.body.details.reason).toBe('advance_missing');
+    // Money never blocks a purchase: the order goes through and records why.
+    mirror = (await partAct(mirror!, 'order', { unitPriceRial: 8_000_000, supplier: 'فروشگاه آزمون' })).body;
+    expect(mirror).toMatchObject({ status: 'ordered', financeBasis: 'advance_missing' });
 
     // No-cost work continues: stock reservation and repair activities.
     handle = (await partAct(handle!, 'check_stock', { inStock: true })).body;
@@ -264,13 +264,11 @@ describe('acceptance 4 and 8: personal case, advance payment and the purchase ga
     expect(f).toMatchObject({ paidRial: 6_000_000, balanceRial: 6_000_000 });
     expect(f.gate).toMatchObject({ open: true, reason: 'advance_paid' });
 
-    mirror = (await partAct(mirror!, 'order', { unitPriceRial: 8_000_000, supplier: 'فروشگاه آزمون' })).body;
-    expect(mirror).toMatchObject({ status: 'ordered', financeBasis: 'advance_paid' });
     f = await financeOf(c.id);
     expect(f.purchasesRial).toBe(8_000_000);
   });
 
-  it('a supplement that raises the cost closes the gate until a new approval; exceptions have a limit', async () => {
+  it('a supplement that raises the cost is flagged for re-approval without blocking; exceptions still track their limit', async () => {
     const c = await newCase({ coverageType: 'personal' });
     await authorized(c.id, [{ description: 'سپر عقب', unitPriceRial: 10_000_000 }], 'customer');
     const proposed = (
@@ -305,8 +303,6 @@ describe('acceptance 4 and 8: personal case, advance payment and the purchase ga
     expect(f.gate).toMatchObject({ open: false, reason: 're_approval_required' });
 
     const [, bracket] = (await expert.post(`/cases/${c.id}/parts/from-assessment`, { source: 'external' })).body as Part[];
-    const denied = await partAct(bracket!, 'order', { unitPriceRial: 9_000_000 });
-    expect(denied.body.details.reason).toBe('re_approval_required');
 
     // Exception: limit 10 M; the proposer cannot approve it.
     f = (await manager.post(`/cases/${c.id}/finance/approvals`, { kind: 'exception', amountRial: 10_000_000, reason: 'مشتری ثابت نمایندگی' }))
@@ -327,8 +323,57 @@ describe('acceptance 4 and 8: personal case, advance payment and the purchase ga
 
     const extra: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'پیچ', source: 'external' })).body;
     const over = await partAct(extra, 'order', { unitPriceRial: 2_000_000 });
-    expect(over.body.code).toBe('FINANCE_GATE');
+    expect(over.body).toMatchObject({ status: 'ordered', financeBasis: 're_approval_required' });
     expect((await financeOf(c.id)).approvals.find((a) => a.id === ex.id)!.spentRial).toBe(9_000_000);
+  });
+
+  it('prices freely; payer approval only when golden card or insurance pays above the approved price (owner rule 2026-11-05)', async () => {
+    // The helper partAct records an approved quote first; these orders go direct.
+    const order = async (part: Part, unitPriceRial: number) => {
+      const current = (await partsOf(part.caseId)).find((row) => row.id === part.id)!;
+      return parts.post(`/parts/${part.id}/actions`, { action: 'order', expectedVersion: current.version, source: 'external', unitPriceRial, supplier: 'بازار آزمون' });
+    };
+    // Personal case: the clerk buys outside at any price without a recorded approval.
+    const personal = await newCase({ coverageType: 'personal' });
+    await authorized(personal.id, [{ description: 'چراغ', unitPriceRial: 5_000_000 }], 'customer');
+    const [lamp] = (await expert.post(`/cases/${personal.id}/parts/from-assessment`, { source: 'external' })).body as Part[];
+    const free = await order(lamp!, 9_000_000);
+    expect(free.body).toMatchObject({ status: 'ordered', unitPriceRial: 9_000_000 });
+
+    // Golden card: at or below the approved price no approval; above it, approval is required.
+    const golden = await newCase({ coverageType: 'golden_card' });
+    await authorized(golden.id, [{ description: 'آینه', unitPriceRial: 4_000_000 }, { description: 'گلگیر جلو', unitPriceRial: 6_000_000 }], 'golden_card');
+    const [mirror, fender] = (await expert.post(`/cases/${golden.id}/parts/from-assessment`, { source: 'external' })).body as Part[];
+    expect((await order(mirror!, 4_000_000)).body).toMatchObject({ status: 'ordered' });
+    expect((await order(fender!, 7_500_000)).body.code).toBe('PRICE_ABOVE_APPROVED');
+  });
+
+  it('raises non-blocking advance and parts-amount alerts the coordinator answers once (owner rule 2026-11-05)', async () => {
+    const admin = await h.login('admin');
+    expect((await expert.put('/settings/alerts', { partsAlertThresholdRial: 5_000_000 })).status).toBe(403);
+    expect((await admin.get('/settings/alerts')).body).toMatchObject({ partsAlertThresholdRial: 500_000_000, defaultRial: 500_000_000 });
+    expect((await admin.put('/settings/alerts', { partsAlertThresholdRial: 5_000_000 })).body.partsAlertThresholdRial).toBe(5_000_000);
+
+    const c = await newCase({ coverageType: 'personal' });
+    await authorized(c.id, [{ description: 'درب', unitPriceRial: 8_000_000 }, { description: 'قاب سپر', unitPriceRial: 3_000_000 }], 'customer');
+    await expert.post(`/cases/${c.id}/parts/from-assessment`, { source: 'external' });
+    const alerts = (await expert.get(`/alerts?caseId=${c.id}`)).body;
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'advance', level: 1 }),
+        expect.objectContaining({ kind: 'parts_amount', level: 2, totalRial: 11_000_000, thresholdRial: 5_000_000 }),
+      ]),
+    );
+    const qc = await h.login('qc');
+    expect((await qc.post(`/cases/${c.id}/alerts/respond`, { kind: 'advance', level: 1, response: 'received' })).status).toBe(403);
+    const left = await expert.post(`/cases/${c.id}/alerts/respond`, { kind: 'advance', level: 1, response: 'not_received', note: 'مشتری فردا می‌آورد' });
+    expect(left.body).toEqual([expect.objectContaining({ kind: 'parts_amount', level: 2 })]);
+    expect(left.status).toBe(201);
+    expect((await expert.post(`/cases/${c.id}/alerts/respond`, { kind: 'advance', level: 1, response: 'received' })).body.code).toBe('ALERT_NOT_OPEN');
+    expect((await expert.post(`/cases/${c.id}/alerts/respond`, { kind: 'parts_amount', level: 2, response: 'not_needed' })).body).toEqual([]);
+    const history = (await expert.get(`/cases/${c.id}/alerts/history`)).body;
+    expect(history.map((x: { kind: string; response: string }) => `${x.kind}:${x.response}`).sort()).toEqual(['advance:not_received', 'parts_amount:not_needed']);
+    await admin.put('/settings/alerts', { partsAlertThresholdRial: 500_000_000 });
   });
 
   it('records payer shares; a mixed case without shares is blocked', async () => {

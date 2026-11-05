@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AlertsController } from '../alerts/alerts.controller';
+import { AlertsService } from '../alerts/alerts.service';
 import { WorkshopController } from '../workshop/workshop.controller';
 import { WorkshopService } from '../workshop/workshop.service';
 import { ReferenceDataController } from '../reference-data/reference-data.controller';
@@ -31,6 +33,7 @@ import {
 /** Phase-1 module: accident repair cases, assessments, parts, finance gate, repair activities, blockers, QC and delivery, dashboard. */
 @Module({
   controllers: [
+    AlertsController,
     WorkshopController,
     ReferenceDataController,
     CasesController,
@@ -46,6 +49,7 @@ import {
     DiscrepanciesController,
   ],
   providers: [
+    AlertsService,
     WorkshopService,
     ReferenceDataService,
     CasesService,
