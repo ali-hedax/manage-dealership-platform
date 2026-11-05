@@ -35,6 +35,10 @@ export interface PartQuote {
 }
 export interface CalendarRevision { id:string|null; version:number; effectiveFrom:string; calendar:WorkCalendar }
 export interface WorkshopTask {
+  /** Parts of this vehicle that arrived or are set aside and wait to be collected from the store. */
+  partsReady?: { count: number; names: string[] };
+  /** Parts of this vehicle still on order (not yet arrived). */
+  partsWaiting?: number;
   dayMinutes?:number|null;
   plannedWorkMinutes?:number|null;
   id:string; caseId:string; caseNumber:string; vehicleLabel:string; plate:string|null; title:string|null;

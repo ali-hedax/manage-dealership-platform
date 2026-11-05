@@ -95,3 +95,11 @@ it('different tenant cannot read, assign, authorize or act on these resources',a
  expect((await foreign.post(`/tasks/${taskId}/actions`,{action:'start',expectedVersion:1})).status).toBe(404);
  expect((await foreign.get(`/cases/${caseId}`)).status).toBe(404);
 });
+it('tells the technician when a part of the vehicle is ready to collect',async()=>{
+ const mineOf=async()=>(await tech.get('/workshop/my-tasks')).body.find((t:{id:string})=>t.id===taskId);
+ expect((await mineOf()).partsWaiting).toBeGreaterThanOrEqual(1);
+ const part=(await c.get(`/cases/${caseId}/parts`)).body.find((x:{id:string})=>x.id===partId);
+ const rec=await p.post(`/parts/${partId}/actions`,{action:'receive',expectedVersion:part.version,inspection:'ok'});
+ expect(rec.status).toBe(201);
+ expect((await mineOf()).partsReady).toEqual({count:1,names:['قطعه آزمون بازار']});
+});
