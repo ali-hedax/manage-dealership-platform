@@ -319,7 +319,7 @@ function ReportsPage() {
                               <Link href={`/cases/${i.caseId}`}>
                                 <bdi>{i.caseNumber}</bdi>
                               </Link>
-                              <div className="small">پذیرش ایران‌خودرو: <bdi>{i.admissionNo||'ندارد؛ شناسه منیج'}</bdi></div>
+                              <div className="small">پذیرش ایران‌خودرو: <bdi>{i.admissionNo?toPersianDigits(i.admissionNo):'ثبت نشده'}</bdi></div>
                               <div className="xs muted">
                                 {i.vehicleLabel}
                                 {i.plate ? ` — ${toPersianDigits(i.plate)}` : ''}
@@ -401,7 +401,7 @@ function ReportsPage() {
             </div>
           )}
           <p className="xs muted">
-            تعریف هر شاخص با نگه‌داشتن نشانگر روی آن نمایش داده می‌شود؛ راهنمای کامل: «تعریف شاخص‌ها» در مستندات (docs/REPORTS_FA.md). نامعلوم با صفر فرق دارد و نبود موعد، تأخیر حساب نمی‌شود.
+            تعریف هر شاخص با نگه‌داشتن نشانگر روی آن نمایش داده می‌شود. «نامعلوم» با صفر فرق دارد و نبود موعد، تأخیر حساب نمی‌شود.
           </p>
         </>
       )}

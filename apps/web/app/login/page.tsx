@@ -122,7 +122,7 @@ export default function LoginPage() {
   return (
     <main className="login entry-login">
       <div className="side">
-        <img src="/brand/logo-dark.png" alt="Manage by HEDAX" width={190} height={63} />
+        <img src="/brand/manage-logo-dark.svg" alt="Manage by HEDAX" width={190} height={48} />
         <div className="entry-story">
           <div className="claim">از پذیرش<br/>تا تحویل،<br/>با دید روشن.</div>
           <p>سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو</p>
