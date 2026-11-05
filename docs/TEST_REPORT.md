@@ -1,6 +1,5 @@
 # Test report
 
-<<<<<<< HEAD
 ## Assessment dispatch and working-day repair plans — 2026-11-05 — in validation
 
 Working branch `feature/assessment-parts-dispatch`, base documentation 402cc82 / operational ad54f15. Owner clarified that recording initial/supplement assessments and sending needs require no generic authorization; only outside-market buying needs recorded price coordination. Added single/all selection, current-version/tenant/transaction checks, exact-code/root matching, incremental quantities and explicit review for reductions/code changes. Complete supplement imports reconcile rather than duplicate existing lines; historical versions remain intact. Company supply is not blocked by a generic assessment or price-increase gate; outside-market quote approval and existing payment controls remain enforced.
@@ -8,11 +7,9 @@ Working branch `feature/assessment-parts-dispatch`, base documentation 402cc82 /
 Added a nullable repair-plan calendar snapshot (migration 0015, no backfill) for numeric working-day case intake and numeric station shares. Dates compute server-side, dependency successors start after planned predecessors, parallel intervals count once in the case budget; original task baselines and prior cases' dates stay preserved. One day uses the longest configured shift-day; Thursday consumes its actual shorter hours. Manual official dates remain in an optional disclosure.
 
 Completed so far: API assessment/parts/workshop/new flows 30/30; shared 21/21; shared/API/web builds and lint passed. New browser end-to-end journey and full regression are running; not published. Exact-code/manual supply versus outside-market gate, calendar half-day/holiday examples, frozen snapshot and overlap assertions are included. Add final results, PR/CI and any release evidence before calling complete.
-=======
 ## Platform states and search — 2026-11-05 — branch `feature/ui-states`
 
 Local Linux, built API + web: web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped**. First run exposed a duplicate accessible name between the new sidebar search and the case-list search; the sidebar field was renamed «جست‌وجوی سریع از هر صفحه» and the full suite rerun green. After the dashboard and stage-based case sections were added, the full suite was run again: **34 passed, 2 skipped**. Full CI pending on the PR.
->>>>>>> origin/feature/entry-workbench-refresh
 
 ## Interface polish — 2026-11-05 — branch `feature/ui-polish`
 

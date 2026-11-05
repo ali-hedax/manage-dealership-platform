@@ -1,12 +1,10 @@
 # Changelog
 
-<<<<<<< HEAD
 ## [In review] — assessment dispatch and working-day repair plans, 2026-11-05
 
 - Select individual/all replacement lines in assessment and send needs directly to parts; show already sent quantities and dispatch only increases. Full supplement files reconcile prior exact codes and preserve previous versions; reductions/code changes with supply history require review.
 - Recording assessments no longer creates a generic authorization wait. Outside-market purchases still require the exact approved quote; regular company supply follows its normal path.
 - Enter repair duration in working days; the server calculates the forecast from a frozen dealership calendar. Allocate day shares to stations, automatically sequence dependencies and report the case budget without counting parallel allocations twice. Existing case dates remain unchanged until explicitly revised.
-=======
 ## [Unreleased] — platform states and search, 2026-11-05
 
 - Quick case search in the sidebar from any page (plate, chassis or case number); press "/" to focus.
@@ -15,7 +13,6 @@
 - Repair plan page uses the same brand blue as the rest of the platform; neutral style for plain notices.
 - Dashboard: duplicate desk card removed (the «ورود به میز کار» button remains); each «نیازمند اقدام» row ends in an arrow instead of a repeated «مشاهده».
 - Case page: for overview roles (e.g. service manager) the section matching the current stage opens automatically, and «موانع» opens when blockers are open.
->>>>>>> origin/feature/entry-workbench-refresh
 
 ## [Unreleased] — interface polish, 2026-11-05
 
