@@ -1,5 +1,7 @@
 # Deployment
 
+**Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
+
 **Current state:** the dedicated Manage host is Production with real data. Owner-approved online mobile installation and complete support desk `9e82246` were installed on 2026-11-04 using tested CI images, verified restores and the operational wrapper; no new production migration or seed was needed. See the [current release record](RELEASE_PWA_20261104.md) and [real-start boundary](REAL_START_FA.md). The Preview instructions below are historical; do not run its reset/deploy script on Production. Source and DNS remain unchanged.
 
 ## Local Preview (available now)

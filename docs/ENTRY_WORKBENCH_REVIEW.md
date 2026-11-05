@@ -27,3 +27,5 @@ Local synthetic browser traversal covers entry, dashboard, six operational desks
 Results and remaining work are recorded in [TEST_REPORT.md](TEST_REPORT.md) and [../PROGRESS.md](../PROGRESS.md). Production evidence will be appended after verified publication.
 
 Pre-publication live read-only review: all 17 current cases loaded, each with nine operational disclosure sections; six repeated selector rows were present in the old production UI. No case, reservation, purchase, payment, task, approval or personal permission was changed during this review.
+
+Published `ad54f15` with all six CI checks passing and verified preservation/restores; [release evidence](RELEASE_ENTRY_20261105.md). Live owner landing, folded filters and per-part reserve access confirmed. Direct Google network access remains the explicit outstanding limitation.

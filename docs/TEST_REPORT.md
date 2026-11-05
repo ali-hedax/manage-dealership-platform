@@ -1,5 +1,13 @@
 # Test report
 
+## Published entry/workbench — 2026-11-05
+
+Application/test `ad54f15`; all six [CI 41974333191](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41974333191) pass: shared 17, API 185 plus nine PG-only tests separately, browser 34 with two optional screenshot skips, daily/support/reservation 3. Final local entry/Auth/ICS 6/6, workshop/holiday API 12/12, daily 3/3; build/lint pass. Older trials below are history, not the final gate. [Release evidence](RELEASE_ENTRY_20261105.md).
+
+Live read-only review: all 17 existing cases and 30 menu destinations loaded. Published list filters folded; seven owner desk choices, repeated sidebar desk list removed; six per-part stock controls and no duplicate selector rows in a six-part case, reserve action reachable without creating a reservation. Google source timeout and local-file fallback confirmed in production settings. No business, calendar or permission mutation used as a test. Direct Google server refresh remains unverified/unavailable; local file path and same parser passed synthetic browser/API checks.
+
+Exact CI source/tree/ZIP/image IDs verified. Restored-copy new-image probes and every table/migration fingerprint equal; frozen source switch preserves all rows, sessions, auth, 44 effective system-admin permissions and `.env`. No new migration/seed. Forty-second switch, healthy API/web/db/gate. Final backup 20261105T054714Z restored with equal fingerprints; exact scratch DBs removed; off-server DPAPI archive decrypted/checksummed and local plaintext removed. No Source/main/DNS/email change.
+
 ## Entry and operational workbench — 2026-11-05 — validation in progress
 
 Branch `feature/entry-workbench-refresh`, based on the published 696eb6f chain. Initial targeted browser run 9/9; final daily report/reservation/support run 3/3; API workshop/holiday tests 12/12. Shared/API/web builds and lint passed before the ICS fallback addition; final build and lint repeated afterwards. Actual public Google Iran feed parsed as 56 holidays (25 tentative) for 2026–2027. Local Windows fetch HTTP 200; dedicated production host/container timed out against Google; no network changes. Direct server refresh is not claimed working on production. Local-file fallback and final complete browser run still require final validation.

@@ -1,5 +1,7 @@
 # Backup and restore
 
+**Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
+
 **Current status:** backup/restore has been exercised on Manage Production. The latest final restore passed for `operational/20261105T044951Z`, including published short-label source/settings, current operational data and the preserved personal staff-administration denial. CurrentUser DPAPI off-server recovery was decrypted/checksummed in memory. See the [release record](RELEASE_SHORT_LABEL_20261105.md). The generic examples below must use the operational wrapper on the current host.
 
 ## What to back up

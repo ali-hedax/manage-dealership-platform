@@ -1,10 +1,11 @@
 # Changelog
 
-## [In review] — entry and operational workbench, 2026-11-05
+## [Released on Manage] — entry and operational workbench, 2026-11-05
 
 - Refined Persian login and explicit selection among permitted desks, with a consistent return destination and fewer duplicate menu entries.
 - Case flags folded behind filters, applied criteria visible; exact-code stock reservation placed beside the actual part request instead of repeating every part below it.
 - Iran public-holiday suggestions from Google, excluding observances and flagging tentative dates; local ICS fallback when the server cannot reach Google. Reviewed changes use existing versioned calendar save; personal calendars and previous repair plans are not changed.
+- Owner-authorized `ad54f15` published after all six CI checks and verified restores; 40-second switch with existing data/auth/permissions preserved. Direct Google access from the host currently times out; file fallback is available. [Release evidence](docs/RELEASE_ENTRY_20261105.md).
 
 ## [Released on Manage] — short vehicle labels in case lists, 2026-11-05
 

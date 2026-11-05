@@ -1,5 +1,7 @@
 # شروع واقعی Manage — نمایندگی ۱۳۰۷ حسینی
 
+**Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
+
 **نسخه جاری برنامه:** نام کوتاه خودرو در فهرست `696eb6f`، منتشرشده در ۱۴۰۵/۰۸/۱۴؛ دریافت اکسل کارشناسی، پرونده/میز جمع‌وجور و نصب آنلاین گوشی محفوظ‌اند. نقش، رمزها، تقویم و داده قبلی تغییر نکرده‌اند. الگوی مدیر سیستم ۴۵ مجوز و با منع شخصی مدیریت کارکنان، دسترسی مؤثر فعلی ۴۴ است. [گزارش انتشار](RELEASE_SHORT_LABEL_20261105.md)، [راهنمای دریافت کارشناسی](ASSESSMENT_INTAKE_FA.md). روایت گذار اولیه زیر تاریخی است.
 
 از ۱۴۰۵/۰۸/۱۱، میزبان قبلی `85.198.52.255` و نشانی HTTPS موجود، داده واقعی دارد. مالک شروع واقعی، حذف دقیق پنج پرونده نمونه و ورود پانزده خودرو را صریحاً تأیید کرد. Source و DNS تغییر نکردند. تصاویر برنامه همان `5e529fd` هستند؛ این راه‌اندازی تغییر تنظیمات و داده بود.
