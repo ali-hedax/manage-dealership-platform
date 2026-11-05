@@ -21,7 +21,7 @@ export function Shell({children}:{children:ReactNode}){
  async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});router.replace('/login');}
  return <div className="shell"><a className="skip-link" href="#page-content">رفتن به محتوای صفحه</a>{open&&mobile&&<button type="button" className="nav-scrim" aria-label="بستن منو" onClick={()=>{setOpen(false);menu.current?.focus();}}/>}
  <aside className={`sidebar${open?' open':''}`} aria-label="منوی اصلی" inert={mobile&&!open}>
- <div className="brand"><Link href="/launch" className="brand-lockup" aria-label="Manage by HEDAX، انتخاب میز کار"><img src="/brand/manage-wordmark-dark.svg" alt="" width={124} height={31}/><span className="brand-by" aria-hidden="true">by HEDAX</span></Link><div className="tenant">{me.tenant.name}</div></div>
+ <div className="brand"><Link href="/launch" className="brand-lockup" aria-label="Manage by HEDAX، انتخاب میز کار"><img src="/brand/manage-wordmark-dark.svg" alt="" width={124} height={31}/><span className="brand-by" aria-hidden="true">by HEDAX</span></Link><div className="tenant">{me.tenant.name}</div></div>{!technicianOnly&&can('case.read')&&<GlobalSearch onDone={()=>setOpen(false)}/>}
  <nav className="nav" id="main-navigation" aria-label="واحدها و میزهای کار" onClick={e=>{if((e.target as HTMLElement).closest('a'))setOpen(false);}}>
  {nav('/launch','انتخاب میز کار','grid')}{technicianOnly?nav('/workshop/technician','کارهای من','wrench'):null}
  {!technicianOnly&&<>{nav('/','داشبورد','gauge',can('dashboard.read'))}
@@ -32,7 +32,7 @@ export function Shell({children}:{children:ReactNode}){
  {(can('user.manage')||can('reference.parts.read')||can('reference.customers.read')||me.isOwner)&&<details className="nav-unit" open={pathname==='/users'||pathname==='/reference-data'}><summary><AppIcon name="settings"/><span>مدیریت و اطلاعات پایه</span></summary><div className="nav-sub">{nav('/users','کارکنان','team',can('user.manage'))}{nav('/users#access-control','مدیریت دسترسی‌ها','shield',!!me.isOwner)}{nav('/reference-data','اطلاعات پایه','database',can('reference.parts.read')||can('reference.customers.read'))}</div></details>}
  <details className="nav-unit planned-units"><summary><AppIcon name="box"/><span>سایر واحدها</span></summary><p className="nav-caption">واحدهای زیر هنوز در دست توسعه‌اند</p><div className="nav-sub">{me.modules.filter(m=>m.status==='planned').map(m=><Link key={m.key} href={`/modules/${m.key}`} className="planned" aria-current={pathname===`/modules/${m.key}`?'page':undefined}><span>{MODULE_LABELS[m.key]}</span><span className="tag-dev">در دست توسعه</span></Link>)}</div></details>
  </>}
- </nav><div className="account"><div className="name">{me.displayName}</div><div className="xs">{me.isOwner?'مالک سامانه':me.roles.map(r=>ROLE_LABELS[r]).join('، ')}</div><InstallButton/><button type="button" className="btn btn-sm" onClick={logout}>خروج</button></div></aside>
+ </nav><div className="account"><div className="account-head"><span className="avatar" aria-hidden="true">{initials(me.displayName)}</span><div><div className="name">{me.displayName}</div><div className="xs">{me.isOwner?'مالک سامانه':me.roles.map(r=>ROLE_LABELS[r]).join('، ')}</div></div></div><InstallButton/><button type="button" className="btn btn-sm" onClick={logout}>خروج</button></div></aside>
  <div className="main"><div className="topbar"><span className="brand-lockup brand-lockup-sm" role="img" aria-label="Manage by HEDAX"><img src="/brand/manage-wordmark-dark.svg" alt="" width={96} height={24}/><span className="brand-by" aria-hidden="true">by HEDAX</span></span><button ref={menu} type="button" className="btn btn-sm" aria-controls="main-navigation" aria-expanded={open} onClick={()=>setOpen(!open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d={open?'M6 6l12 12M18 6 6 18':'M4 7h16M4 12h16M4 17h16'}/></svg><span>منو</span></button></div>{me.environment!=='production'&&<div className="env-banner" role="note">نسخه آزمایشی — داده‌های این محیط ساختگی‌اند و جای سامانه‌های رسمی را نمی‌گیرند.</div>}
  <main className="page" id="page-content" tabIndex={-1}><NotificationBar/><PageActions/>{children}</main></div></div>;
 }
@@ -43,4 +43,16 @@ export function pageTitle(pathname:string):string{
  const module=/^\/modules\/([^/]+)/.exec(pathname)?.[1];
  if(module)return MODULE_LABELS[module as ModuleKey]??'واحدها';
  return PAGE_TITLES.find(([re])=>re.test(pathname))?.[1]??'Manage';
+}
+
+/** First letters of the first two words of a display name, for the avatar. */
+export function initials(name:string):string{
+ return name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('\u200c')||'؟';
+}
+
+/** Search from any page: plate, chassis, admission or case number, owner. Opens the filtered case list. Press "/" to focus. */
+function GlobalSearch({onDone}:{onDone:()=>void}){
+ const router=useRouter();const [q,setQ]=useState('');const input=useRef<HTMLInputElement>(null);
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{const t=e.target as HTMLElement;if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!(t.closest('input,textarea,select,[contenteditable="true"]'))){e.preventDefault();input.current?.focus();}};document.addEventListener('keydown',key);return ()=>document.removeEventListener('keydown',key);},[]);
+ return <form role="search" className="global-search" onSubmit={e=>{e.preventDefault();const v=q.trim();if(!v)return;router.push(`/cases?q=${encodeURIComponent(v)}`);setQ('');onDone();}}><label className="sr-only" htmlFor="global-search">جست‌وجوی سریع از هر صفحه</label><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input ref={input} id="global-search" type="search" value={q} maxLength={100} onChange={e=>setQ(e.target.value)} placeholder="پلاک، شاسی یا شمارهٔ پرونده" autoComplete="off"/><kbd aria-hidden="true">/</kbd></form>;
 }

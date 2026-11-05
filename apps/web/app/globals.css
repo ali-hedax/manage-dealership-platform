@@ -3,8 +3,8 @@
    (inline-start = right in RTL) so a future LTR locale needs no rewrite. */
 
 :root {
-  --workshop-accent: #24616b;
-  --workshop-soft: #edf5f5;
+  --workshop-accent: var(--blue-strong);
+  --workshop-soft: var(--blue-soft);
   --carbon: #1a202c;
   --carbon-2: #232b3a;
   --carbon-3: #2d3748;
@@ -1676,3 +1676,27 @@ tr.is-late td { background:var(--red-soft); }
 .brand-lockup-sm img { width:96px; }
 .brand-lockup-sm .brand-by { font-size:9.5px; letter-spacing:2px; }
 .topbar .btn svg { flex:none; }
+
+/* Platform states (2026-11-05): one accent across modules, neutral default
+   callout, shared empty/permission/error state, user avatar. */
+.callout:not([class*="callout-"]) { border-color:var(--silver); background:var(--silver-2); color:var(--ink); }
+.empty-state { display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:48px 24px; margin-block:24px; background:var(--surface); border:1px solid var(--silver); border-radius:var(--radius-m); }
+.empty-state .empty-icon { inline-size:56px; block-size:56px; border-radius:50%; display:grid; place-items:center; background:var(--blue-soft); color:var(--blue-strong); }
+.empty-state .empty-icon .app-icon { inline-size:26px; block-size:26px; }
+.empty-state h1,.empty-state h2 { font-size:var(--fs-l); margin:4px 0 0; }
+.empty-state p { margin:0; color:var(--steel); max-inline-size:46ch; }
+.empty-state .row { justify-content:center; margin-block-start:8px; }
+.empty-state-page { min-block-size:100svh; display:grid; place-items:center; background:var(--paper); padding:24px; }
+.empty-state-page .empty-state { max-inline-size:520px; inline-size:100%; margin:0; }
+.empty-state-page .empty-brand { inline-size:150px; margin-block-end:8px; }
+.account-head { display:flex; align-items:center; gap:10px; }
+.avatar { inline-size:36px; block-size:36px; border-radius:50%; display:grid; place-items:center; flex:none; background:var(--blue); color:#fff; font-weight:700; font-size:14px; }
+.global-search { display:flex; align-items:center; gap:8px; margin:12px 10px 0; padding:0 10px; min-block-size:40px; border-radius:8px; background:var(--carbon-2); border:1px solid var(--carbon-3); color:#a0aec0; }
+.global-search:focus-within { border-color:var(--blue); box-shadow:0 0 0 2px rgba(49,130,206,.35); }
+.global-search input { flex:1; min-inline-size:0; background:transparent; border:0; outline:0; color:#f7fafc; font:inherit; font-size:var(--fs-s); }
+.global-search input::placeholder { color:#a0aec0; }
+.global-search kbd { font:600 11px/1 ui-monospace,monospace; border:1px solid var(--carbon-3); border-radius:4px; padding:3px 6px; color:#a0aec0; }
+@media(max-width:860px){ .global-search kbd { display:none; } }
+.sr-only { position:absolute; inline-size:1px; block-size:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.attention-go { color:var(--steel-2); font-size:20px; line-height:1; }
+.attention a:hover .attention-go { color:var(--blue-strong); }
