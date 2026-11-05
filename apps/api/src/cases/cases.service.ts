@@ -622,7 +622,9 @@ export class CasesService {
       officialDeadlineAt: iso(c.officialDeadlineAt),
       forecastDeliveryAt: iso(c.forecastDeliveryAt),
       vehicleLabel: [v.brand, v.model, v.trim].filter(Boolean).join(' ') || 'خودرو (مدل نامشخص)',
-      vehicleSummary: [v.brand, v.model || 'مدل نامشخص'].filter(Boolean).join(' '),
+      // Some manufacturer model cells include explicit engine/gearbox metadata.
+      // Keep the model name before those terms; never derive it from trim.
+      vehicleSummary: [v.brand, v.model?.split(/\s+(?:با\s+)?(?:موتور|گیربکس)(?=\s|[a-z0-9])/iu)[0]?.trim() || 'مدل نامشخص'].filter(Boolean).join(' '),
       plate: v.plate,
       vin: v.vin,
       responsible: c.responsibleUserId ? { id: c.responsibleUserId, displayName: responsibleName! } : null,
