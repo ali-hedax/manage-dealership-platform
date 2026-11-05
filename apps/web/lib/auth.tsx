@@ -14,7 +14,7 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children, fallback }: { children: ReactNode; fallback: ReactNode }) {
   // A 401 redirects to /login inside api().
-  const { data } = useSWR<Me>('/auth/me', fetcher, { revalidateOnFocus: false });
+  const { data } = useSWR<Me>('/auth/me', fetcher, { revalidateOnFocus: true, refreshInterval: 30_000 });
   if (!data) return <>{fallback}</>;
   const perms = new Set(data.permissions);
   return <AuthContext.Provider value={{ me: data, can: (p) => perms.has(p) }}>{children}</AuthContext.Provider>;

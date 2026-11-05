@@ -1,6 +1,143 @@
 # Changelog
 
+## [Published] — assessment dispatch and working-day repair plans, 2026-11-05
+
+Application `79f6585` published after all six CI checks and restored-copy migration/data-preservation verification. Single/all assessment dispatch, duplicate-safe complete supplements, working-day intake and station shares are operational. Existing official approval history, outside-market quote controls, dates and user access are preserved. See [release record](docs/RELEASE_DISPATCH_DAYS_20261105.md).
+
+## [In review] — assessment dispatch and working-day repair plans, 2026-11-05
+
+- Select individual/all replacement lines in assessment and send needs directly to parts; show already sent quantities and dispatch only increases. Full supplement files reconcile prior exact codes and preserve previous versions; reductions/code changes with supply history require review.
+- Recording assessments no longer creates a generic authorization wait. Outside-market purchases still require the exact approved quote; regular company supply follows its normal path.
+- Enter repair duration in working days; the server calculates the forecast from a frozen dealership calendar. Allocate day shares to stations, automatically sequence dependencies and report the case budget without counting parallel allocations twice. Existing case dates remain unchanged until explicitly revised.
+## [Unreleased] — platform states and search, 2026-11-05
+
+- Quick case search in the sidebar from any page (plate, chassis or case number); press "/" to focus.
+- Shared empty/permission state with icon, explanation and next step; branded "page not found" and error pages with retry.
+- User avatar with initials in the account area.
+- Repair plan page uses the same brand blue as the rest of the platform; neutral style for plain notices.
+- Dashboard: duplicate desk card removed (the «ورود به میز کار» button remains); each «نیازمند اقدام» row ends in an arrow instead of a repeated «مشاهده».
+- Case page: for overview roles (e.g. service manager) the section matching the current stage opens automatically, and «موانع» opens when blockers are open.
+
+## [Unreleased] — staff access recovery, 2026-11-05
+
+- The owner can make a private one-hour recovery link for a colleague who lost the password or Authenticator. The colleague sets a new password and reconnects Authenticator, and old sessions end. The owner account cannot use this path. Not yet on the server.
+
+## [Unreleased] — interface polish, 2026-11-05
+
+- SVG logo set (full lockup and compact wordmark); sidebar and phone bar show "by HEDAX" as readable text.
+- Case, plate and admission numbers in Persian digits on every list and board.
+- Removed developer text from the interface (local-sync line, documentation file name, repeated "no admission number" sentence).
+- Tab title per area; distinct menu icons; hamburger icon on the phone menu button; duplicate logo removed from desk selection.
+
+## [Unreleased] — login page refresh, 2026-11-05
+
+- Login heading «ورود به حساب کاری», email label «ایمیل کاری», shorter guidance; product descriptor «سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو» under the approved slogan.
+- Show/hide password moved into the password field as an eye icon; «رمز را فراموش کرده‌اید؟» directly under the password; submit button no longer greyed out before typing (native required-field validation instead).
+- Two-factor note under the continue button in personal (email + Authenticator) mode; install action restyled as a quiet phone link.
+- Numbered route (01 پذیرش و کارشناسی · 02 تأمین و تعمیر · 03 کنترل و تحویل) and «محصولی از هداکس» signature on the brand panel. No API, auth or permission change.
+
+## [Released on Manage] — production domain managebyhedax.ir, 2026-11-05
+
+- Manage now answers at `https://managebyhedax.ir`, with 301 redirects from HTTP, `www`, the raw IP and the former temporary address. Staff sign in once more, and installed mobile apps need reinstalling from the new address. Invitation links use the new address.
+- Removed the Preview wording from the site-gate page, which staff do not see while Authenticator sign-in is on. It reaches the server with the next release.
+- Traffic now passes through the ArvanCloud proxy. Login limits, sessions and audit records keep each visitor's real address.
+
+## [Released on Manage] — entry and operational workbench, 2026-11-05
+
+- Refined Persian login and explicit selection among permitted desks, with a consistent return destination and fewer duplicate menu entries.
+- Case flags folded behind filters, applied criteria visible; exact-code stock reservation placed beside the actual part request instead of repeating every part below it.
+- Iran public-holiday suggestions from Google, excluding observances and flagging tentative dates; local ICS fallback when the server cannot reach Google. Reviewed changes use existing versioned calendar save; personal calendars and previous repair plans are not changed.
+- Owner-authorized `ad54f15` published after all six CI checks and verified restores; 40-second switch with existing data/auth/permissions preserved. Direct Google access from the host currently times out; file fallback is available. [Release evidence](docs/RELEASE_ENTRY_20261105.md).
+
+## [Released on Manage] — short vehicle labels in case lists, 2026-11-05
+
+- Case lists and accident-desk queues show brand/model name above the owner name, omitting the long manufacturer trim and explicit engine/gearbox annotations embedded in model cells. Full model/trim and search/detail data are retained.
+- Published owner-approved `696eb6f` using exact verified CI images, restored backups and preserved data/authentication/settings; final switch 35 seconds. [Release evidence](docs/RELEASE_SHORT_LABEL_20261105.md).
+
+## [Released on Manage] — assessment intake and compact case workbench, 2026-11-04
+
+- Added header-driven XLSX assessment preview/import for sparse PDF-copy tables, separate labour and parts, explicit currency, rejected/correction/equivalent-row review, validation and atomic versioned audited draft insertion.
+- Collapsed secondary case information, part stock suggestions, Emdad, reservations, evidence and tracking; preserved role-specific primary work, deep links, printing and all permissions. Desk overflow actions remain available on demand.
+- Scoped case/part Emdad results to relevant technical codes in the API, keeping independent history intact. Added exact vehicle-history lookup and safe repeat-admission profile prefill without copying prior damage, coverage, money or workflow.
+- Published owner-approved `d0a66b2` using the exact verified CI images, with restored backups, unchanged data/authentication/settings and a 39-second switch. No database migration, dependency/account change, main merge, DNS or email configuration. [Release record](docs/RELEASE_ASSESSMENT_20261104.md).
+
+## [Released on Manage] — online mobile installation, 2026-11-04
+
+- Added installation metadata and existing-brand Android/Apple icons, standalone display, role-aware launch, optional browser installation and manual Safari instructions from login and account menus.
+- Added a network-loss warning; technician actions still require a successful server response and clear earlier success text before retrying. No offline queue, service-worker data cache or phone Push is included.
+- Public branding metadata passes the personal-auth gate while launch and operational APIs remain protected. Published tested `9e82246` with verified backups and existing authentication/data preserved. [Installation guide](docs/PWA_FA.md), [release record](docs/RELEASE_PWA_20261104.md). Native installation on actual phones remains to be checked.
+
+## [Released on Manage] — complete system support desk, 2026-11-04
+
+- Grouped system support work into daily reports/parts, cases/repairs and oversight/support; added searchable case queue and permission-gated access to operational desks while keeping the owner desk protected.
+- Separately, the owner requested all operational permissions for the existing real system-admin template (32→45); applied through the owner UI and backed up. The owner flag and owner-only API protections remain separate. Daily reminders include the newly authorized uploader at the configured due time. [Guide](docs/SYSTEM_ADMIN_FA.md).
+- Preserved a later personal denial of staff administration during release: the template has 45 operational permissions and the current support account has 44 effective permissions. Existing owner-only controls remain enforced.
+
+## [Released on Manage] — accident workflow redesign, 2026-11-04
+
+- Unified accident coordinator desk and default responsibilities; parts operations remain with parts, the service manager receives reporting access, and system support assists operations without owner-only access administration. Existing accounts and custom access templates are not migrated.
+- Added coded repair stations, an effective-dated Tehran work calendar, explicit holiday review, working-minute planning, parallel/dependent repair work, immutable original deadlines and recorded rescheduling reasons.
+- Added a restricted technician phone page for assigned start/end actions, separate coordinator handover confirmation, station delay/transfer reports and per-case union of blocker intervals.
+- Added parts market quotes and coordinator-recorded payer decisions; purchase requires matching, unexpired authorization, including price increases above the assessment. Customer receipts and release authority belong to the coordinator; spending exceptions remain separately controlled.
+- Station-code filtering now follows the report into matching case lists, event counts, Excel and Persian PDF; unknown station codes are explicitly shown as unknown.
+- Published tested `880b121` with all six CI checks passing; restored-copy migration and final backup recovery verified, existing records and authentication preserved. Owner saved the weekly work schedule and separately approved five additions to the existing system-support template. Added the [Persian workflow guide](docs/ACCIDENT_WORKFLOW_FA.md) and [release record](docs/RELEASE_ACCIDENT_20261104.md). Actual station codes, reviewed holidays and technician phone/LAN rollout remain operational setup.
+
+## [Released on Manage] — daily parts reports, 2026-11-03
+
+- Published tested 40b389f (CI 41614528596, all six jobs successful) with the operational environment and existing accounts/cases preserved. Added daily stock/Emdad upload and review, exact-SKU reservations/reconciliation, audited family aliases, internal 11:00 Tehran reminders and a Persian staff guide.
+- Owner's stock definitions saved: rial, excluding tax, full physical dealership stock; zero quantity omitted from selection without deleting commitments/history. Supplied files are format samples only and were not activated in production. Fresh exports are the next user step. Main remains unmerged.
+
+## [Unreleased] — branch `feature/daily-parts-reports`
+
+- Owner-confirmed stock definitions: full dealership physical stock, rial prices excluding tax. Zero-quantity items remain in history but are omitted from stock options; reservations are retained for shortfall review.
+
+- Stock option balances and daily totals refresh after reservation, issue and release actions. Daily report desk links apply the matching due/review filters.
+- Nonstandard stock codes support an audited, versioned human family alias without rewriting source codes, stock quantities or reservation history (0013). Unmapped codes remain independent.
+- Added Persian staff guide and recorded the owner's rial/full-warehouse/physical-quantity definitions. Tax inclusion is still unknown. Not deployed.
+
+- در دست ساخت و منتشرنشده: بارگذاری روزانه موجودی انبار و امداد ویژه، رزرو داخلی با انتخاب کد کامل، پیگیری امداد و یادآوری داخلی ساعت ۱۱ تهران. API روی شاخه ثبت شده و رابط کاربری هنوز کامل آزموده و commit نشده است؛ وضعیت در [HANDOFF_DAILY_PARTS.md](HANDOFF_DAILY_PARTS.md).
+
+## [Unreleased] — branch `feature/department-workspaces`
+
+- نسخه آزموده‌شده `e7319eb` با مجوز مالک روی Manage عملیاتی منتشر شد؛ حساب موجود مالک با ثبت تاریخی تعیین و پرونده‌ها، کاتالوگ، سوابق، رمزها و نقش‌های کارکنان حفظ شدند. پشتیبان پیش/پس از نصب و بازیابی تأیید شد.
+
+- اصلاح پیوند مستقیم به بخش پرونده پس از بارگذاری غیرهم‌زمان؛ به‌روزرسانی داده در همان پرونده، موقعیت پیمایش کاربر را تغییر نمی‌دهد.
+
+- منوی واحد تصادفات با پرونده/ثبت/گزارش و میزهای کار نقش‌ها، کارت‌های کار با آیکون و صف مرتبط، میان‌بر بخش‌های پرونده و نمایش جمع‌شده واحدهای آینده.
+- پنل مالک برای تغییر الگوهای سمت و مجوز اضافه/ممنوع هر کارمند، بازبینی قبل ذخیره، اعمال در درخواست بعدی، حفاظت حساب مالک، کنترل هم‌زمانی و ثبت تاریخی. ماسک تماس بر اساس مجوز نهایی و جلوگیری از دعوت فراتر از مجوز مدیر غیرمالک.
+
 All notable changes. Versions follow semantic versioning once releases start.
+
+## [Unreleased] — branch `feature/reference-data`
+
+- نسخه `a25292e` با مجوز مالک روی Manage عملیاتی نصب شد؛ ۴۷۰۴۵ کد قطعه و ۲۷۳۲ سابقه پذیرش وارد اطلاعات پایه شد، بدون ساخت پرونده یا تغییر موجودی انبار. پشتیبان پیش/پس از نصب و بازیابی تأیید شد. جست‌وجوی سابقه در ویرایش پرونده موجود نیز در دسترس است.
+
+- افزایش ظرفیت فایل مرجع به پنج مگابایت با بخش‌های ۵۰۰۰تایی؛ نگهداری فقط ستون‌های انتخاب‌شده، کنترل تکرار کد در کل فایل، ورود ماهانه سوابق و نمایش پذیرش تاریخی همراه پرونده‌های منیج منطبق.
+- رفع محدودیت ۸۰ نویسه‌ای شرح تیپ/مدل (اکنون ۱۰۰۰)، نام مشتری ۵۰۰؛ شرح تیپ چندخطی، خطاهای فارسی، پذیرش قابل ویرایش و نمایش هر دو شماره در فهرست، پرونده و گزارش Excel/PDF. پذیرش بدون شماره ایران‌خودرو همچنان با شماره منیج پیگیری می‌شود.
+
+- «اطلاعات پایه»: ورود چند فایل کاتالوگ قطعات و سوابق مشتری/خودرو با انتخاب برگه، سربرگ و نگاشت ستون‌ها، پیش‌نمایش و گزارش فارسی تمام ردیف‌ها، کنترل تکرار و نسخه هم‌زمان، بدون ایجاد پرونده یا رزرو انبار.
+- انتخاب کد/نام قطعه در فرم افزودن قطعه؛ جست‌وجوی دقیق شاسی/VIN و انتخاب سابقه در فرم پذیرش با تکمیل فقط خانه‌های خالی. حفاظت از شماره‌های متنی و مالکیت تاریخی، تفکیک مجوزها و نمای موبایل. [راهنما](docs/REFERENCE_DATA_FA.md).
+
+## [Unreleased] — branch `feature/reports-center`
+
+- شروع واقعی نمایندگی ۱۳۰۷ حسینی با تأیید مالک: حذف محدود پنج پرونده نمونه، غیرفعال‌سازی هفت حساب نمونه با حفظ حساب شخصی و تاریخچه، ورود پانزده خودرو و حفظ هشت ردیف نیازمند بررسی؛ حالت Production و پشتیبان روزانه با overlay مستقل. تصاویر برنامه همان نسخه آزموده‌شده‌اند. [راهنما](docs/REAL_START_FA.md).
+- دعوت خصوصی اولین همکار با همه نقش‌های فعلی، بنا بر انتخاب صریح مالک؛ فعال‌سازی شخصی و Authenticator توسط خود همکار انجام می‌شود. ایمیل ارسال نشده است.
+
+- «گزارش‌ها» در منو و میان‌بر در داشبورد، فهرست پرونده‌ها، قطعات و فعالیت‌ها: نماهای مدیر خدمات، انبار و قطعات، تصادفات، واحدهای تعمیر و کنترل کیفیت؛ نمای پیش‌فرض بر اساس نقش و کنترل دسترسی در API.
+- «کارهای امروز» با اولویت موعد گذشته، امروز، نزدیک، بعدی و بدون موعد و دلیل اولویت؛ «آمار و روند» با حداکثر شش شاخص (واحد و تعریف)، نمودار مراحل، علل توقف، کامل‌بودن داده، سن پرونده، ماندن در مرحله (با شمار موارد کنارگذاشته)، روند پذیرش و تحویل و مقایسه با بازه هم‌طول قبل؛ هر شاخص و ستون به فهرست همان رکوردها متصل است و جدول جایگزین دارد.
+- فیلترها در نشانی صفحه می‌مانند (بازگشت از پرونده)؛ خروجی Excel همه ردیف‌های فیلترشده با عنوان، زمان، بازه و فیلتر؛ چاپ سیاه‌وسفید.
+- فهرست پرونده‌ها: فیلتر علت مانع و «عبور از مهلت رسمی»، «عبور از پیش‌بینی» و «بدون موعد». داشبورد «پرونده فعال» را درست می‌نامد. تعریف‌ها: `docs/REPORTS_FA.md`.
+
+## [Unreleased] — branch `feature/vehicle-excel-import`
+
+- ورود خودروهای موجود از اکسل (مدیر خدمات): خواندن برگه «لیست خودروها» با تشخیص خودکار سربرگ، پیش‌نمایش فارسی (جدید، به‌روزرسانی، بدون تغییر، تکراری، ناقص، نیازمند بررسی، خطا)، ثبت ردیف‌به‌ردیف، گزارش Excel نتیجه با شماره پرونده صادرشده و فایل نمونه ساختگی.
+- تطبیق فقط با شماره پرونده، VIN کامل، شماره کارت پذیرش و شاسی ثبت‌شده؛ خانه خالی مقدار قبلی را پاک نمی‌کند؛ ورود دوباره پرونده یا وظیفه تکراری نمی‌سازد؛ تاریخ بدون ساعت فقط با تصمیم صریح و با نمایش «ساعت نامعلوم».
+- پرونده: شماره کارت پذیرش و شاسی ثبت‌شده (قابل جست‌وجو) و «سابقه ورود از اکسل» با متن اصلی سلول‌ها. Migration افزایشی 0008.
+
+## [Unreleased] — branch `fix/invitation-email-delivery`
+
+- کارکنان: «بررسی اتصال ایمیل» (اتصال، TLS و احراز هویت فرستنده از همان سرور، بدون ارسال پیام) و نمایش علت شکست ارسال (اتصال مسدود، DNS، TLS، احراز هویت، رد گیرنده) زیر نام همکار؛ متن «ارسال شد» به «پذیرفته‌شده توسط سرور ایمیل» اصلاح شد.
+- Migration افزایشی 0007 (`invitation_failure`)، اسکریپت `mail:check` و `deploy/preview/configure-smtp.sh` برای تنظیم خصوصی App Password روی سرور با بررسی پیش از فعال‌سازی و پشتیبان `.env`.
 
 ## [Unreleased] — staff email invitations
 
@@ -81,7 +218,12 @@ All notable changes. Versions follow semantic versioning once releases start.
 ### Security
 - `drizzle-orm` raised to 0.45.x and `multer` overridden to ≥ 2.5.0 to clear high-severity advisories reported by `pnpm audit`.
 
-
 ## Preview browser sign-in compatibility — 2026-11-01
 
 - Replace the native browser password challenge with an accessible Persian sign-in form and a signed secure cookie, preserving the Preview password and isolation. Actual in-app browser login to the manager dashboard was verified.
+
+## [Unreleased] — reports stage 3b
+
+- Persian A4 PDF reports with embedded Vazirmatn, dealership header, row-limit disclosure, repeated table header, multi-page long rows and page numbers.
+- Parts discrepancy queue in warehouse and manager reports: deduplicated findings, assignee, reasoned outcomes, optimistic locking and tenant isolation. Detection, condition changes and review actions retain transactional audit/change history.
+- CI exports the images it smoke-tests for an owner-approved Preview installation; CI does not deploy or connect to the server.

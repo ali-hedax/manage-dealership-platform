@@ -1,5 +1,6 @@
 import type { Assessment, CaseDetail, Department, TimelineEvent } from '@manage/shared';
 import { Client, createHarness, daysAgo, daysAhead, type Harness } from './harness';
+import { writeSheet } from '../src/parts/xlsx';
 
 // Issue #8: versioned assessments and supplements (acceptance scenario 5).
 
@@ -83,8 +84,46 @@ afterAll(async () => {
   await h?.close();
 });
 
+describe('assessment Excel import', () => {
+  it('looks up a vehicle by exact identity across admissions without a fuzzy match', async () => {
+    const vin = 'TESTVIN00000088A1';
+    const c = await newCase({vehicle:{vin,model:'تارا'}});
+    const exact = await expert.get(`/cases?status=all&vehicleIdentity=${vin}`);
+    expect(exact.body.items.map((v:{id:string})=>v.id)).toEqual([c.id]);
+    expect((await expert.get('/cases?status=all&vehicleIdentity=00000088A1')).body.total).toBe(0);
+    expect((await expert.get('/cases?status=all&vehicleIdentity=------')).body.code).toBe('VEHICLE_IDENTITY_INVALID');
+  });
+  it('previews without writes, imports atomically with version/audit and rejects repeats or an unauthorized role', async () => {
+    const c = await newCase();
+    const a = (await expert.post(`/cases/${c.id}/assessments`, {kind:'initial',assessorName:'کارشناس آزمون'})).body as Assessment;
+    const fileBase64 = Buffer.from(writeSheet('آزمون', [['شرح قطعه','شماره فنی','تعداد','فی','مبلغ'],['قطعه ساختگی','00123456','2','100','200']])).toString('base64');
+    const body = {fileBase64, currency:'rial', expectedVersion:a.version, dryRun:true};
+    const preview = await expert.post(`/assessments/${a.id}/import`,body);
+    expect(preview.status).toBe(201); expect(preview.body.rows).toHaveLength(1); expect(preview.body.applied).toBe(false);
+    expect((await expert.get(`/cases/${c.id}/assessments`)).body[0].items).toHaveLength(0);
+    expect((await parts.post(`/assessments/${a.id}/import`,body)).status).toBe(403);
+    const applied = await expert.post(`/assessments/${a.id}/import`,{...body,dryRun:false});
+    expect(applied.status).toBe(201); expect(applied.body.applied).toBe(true);
+    expect((await expert.post(`/assessments/${a.id}/import`,{...body,dryRun:false})).status).toBe(409);
+    const saved = (await expert.get(`/cases/${c.id}/assessments`)).body[0] as Assessment;
+    expect(saved.items).toHaveLength(1); expect(saved.authorizationStatus).not.toBe('approved');
+    expect((await expert.post(`/assessments/${a.id}/import`,{...body,expectedVersion:saved.version})).body.rows[0].outcome).toBe('unchanged');
+    expect((await expert.post(`/assessments/${a.id}/import`,{...body,expectedVersion:saved.version,dryRun:false})).body.applied).toBe(true);
+    expect((await expert.get(`/cases/${c.id}/assessments`)).body[0].items).toHaveLength(1);
+    const timeline = (await expert.get(`/cases/${c.id}/timeline`)).body as TimelineEvent[];
+    expect(JSON.stringify(timeline)).toContain('assessment.items_imported');
+  });
+  it('does not write any valid row if another row is invalid', async () => {
+    const c = await newCase();
+    const a = (await expert.post(`/cases/${c.id}/assessments`,{kind:'initial',assessorName:'کارشناس آزمون'})).body as Assessment;
+    const fileBase64 = Buffer.from(writeSheet('آزمون',[['شرح قطعه','شماره فنی','تعداد','فی','مبلغ'],['سالم','00123456','1','100','100'],['خطادار','00123457','0','100','100']])).toString('base64');
+    expect((await expert.post(`/assessments/${a.id}/import`,{fileBase64,currency:'rial',expectedVersion:a.version,dryRun:false})).body.code).toBe('ASSESSMENT_IMPORT_INVALID');
+    expect((await expert.get(`/cases/${c.id}/assessments`)).body[0].items).toHaveLength(0);
+  });
+});
+
 describe('initial assessment', () => {
-  it('drafts, totals, finalizes into a pending authorization that blocks the case', async () => {
+  it('drafts and finalizes without creating a generic authorization blocker', async () => {
     const c = await newCase();
     expect(c.stage).toBe('reception');
 
@@ -127,14 +166,12 @@ describe('initial assessment', () => {
     expect(fin.status).toBe(201);
     a = fin.body;
     expect(a.status).toBe('final');
-    expect(a.authorizationStatus).toBe('pending');
-    expect(a.blockerId).toBeTruthy();
+    expect(a.authorizationStatus).toBe('not_required');
+    expect(a.blockerId).toBeNull();
 
     const kase = await caseOf(c.id);
-    expect(kase.stage).toBe('awaiting_approval');
-    const blocker = kase.blockers.find((b) => b.id === a.blockerId)!;
-    expect(blocker.reason).toBe('authorization');
-    expect(blocker.resolvedAt).toBeNull();
+    expect(kase.stage).toBe('assessment');
+    expect(kase.blockers.filter(b=>b.reason==='authorization')).toHaveLength(0);
 
     // Final versions are immutable; the waiting blocker closes only with the decision.
     const edit = await expert.patch(`/assessment-items/${a.items[0]!.id}`, {
@@ -142,8 +179,6 @@ describe('initial assessment', () => {
       unitPriceRial: 1,
     });
     expect(edit.body.code).toBe('ASSESSMENT_FINAL');
-    const manual = await supervisor.post(`/blockers/${a.blockerId}/resolve`, { note: 'دستی' });
-    expect(manual.body.code).toBe('BLOCKER_MANAGED');
 
     // Insurer approval is valid only with its reference in the official system.
     const noRef = await expert.post(`/assessments/${a.id}/authorization`, {
@@ -167,7 +202,7 @@ describe('initial assessment', () => {
     expect(ok.body.authorization.reference).toBe('TEST-AUTH-2');
     expect(ok.body.items.every((i: { approvalStatus: string }) => i.approvalStatus === 'approved')).toBe(true);
     const after = await caseOf(c.id);
-    expect(after.blockers.find((b) => b.id === a.blockerId)!.resolvedAt).toBeTruthy();
+    expect(after.blockers.filter(b=>b.reason==='authorization')).toHaveLength(0);
 
     const again = await expert.post(`/assessments/${a.id}/authorization`, {
       expectedVersion: ok.body.version,
@@ -190,8 +225,7 @@ describe('initial assessment', () => {
     a = await addItem(a, { action: 'repair', description: 'صافکاری', labourRial: 1_000_000 });
     a = (await expert.post(`/assessments/${a.id}/finalize`, { expectedVersion: a.version })).body;
     // The wait started when the assessment was done, not when it was typed in.
-    const wait = (await caseOf(c.id)).blockers.find((b) => b.id === a.blockerId)!;
-    expect(new Date(wait.occurredAt).getTime()).toBe(new Date(a.assessedAt).getTime());
+    expect((await caseOf(c.id)).blockers.filter(b=>b.reason==='authorization')).toHaveLength(0);
 
     const body = { expectedVersion: a.version, decision: 'approved', source: 'customer', method: 'phone' };
     const tooEarly = await expert.post(`/assessments/${a.id}/authorization`, { ...body, at: daysAgo(2) });
@@ -289,7 +323,7 @@ describe('acceptance 5: supplement after hidden damage', () => {
     expect(v2.status).toBe('final');
     expect(v2.deltaRial).toBe(34_000_000);
     expect(v2.requiresFinancialReview).toBe(true);
-    expect(v2.authorizationStatus).toBe('pending');
+    expect(v2.authorizationStatus).toBe('not_required');
 
     // The approved version is preserved exactly.
     const versions: Assessment[] = (await expert.get(`/cases/${c.id}/assessments`)).body;
@@ -305,9 +339,8 @@ describe('acceptance 5: supplement after hidden damage', () => {
     expect(new Date(kase.forecastDeliveryAt!).getTime()).toBe(new Date(newForecast).getTime());
     expect(kase.officialDeadlineAt).toBe(c.officialDeadlineAt);
     expect(kase.stage).toBe('in_repair');
-    const wait = kase.blockers.find((b) => b.id === v2.blockerId)!;
-    expect(wait.reason).toBe('authorization');
-    expect(new Date(wait.occurredAt).getTime()).toBe(new Date(discoveredAt).getTime());
+    expect(v2.blockerId).toBeNull();
+    expect(kase.blockers.filter(b=>b.reason==='authorization')).toHaveLength(0);
 
     // No delivery while the supplement waits for authorization; work itself continues.
     const gate = await supervisor.post(`/cases/${c.id}/stage`, { stage: 'delivered', expectedVersion: kase.version });
@@ -330,7 +363,7 @@ describe('acceptance 5: supplement after hidden damage', () => {
     expect(v2.authorizationStatus).toBe('partially_approved');
     expect(v2.totals.approvedRial).toBe(87_000_000 - 32_000_000);
     expect(v2.items.find((i) => i.id === support.id)!.approvalStatus).toBe('rejected');
-    expect((await caseOf(c.id)).blockers.find((b) => b.id === v2.blockerId)!.resolvedAt).toBeTruthy();
+    expect((await caseOf(c.id)).blockers.filter(b=>b.reason==='authorization')).toHaveLength(0);
 
     const timeline: TimelineEvent[] = (await expert.get(`/cases/${c.id}/timeline`)).body;
     const actions = timeline.map((e) => e.action);

@@ -1,0 +1,37 @@
+# شروع واقعی Manage — نمایندگی ۱۳۰۷ حسینی
+
+**Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
+
+**نسخه جاری برنامه:** نام کوتاه خودرو در فهرست `696eb6f`، منتشرشده در ۱۴۰۵/۰۸/۱۴؛ دریافت اکسل کارشناسی، پرونده/میز جمع‌وجور و نصب آنلاین گوشی محفوظ‌اند. نقش، رمزها، تقویم و داده قبلی تغییر نکرده‌اند. الگوی مدیر سیستم ۴۵ مجوز و با منع شخصی مدیریت کارکنان، دسترسی مؤثر فعلی ۴۴ است. [گزارش انتشار](RELEASE_SHORT_LABEL_20261105.md)، [راهنمای دریافت کارشناسی](ASSESSMENT_INTAKE_FA.md). روایت گذار اولیه زیر تاریخی است.
+
+از ۱۴۰۵/۰۸/۱۱، میزبان قبلی `85.198.52.255` و نشانی HTTPS موجود، داده واقعی دارد. مالک شروع واقعی، حذف دقیق پنج پرونده نمونه و ورود پانزده خودرو را صریحاً تأیید کرد. Source و DNS تغییر نکردند. تصاویر برنامه همان `5e529fd` هستند؛ این راه‌اندازی تغییر تنظیمات و داده بود.
+
+## کار روزانه
+
+از فهرست پرونده‌ها شروع کنید؛ پانزده خودرو ثبت شده‌اند. ابتدا مسئول، اقدام بعدی و واحد درگیر را بر اساس واقعیت تعیین کنید. قطعات و موانع اکسل فقط در «سابقه ورود از اکسل» هستند؛ درخواست قطعه/مانع/فعالیت را از بخش مربوط پرونده ثبت کنید. ساعت پذیرش نامعلوم به‌عنوان ساعت واقعی صفر گزارش نمی‌شود.
+
+هفت ردیف وضعیت تعمیر ندارند؛ دو مورد از آن‌ها تاریخ پذیرش هم ندارند. یک ردیف «تحویل‌شده» نیازمند بررسی ورود سابقه تحویل است؛ برای عبور از اعتبارسنجی وضعیتش را تغییر صوری ندهید. Google Sheet تغییر نکرده است. پس از تکمیل، ورود دوباره با شناسه یکتا انجام می‌شود؛ نام مالک یا ردیف مبنای تطبیق نیست.
+
+کارکنان با ایمیل و نقش واقعی از صفحه کارکنان دعوت شوند؛ خودشان رمز و Authenticator را تنظیم می‌کنند. تا رفع SMTP از لینک خصوصی استفاده شود. ارسال ایمیلی موفق تأیید نشده؛ تیکت آروان `291-327B43BA-006E` ثبت شده است.
+
+## استقرار بعدی
+
+**سرور اکنون Production است. reset-demo و deploy قدیمی Preview روی آن اجرا نشود.**
+
+overlay آخر `/home/manage/operations/operational.yml` است. دستورات Compose روی میزبان با wrapper زیر اجرا شوند:
+
+```bash
+bash /home/manage/operations/operational-compose.sh ps
+```
+
+منابع بدون راز: [overlay](../deploy/operational/operational.yml)، [wrapper](../deploy/operational/operational-compose.sh)، [پشتیبان](../deploy/operational/backup-operational.sh)، [نصب زمان‌بندی](../deploy/operational/install-backup-cron.sh). Production migration خودکار ندارد؛ انتشار بعدی به تأیید مالک، پشتیبان، migration صریح، CI و آزمون نیاز دارد. تا تطبیق با overlay جاری از اسکریپت انتشار Preview استفاده نشود.
+
+[اسکریپت یک‌بارمصرف گذار](../deploy/operational/launch-manage.cjs) داخل image موجود با ورودی استاندارد Node اجرا شد. پیش‌فرض تمام تراکنش را rollback می‌کند. اجرای اصلی با تأیید جداگانه و guard دقیق پنج پرونده/هفت حساب ممکن بود؛ tenant واقعی یا رکورد اضافی موجب توقف می‌شود. پس از شروع دوباره اجرا نشود. رمز، Authenticator، نشست مالک، شمارنده و auditهای قبلی حفظ شدند.
+
+## پشتیبان و بازیابی
+
+- قبل از گذار: `/home/manage/backups/stage3-20261102T130557Z`؛ آزمون بازیابی و اجرای کامل گذار/ورود روی DB موقت موفق.
+- پس از ورود: `/home/manage/backups/operational/20261102T131205Z`؛ بازیابی موقت: ۱۵ پرونده، صفر is_test، پانزده import_key یکتا. DBهای موقت پس از بررسی حذف شدند.
+- روزانه: ۰۰:۳۰ UTC / ۰۴:۰۰ تهران در crontab کاربر manage؛ cron فعال. اسکریپت قفل هم‌زمانی، umask خصوصی، کنترل فهرست pg_restore و SHA256 دارد و نسخه قبلی را حذف نمی‌کند. لاگ در پوشه operational است؛ خطا باید بررسی شود.
+- پشتیبان روزانه روی همان VM است. نسخه `20261102T131800Z` شامل DB/config/operations به رایانه مالک منتقل و در `work/operational-recovery-20261102.dpapi` همین گفت‌وگو با Windows DPAPI در scope CurrentUser ذخیره شد. decrypt در حافظه و SHA256 تأیید و آرشیو خام محلی حذف شد. entropy ثابت این نسخه `Manage by HEDAX operational backup v1` است. بازیابی به همان حساب Windows نیاز دارد؛ این فایل را با خروجی عمومی اشتباه نگیرید. انتقال خودکار روزانه خارج از میزبان و آزمایش بازیابی دوره‌ای هنوز باقی است.
+- پیش از restore روی پایگاه اصلی، نوشتن کاربران متوقف و از وضعیت فعلی نیز پشتیبان گرفته شود. بازیابی نسخه قبل از گذار، داده جدید واقعی را برمی‌گرداند؛ بدون بررسی و تأیید مالک اجرا نشود. config و AUTH_TOKEN_SECRET همراه DB خصوصی حفظ شوند تا Authenticator موجود قابل استفاده بماند.

@@ -10,9 +10,14 @@ import {
   PART_ACTIONS,
   PART_INSPECTIONS,
   PART_SOURCES,
+  PART_STATUSES,
   QC_CHECK_ITEMS,
   QC_RESULTS,
   QC_SAFETY_ITEMS,
+  IMPORT_DEADLINE_TARGETS,
+  DISCREPANCY_STATUSES,
+  REPORT_PERIODS,
+  REPORT_VIEWS,
   RECIPIENT_RELATIONS,
   CASE_STAGES,
   CASE_STATUSES,
@@ -44,21 +49,22 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const customerInputSchema = z.object({
-  fullName: optionalText(120),
+  fullName: optionalText(500),
   phone: optionalText(32),
 });
 
 export const vehicleInputSchema = z.object({
-  brand: optionalText(60),
-  model: optionalText(80),
-  trim: optionalText(80),
+  brand: optionalText(200),
+  model: optionalText(1000),
+  trim: optionalText(1000),
   modelYear: z.number().int().min(1300).max(2100).nullish(),
-  plate: optionalText(32),
+  plate: optionalText(64),
   vin: optionalText(32),
-  color: optionalText(40),
+  color: optionalText(100),
 });
 
 const caseFields = {
+  admissionNo: optionalText(80),
   customer: customerInputSchema.optional(),
   vehicle: vehicleInputSchema.optional(),
   odometerKm: z.number().int().min(0).max(5_000_000).nullish(),
@@ -71,6 +77,7 @@ const caseFields = {
   insuranceClaimNo: optionalText(64),
   coverageNotes: optionalText(2000),
   responsibleUserId: uuid.nullish(),
+  repairDurationDays: z.number().min(0.25).max(365).multipleOf(0.25).optional(),
   officialDeadlineAt: optionalIsoDate,
   forecastDeliveryAt: optionalIsoDate,
   stage: z.enum(CASE_STAGES).optional(),
@@ -114,15 +121,21 @@ export const CASE_FLAGS = [
   'parts_overdue',
   'parts_to_order',
   'finance_pending',
+  'overdue_official',
+  'overdue_forecast',
+  'no_deadline',
 ] as const;
 export type CaseFlag = (typeof CASE_FLAGS)[number];
 
 export const caseListQuerySchema = z.object({
+  vehicleIdentity: z.string().trim().min(6).max(32).optional(),
+  stationCode:z.string().trim().min(1).max(32).optional(),
   q: z.string().trim().max(100).optional(),
   stage: z.enum(CASE_STAGES).optional(),
   coverage: z.enum(COVERAGE_TYPES).optional(),
   status: z.enum([...CASE_STATUSES, 'all']).default('open'),
   flag: z.enum(CASE_FLAGS).optional(),
+  blockerReason: z.enum(BLOCKER_REASONS).optional(),
   responsibleUserId: uuid.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -130,6 +143,11 @@ export const caseListQuerySchema = z.object({
 export type CaseListQuery = z.infer<typeof caseListQuerySchema>;
 
 export const createTaskSchema = z.object({
+  stationId: uuid.nullish(),
+  assignedUserId: uuid.nullish(),
+  durationMinutes: z.number().int().min(1).max(100000).optional(),
+  durationDays: z.number().min(0.25).max(180).multipleOf(0.25).optional(),
+  scheduleReason: optionalText(1000),
   departmentId: uuid,
   title: optionalText(200),
   technicianName: optionalText(120),
@@ -229,6 +247,14 @@ export const assessmentItemSchema = z.object({
 });
 export type AssessmentItemInput = z.infer<typeof assessmentItemSchema>;
 
+export const importAssessmentSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  fileBase64: z.string().min(1).max(7_000_000).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+  dryRun: z.boolean().default(true),
+  currency: z.enum(['rial', 'toman']),
+}).strict();
+export type ImportAssessmentInput = z.infer<typeof importAssessmentSchema>;
+
 export const updateAssessmentItemSchema = z.object({
   action: assessmentItemFields.action.optional(),
   description: assessmentItemFields.description.optional(),
@@ -295,7 +321,10 @@ export type CreatePartInput = z.infer<typeof createPartSchema>;
 
 export const partsFromAssessmentSchema = z.object({
   source: z.enum(PART_SOURCES).optional(),
-});
+  assessmentId: uuid.optional(),
+  expectedVersion: z.number().int().min(1).optional(),
+  itemIds: z.array(uuid).min(1).max(500).optional(),
+}).superRefine((v,ctx)=>{if((v.itemIds||v.assessmentId||v.expectedVersion)&&(!v.itemIds||!v.assessmentId||!v.expectedVersion))ctx.addIssue({code:'custom',message:'شناسه و نسخه کارشناسی و اقلام انتخابی را با هم بفرستید'});});
 export type PartsFromAssessmentInput = z.infer<typeof partsFromAssessmentSchema>;
 
 export const importPartsSchema = z.object({
@@ -454,3 +483,72 @@ export const deliverySchema = z.object({
   note: optionalText(1000),
 });
 export type DeliveryInput = z.infer<typeof deliverySchema>;
+
+// ------------------------------------------------- existing-vehicle import
+
+export const vehicleImportDecisionsSchema = z.object({
+  // Rows with a date but no time: record the day only (time shown as unknown).
+  dateWithoutTime: z.boolean().default(false),
+  deadlineAs: z.enum(IMPORT_DEADLINE_TARGETS).default('none'),
+});
+export type VehicleImportDecisions = z.infer<typeof vehicleImportDecisionsSchema>;
+
+export const vehicleImportSchema = z.object({
+  fileName: z.string().trim().min(1).max(200),
+  // base64 of an .xlsx up to ~1 MB.
+  fileBase64: z.string().min(1).max(1_400_000),
+  decisions: vehicleImportDecisionsSchema.default({ dateWithoutTime: false, deadlineAs: 'none' }),
+});
+export type VehicleImportInput = z.infer<typeof vehicleImportSchema>;
+
+// ------------------------------------------------------------------ reports
+
+const jalaliDay = z
+  .string()
+  .trim()
+  .regex(/^[0-9۰-۹]{4}[/-][0-9۰-۹]{1,2}[/-][0-9۰-۹]{1,2}$/, 'تاریخ را به شکل ۱۴۰۵/۰۸/۱۰ وارد کنید');
+
+export const reportQuerySchema = z.object({
+  stationCode:z.string().trim().min(1).max(32).optional(),
+  view: z.enum(REPORT_VIEWS),
+  period: z.enum(REPORT_PERIODS).default('month'),
+  // Jalali days (Tehran), inclusive; only for period=custom.
+  from: jalaliDay.optional(),
+  to: jalaliDay.optional(),
+  responsibleUserId: z.union([uuid, z.literal('me'), z.literal('none')]).optional(),
+  departmentId: uuid.optional(),
+  stage: z.enum(CASE_STAGES).optional(),
+  coverage: z.enum(COVERAGE_TYPES).optional(),
+  blockerReason: z.enum(BLOCKER_REASONS).optional(),
+  partStatus: z.enum(PART_STATUSES).optional(),
+  // Case number, admission number, plate, VIN or chassis.
+  q: z.string().trim().max(100).optional(),
+  // Work-list rows of one kind only (a KPI or chart bar opens its rows).
+  kind: z.string().trim().max(40).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ReportQuery = z.infer<typeof reportQuerySchema>;
+
+// ---------------------------------------------------- parts discrepancies
+
+export const discrepancyListSchema = z.object({
+  status: z.enum([...DISCREPANCY_STATUSES, 'active', 'all']).default('active'),
+  caseId: uuid.optional(),
+});
+export type DiscrepancyListQuery = z.infer<typeof discrepancyListSchema>;
+
+export const discrepancyAssignSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  // null releases the item back to "open".
+  assigneeUserId: uuid.nullable(),
+});
+export type DiscrepancyAssignInput = z.infer<typeof discrepancyAssignSchema>;
+
+export const discrepancyResolveSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  // resolved: the records were checked and corrected; dismissed: not a real discrepancy.
+  outcome: z.enum(['resolved', 'dismissed']),
+  reason: z.string().trim().min(5, 'دلیل و سابقه رسیدگی را بنویسید').max(1000),
+});
+export type DiscrepancyResolveInput = z.infer<typeof discrepancyResolveSchema>;

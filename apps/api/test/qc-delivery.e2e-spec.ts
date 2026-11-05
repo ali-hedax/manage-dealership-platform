@@ -1,3 +1,5 @@
+import { eq } from 'drizzle-orm';
+import { users } from '../src/db/schema';
 import {
   QC_CHECK_ITEMS,
   type Assessment,
@@ -129,6 +131,8 @@ async function technicallyClosedGoldenCard(): Promise<CaseDetail> {
 
 beforeAll(async () => {
   h = await createHarness();
+  // This fixture exercises the legacy financial decision path with an explicit grant.
+  await h.db.db.update(users).set({permissionOverrides:{allow:['finance.approve','finance.close','finance.propose'],deny:[]}}).where(eq(users.username,'manager'));
   [expert, supervisor, manager, parts, cashier, qc] = await Promise.all(
     ['expert', 'supervisor', 'manager', 'parts', 'cashier', 'qc'].map((u) => h.login(u)),
   );
@@ -208,7 +212,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
 
     const over = await cashier.post(`/cases/${c.id}/finance/payments`, { amountRial: 12_000_000, paymentRef: 'RCPT-TEST-1' });
     expect(over.body.code).toBe('PAYMENT_EXCEEDS_BALANCE');
-    expect((await expert.post(`/cases/${c.id}/finance/payments`, { amountRial: 1, paymentRef: 'x' })).status).toBe(403);
+    expect((await parts.post(`/cases/${c.id}/finance/payments`, { amountRial: 1, paymentRef: 'x' })).status).toBe(403);
     const paid = await cashier.post(`/cases/${c.id}/finance/payments`, { amountRial: 11_000_000, paymentRef: 'RCPT-TEST-1' });
     expect(paid.status).toBe(201);
     expect(paid.body as CaseFinance).toMatchObject({ paidRial: 11_000_000, balanceRial: 0 });
@@ -302,7 +306,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
     expect(state.deliveryIssues.map((i) => i.code)).toEqual(['financial_not_closed']);
   });
 
-  it('closing with a balance due needs the service manager and a reason', async () => {
+  it('customer balance release uses coordinator release authority and a reason', async () => {
     const c = await newCase({ coverageType: 'personal' });
     await authorized(c.id, 'customer');
     await installPart(c.id);
@@ -313,7 +317,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
 
     expect((await cashier.post(`/cases/${c.id}/financial-close`, { expectedVersion: v, waiveBalance: true, note: 'اعتبار' })).status).toBe(403);
     expect((await manager.post(`/cases/${c.id}/financial-close`, { expectedVersion: v, waiveBalance: true })).status).toBe(400);
-    const res = await manager.post(`/cases/${c.id}/financial-close`, {
+    const res = await expert.post(`/cases/${c.id}/financial-close`, {
       expectedVersion: v,
       waiveBalance: true,
       note: 'مشتری اعتباری؛ تسویه در پایان ماه',
@@ -327,10 +331,10 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
   it('enforces roles on QC, closes and handover', async () => {
     const c = await newCase({ coverageType: 'golden_card', goldenCardFileNo: 'GC-TEST-13' });
     const v = c.version;
-    expect((await recordQc(c.id, {}, expert)).status).toBe(403);
+    expect((await recordQc(c.id, {}, manager)).status).toBe(403);
     expect((await recordQc(c.id, {}, parts)).status).toBe(403);
     expect((await qc.post(`/cases/${c.id}/technical-close`, { expectedVersion: v })).status).toBe(403);
-    expect((await expert.post(`/cases/${c.id}/financial-close`, { expectedVersion: v })).status).toBe(403);
+    expect((await parts.post(`/cases/${c.id}/financial-close`, { expectedVersion: v })).status).toBe(403);
     const handover = { expectedVersion: v, recipientName: 'آزمون', recipientRelation: 'owner', handoverConfirmed: true };
     expect((await cashier.post(`/cases/${c.id}/delivery`, handover)).status).toBe(403);
     expect((await qc.post(`/cases/${c.id}/delivery`, handover)).status).toBe(403);

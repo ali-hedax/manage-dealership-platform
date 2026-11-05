@@ -1,5 +1,13 @@
 # Database
 
+## 0014: repair workflow, station codes and market-price approvals
+
+`0014_parallel_mattie_franklin.sql` adds tenant-scoped `work_calendars` (append-only effective revisions), `workshop_stations` (mutable/versioned), and `part_quotes` (versioned proposal and external-decision history). Task rows gain station/assignee references, a station snapshot, a frozen calendar snapshot and immutable original planned start/end timestamps. Existing tasks retain null snapshots/baselines; no historical durations, assignments or customer data are invented. Every mutation writes audit and change-log snapshots in the same transaction. Cross-tenant station, staff, quote and case references are validated by services. Code uniqueness is scoped to the tenant.
+
+Matching rollback: `apps/api/src/db/down/0014_parallel_mattie_franklin.sql`. It drops the new history and task columns; it is destructive and requires preservation/review before any real execution. The SQL migration does not modify real accounts, role assignments, permission templates, passwords or MFA. New default role permissions still require an effective-access review before rollout, because pre-existing templates/overrides take precedence. See [workflow guide](ACCIDENT_WORKFLOW_FA.md).
+
+Migration `0013_stock_code_aliases` adds tenant-scoped, versioned human-approved family aliases for nonstandard stock codes. A nullable base detaches an alias without losing its audited history. Snapshot quantities, source codes and existing reservations are unchanged. Permission: `daily_reports.settings`; every update records approver, reason, time and audit/change-log in the same transaction. Down script is for an isolated rehearsal only. Migrations 0012 and 0013 were restored/rehearsed and installed in production on 2026-11-03 with release 40b389f; sample daily reports were applied only to the isolated copy, never production.
+
 PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts). Migrations: [`apps/api/src/db/migrations`](../apps/api/src/db/migrations) (applied by Drizzle's migrator, tracked in `drizzle.__drizzle_migrations`). Rollback scripts: [`apps/api/src/db/down`](../apps/api/src/db/down).
 
 ## Conventions
@@ -47,6 +55,8 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 
 ## Migrations
 
+`0010_reference_data`: `reference_imports` stores kind, file/hash, selected sheet/header/mapping, all source rows and outcomes, creator/times and preview/applied status. `reference_entries` stores tenant/kind/identity key (unique per tenant/kind), indexed lookup key, reference payload, source import, version and test flag. Parts identity is the normalized technical code; historical-customer identity hashes the normalized row, preserving different owners/visits for the same chassis. Quantity payload carries its own import timestamp/source filename. No existing case, customer, stock or authentication columns change. Down: `down/0010_reference_data.down.sql`, disposable DBs only. See [reference workflow](REFERENCE_DATA_FA.md).
+
 | Migration | Content | Down script |
 | --- | --- | --- |
 | `0000_init` | All tables and indexes | `down/0000_init.down.sql` (drops everything — disposable DBs only) |
@@ -58,6 +68,30 @@ PostgreSQL 16. Schema source of truth: [`apps/api/src/db/schema.ts`](../apps/api
 
 Workflow for a change: edit `schema.ts` → `pnpm --filter @manage/api db:generate` → review the SQL → write the down script → run tests → document here. Production: back up first, then `pnpm db:migrate` ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
 
+## 0008_vehicle_import
+
+Existing-vehicle Excel import. On `cases`: `admission_no` (workshop admission card number, original text) and `admission_no_key` (matching key; null for non-unique values such as «بدون پذیرش»), `admitted_at_precision` ('minute' default, 'date' when only the day is known), `origin` ('manual' | 'excel_import') and `import_key` (identity used by the import: vin:, adm: or chs:; unique per tenant when set, so an interrupted or repeated import cannot create a second case). `vehicles.chassis_ref`: chassis number as recorded on the sheet, never treated as a VIN. `tasks.import_ref` (unique per case when set): a sheet row's next action is created once. New tables `vehicle_imports` (file name and SHA-256, sheet, header row, decisions, counts, blank rows, unmapped columns, status preview | applying | applied | partial, creator/applier) and `vehicle_import_rows` (row number, outcome, original cells by header (`source`), values by column key, identity, case, changes, messages). Rows are the provenance of imported cases. Additive; existing cases default to manual/minute. Down script `down/0008_vehicle_import.down.sql` (disposable databases only).
+
+## 0007_invitation_failure
+
+Additive nullable column `auth_challenges.invitation_failure`: category of the last failed invitation email (`dns_failed`, `connection_blocked`, `tls_failed`, `auth_failed`, `recipient_rejected`, `unknown`). Never the raw SMTP error. Cleared by a successful resend (new challenge). Down script: `apps/api/src/db/down/0007_invitation_failure.down.sql`, disposable databases only.
+
 ## 0006_staff_invitation_email
 
 Additive columns on auth_challenges: invitation_delivery (manual/sending/sent/failed; default manual for existing data) and invitation_sent_at (nullable UTC timestamp). Store delivery status on each invitation, never its raw token or SMTP diagnostic. Sent/failed outcomes also append a sanitized user audit event in the same transaction. If execution stops mid-send, sending stays visibly uncertain until the owner explicitly resends. Down script: apps/api/src/db/down/0006_staff_invitation_email.down.sql, disposable databases only. No existing identity, password or encrypted Authenticator seed is reset.
+
+## 0009_part_discrepancies
+
+Adds the tenant-scoped parts discrepancy queue with a unique (tenant_id, dedupe_key), links to the case/part/blocker, detection time, condition-cleared time, assignee, review outcome and reason, test marker and optimistic version. No existing records are deleted or reclassified. Detection and condition changes, assignment and resolution write audit and change-log rows transactionally; a cleared condition does not close a review. The down script is for disposable databases only.
+
+## 0011_staff_access
+
+Additive `tenants.permission_templates` (role presets) and `permission_version`, plus `users.permission_overrides` (allow/deny) and `is_owner` (default false). Partial unique tenant owner index prevents multiple owner designations. No ownership is guessed by migration. Effective permissions: union of tenant role presets (fallback to code defaults), add personal allow, remove personal deny; designated owner has the complete catalog. Auth resolves these for every request. Owner-only mutations lock the tenant, use expected user/template versions and write audit/change-log transactionally. Invitation delegation cannot exceed the non-owner caller’s effective permissions after an owner exists. Current credentials, TOTP, sessions, case data and reference data are preserved. Application rollback retains columns; `down/0011_staff_access.down.sql` is for disposable databases only. See [staff workspaces and access](WORKSPACES_ACCESS_FA.md).
+
+## 0012_daily_parts_reports
+
+**Unreleased.** Additive only: new tables `daily_report_profiles`, `daily_report_files`, `daily_report_imports`, `daily_report_rows`, `daily_tasks`, `stock_snapshots`, `stock_snapshot_items`, `stock_reservations`, `emdad_requests`, `emdad_request_events` and `notifications`; no existing row is changed or removed. It has run only on in-memory PGlite in tests so far, and may still be edited until its first install. `down/0012_daily_parts_reports.down.sql` is for disposable databases only. See [daily parts reports](DAILY_PARTS_FA.md).
+
+## 0015 — repair-day plan snapshot
+
+`cases.repair_plan` is nullable JSONB: entered working-day duration, equivalent working minutes, admission anchor/end, and immutable calendar revision. Existing cases remain null and existing official/forecast dates are not rewritten. New/explicitly revised plans compute the internal forecast server-side; changes are versioned/audited and revisions require a reason. Rollback: `apps/api/src/db/down/0015_fancy_mongoose.sql` drops only the added column; export plan data before an owner-authorized rollback.

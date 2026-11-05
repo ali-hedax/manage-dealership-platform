@@ -27,10 +27,13 @@ const FLAGS: { key: string; label: string }[] = [
   { key: 'needs_completion', label: 'نیازمند تکمیل' },
   { key: 'ready', label: 'آماده تحویل' },
   { key: 'legacy', label: 'ثبت از قبل' },
-  { key: 'awaiting_authorization', label: 'منتظر مجوز' },
+  { key: 'awaiting_authorization', label: 'منتظر تأیید قیمت بازار' },
   { key: 'parts_to_order', label: 'قطعه سفارش‌نشده' },
   { key: 'parts_overdue', label: 'قطعه دیرکرد' },
   { key: 'finance_pending', label: 'منتظر تصمیم مالی' },
+  { key: 'overdue_official', label: 'عبور از مهلت رسمی' },
+  { key: 'overdue_forecast', label: 'عبور از پیش‌بینی' },
+  { key: 'no_deadline', label: 'بدون موعد' },
 ];
 
 function CasesList() {
@@ -71,13 +74,26 @@ function CasesList() {
           <h1>پرونده‌های تصادفی</h1>
           <p className="muted small">{data ? `${faNum(data.total)} پرونده` : ' '}</p>
         </div>
-        {can('case.create') && (
-          <Link className="btn btn-primary" href="/cases/new">
-            ثبت پرونده
-          </Link>
-        )}
+        <div className="row" style={{ gap: 6 }}>
+          {can('case.update') && (
+            <Link className="btn" href="/reports?view=accident">
+              گزارش تصادفات
+            </Link>
+          )}
+          {can('case.import') && (
+            <Link className="btn" href="/cases/import">
+              ورود خودروهای موجود از اکسل
+            </Link>
+          )}
+          {can('case.create') && (
+            <Link className="btn btn-primary" href="/cases/new">
+              ثبت پرونده
+            </Link>
+          )}
+        </div>
       </div>
 
+      {params.get('stationCode')&&<p className="callout">پرونده‌های دارای ارجاع به جایگاه <bdi>{params.get('stationCode')}</bdi> <button type="button" className="btn btn-sm" onClick={()=>update({stationCode:null,page:null})}>برداشتن فیلتر جایگاه</button></p>}
       <div className="panel">
         <div className="panel-body stack" style={{ gap: 12 }}>
           <input
@@ -85,17 +101,19 @@ function CasesList() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="جست‌وجو با پلاک، VIN، نام یا تلفن مالک، شماره پرونده"
+            placeholder="جست‌وجو با پلاک، VIN، شاسی، شماره پذیرش، نام یا تلفن مالک، شماره پرونده"
             aria-label="جست‌وجوی پرونده"
             autoFocus
           />
+          {(flag||params.get('stage')||params.get('coverage')||params.get('status'))&&<div className="row" aria-label="فیلترهای فعال">{flag&&<span className="chip chip-blue">{FLAGS.find(f=>f.key===flag)?.label??flag}</span>}{params.get('stage')&&<span className="chip">{STAGE_LABELS[params.get('stage') as keyof typeof STAGE_LABELS]??params.get('stage')}</span>}{params.get('coverage')&&<span className="chip">{COVERAGE_LABELS[params.get('coverage') as keyof typeof COVERAGE_LABELS]??params.get('coverage')}</span>}{params.get('status')&&<span className="chip">وضعیت: {({open:'باز',closed:'بسته',cancelled:'لغوشده',all:'همه'} as Record<string,string>)[params.get('status')!]??params.get('status')}</span>}<button type="button" className="btn btn-sm" onClick={()=>update({flag:null,stage:null,coverage:null,status:null,page:null})}>برداشتن فیلتر</button></div>}
+          <details className="case-filters compact-disclosure"><summary>فیلترها{[flag,params.get('stage'),params.get('coverage'),params.get('status')].filter(Boolean).length?' (فعال)':''}</summary><div className="stack">
           <div className="row">
             {FLAGS.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 className={`chip${flag === f.key ? ' chip-blue' : ''}`}
-                style={{ cursor: 'pointer', fontSize: 'var(--fs-s)', padding: '3px 10px' }}
+                style={{ cursor: 'pointer', fontSize: 'var(--fs-s)', minHeight: 44, padding: '6px 12px' }}
                 aria-pressed={flag === f.key}
                 onClick={() => update({ flag: flag === f.key ? null : f.key, page: null })}
               >
@@ -156,7 +174,7 @@ function CasesList() {
                 حذف فیلترها
               </button>
             )}
-          </div>
+          </div></div></details>
         </div>
       </div>
 
@@ -166,7 +184,7 @@ function CasesList() {
         <table className="table responsive">
           <thead>
             <tr>
-              <th>پرونده</th>
+              <th>پرونده و پذیرش</th>
               <th>پلاک</th>
               <th>خودرو و مالک</th>
               <th>پوشش</th>
@@ -186,13 +204,14 @@ function CasesList() {
                     <Link href={`/cases/${c.id}`} className="num" style={{ fontWeight: 700 }} onClick={(e) => e.stopPropagation()}>
                       {toPersianDigits(c.caseNumber)}
                     </Link>
-                    <div className="xs muted">پذیرش {formatJalali(c.admittedAt)}</div>
+                    {c.admissionNo?<div className="small">پذیرش ایران‌خودرو: <bdi>{toPersianDigits(c.admissionNo)}</bdi></div>:<div className="small muted">بدون شماره پذیرش</div>}
+                    <div className="xs muted">تاریخ پذیرش {formatJalali(c.admittedAt)}</div>
                   </td>
                   <td>
                     <Plate value={c.plate} />
                   </td>
                   <td>
-                    <div>{toPersianDigits(c.vehicleLabel)}</div>
+                    <div>{toPersianDigits(c.vehicleSummary ?? c.vehicleLabel)}</div>
                     <div className="xs muted">{c.customerName ?? 'مالک نامشخص'}</div>
                   </td>
                   <td className="hide-sm">

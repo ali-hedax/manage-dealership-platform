@@ -22,6 +22,7 @@ export const DEMO_TENANT_CODE = 'demo';
 export const CREDENTIALS_FILE = resolve(__dirname, '../../.data/demo-credentials.local.txt');
 
 const DEMO_USERS: { username: string; displayName: string; roles: Role[] }[] = [
+  { username:'technician',displayName:'تعمیرکار نمونه',roles:['technician'] },
   { username: 'expert', displayName: 'کارشناس نمونه', roles: ['accident_expert'] },
   { username: 'supervisor', displayName: 'سرپرست نمونه', roles: ['accident_supervisor'] },
   { username: 'manager', displayName: 'مدیر خدمات نمونه', roles: ['service_manager'] },
@@ -89,6 +90,7 @@ export class DemoSeedService {
           displayName: u.displayName,
           passwordHash,
           roles: u.roles,
+          isOwner: u.username === this.cfg.DEMO_OWNER_USERNAME,
           isTest: true,
         })),
       );
@@ -183,7 +185,7 @@ export class DemoSeedService {
       weight: 2,
     });
     // Assessment approved in the golden-card system, then hidden damage found
-    // during body work: the supplement waits for a new authorization.
+    // during body work: the supplement is recorded without a generic approval wait.
     let a1 = await this.assessments.create(expert, c1.id, {
       kind: 'initial',
       assessorName: 'کارشناس امداد نمونه',

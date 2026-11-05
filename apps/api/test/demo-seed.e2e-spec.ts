@@ -17,17 +17,17 @@ it('demo dealership seeds through the real services with realistic states', asyn
   const items = list.items as CaseListItem[];
   expect(items.every((i) => i.isTest)).toBe(true);
   expect(items.map((i) => i.stage).sort()).toEqual(
-    ['awaiting_approval', 'awaiting_parts', 'in_repair', 'in_repair', 'ready_for_delivery'].sort(),
+    ['awaiting_parts', 'awaiting_parts', 'in_repair', 'in_repair', 'ready_for_delivery'].sort(),
   );
 
   const d = (await manager.get('/dashboard')).body;
   expect(d).toMatchObject({
     activeCases: 5,
     overdue: 1,
-    blockedCases: 2,
+    blockedCases: 1,
     readyForDelivery: 1,
     legacyEntries: 1,
-    awaitingAuthorization: 1,
+    awaitingAuthorization: 0,
     partsOverdue: 1,
     partsToOrder: 1,
     financePending: 1,

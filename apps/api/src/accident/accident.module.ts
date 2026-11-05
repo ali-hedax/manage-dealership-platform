@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { WorkshopController } from '../workshop/workshop.controller';
+import { WorkshopService } from '../workshop/workshop.service';
+import { ReferenceDataController } from '../reference-data/reference-data.controller';
+import { ReferenceDataService } from '../reference-data/reference-data.service';
 import { AssessmentsController } from '../assessments/assessments.controller';
 import { AssessmentsService } from '../assessments/assessments.service';
 import { BlockersService } from '../blockers/blockers.service';
@@ -10,7 +14,13 @@ import { FinanceController } from '../finance/finance.controller';
 import { FinanceService } from '../finance/finance.service';
 import { PartsController } from '../parts/parts.controller';
 import { PartsService } from '../parts/parts.service';
+import { DiscrepanciesController } from '../discrepancies/discrepancies.controller';
+import { DiscrepanciesService } from '../discrepancies/discrepancies.service';
+import { ReportsController } from '../reports/reports.controller';
+import { ReportsService } from '../reports/reports.service';
 import { TasksService } from '../tasks/tasks.service';
+import { VehicleImportController } from '../vehicle-import/vehicle-import.controller';
+import { VehicleImportService } from '../vehicle-import/vehicle-import.service';
 import {
   BlockersController,
   CasesController,
@@ -21,6 +31,8 @@ import {
 /** Phase-1 module: accident repair cases, assessments, parts, finance gate, repair activities, blockers, QC and delivery, dashboard. */
 @Module({
   controllers: [
+    WorkshopController,
+    ReferenceDataController,
     CasesController,
     TasksController,
     BlockersController,
@@ -29,8 +41,13 @@ import {
     PartsController,
     FinanceController,
     CompletionController,
+    VehicleImportController,
+    ReportsController,
+    DiscrepanciesController,
   ],
   providers: [
+    WorkshopService,
+    ReferenceDataService,
     CasesService,
     TasksService,
     BlockersService,
@@ -39,6 +56,9 @@ import {
     PartsService,
     FinanceService,
     CompletionService,
+    VehicleImportService,
+    ReportsService,
+    DiscrepanciesService,
   ],
   exports: [CasesService, TasksService, BlockersService, AssessmentsService, PartsService, FinanceService, CompletionService],
 })

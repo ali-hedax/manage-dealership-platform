@@ -9,6 +9,8 @@ import {
   COVERAGE_TYPES,
   STAGE_LABELS,
   toLatinDigits,
+  repairDayPlan,
+  type CalendarRevision,
   type CaseDetail,
   type CaseStage,
   type CoverageType,
@@ -17,14 +19,18 @@ import {
 import { api, errorMessage, fetcher, newKey } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
+import {formatJalali} from '@/lib/format';
 import { JalaliInput } from './JalaliInput';
 import { Plate } from './Plate';
+import { ReferenceLookup } from './ReferenceLookup';
+import { VehicleHistoryLookup } from './VehicleHistoryLookup';
 
 // Common Iran Khodro models as suggestions; free text is always allowed.
 const MODELS = ['دنا', 'دنا پلاس', 'پژو ۲۰۷', 'پژو ۲۰۶', 'پژو پارس', 'سمند', 'سورن پلاس', 'رانا پلاس', 'تارا', 'ری‌را', 'هایما'];
 const DRAFT_KEY = 'manage.caseDraft.v1';
 
 interface FormState {
+  admissionNo: string;
   plate: string;
   vin: string;
   brand: string;
@@ -48,10 +54,12 @@ interface FormState {
   responsibleUserId: string;
   officialDeadlineAt: string | null;
   forecastDeliveryAt: string | null;
+  repairDurationDays: string;
   reason: string;
 }
 
 const empty = (): FormState => ({
+  admissionNo: '',
   plate: '',
   vin: '',
   brand: 'ایران‌خودرو',
@@ -75,11 +83,13 @@ const empty = (): FormState => ({
   responsibleUserId: '',
   officialDeadlineAt: null,
   forecastDeliveryAt: null,
+  repairDurationDays: '',
   reason: '',
 });
 
 function fromCase(c: CaseDetail): FormState {
   return {
+    admissionNo: c.admissionNo??'',
     plate: c.vehicle.plate ?? '',
     vin: c.vehicle.vin ?? '',
     brand: c.vehicle.brand ?? '',
@@ -103,6 +113,7 @@ function fromCase(c: CaseDetail): FormState {
     responsibleUserId: c.responsible?.id ?? '',
     officialDeadlineAt: c.officialDeadlineAt,
     forecastDeliveryAt: c.forecastDeliveryAt,
+    repairDurationDays:c.repairPlan?String(c.repairPlan.days):'',
     reason: '',
   };
 }
@@ -127,14 +138,19 @@ function Section({ title, children, note }: { title: string; children: ReactNode
 export function CaseForm({ existing }: { existing?: CaseDetail }) {
   const router = useRouter();
   const toast = useToast();
-  const { me } = useAuth();
+  const { me, can } = useAuth();
   const editing = !!existing;
   const [f, setF] = useState<FormState>(() => (existing ? fromCase(existing) : empty()));
   const [restored, setRestored] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [historySource, setHistorySource] = useState('');
   const idempotencyKey = useRef(newKey());
   const { data: assignable } = useSWR<UserRef[]>('/users/assignable', fetcher);
+  const {data:workCalendar}=useSWR<{current:CalendarRevision}>(can('workshop.read')?'/workshop/calendar':null,fetcher);
+  const planChanged=!!f.repairDurationDays&&(!existing?.repairPlan||Number(toLatinDigits(f.repairDurationDays))!==existing.repairPlan.days||Date.parse(f.admittedAt??'')!==Date.parse(existing.admittedAt));
+  let planPreview:string|null=null;
+  try{const calendar=existing?.repairPlan?.calendar??workCalendar?.current;if(calendar&&f.admittedAt&&Number(f.repairDurationDays)>0)planPreview=repairDayPlan(f.admittedAt,Number(f.repairDurationDays),calendar).endAt;}catch{/* Validation remains authoritative on the server. */}
 
   // Draft: restore once, then save on every change (create mode only).
   useEffect(() => {
@@ -176,17 +192,20 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
 
   const sensitiveChanged =
     editing &&
-    (f.officialDeadlineAt !== existing!.officialDeadlineAt ||
+    (planChanged||f.officialDeadlineAt !== existing!.officialDeadlineAt ||
       (f.admittedAt && new Date(f.admittedAt).getTime() !== new Date(existing!.admittedAt).getTime()));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
     if (!f.admittedAt) return setError('زمان پذیرش را وارد کنید');
+    if(existing?.repairPlan&&!f.repairDurationDays)return setError('مدت برنامه قبلی را خالی نکنید؛ برای اصلاح، تعداد روز تازه وارد کنید');
+    if(f.trim.length>1000)return setError('شرح تیپ خودرو بیش از ۱۰۰۰ نویسه است؛ متن حفظ شده، لطفاً آن را کوتاه کنید');
     if (sensitiveChanged && !f.reason.trim()) return setError('برای تغییر مهلت رسمی یا زمان پذیرش، دلیل را بنویسید');
     setBusy(true);
     const nul = (v: string) => (v.trim() === '' ? null : v.trim());
     const payload: Record<string, unknown> = {
+      admissionNo: nul(f.admissionNo),
       vehicle: {
         plate: nul(f.plate),
         vin: nul(f.vin),
@@ -209,6 +228,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
       responsibleUserId: f.responsibleUserId || null,
       officialDeadlineAt: f.officialDeadlineAt,
       forecastDeliveryAt: f.forecastDeliveryAt,
+      ...(planChanged?{repairDurationDays:Number(toLatinDigits(f.repairDurationDays))}:{}),
     };
     // A masked phone is not editable by this role; send only what is known.
     const customer: Record<string, string | null> = { fullName: nul(f.fullName) };
@@ -267,6 +287,16 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </div>
       )}
 
+      {!editing && can('case.read') && <details className="intake-history" open><summary><strong>خودرو سابقه دارد؟</strong><span className="small muted">مشخصات را از آخرین پذیرش بیاورید</span></summary><div className="panel-body stack"><VehicleHistoryLookup onSelect={c => {
+        if (f.vin.trim() && toLatinDigits(f.vin).replace(/\s/g,'').toUpperCase() !== (c.vehicle.vin || '').replace(/\s/g,'').toUpperCase()) { toast('VIN فرم با خودروی انتخاب‌شده متفاوت است؛ ابتدا هویت خودرو را بررسی کنید','error'); return; }
+        setF(s => ({ ...s, plate: s.plate || c.vehicle.plate || '', vin: s.vin || c.vehicle.vin || '',
+          brand: s.brand === 'ایران‌خودرو' ? c.vehicle.brand || s.brand : s.brand,
+          model: s.model || c.vehicle.model || '', trim: s.trim || c.vehicle.trim || '',
+          modelYear: s.modelYear || (c.vehicle.modelYear ? String(c.vehicle.modelYear) : ''), color: s.color || c.vehicle.color || '',
+          fullName: s.fullName || c.customer?.fullName || '', phone: s.phone || (c.customer?.phoneMasked ? '' : c.customer?.phone) || '' }));
+        setHistorySource(c.caseNumber); toast('مشخصات در خانه‌های خالی قرار گرفت؛ مالک و تلفن فعلی را بررسی کنید');
+      }} />{historySource && <p className="callout callout-blue small" role="status">مشخصات از پرونده <bdi>{historySource}</bdi> تکمیل شد. مالک و تلفن را بررسی کنید؛ اطلاعات مراجعهٔ جدید را در ادامه بنویسید.</p>}</div></details>}
+      {can('reference.customers.read')&&<details className="compact-disclosure panel"><summary>جست‌وجو در سوابق اطلاعات پایه</summary><div className="panel-body"><ReferenceLookup kind="customers" initialQuery={existing?.vehicle.vin||existing?.vehicle.chassisRef||''} onSelect={r=>{setF(s=>({...s,fullName:s.fullName||r.data.fullName||'',phone:s.phone||r.data.phone||'',vin:s.vin||r.data.vin||'',plate:s.plate||r.data.plate||'',model:s.model||r.data.model||'',trim:s.trim||r.data.trim||''}));toast('اطلاعات سابقه فقط در خانه‌های خالی قرار گرفت؛ مالک و شماره پذیرش فعلی را تأیید کنید');}}/></div></details>}
       <Section title="خودرو" note="پلاک یا VIN برای شناسایی کافی است">
         <label className="field">
           <span>پلاک</span>
@@ -296,7 +326,8 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </label>
         <label className="field">
           <span>تیپ</span>
-          <input className="input" name="trim" {...text('trim')} />
+          <textarea className="input" aria-label="تیپ" name="trim" rows={3} {...text('trim')} />
+          <span className="hint">شرح کامل تیپ و تجهیزات؛ {f.trim.length} از ۱۰۰۰ نویسه</span>
         </label>
         <label className="field">
           <span>سال ساخت</span>
@@ -324,6 +355,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
       </Section>
 
       <Section title="پذیرش و خسارت">
+        <label className="field"><span>شماره کارت پذیرش ایران‌خودرو</span><input className="input ltr-input" aria-label="شماره کارت پذیرش ایران‌خودرو" name="admissionNo" maxLength={80} {...text('admissionNo')}/><span className="hint">اگر پذیرش ندارد خالی بگذارید؛ شماره پرونده منیج همیشه شناسه مستقل پرونده است.</span></label>
         <JalaliInput
           label="زمان پذیرش واقعی"
           name="admittedAt"
@@ -417,7 +449,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </div>
       </section>
 
-      <Section title="مسئولیت و زمان‌ها" note="سه زمان مستقل: مهلت رسمی، پیش‌بینی داخلی و تحویل واقعی">
+      <Section title="مسئولیت و مدت تعمیر" note="تعداد روز کاری را وارد کنید؛ تاریخ پایان با تقویم نمایندگی محاسبه می‌شود">
         <label className="field">
           <span>مسئول پرونده</span>
           <select
@@ -434,6 +466,9 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
             ))}
           </select>
         </label>
+        <label className="field"><span>مدت تعمیر (روز کاری)</span><input className="input" type="number" aria-label="مدت تعمیر (روز کاری)" name="repairDurationDays" min={0.25} max={365} step={0.25} value={f.repairDurationDays??''} onChange={e=>set('repairDurationDays',e.target.value)}/><span className="hint">یک روز معادل یک روز کاملِ ساعات تنظیم‌شده نمایندگی است؛ پنجشنبه نیمه‌وقت، استراحت و تعطیلات لحاظ می‌شوند.</span></label>
+        {planPreview&&<p className="callout callout-blue">پایان محاسبه‌شده: {formatJalali(planPreview,{time:true})}</p>}
+        <details className="span-all compact-disclosure"><summary>موعد رسمی یا پیش‌بینی ثبت‌شده از قبل</summary><div className="grid-2">
         <JalaliInput
           label="مهلت رسمی / تعهد اولیه"
           name="officialDeadlineAt"
@@ -450,6 +485,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
           withTime
           hint="برآورد فعلی کارشناس با توجه به ظرفیت"
         />
+        </div></details>
         {sensitiveChanged && (
           <label className="field span-all">
             <span>دلیل تغییر مهلت رسمی یا زمان پذیرش *</span>

@@ -15,7 +15,10 @@ import { AssessmentPanel } from '@/components/AssessmentPanel';
 import { BlockersPanel } from '@/components/BlockersPanel';
 import { CompletionPanel } from '@/components/CompletionPanel';
 import { FinancePanel } from '@/components/FinancePanel';
+import { CaseStockPanel } from '@/components/CaseStockPanel';
+import { CaseSection } from '@/components/CaseSection';
 import { PartsPanel } from '@/components/PartsPanel';
+import { ProvenancePanel } from '@/components/ProvenancePanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
 import { Plate } from '@/components/Plate';
 import { TasksPanel } from '@/components/TasksPanel';
@@ -54,7 +57,8 @@ export default function CaseDetailPage() {
     void mutate();
     // Assessment, parts and finance depend on each other and do not touch the
     // case version: refresh every view of this case (timeline included).
-    void mutateKey((key) => typeof key === 'string' && key.startsWith(`/cases/${id}/`));
+    void mutateKey((key) => (typeof key === 'string' && key.startsWith(`/cases/${id}/`)) ||
+      (Array.isArray(key) && key[0] === '/emdad/requests/search' && key[1] === id));
   };
 
   async function changeStage(stage: CaseStage) {
@@ -71,6 +75,7 @@ export default function CaseDetailPage() {
   }
 
   const v = kase.vehicle;
+  const currentTasks = kase.tasks.filter(t => ['in_progress','blocked','done'].includes(t.status));
   return (
     <div className="stack">
       <div className="case-hero">
@@ -79,6 +84,7 @@ export default function CaseDetailPage() {
             <span className="case-number">{toPersianDigits(kase.caseNumber)}</span>
             <Plate value={v.plate} large />
           </div>
+          <div className="small">شماره پذیرش ایران‌خودرو: <strong><bdi>{kase.admissionNo?toPersianDigits(kase.admissionNo):'ندارد'}</bdi></strong> · شماره منیج: <bdi>{toPersianDigits(kase.caseNumber)}</bdi></div>
           <div className="row" style={{ gap: 6 }}>
             <StageChip stage={kase.stage} />
             <CoverageChip coverage={kase.coverageType} />
@@ -124,7 +130,15 @@ export default function CaseDetailPage() {
       <section className="panel times" aria-label="زمان‌ها">
         <div>
           <div className="k">پذیرش واقعی</div>
-          <div className="v">{formatJalali(kase.admittedAt, { time: true })}</div>
+          <div className="v">
+            {kase.admittedAtPrecision === 'date' ? (
+              <>
+                {formatJalali(kase.admittedAt)} <span className="xs muted">(ساعت نامعلوم)</span>
+              </>
+            ) : (
+              formatJalali(kase.admittedAt, { time: true })
+            )}
+          </div>
           <div className="rel muted">ثبت در Manage: {formatJalali(kase.createdAt)}</div>
         </div>
         <div>
@@ -161,16 +175,20 @@ export default function CaseDetailPage() {
         </div>
       )}
 
-      <div className="grid-3" style={{ alignItems: 'start' }}>
+      {currentTasks.length > 0 && <div className="case-current-route"><strong>فعالیت‌های جاری خودرو</strong><div className="row">
+        {currentTasks.map(t => <a className="chip" key={t.id} href="#case-tasks">{t.stationCode || t.department.name} · {t.status === 'done' ? 'منتظر تأیید تحویل' : t.status === 'blocked' ? 'دارای مانع' : 'در حال انجام'}</a>)}
+      </div></div>}
+      <div className="grid-3 case-work-area" style={{ alignItems: 'start' }}>
         <div className="stack span-2">
-          <AssessmentPanel kase={kase} onChange={refresh} />
-          <PartsPanel kase={kase} onChange={refresh} />
-          <TasksPanel kase={kase} onChange={refresh} />
-          <BlockersPanel kase={kase} onChange={refresh} />
-          <CompletionPanel kase={kase} onChange={refresh} />
+          <CaseSection id="case-assessment" title="کارشناسی و الحاقیه" note="اقلام، فایل اکسل و ارسال به قطعات" initialOpen={can('assessment.manage')||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-assessment')}><AssessmentPanel kase={kase} onChange={refresh} /></CaseSection>
+          <CaseSection id="case-parts" title="قطعات و تأمین" note="نیازها، خرید و تحویل قطعه" initialOpen={(!can('assessment.manage') && can('part.manage'))||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-parts')}><PartsPanel kase={kase} onChange={refresh} />{(can('stock.read') || can('emdad.read')) && <CaseStockPanel kase={kase} />}</CaseSection>
+          <CaseSection id="case-tasks" title="مسیر تعمیرات" note="ارجاع، شروع، پایان و تحویل جایگاه" initialOpen={(!can('assessment.manage') && !can('part.manage') && can('task.manage'))||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-tasks')}><TasksPanel kase={kase} onChange={refresh} /></CaseSection>
+          <CaseSection id="case-blockers" title="موانع و پیگیری" note={`${faNum(kase.openBlockers)} مانع باز`} initialOpen={!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&kase.openBlockers>0}><BlockersPanel kase={kase} onChange={refresh} /></CaseSection>
+          <CaseSection id="case-quality" title="کنترل کیفیت و تحویل" initialOpen={(!can('assessment.manage') && !can('part.manage') && !can('finance.payment') && can('qc.inspect'))||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-quality')}><CompletionPanel kase={kase} onChange={refresh} /></CaseSection>
         </div>
 
         <div className="stack">
+          <CaseSection id="case-info" title="مشخصات و شرح خسارت">
           <section className="panel">
             <div className="panel-head">
               <h2>مشخصات</h2>
@@ -185,6 +203,20 @@ export default function CaseDetailPage() {
                 </dd>
                 <dt>VIN</dt>
                 <dd>{v.vin ? <span className="ltr">{v.vin}</span> : '—'}</dd>
+                {v.chassisRef && (
+                  <>
+                    <dt>شاسی ثبت‌شده</dt>
+                    <dd>
+                      <bdi>{v.chassisRef}</bdi>
+                    </dd>
+                  </>
+                )}
+                {kase.admissionNo && (
+                  <>
+                    <dt>شماره کارت پذیرش</dt>
+                    <dd>{kase.admissionNo}</dd>
+                  </>
+                )}
                 <dt>کیلومتر</dt>
                 <dd className="num">{kase.odometerKm != null ? faNum(kase.odometerKm) : <Missing />}</dd>
                 <dt>محل خودرو</dt>
@@ -220,11 +252,14 @@ export default function CaseDetailPage() {
               </p>
             </div>
           </section>
+          </CaseSection>
 
-          <FinancePanel kase={kase} onChange={refresh} />
+          <CaseSection id="case-finance" title="مالی و تسویه" initialOpen={!can('assessment.manage') && !can('part.manage') && can('finance.payment')}><FinancePanel kase={kase} onChange={refresh} /></CaseSection>
+
+          <CaseSection id="case-provenance" title="منبع و سابقه ورود اطلاعات"><ProvenancePanel kase={kase} /></CaseSection>
 
           {can('audit.read') && (
-            <section className="panel">
+            <CaseSection id="case-history" title="تاریخچه تغییرات"><section className="panel">
               <div className="panel-head">
                 <h2>تاریخچه</h2>
               </div>
@@ -232,6 +267,7 @@ export default function CaseDetailPage() {
                 <Timeline caseId={kase.id} version={kase.version + kase.tasks.reduce((s, t) => s + t.version, 0) + kase.blockers.length} />
               </div>
             </section>
+            </CaseSection>
           )}
         </div>
       </div>

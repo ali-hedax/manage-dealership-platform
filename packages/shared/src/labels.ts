@@ -7,6 +7,12 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  DiscrepancyKind,
+  DiscrepancyStatus,
+  ReportView,
+  WorkPriority,
+  ImportDeadlineTarget,
+  VehicleImportOutcome,
   FinanceApprovalKind,
   FinanceApprovalStatus,
   FinanceGateReason,
@@ -27,8 +33,10 @@ import type {
 } from './enums';
 
 export const ROLE_LABELS: Record<Role, string> = {
-  accident_expert: 'کارشناس تصادفات',
-  accident_supervisor: 'سرپرست تصادفات',
+  accident_coordinator: 'مسئول تصادفات',
+  technician: 'تعمیرکار',
+  accident_expert: 'مسئول تصادفات (سمت قدیمی کارشناس)',
+  accident_supervisor: 'مسئول تصادفات (سمت قدیمی سرپرست)',
   service_manager: 'مدیر خدمات',
   parts_clerk: 'قطعات',
   cashier: 'مالی و صندوق',
@@ -187,6 +195,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
 };
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  'part_quote.proposed':'ثبت قیمت بازار برای تأیید','part_quote.approved':'ثبت تأیید قیمت از پرداخت‌کننده','part_quote.rejected':'ثبت رد قیمت','part_quote.superseded':'جایگزینی پیشنهاد قیمت','part.quote_version_changed':'به‌روزرسانی نسخه نیاز قطعه پس از قیمت‌گیری','work_calendar.created':'ثبت نسخه تقویم کاری','workshop_station.created':'تعریف جایگاه','workshop_station.updated':'ویرایش جایگاه',
   'case.created': 'ایجاد پرونده',
   'case.updated': 'ویرایش پرونده',
   'case.stage_changed': 'تغییر مرحله',
@@ -203,6 +212,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'assessment.created': 'شروع کارشناسی',
   'assessment.supplement_created': 'شروع الحاقیه (آسیب پنهان)',
   'assessment.item_added': 'افزودن قلم کارشناسی',
+  'assessment.items_imported': 'ورود اقلام کارشناسی از اکسل',
   'assessment.item_updated': 'ویرایش قلم کارشناسی',
   'assessment.item_removed': 'حذف قلم از پیش‌نویس',
   'assessment.finalized': 'نهایی‌شدن کارشناسی',
@@ -227,6 +237,14 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'case.technical_closed': 'بستن فنی',
   'case.financial_closed': 'بستن مالی',
   'case.delivered': 'تحویل خودرو',
+  'case.imported': 'ورود از اکسل',
+  'vehicle_import.applied': 'ثبت ورود اکسل خودروها',
+  'discrepancy.assigned': 'تعیین مسئول بررسی مغایرت',
+  'discrepancy.detected': 'شناسایی خودکار مغایرت',
+  'discrepancy.condition_cleared': 'رفع نشانه ناسازگاری؛ نیازمند بررسی مسئول',
+  'discrepancy.condition_returned': 'بازگشت نشانه ناسازگاری',
+  'discrepancy.resolved': 'رفع مغایرت قطعه',
+  'discrepancy.dismissed': 'رد مغایرت (اختلاف واقعی نبود)',
 };
 
 // Keys produced by the API in CaseListItem.missingFields ('نیازمند تکمیل').
@@ -293,4 +311,48 @@ export const RECIPIENT_RELATION_LABELS: Record<RecipientRelation, string> = {
   agent: 'نماینده مالک (با معرفی‌نامه)',
   insurer: 'نماینده بیمه',
   other: 'سایر',
+};
+
+export const VEHICLE_IMPORT_OUTCOME_LABELS: Record<VehicleImportOutcome, string> = {
+  new: 'جدید',
+  update: 'موجود — به‌روزرسانی',
+  unchanged: 'موجود — بدون تغییر',
+  duplicate: 'تکراری در فایل',
+  incomplete: 'ناقص — نیازمند تصمیم',
+  needs_review: 'نیازمند بررسی',
+  error: 'دارای خطا',
+};
+
+export const IMPORT_DEADLINE_TARGET_LABELS: Record<ImportDeadlineTarget, string> = {
+  none: 'ثبت نشود (فقط در سابقه ورود)',
+  forecast: 'پیش‌بینی تحویل (برآورد داخلی)',
+  official: 'مهلت رسمی / تعهد',
+};
+
+export const REPORT_VIEW_LABELS: Record<ReportView, string> = {
+  manager: 'مدیر خدمات',
+  parts: 'انبار و قطعات',
+  accident: 'تصادفات',
+  workshop: 'واحدهای تعمیر و کنترل کیفیت',
+};
+
+export const WORK_PRIORITY_LABELS: Record<WorkPriority, string> = {
+  overdue: 'موعد گذشته',
+  today: 'موعد امروز',
+  soon: 'موعد نزدیک',
+  later: 'موعد بعدی',
+  none: 'بدون موعد',
+};
+
+export const DISCREPANCY_KIND_LABELS: Record<DiscrepancyKind, string> = {
+  handover_vs_shortage: 'تحویل ثبت‌شده، اما واحد تعمیر کمبود اعلام کرده',
+  wrong_or_defective: 'قطعه اشتباه یا معیوب',
+  supply_inconsistent: 'ناسازگاری سوابق تأمین و تحویل',
+};
+
+export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
+  open: 'باز — بدون مسئول',
+  in_review: 'در حال بررسی',
+  resolved: 'رفع شد',
+  dismissed: 'اختلاف واقعی نبود',
 };

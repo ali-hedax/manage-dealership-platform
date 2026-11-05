@@ -239,8 +239,8 @@ export class CompletionService {
         const issues = balance ? [...others, balance] : others;
         throw badRequest('FINANCIAL_CLOSE_BLOCKED', `بستن مالی ممکن نیست: ${listOf(issues)}`, { issues });
       }
-      if (balance && !actor.user.permissions.has('finance.approve')) {
-        throw forbidden('بستن مالی با مانده سهم مشتری فقط با تصمیم مدیر خدمات ممکن است');
+      if (balance && !actor.user.permissions.has('finance.approve') && !actor.user.permissions.has('case.release_authorize')) {
+        throw forbidden('خروج با مانده سهم مشتری به اختیار تأیید خروج و ثبت دلیل نیاز دارد');
       }
       await this.cases.applyPatch(
         tx,

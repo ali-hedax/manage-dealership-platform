@@ -50,6 +50,69 @@
       "when": 1793544830101,
       "tag": "0006_staff_invitation_email",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793598639004,
+      "tag": "0007_invitation_failure",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793605009278,
+      "tag": "0008_vehicle_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793611637006,
+      "tag": "0009_part_discrepancies",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793630702843,
+      "tag": "0010_reference_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793683743128,
+      "tag": "0011_staff_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793692012318,
+      "tag": "0012_daily_parts_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793696562482,
+      "tag": "0013_stock_code_aliases",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793709843673,
+      "tag": "0014_parallel_mattie_franklin",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793872544929,
+      "tag": "0015_fancy_mongoose",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,8 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   NODE_ID: z.string().min(1).default('dev-local'),
   SEED_DEMO_PASSWORD: z.string().optional(),
+  // Browser tests only: owner of the synthetic dealership. The demo seed never runs in production.
+  DEMO_OWNER_USERNAME: z.string().optional(),
   TOTP_AUTH_ENABLED: z.string().default('false').transform((v) => v === 'true'),
   PUBLIC_APP_URL: z.url().default('http://localhost:3000'),
   AUTH_TOKEN_SECRET: z.preprocess((v)=>v===''?undefined:v,z.string().min(32).optional()),
@@ -30,6 +32,10 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().default(''),
   SMTP_FROM: z.string().trim().refine((v) => !/[\r\n]/.test(v), 'Invalid mail sender').default(''),
   // Login attempts per minute per client address (default 10).
+  // Daily report files (the Emdad export is ~23.6 MB); only the upload route accepts raw bodies.
+  DAILY_REPORT_MAX_BYTES: z.coerce.number().int().min(1_000_000).max(64 * 1024 * 1024).default(32 * 1024 * 1024),
+  // Server-side 11:00 reminders; off in tests, which drive the scheduler directly.
+  DAILY_SCHEDULER: z.string().default('true').transform((v) => v === 'true'),
   LOGIN_RATE_LIMIT: z.preprocess((v) => (v === '' ? undefined : v), z.coerce.number().int().positive().optional()),
 });
 

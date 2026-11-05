@@ -4,22 +4,23 @@ import {createHmac,randomBytes,timingSafeEqual} from 'node:crypto';
 import QRCode from 'qrcode';
 import {permissionsFor,type Role} from '@manage/shared';
 import {AuditService} from '../audit/audit.service';
-import {AppError,forbidden} from '../common/errors';
+import {AppError,conflict,forbidden,notFound} from '../common/errors';
 import {newId} from '../common/ids';
 import {APP_CONFIG,type AppConfig} from '../config';
 import {DATABASE,type DatabaseHandle,type Tx} from '../db/database';
-import {authChallenges,tenants,users} from '../db/schema';
+import {authChallenges,sessions,tenants,users} from '../db/schema';
 import {DEMO_TENANT_CODE} from '../demo/demo-seed.service';
 import {AuthService} from './auth.service';
 import type {Actor} from './auth.types';
 import type {EmailLoginInput,EmailVerifyInput,InvitationInput,PasswordSetInput} from './email.contracts';
 import {hashPassword,verifyPassword} from './password';
 import {authenticator,decryptTotp,encryptTotp,newTotpSeed,totpStep} from './totp';
-import {InvitationMailService} from './invitation-mail.service';
+import {InvitationMailService,MailDeliveryError,type MailFailure} from './invitation-mail.service';
 
 type Meta={ip?:string;requestId?:string;userAgent?:string};
 const invalid=()=>new AppError(401,'INVALID_CREDENTIALS','ایمیل، رمز یا کد تأیید معتبر نیست');
 const equal=(a:string,b:string)=>a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
+const RECOVERY_TTL_MS=3600000;
 @Injectable()
 export class EmailAuthService {
   private readonly dummy=hashPassword(randomBytes(32).toString('hex'));
@@ -32,7 +33,7 @@ export class EmailAuthService {
     const [r]=await tx.select({u:users,t:tenants}).from(users).innerJoin(tenants,eq(tenants.id,users.tenantId)).where(eq(users.id,userId));
     if(!r)throw invalid();const roles=r.u.roles as Role[];
     return {ip:meta.ip,requestId:meta.requestId,user:{id:userId,tenantId:r.t.id,tenantCode:r.t.code,tenantName:r.t.name,isTestTenant:r.t.isTest,
-      username:r.u.username,displayName:r.u.displayName,roles,permissions:permissionsFor(roles),sessionId:'pending-authenticator'}};
+      username:r.u.username,displayName:r.u.displayName,isOwner:r.u.isOwner,roles,permissions:permissionsFor(roles,r.t.permissionTemplates,r.u.permissionOverrides,r.u.isOwner),sessionId:'pending-authenticator'}};
   }
   private async record(tx:Tx,userId:string,action:string,meta:Meta={}){await this.audit.record(tx,await this.actor(tx,userId,meta),{entityType:'user',entityId:userId,action});}
 
@@ -84,11 +85,23 @@ export class EmailAuthService {
     if(!actor.user.permissions.has('user.manage'))throw forbidden();
     return {configured:this.mail.configured};
   }
+  /** Connection, TLS and sender authentication check without sending; the result category is audited. */
+  async checkMail(actor:Actor){
+    if(!actor.user.permissions.has('user.manage'))throw forbidden();
+    const result=await this.mail.check();
+    await this.db.transaction(tx=>this.audit.record(tx,actor,{entityType:'user',entityId:actor.user.id,action:'user.invitation_mail_checked',after:{...result}}));
+    return result;
+  }
   async invite(actor:Actor,input:InvitationInput,delivery:'manual'|'email'='manual'){
     if(!actor.user.permissions.has('user.manage'))throw forbidden();
     if(delivery==='email')this.mail.assertConfigured();
     const id=newId(),raw=randomBytes(32).toString('base64url'),passwordHash=await hashPassword(randomBytes(32).toString('hex'));
     const userId=await this.db.transaction(async tx=>{
+      const [tenant]=await tx.select().from(tenants).where(eq(tenants.id,actor.user.tenantId)).for('update');
+      const currentActor=await this.actor(tx,actor.user.id);
+      if(!currentActor.user.permissions.has('user.manage'))throw forbidden();
+      const [owner]=await tx.select({id:users.id}).from(users).where(and(eq(users.tenantId,actor.user.tenantId),eq(users.isOwner,true)));
+      if(owner&&!currentActor.user.isOwner&&[...permissionsFor(input.roles,tenant.permissionTemplates)].some(p=>!currentActor.user.permissions.has(p)))throw forbidden('دسترسی سمت‌های این دعوت از دسترسی شما بیشتر است؛ مالک باید دعوت را بسازد');
       const [existing]=await tx.select().from(users).where(and(eq(users.email,input.email),eq(users.tenantId,actor.user.tenantId))).for('update');
       if(existing&&(existing.tenantId!==actor.user.tenantId||existing.isActive))throw new AppError(409,'INVITE_EXISTS','این ایمیل قبلاً برای حساب دیگری ثبت شده است');
       const uid=existing?.id??newId();
@@ -104,17 +117,40 @@ export class EmailAuthService {
     });
     const invitationUrl=`${this.cfg.PUBLIC_APP_URL.replace(/\/$/,'')}/activate#token=${id}.${raw}`;
     if(delivery==='manual')return {id:userId,invitationUrl,status:'invited'};
-    let emailDelivery:'sent'|'failed'='failed';
-    try{await this.mail.send({email:input.email,displayName:input.displayName,invitationUrl});emailDelivery='sent';}catch{
+    let emailDelivery:'sent'|'failed'='failed';let failure:MailFailure|null=null;
+    try{await this.mail.send({email:input.email,displayName:input.displayName,invitationUrl});emailDelivery='sent';}catch(error){
       // Never log SMTP errors: they can include credentials, recipients or links.
-      // The persisted failure lets the owner explicitly resend without a retry loop.
+      // Only the category is kept, so the owner can fix the cause and resend explicitly.
+      failure=error instanceof MailDeliveryError?error.failure:'unknown';
     }
     await this.db.transaction(async tx=>{
-      await tx.update(authChallenges).set({invitationDelivery:emailDelivery,invitationSentAt:emailDelivery==='sent'?new Date():null})
+      await tx.update(authChallenges).set({invitationDelivery:emailDelivery,invitationSentAt:emailDelivery==='sent'?new Date():null,invitationFailure:failure})
         .where(and(eq(authChallenges.id,id),eq(authChallenges.tenantId,actor.user.tenantId)));
-      await this.audit.record(tx,actor,{entityType:'user',entityId:userId,action:`user.invitation_email_${emailDelivery}`,after:{challengeId:id,delivery:emailDelivery}});
+      await this.audit.record(tx,actor,{entityType:'user',entityId:userId,action:`user.invitation_email_${emailDelivery}`,after:{challengeId:id,delivery:emailDelivery,failure}});
     });
-    return {id:userId,status:'invited',emailDelivery};
+    return {id:userId,status:'invited',emailDelivery,...(failure?{failure}:{})};
+  }
+
+  /**
+   * Owner-issued private link for a staff member who lost the password or the
+   * Authenticator. The old credentials keep working until the person finishes,
+   * so a link made by mistake locks nobody out. The owner account is excluded:
+   * nobody above it can confirm that person's identity.
+   */
+  async issueRecovery(actor:Actor,userId:string){
+    const id=newId(),raw=randomBytes(32).toString('base64url'),expiresAt=new Date(Date.now()+RECOVERY_TTL_MS);
+    await this.db.transaction(async tx=>{
+      const [me]=await tx.select({isOwner:users.isOwner,isActive:users.isActive}).from(users).where(and(eq(users.id,actor.user.id),eq(users.tenantId,actor.user.tenantId)));
+      if(!me?.isOwner||!me.isActive)throw forbidden('ساخت لینک بازیابی فقط برای مالک سامانه مجاز است');
+      const [u]=await tx.select().from(users).where(and(eq(users.id,userId),eq(users.tenantId,actor.user.tenantId))).for('update');
+      if(!u)throw notFound('کاربر');
+      if(u.isOwner)throw conflict('RECOVERY_OWNER','حساب مالک از این مسیر بازیابی نمی‌شود');
+      if(!u.isActive||!u.email||!u.encryptedTotpSecret)throw conflict('RECOVERY_NOT_ACTIVE','این حساب هنوز فعال نشده است؛ به‌جای بازیابی، دعوت تازه بسازید');
+      await tx.update(authChallenges).set({consumedAt:new Date()}).where(and(eq(authChallenges.userId,u.id),isNull(authChallenges.consumedAt)));
+      await tx.insert(authChallenges).values({id,userId:u.id,tenantId:u.tenantId,purpose:'recover',secretHash:this.hash('recover',id,raw),expiresAt});
+      await this.audit.record(tx,actor,{entityType:'user',entityId:u.id,action:'user.recovery_issued',after:{expiresAt:expiresAt.toISOString()}});
+    });
+    return {recoveryUrl:`${this.cfg.PUBLIC_APP_URL.replace(/\/$/,'')}/activate#token=${id}.${raw}&mode=recovery`,expiresAt};
   }
 
   async enroll(input:PasswordSetInput,meta:Meta){
@@ -126,10 +162,11 @@ export class EmailAuthService {
     const email=await this.db.transaction(async tx=>{
       const [u]=await tx.select().from(users).where(eq(users.id,candidate.userId)).for('update');
       const [c]=await tx.select().from(authChallenges).where(eq(authChallenges.id,id!)).for('update');
-      if(!u||u.isActive||!c||c.purpose!=='invite'||c.consumedAt||c.expiresAt<=new Date()||!equal(c.secretHash,this.hash('invite',c.id,raw!)))return null;
+      const recovery=c?.purpose==='recover';
+      if(!u||!c||(!recovery&&c.purpose!=='invite')||(recovery?!u.isActive||u.isOwner:u.isActive)||c.consumedAt||c.expiresAt<=new Date()||!equal(c.secretHash,this.hash(c.purpose,c.id,raw!)))return null;
       await tx.update(authChallenges).set({consumedAt:new Date()}).where(eq(authChallenges.id,c.id));
-      await tx.insert(authChallenges).values({id:enrollmentId,userId:u.id,tenantId:u.tenantId,purpose:'enroll',secretHash:this.hash('proof',enrollmentId,proof),passwordHash,encryptedTotpSecret,expiresAt:new Date(Date.now()+10*60000)});
-      await this.record(tx,u.id,'auth.totp_enrollment_started',meta);return u.email;
+      await tx.insert(authChallenges).values({id:enrollmentId,userId:u.id,tenantId:u.tenantId,purpose:recovery?'recover_enroll':'enroll',secretHash:this.hash('proof',enrollmentId,proof),passwordHash,encryptedTotpSecret,expiresAt:new Date(Date.now()+10*60000)});
+      await this.record(tx,u.id,recovery?'auth.recovery_started':'auth.totp_enrollment_started',meta);return u.email;
     });
     if(!email)throw invalid();
     const uri=authenticator(seed,email).toString();
@@ -141,12 +178,14 @@ export class EmailAuthService {
     const ok=await this.db.transaction(async tx=>{
       const [u]=await tx.select().from(users).where(eq(users.id,candidate.userId)).for('update');
       const [c]=await tx.select().from(authChallenges).where(eq(authChallenges.id,input.challengeId)).for('update');
-      if(!u||u.isActive||!c||c.purpose!=='enroll'||c.consumedAt||c.expiresAt<=new Date()||c.attempts>=5||!c.encryptedTotpSecret||!c.passwordHash||!equal(c.secretHash,this.hash('proof',c.id,input.proof)))return false;
+      const recovery=c?.purpose==='recover_enroll';
+      if(!u||!c||(!recovery&&c.purpose!=='enroll')||(recovery?!u.isActive||u.isOwner:u.isActive)||c.consumedAt||c.expiresAt<=new Date()||c.attempts>=5||!c.encryptedTotpSecret||!c.passwordHash||!equal(c.secretHash,this.hash('proof',c.id,input.proof)))return false;
       const step=totpStep(decryptTotp(c.encryptedTotpSecret,this.key()),input.code,-1);
       if(step===null){await tx.update(authChallenges).set({attempts:c.attempts+1}).where(eq(authChallenges.id,c.id));await this.record(tx,u.id,'auth.enrollment_code_failed',meta);return false;}
-      await tx.update(users).set({passwordHash:c.passwordHash,encryptedTotpSecret:c.encryptedTotpSecret,totpLastStep:step,isActive:true,activatedAt:new Date(),updatedAt:new Date(),version:sql`${users.version}+1`}).where(eq(users.id,u.id));
+      await tx.update(users).set({passwordHash:c.passwordHash,encryptedTotpSecret:c.encryptedTotpSecret,totpLastStep:step,failedLoginCount:0,lockedUntil:null,...(recovery?{}:{isActive:true,activatedAt:new Date()}),updatedAt:new Date(),version:sql`${users.version}+1`}).where(eq(users.id,u.id));
       await tx.update(authChallenges).set({consumedAt:new Date()}).where(and(eq(authChallenges.userId,u.id),isNull(authChallenges.consumedAt)));
-      await this.record(tx,u.id,'auth.totp_enrolled',meta);return true;
+      if(recovery)await tx.update(sessions).set({revokedAt:new Date()}).where(and(eq(sessions.userId,u.id),isNull(sessions.revokedAt)));
+      await this.record(tx,u.id,recovery?'auth.recovery_completed':'auth.totp_enrolled',meta);return true;
     });
     if(!ok)throw invalid();return {status:'ok'};
   }
@@ -154,11 +193,11 @@ export class EmailAuthService {
     if(!actor.user.permissions.has('user.manage'))throw forbidden();
     const people=await this.db.select({id:users.id,email:users.email,displayName:users.displayName,roles:users.roles,isActive:users.isActive})
       .from(users).where(and(eq(users.tenantId,actor.user.tenantId),isNotNull(users.email)));
-    const invitations=await this.db.selectDistinctOn([authChallenges.userId],{userId:authChallenges.userId,delivery:authChallenges.invitationDelivery,sentAt:authChallenges.invitationSentAt,expiresAt:authChallenges.expiresAt})
+    const invitations=await this.db.selectDistinctOn([authChallenges.userId],{userId:authChallenges.userId,delivery:authChallenges.invitationDelivery,sentAt:authChallenges.invitationSentAt,failure:authChallenges.invitationFailure,expiresAt:authChallenges.expiresAt})
       .from(authChallenges).where(and(eq(authChallenges.tenantId,actor.user.tenantId),eq(authChallenges.purpose,'invite')))
       .orderBy(authChallenges.userId,desc(authChallenges.createdAt),desc(authChallenges.id));
     const latest=new Map(invitations.map(i=>[i.userId,i]));
-    return people.map(u=>({...u,invitationDelivery:latest.get(u.id)?.delivery??'manual',invitationSentAt:latest.get(u.id)?.sentAt??null,invitationExpiresAt:latest.get(u.id)?.expiresAt??null}));
+    return people.map(u=>({...u,invitationDelivery:latest.get(u.id)?.delivery??'manual',invitationSentAt:latest.get(u.id)?.sentAt??null,invitationFailure:latest.get(u.id)?.failure??null,invitationExpiresAt:latest.get(u.id)?.expiresAt??null}));
   }
   async bootstrapOwner(email:string){
     if(!['development','preview'].includes(this.cfg.APP_ENV))throw forbidden();

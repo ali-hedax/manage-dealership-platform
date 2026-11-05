@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseSections } from './helpers';
 
 // Issue #12 in the browser, on demo case 5 (personal): QC failed once, the
 // corrective activity was approved, round 2 passed and the case is technically
@@ -10,6 +10,7 @@ async function openCase5(page: Page, user: string) {
   await login(page, user);
   await page.goto('/cases?q=' + encodeURIComponent('مشتری نمونه پنج'));
   await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه پنج' }).click();
+  await openCaseSections(page,'quality','tasks','finance','history');
   await expect(page.getByTestId('completion-panel')).toBeVisible();
 }
 
@@ -29,7 +30,7 @@ test('QC history, settlement, financial close and handover archive the case', as
   await openCase5(page, 'cashier');
   await expect(panel).toContainText('سهم مشتری کامل دریافت نشده است');
   await expect(panel.getByRole('button', { name: 'بستن مالی' })).toBeDisabled();
-  await page.getByTestId('finance-panel').getByRole('button', { name: 'ثبت دریافت تسویه' }).click();
+  await page.getByTestId('finance-panel').getByRole('button', { name: 'ثبت دریافت از مشتری' }).click();
   await expect(dialog.getByLabel('مبلغ دریافتی (ریال) *')).toHaveValue('8000000');
   await dialog.getByLabel('شماره پیگیری / رسید پرداخت *').fill('POS-E2E-5');
   await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();

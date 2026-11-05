@@ -23,6 +23,7 @@ import {
 import { fetcher } from '@/lib/api';
 
 const FIELD_LABELS: Record<string, string> = {
+  officialRecorded:'ثبت مجوز در سامانه رسمی',approver:'تأییدکننده',validUntil:'اعتبار قیمت',
   stage: 'مرحله',
   status: 'وضعیت',
   coverageType: 'پوشش',

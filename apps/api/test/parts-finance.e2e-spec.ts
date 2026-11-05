@@ -1,3 +1,5 @@
+import { eq } from 'drizzle-orm';
+import { users } from '../src/db/schema';
 import type { Assessment, CaseDetail, CaseFinance, Department, Part, TimelineEvent } from '@manage/shared';
 import { randomBytes } from 'node:crypto';
 import { strToU8, zipSync } from 'fflate';
@@ -67,11 +69,24 @@ async function authorized(
 }
 
 async function partAct(p: Part, action: string, extra: object = {}, who: Client = parts) {
+  if(action==='order' && (((extra as {source?:string}).source??p.source)==='external'||!!(extra as {priceApprovalRef?:string}).priceApprovalRef)) {
+    const current=(await partsOf(p.caseId)).find(row=>row.id===p.id)!;
+    const opts=extra as {unitPriceRial:number;supplier?:string;priceApprovalRef?:string;priceApprovedBy?:string};
+    const proposal=await parts.post(`/workshop/parts/${p.id}/quotes`,{expectedVersion:current.version,unitPriceRial:opts.unitPriceRial,supplier:opts.supplier??'فروشنده آزمون',validUntil:daysAhead(2)});
+    expect(proposal.status).toBe(201);
+    const quote=proposal.body.find((q:{partId:string;status:string})=>q.partId===p.id&&q.status==='pending');
+    const kase=await caseOf(p.caseId);
+    const source=kase.coverageType==='golden_card'?'golden_card':kase.coverageType==='insurance'?'insurer':'customer';
+    expect((await expert.post(`/workshop/quotes/${quote.id}/decision`,{expectedVersion:1,decision:'approved',officialRecorded:true,source,reference:opts.priceApprovalRef??'TEST-MARKET',approver:opts.priceApprovedBy??'تأییدکننده آزمون',note:'مجوز خرید آزمون ثبت شد'})).status).toBe(201);
+    extra={...extra,supplier:opts.supplier??'فروشنده آزمون'};p={...p,version:current.version+1};
+  }
   return who.post(`/parts/${p.id}/actions`, { action, expectedVersion: p.version, ...extra });
 }
 
 beforeAll(async () => {
   h = await createHarness();
+  // This fixture exercises the legacy financial decision path with an explicit grant.
+  await h.db.db.update(users).set({permissionOverrides:{allow:['finance.approve','finance.close','finance.propose'],deny:[]}}).where(eq(users.username,'manager'));
   [expert, supervisor, manager, parts, cashier] = await Promise.all(
     ['expert', 'supervisor', 'manager', 'parts', 'cashier'].map((u) => h.login(u)),
   );
@@ -169,7 +184,7 @@ describe('acceptance 2: golden card, waiting for a company part', () => {
 });
 
 describe('acceptance 3: body insurance, price change approved by the assessor', () => {
-  it('requires the assessor approval reference above the approved price and the line authorization', async () => {
+  it('allows company/insurer supply without a generic assessment or price gate', async () => {
     const c = await newCase({ coverageType: 'insurance', insurerName: 'بیمه آزمون', insuranceClaimNo: 'TEST-CL-3' });
     const v1 = await authorized(
       c.id,
@@ -182,18 +197,9 @@ describe('acceptance 3: body insurance, price change approved by the assessor', 
     let [fender, door] = (await expert.post(`/cases/${c.id}/parts/from-assessment`, { source: 'insurer_supplier' }))
       .body as Part[];
 
-    const above = await partAct(fender!, 'order', { supplier: 'تأمین‌کننده بیمه آزمون', unitPriceRial: 23_000_000 });
-    expect(above.body.code).toBe('PRICE_ABOVE_APPROVED');
-    const ok = await partAct(fender!, 'order', {
-      supplier: 'تأمین‌کننده بیمه آزمون',
-      unitPriceRial: 23_000_000,
-      priceApprovedBy: 'کارشناس بیمه آزمون',
-      priceApprovalRef: 'INS-PRICE-TEST-1',
-      etaAt: daysAhead(3),
-    });
-    expect(ok.status).toBe(201);
-    fender = ok.body;
-    expect(fender).toMatchObject({ priceApprovalRef: 'INS-PRICE-TEST-1', unitPriceRial: 23_000_000 });
+    const ok=await partAct(fender!,'order',{supplier:'تأمین‌کننده بیمه آزمون',unitPriceRial:23_000_000,etaAt:daysAhead(3)});
+    expect(ok.status).toBe(201);fender=ok.body;
+    expect(fender).toMatchObject({priceApprovalRef:null,unitPriceRial:23_000_000});
 
     // A supplement re-prices the door: until its authorization the door cannot be ordered.
     let v2: Assessment = (
@@ -203,17 +209,7 @@ describe('acceptance 3: body insurance, price change approved by the assessor', 
     v2 = (await expert.patch(`/assessment-items/${doorLine.id}`, { expectedVersion: v2.version, unitPriceRial: 55_000_000 }))
       .body;
     v2 = (await expert.post(`/assessments/${v2.id}/finalize`, { expectedVersion: v2.version })).body;
-    const blocked = await partAct(door!, 'order', { unitPriceRial: 50_000_000 });
-    expect(blocked.body.code).toBe('AUTHORIZATION_REQUIRED');
-
-    await expert.post(`/assessments/${v2.id}/authorization`, {
-      expectedVersion: v2.version,
-      decision: 'approved',
-      source: 'insurer',
-      method: 'official_system',
-      reference: 'TEST-AUTH-V2',
-    });
-    door = (await partAct(door!, 'order', { unitPriceRial: 50_000_000 })).body;
+    door=(await partAct(door!,'order',{unitPriceRial:50_000_000})).body;
     expect(door.status).toBe('ordered');
     expect(v1.status).toBe('final');
   });
@@ -324,6 +320,7 @@ describe('acceptance 4 and 8: personal case, advance payment and the purchase ga
 
     // The demo has one service manager; a second one approves.
     const approver = await h.loginAs('manager2', ['service_manager']);
+    await h.db.db.update(users).set({permissionOverrides:{allow:['finance.approve'],deny:[]}}).where(eq(users.username,'manager2'));
     await approver.post(`/financial-approvals/${ex.id}/decision`, { decision: 'approve', expectedVersion: 1 });
     const okOrder = await partAct(bracket!, 'order', { unitPriceRial: 9_000_000 });
     expect(okOrder.body).toMatchObject({ status: 'ordered', financeBasis: 'exception' });
@@ -378,12 +375,12 @@ describe('Excel import and permissions', () => {
       ['', null, 1, 'company', null, null],
       ['شیشه', null, 0, 'نامعلوم', null, null],
     ]);
-    const preview = await parts.post(`/cases/${c.id}/parts/import`, { fileBase64: bad, dryRun: true });
+    const preview = await expert.post(`/cases/${c.id}/parts/import`, { fileBase64: bad, dryRun: true });
     expect(preview.status).toBe(201);
     expect(preview.body.rows).toHaveLength(1);
     expect(preview.body.rows[0]).toMatchObject({ quantity: 2, source: 'stock', approvedUnitPriceRial: 1_200_000 });
     expect(preview.body.errors.map((e: { row: number }) => e.row)).toEqual([3, 4]);
-    const refused = await parts.post(`/cases/${c.id}/parts/import`, { fileBase64: bad, dryRun: false });
+    const refused = await expert.post(`/cases/${c.id}/parts/import`, { fileBase64: bad, dryRun: false });
     expect(refused.body.code).toBe('IMPORT_INVALID');
     expect(await partsOf(c.id)).toHaveLength(0);
 
@@ -391,12 +388,12 @@ describe('Excel import and permissions', () => {
       ['فیلتر روغن', 'TEST-PN-1', 2, 'انبار نمایندگی', 1_200_000, null],
       ['چراغ مه‌شکن', 'TEST-PN-2', 1, 'قطعه شرکت', 4_500_000, 'سمت راست'],
     ]);
-    const done = await parts.post(`/cases/${c.id}/parts/import`, { fileBase64: good, dryRun: false });
+    const done = await expert.post(`/cases/${c.id}/parts/import`, { fileBase64: good, dryRun: false });
     expect(done.body).toMatchObject({ dryRun: false, created: 2 });
     const list = await partsOf(c.id);
     expect(list.map((p) => p.source)).toEqual(['stock', 'company']);
 
-    const notXlsx = await parts.post(`/cases/${c.id}/parts/import`, {
+    const notXlsx = await expert.post(`/cases/${c.id}/parts/import`, {
       fileBase64: Buffer.from('not a spreadsheet').toString('base64'),
     });
     expect(notXlsx.body.errors[0].message).toContain('.xlsx');
@@ -415,7 +412,7 @@ describe('Excel import and permissions', () => {
     ]);
     const big = sheet(many);
     expect(big.length).toBeGreaterThan(150_000);
-    const preview = await parts.post(`/cases/${c.id}/parts/import`, { fileBase64: big, dryRun: true });
+    const preview = await expert.post(`/cases/${c.id}/parts/import`, { fileBase64: big, dryRun: true });
     expect(preview.status).toBe(201);
     expect(preview.body.rows).toHaveLength(1500);
 
@@ -424,7 +421,7 @@ describe('Excel import and permissions', () => {
       'xl/worksheets/sheet1.xml': strToU8(' '.repeat(MAX_ENTRY_BYTES + 4 * 1024 * 1024)),
     });
     expect(bomb.length).toBeLessThan(100_000);
-    const refused = await parts.post(`/cases/${c.id}/parts/import`, {
+    const refused = await expert.post(`/cases/${c.id}/parts/import`, {
       fileBase64: Buffer.from(bomb).toString('base64'),
       dryRun: true,
     });

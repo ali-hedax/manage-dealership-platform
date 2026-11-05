@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseSections } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -9,6 +9,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await login(page, 'supervisor');
 
   // Dashboard opens with the stage pipeline linked to filtered lists.
+  await page.goto('/');
   await expect(page.getByRole('heading', { name: 'وضعیت تعمیرگاه' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'مراحل پرونده‌ها' })).toContainText('در حال تعمیر');
 
@@ -24,6 +25,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await page.getByLabel('شرح خسارت').fill('ضربه به گلگیر جلو چپ');
   await page.getByRole('button', { name: 'کارت طلایی / امداد خودرو' }).click();
   await page.getByLabel('شماره پرونده کارت طلایی / امداد').fill('GC-E2E-1');
+  await page.getByText('موعد رسمی یا پیش‌بینی ثبت‌شده از قبل',{exact:true}).click();
   await page.getByLabel('مهلت رسمی / تعهد اولیه', { exact: true }).fill('۱۵۰۰/۰۱/۱۰');
   await page.getByLabel('مهلت رسمی / تعهد اولیه — ساعت').fill('۱۲:۰۰');
   await page.getByLabel('مهلت رسمی / تعهد اولیه — ساعت').blur();
@@ -37,6 +39,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await expect(page.getByText('نیازمند تکمیل:')).toHaveCount(0);
 
   // Add a body-shop activity and record start.
+  await openCaseSections(page,'tasks','blockers','history');
   await page.getByRole('button', { name: 'افزودن فعالیت' }).click();
   await page.locator('select[name="departmentId"]').selectOption({ label: 'صافکاری' });
   await page.locator('input[name="technicianName"]').fill('تکنسین آزمون');
@@ -61,7 +64,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
 
   await task.getByRole('button', { name: 'اتمام' }).click();
   await expect(task).toContainText('اتمام (منتظر تأیید)');
-  await task.getByRole('button', { name: 'تأیید سرپرست' }).click();
+  await task.getByRole('button', { name: 'تأیید تحویل' }).click();
   await expect(task).toContainText('تأییدشده');
   await expect(page.getByLabel('زمان‌ها')).toContainText('۱۰۰٪');
 
@@ -105,7 +108,8 @@ test('parts clerk: read-only view with masked customer phone and no create actio
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await page.locator('tbody tr').first().click();
   // Details panel (the finance panel has its own list).
-  const details = page.locator('section').filter({ has: page.getByRole('heading', { name: 'مشخصات' }) });
+  await openCaseSections(page,'info');
+  const details = page.locator('#case-info');
   await expect(details.locator('dl')).toContainText('***');
   await expect(page.getByRole('button', { name: 'افزودن فعالیت' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'ویرایش پرونده' })).toHaveCount(0);
@@ -113,6 +117,7 @@ test('parts clerk: read-only view with masked customer phone and no create actio
 
 test('planned modules are visible as roadmap and expose no actions', async ({ page }) => {
   await login(page, 'manager');
+  await page.getByText('سایر واحدها',{exact:true}).click();
   await page.getByRole('link', { name: /انبار، قطعات و تأمین‌کنندگان/ }).click();
   await expect(page.getByText('این بخش در دست توسعه است و هنوز قابل استفاده نیست.')).toBeVisible();
   await expect(page.locator('main').getByRole('button')).toHaveCount(0);

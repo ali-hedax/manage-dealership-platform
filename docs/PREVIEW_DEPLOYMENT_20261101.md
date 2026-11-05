@@ -76,3 +76,44 @@ Personal mode uses email + a user-chosen password + Google Authenticator. It rep
 ## Repository reconciliation follow-up — 2026-11-01
 
 Owner reports completing their own personal-password/Authenticator setup and entering Preview. Earlier pending-owner statements are historical. The audit did not inspect their credentials/session or perform a new rollout. Read-only SSH inspection confirmed /opt/manage at 58ad08c9ccb427de74ce2d2c2f008a29e043b972 with no tracked/untracked changes and healthy application containers. That SHA is already in GitHub; later 82152c2 is documentation only.
+
+## Update — PR #28 (invitation email diagnostics), 2026-11-02
+
+Owner approved installing PR #28 on the Manage Preview only, from CI-built images, with a restorable backup first. Done; nothing was deleted.
+
+- **Images:** built by CI on draft PR #29 (PR #28 plus only the image-export CI step of PR #25). The source merge commit `58391f1` differs from PR #28 head `e042d9f` only in `.github/workflows/ci.yml`. All 6 CI jobs green (run 41398302563). Archive SHA-256 verified locally and on the VM; loaded image IDs match the CI manifest. The VM cannot reach npm or the artifact storage, so the archive was copied from the owner's machine in verified 5 MB chunks.
+- **Backup** `/home/manage/backups/pr28-20261102T065529Z` (mode 700/600): `pg_dump -Fc` (188 entries), `.env`, `deploy/preview` config, previous git head and image IDs, counts, SHA256SUMS, and the update/rollback script. Restorability was tested by restoring into a temporary database on the same server (users 8, Authenticator 1, cases 5, audit 85, migrations 7 — identical); the temporary database was dropped. Previous images are tagged `manage-api|manage-web:before-pr28-20261102T065529Z`.
+- **Install:** only the API and web containers were recreated (`--no-deps --no-build`). Caddy, the gate, the database and `.env` were untouched (`.env` byte-identical). The checkout is clean at `e042d9f`.
+- **Verification:**
+  - All five services are healthy; health reports `ok/postgres/preview`.
+  - Migration 0007 applied (8 migrations) and the `invitation_failure` column exists.
+  - Users, active accounts, enrolled Authenticators, cases, tasks, parts, audit and invitations have the same counts before and after.
+  - Over public HTTPS: certificate valid until 2027-01-30. Anonymous `/` and `/users` redirect to `/login`; `/login`, `/activate` and `/reset-password` return 200; `totpEnabled: true`.
+  - Anonymous staff list, mail check and private-invite API calls return 401. Demo shared-password logins return 403 (personal sign-in only), so the authenticated staff page can only be exercised by the owner.
+- **Network observation:** the app answers in about 0.1 s, but new TCP connections to the public address sometimes take 5–15 s. This happens from the owner's machine and from the VM to its own public IP, and SSH connections time out intermittently. UFW, conntrack (52/65,536) and fail2ban show no cause on the VM; the delays are upstream (datacenter or national network). Nothing was changed.
+- **Rollback:** `bash /home/manage/backups/pr28-20261102T065529Z/deploy-pr28.sh rollback` re-tags the previous images and checks out `b7e4c93`. Migration 0007 only added a nullable column; a full DB restore is `pg_restore --clean --if-exists` from `db.dump`.
+
+## Update — PR #30 (existing-vehicle Excel import), 2026-11-02
+
+Owner approved installing PR #30 on the Manage Preview only. Approval covers the feature, not test-data removal or importing the real vehicle file; none was done.
+
+- **CI:** final head `439e92b` passed 6/6 checks. Images were built by draft PR #31 (PR #30 plus only the image-export CI step), run 41413134903. Source merge commit `83278e0` differs from `439e92b` only in `.github/workflows/ci.yml`. The archive SHA-256 was verified locally and on the VM, and image IDs match the CI manifest. The archive was copied in verified 5 MB chunks.
+- **Backup:** `/home/manage/backups/pr30-20261102T083407Z` contains `pg_dump -Fc` (188 entries), `.env`, Preview config, previous git head and image IDs, counts, SHA256SUMS and `deploy-pr30.sh`. A test restore into a temporary database matched (users 8, Authenticator 1, cases 5, audit 85, migrations 8); the temporary database was dropped. Previous images are tagged `before-pr30-20261102T083407Z`.
+- **Install:** only API and web were recreated. Caddy, the gate, the database and `.env` (byte-identical) were untouched. The checkout is clean at `439e92b`.
+- **Verification:**
+  - All services are healthy, and health reports ok/postgres/preview.
+  - Migration 0008 applied (9 migrations); the `vehicle_imports` and `vehicle_import_rows` tables and `cases.admission_no` exist.
+  - Users, active accounts, enrolled Authenticators, cases, tasks, parts, audit, invitations and the 6 existing sessions are identical before and after. No import has run.
+  - Over public HTTPS: `/login` returns 200 and `totpEnabled` is true. Anonymous `/` and `/cases/import` redirect to `/login`, and anonymous imports, sample and invitation APIs return 401.
+  - The authenticated import page and the owner's own sign-in can only be checked by the owner (personal sign-in only).
+- **Rollback:** `bash /home/manage/backups/pr30-20261102T083407Z/deploy-pr30.sh rollback` returns to the `e042d9f` images and code. Migration 0008 is additive; a full DB restore is `pg_restore --clean --if-exists` from `db.dump`.
+
+## Update — full reports center (PR #32), 2026-11-02
+
+Owner explicitly authorized completion, testing and deployment to the existing isolated Manage Preview. Deployed application head: `5e529fd5c01c61e4f440af71b2a26458220fb5ff`. All 6 CI checks passed in run 41424078886. Exported image source `2c4c4d2da5bd0676d0830ef22125e444312fe2cf` has the identical tree; archive SHA-256 and both loaded image IDs were checked locally/on the VM. The code was delivered in a Git bundle and installed detached, preserving a clean server checkout. No main merge occurred.
+
+Verified restorable pre-install backup: `/home/manage/backups/stage3-20261102T123555Z` (DB dump, private configuration, old code and image references, before/restored/after counts, checksums and rollback script). Restore drill used a separate temporary DB. Only API/web were recreated; database, Caddy, gate and .env were retained. Migration 0009 adds the discrepancy table; migration count 9 -> 10. Preserved: users 8, enrolled TOTP 1, cases 5, tasks 6, parts 4, audit 88. Health API/web/db/gate passed.
+
+The owner's existing browser session remained valid. Live reports and statistics loaded, discrepancy queue loaded, and a 5-row PDF downloaded from the deployed server; the complete PDF was rendered and inspected. No real vehicle file was imported and no synthetic operational data was purged. Source, DNS, firewall and authentication configuration were not modified.
+
+Rollback: `bash /home/manage/backups/stage3-current/deploy-stage3.sh rollback` restores the previous application images and source. The additive table may remain; the DB dump is preserved if a database restore is explicitly needed.

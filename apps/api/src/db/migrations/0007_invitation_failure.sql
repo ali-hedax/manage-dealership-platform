@@ -1,0 +1,1 @@
+ALTER TABLE "auth_challenges" ADD COLUMN "invitation_failure" text;

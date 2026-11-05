@@ -7,6 +7,13 @@ import type {
   AuthorizationStatus,
   BlockerReason,
   CompletionIssueCode,
+  DiscrepancyKind,
+  DiscrepancyStatus,
+  ReportPeriod,
+  ReportView,
+  WorkPriority,
+  ImportDeadlineTarget,
+  VehicleImportOutcome,
   FinanceApprovalKind,
   FinanceApprovalStatus,
   FinanceGateReason,
@@ -31,6 +38,7 @@ import type { Permission } from './permissions';
 
 export interface Me {
   id: string;
+  isOwner?: boolean;
   authentication?: 'password' | 'totp';
   username: string;
   displayName: string;
@@ -49,6 +57,7 @@ export interface UserRef {
 export interface CaseListItem {
   id: string;
   caseNumber: string;
+  admissionNo: string | null;
   stage: CaseStage;
   status: CaseStatus;
   coverageType: CoverageType;
@@ -57,6 +66,8 @@ export interface CaseListItem {
   forecastDeliveryAt: string | null;
   customerName: string | null;
   vehicleLabel: string;
+  /** Compact list label from brand/model only; never inferred from the manufacturer trim. */
+  vehicleSummary?: string;
   plate: string | null;
   vin: string | null;
   responsible: UserRef | null;
@@ -75,6 +86,11 @@ export interface Paged<T> {
 }
 
 export interface Task {
+  stationId?: string | null;
+  stationCode?: string | null;
+  stationName?: string | null;
+  assignedUserId?: string | null;
+  baselineEndAt?: string | null;
   id: string;
   caseId: string;
   department: { id: string; code: string; name: string };
@@ -304,7 +320,15 @@ export interface TimelineEvent {
   summary: Record<string, unknown> | null;
 }
 
+export interface AssessmentImportPreview {
+  rows: { sheet: string; row: number; action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string; outcome?: 'new' | 'unchanged' | 'updated' }[];
+  errors: { sheet: string; row: number; message: string }[];
+  skipped: { sheet: string; row: number; reason: string }[];
+  applied: boolean;
+}
+
 export interface CaseDetail extends Omit<CaseListItem, 'customerName'> {
+  repairPlan?: import('./workshop').RepairPlan | null;
   version: number;
   customer: { id: string; fullName: string | null; phone: string | null; phoneMasked: boolean } | null;
   vehicle: {
@@ -316,7 +340,14 @@ export interface CaseDetail extends Omit<CaseListItem, 'customerName'> {
     plate: string | null;
     vin: string | null;
     color: string | null;
+    /** Chassis number as recorded on the admission sheet (may be short; not a VIN). */
+    chassisRef: string | null;
   };
+  /** Workshop admission card number (not the Manage case number). */
+  admissionNo: string | null;
+  /** 'date' when only the admission day is known (imported record). */
+  admittedAtPrecision: 'minute' | 'date';
+  origin: 'manual' | 'excel_import';
   odometerKm: number | null;
   damageDescription: string | null;
   vehicleLocation: string | null;
@@ -423,4 +454,151 @@ export interface CaseCompletion {
   } | null;
   /** Issues that still prevent the handover. */
   deliveryIssues: CompletionIssue[];
+}
+
+export interface VehicleImportMessage {
+  level: 'error' | 'warning' | 'info';
+  text: string;
+}
+
+export interface VehicleImportChange {
+  field: string;
+  from: string | null;
+  to: string | null;
+}
+
+export interface VehicleImportRow {
+  /** Row number in the sheet (as Excel shows it). */
+  rowNo: number;
+  outcome: VehicleImportOutcome;
+  /** Values as they appear in the file, by column header. */
+  source: Record<string, string>;
+  identity: string | null;
+  caseId: string | null;
+  caseNumber: string | null;
+  changes: VehicleImportChange[];
+  messages: VehicleImportMessage[];
+}
+
+export interface VehicleImport {
+  id: string;
+  status: 'preview' | 'applied' | 'partial';
+  fileName: string;
+  sheetName: string;
+  headerRow: number;
+  decisions: { dateWithoutTime: boolean; deadlineAs: ImportDeadlineTarget };
+  counts: Record<VehicleImportOutcome, number>;
+  /** Empty template rows that were skipped, by row number. */
+  blankRows: number[];
+  /** Columns of the file that have no destination in Manage (kept as provenance). */
+  unmappedColumns: string[];
+  rows: VehicleImportRow[];
+  createdAt: string;
+  createdBy: UserRef;
+  appliedAt: string | null;
+}
+
+/** Where a case's data came from when it was created or updated by an import. */
+export interface CaseProvenance {
+  importId: string;
+  fileName: string;
+  rowNo: number;
+  outcome: VehicleImportOutcome;
+  appliedAt: string | null;
+  appliedBy: UserRef;
+  source: Record<string, string>;
+}
+
+export interface ReportKpi {
+  key: string;
+  label: string;
+  /** What is counted: پرونده، خودرو، درخواست قطعه، فعالیت. */
+  unit: string;
+  value: number;
+  /** Physical parts (sum of quantities) next to a part-request count. */
+  quantity?: number;
+  definition: string;
+  /** Case-list query that shows exactly the counted cases, when one exists. */
+  listQuery?: string;
+  /** Work-list filter (kind) that shows the counted rows. */
+  itemKind?: string;
+}
+
+export interface ReportBar {
+  key: string;
+  label: string;
+  value: number;
+  /** Case-list query of exactly these cases. */
+  listQuery?: string;
+  /** Same report narrowed to this bar (e.g. departmentId=…). */
+  reportQuery?: string;
+  itemKind?: string;
+}
+
+export interface WorkItem {
+  stationCodes?:string[];
+  kind: string;
+  kindLabel: string;
+  caseId: string;
+  caseNumber: string;
+  admissionNo?: string|null;
+  plate: string | null;
+  vehicleLabel: string;
+  partId?: string;
+  taskId?: string;
+  description: string;
+  partNumber?: string | null;
+  quantity?: number;
+  status: string;
+  dueAt: string | null;
+  dueLabel: string | null;
+  priority: WorkPriority;
+  priorityReason: string;
+  responsible: UserRef | null;
+  stoppedBy: string | null;
+  nextAction: string;
+}
+
+export interface ReportResult {
+  view: ReportView;
+  generatedAt: string;
+  isTestData: boolean;
+  period: { key: ReportPeriod; from: string; to: string; label: string; previousFrom: string; previousTo: string };
+  filters: { key: string; label: string; value: string }[];
+  kpis: ReportKpi[];
+  charts: {
+    key: string;
+    title: string;
+    unit: string;
+    kind: 'bar' | 'trend';
+    bars: ReportBar[];
+    /** Trend only: second series (e.g. deliveries next to admissions). */
+    series?: { label: string; values: number[] }[];
+    note?: string;
+    /** Rows left out because the needed data does not exist. */
+    excluded?: { count: number; reason: string };
+  }[];
+  /** Comparable figures for events in the period and the same-length period before. */
+  events: { key: string; label: string; unit: string; current: number; previous: number }[];
+  items: { rows: WorkItem[]; total: number; page: number; pageSize: number; kinds: { kind: string; label: string; count: number }[] };
+}
+
+export interface PartDiscrepancy {
+  id: string;
+  kind: DiscrepancyKind;
+  status: DiscrepancyStatus;
+  caseId: string;
+  caseNumber: string;
+  plate: string | null;
+  part: { id: string; description: string; partNumber: string | null; quantity: number; status: string } | null;
+  /** Facts the system found (dates and records), not a verdict. */
+  detail: string;
+  detectedAt: string;
+  /** The condition no longer holds; still open until a person records the outcome. */
+  conditionClearedAt: string | null;
+  assignee: UserRef | null;
+  resolvedAt: string | null;
+  resolvedBy: UserRef | null;
+  resolutionReason: string | null;
+  version: number;
 }

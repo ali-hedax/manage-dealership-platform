@@ -17,13 +17,19 @@ export async function purgeTestTenants(db: Database): Promise<number> {
       if(personal.length)throw new Error('Refusing to purge a Preview tenant with personal accounts; preserve identities and use an explicitly reviewed reset procedure.');
     }
     for (const { id } of ids) {
+      await tx.execute(sql`delete from reference_entries where tenant_id = ${id}`);
+      await tx.execute(sql`delete from reference_imports where tenant_id = ${id}`);
       await tx.execute(sql`delete from idempotency_keys where tenant_id = ${id}`);
       await tx.execute(sql`delete from change_log where tenant_id = ${id}`);
       await tx.execute(sql`delete from audit_events where tenant_id = ${id}`);
+      await tx.execute(sql`delete from part_discrepancies where tenant_id = ${id}`);
+      await tx.execute(sql`delete from vehicle_import_rows where tenant_id = ${id}`);
+      await tx.execute(sql`delete from vehicle_imports where tenant_id = ${id}`);
       await tx.execute(sql`delete from case_payments where tenant_id = ${id}`);
       await tx.execute(sql`delete from financial_approvals where tenant_id = ${id}`);
       await tx.execute(sql`delete from case_finance where tenant_id = ${id}`);
       await tx.execute(sql`update blockers set part_request_id = null where tenant_id = ${id}`);
+      await tx.execute(sql`delete from part_quotes where tenant_id = ${id}`);
       await tx.execute(sql`delete from part_requests where tenant_id = ${id}`);
       await tx.execute(sql`delete from assessment_items where tenant_id = ${id}`);
       await tx.execute(sql`delete from assessments where tenant_id = ${id}`);
@@ -38,6 +44,8 @@ export async function purgeTestTenants(db: Database): Promise<number> {
       await tx.execute(sql`delete from customers where tenant_id = ${id}`);
       await tx.execute(sql`delete from vehicles where tenant_id = ${id}`);
       await tx.execute(sql`delete from sessions where tenant_id = ${id}`);
+      await tx.execute(sql`delete from workshop_stations where tenant_id = ${id}`);
+      await tx.execute(sql`delete from work_calendars where tenant_id = ${id}`);
       await tx.execute(sql`delete from departments where tenant_id = ${id}`);
       await tx.execute(sql`delete from users where tenant_id = ${id}`);
       await tx.execute(sql`delete from tenants where id = ${id} and is_test = true`);

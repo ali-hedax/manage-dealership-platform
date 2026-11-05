@@ -33,17 +33,21 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const forwardedFor = req.headers.get('x-forwarded-for');
   if (forwardedFor && process.env.TRUST_PROXY_HEADERS === 'true') headers.set('x-forwarded-for', forwardedFor);
   const hasBody = !['GET', 'HEAD'].includes(req.method);
+  // Daily report files (tens of MB) are streamed through; the API enforces their limit.
+  const stream = req.method === 'POST' && path.join('/') === 'daily-reports/uploads' && !!req.body;
 
   let upstream: Response;
   try {
     upstream = await fetch(target, {
       method: req.method,
       headers,
-      body: hasBody ? await req.arrayBuffer() : undefined,
+      body: stream ? req.body : hasBody ? await req.arrayBuffer() : undefined,
       redirect: 'manual',
       cache: 'no-store',
-    });
+      ...(stream ? { duplex: 'half' } : {}),
+    } as RequestInit);
   } catch {
+    console.error('api proxy failed: upstream unavailable');
     return Response.json(
       { statusCode: 502, code: 'API_UNREACHABLE', message: 'سرویس Manage در دسترس نیست. چند لحظه بعد دوباره تلاش کنید.' },
       { status: 502 },

@@ -12,7 +12,13 @@ export class ZodPipe<T> implements PipeTransform<unknown, T> {
         HttpStatus.BAD_REQUEST,
         'VALIDATION_ERROR',
         'اطلاعات ارسالی معتبر نیست',
-        result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        result.error.issues.map((i) => {
+          const path=i.path.join('.');
+          const labels:Record<string,string>={'vehicle.trim':'شرح تیپ خودرو','vehicle.model':'مدل خودرو','vehicle.brand':'برند خودرو','vehicle.color':'رنگ','vehicle.plate':'پلاک','vehicle.vin':'VIN','customer.fullName':'نام مشتری','customer.phone':'تلفن مشتری',admissionNo:'شماره پذیرش',admittedAt:'تاریخ پذیرش',officialDeadlineAt:'موعد رسمی',forecastDeliveryAt:'پیش‌بینی تحویل'};
+          const label=labels[path]||'این فیلد';
+          const text=i.code==='too_big'?`حداکثر ${String(i.maximum)} ${'origin' in i&&i.origin==='string'?'نویسه':'مقدار'} مجاز است`:i.code==='invalid_format'&&/At$/.test(path)?'تاریخ یا ساعت قابل خواندن نیست؛ از ورودی تاریخ و ساعت استفاده کنید':'مقدار واردشده معتبر نیست';
+          return {path,message:`${label}: ${text}`};
+        }),
       );
     }
     return result.data;

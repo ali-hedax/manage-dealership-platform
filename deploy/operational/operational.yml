@@ -1,0 +1,18 @@
+# Last overlay for the owner's existing Manage VM. No public-port changes.
+services:
+  api:
+    environment:
+      APP_ENV: production
+      NODE_ID: manage-arvan-production
+      COOKIE_SECURE: "true"
+      TOTP_AUTH_ENABLED: "true"
+      SEED_DEMO_PASSWORD: ""
+  gate:
+    environment:
+      TOTP_AUTH_ENABLED: "true"
+  caddy:
+    volumes:
+      # Same target as the Preview overlay, so this file replaces its Caddyfile.
+      - /home/manage/operations/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/manage/operations/tls:/etc/caddy/tls:ro
+      - /home/manage/operations/acme-webroot:/srv/acme:ro

@@ -107,7 +107,7 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
         await api(`/cases/${kase.id}/finance/payments`, {
           body: { amountRial: parseAmount(amount), paymentRef: text, at },
         });
-        toast('دریافت تسویه ثبت شد');
+        toast('دریافت وجه مشتری ثبت شد');
       } else {
         await api(`/financial-approvals/${mode.a.id}/payment`, {
           body: { expectedVersion: mode.a.version, paymentRef: text, at },
@@ -143,7 +143,7 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
           <div className="row" style={{ gap: 6 }}>
             {can('finance.payment') && !!f.balanceRial && (
               <button className="btn btn-sm" onClick={() => open({ kind: 'settle' })}>
-                ثبت دریافت تسویه
+                ثبت دریافت از مشتری
               </button>
             )}
             {can('finance.propose') && (
@@ -275,7 +275,7 @@ export function FinancePanel({ kase, onChange }: { kase: CaseDetail; onChange: (
                   ? 'تأیید هزینه توسط مدیر'
                   : 'رد پیشنهاد'
                 : mode?.kind === 'settle'
-                  ? 'ثبت دریافت تسویه'
+                  ? 'ثبت دریافت از مشتری'
                   : 'تأیید دریافت پیش‌پرداخت'
         }
         onClose={() => setMode(null)}

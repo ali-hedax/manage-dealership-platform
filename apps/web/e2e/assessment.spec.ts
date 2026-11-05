@@ -44,18 +44,13 @@ test('expert: assessment, authorization and a supplement that keeps the approved
 
   await panel.getByRole('button', { name: 'نهایی کردن' }).click();
   await dialog.getByRole('button', { name: 'نهایی کردن' }).click();
-  await expect(panel).toContainText('در انتظار مجوز');
-  await expect(page.locator('.case-hero')).toContainText('در انتظار مجوز / تأیید');
-  await expect(page.locator('.blocker').first()).toContainText('مجوز');
-
-  // Insurer authorization requires the reference in the official system.
-  await panel.getByRole('button', { name: 'ثبت مجوز' }).click();
-  await expect(dialog.getByRole('button', { name: 'ثبت', exact: true })).toBeDisabled();
-  await dialog.getByLabel('شماره ثبت در سامانه رسمی *').fill('TEST-AUTH-E2E');
-  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
-  await expect(panel).toContainText('مجوز ثبت شد');
-  await expect(page.getByText('مانعی ثبت نشده است.')).toHaveCount(0);
-  await expect(page.locator('.case-hero')).not.toContainText('مانع باز');
+  await expect(panel).toContainText('نیاز به مجوز جدید ندارد');
+  await expect(panel.getByRole('button',{name:'ثبت مجوز',exact:true})).toHaveCount(0);
+  await panel.getByRole('checkbox',{name:'انتخاب همه قطعات قابل ارسال'}).check();
+  await panel.getByRole('button',{name:/ارسال به قطعات و تأمین/}).click();
+  await expect(page.locator('#case-parts')).toBeInViewport();
+  await expect(page.getByTestId('part-stock')).toHaveCount(1);
+  await page.locator('#case-assessment > summary').scrollIntoViewIfNeeded();
 
   // Hidden damage: a supplement copies the approved lines and adds a new one.
   await panel.getByRole('button', { name: 'ثبت الحاقیه (آسیب پنهان)' }).click();
@@ -73,10 +68,10 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await current.getByRole('button', { name: 'نهایی کردن' }).click();
   await dialog.getByRole('button', { name: 'نهایی کردن' }).click();
 
-  await expect(current).toContainText('در انتظار مجوز');
+  await expect(current).toContainText('نیاز به مجوز جدید ندارد');
   await expect(current).toContainText('نسبت به نسخه قبل: افزایش ۲۵,۰۰۰,۰۰۰ ریال');
   await expect(current).toContainText('تأیید مالی باید دوباره بررسی شود');
-  await expect(page.locator('.case-hero')).toContainText('مانع باز');
+  await expect(current.getByRole('button',{name:'ثبت مجوز',exact:true})).toHaveCount(0);
 
   // The approved version is kept unchanged.
   await panel.getByText(/نسخه‌های قبلی/).click();

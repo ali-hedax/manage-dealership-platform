@@ -1,6 +1,8 @@
 # Backup and restore
 
-**Status:** procedure defined; not yet exercised on a real server (none provisioned). A restore drill must pass before real data is entered.
+**Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
+
+**Current status:** backup/restore has been exercised on Manage Production. The latest final restore passed for `operational/20261105T044951Z`, including published short-label source/settings, current operational data and the preserved personal staff-administration denial. CurrentUser DPAPI off-server recovery was decrypted/checksummed in memory. See the [release record](RELEASE_SHORT_LABEL_20261105.md). The generic examples below must use the operational wrapper on the current host.
 
 ## What to back up
 
@@ -40,4 +42,11 @@ Record date, dump file, row counts and result in the table below. The `audit_eve
 
 | Date | Environment | Dump | Rows (cases / audit) | Result |
 | --- | --- | --- | --- | --- |
-| — | — | — | — | Not yet performed |
+| 2026-11-05 | Isolated copy of Manage Production | operational/20261105T044951Z | Full table/migration fingerprints recorded privately and matched | Final short-label backup restored; three scratch DBs removed, encrypted off-server recovery verified. |
+| 2026-11-04 | Isolated copy of Manage Production | operational/20261104T151335Z | Full table/migration fingerprints recorded privately and matched | Restored final compact-assessment backup; both scratch DBs removed; encrypted off-server recovery verified. |
+| 2026-11-04 | Isolated copy of Manage Production | operational/20261104T062953Z | Counts/fingerprints recorded privately and matched | Full operational/account comparison passed; scratch DB removed, encrypted off-server recovery verified. |
+| 2026-11-04 | Isolated copy of Manage Production | operational/20261104T051806Z | 15 / 54012 | Operational/account/calendar/access fingerprints matched; encrypted off-server recovery verified. |
+
+## Verified Preview restore drill — 2026-11-02
+
+The historical status above is superseded for the isolated Manage Preview: `/home/manage/backups/stage3-20261102T123555Z/db.dump` was restored into a separate temporary database before publishing PR #32. Counts matched: users 8, enrolled TOTP 1, cases 5, tasks 6, parts 4, audit 88, migrations 9. The temporary database was removed after verification; live data was not restored over or reset. Backup files and private configuration remain on the Manage VM with restrictive permissions.

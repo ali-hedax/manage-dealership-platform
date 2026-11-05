@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, like, ne, sql, type SQL } from 'dr
 import { alias } from 'drizzle-orm/pg-core';
 import {
   currentJalaliYear,
-  hasPermission,
+  repairDayPlan,
   maskPhone,
   normalizePersian,
   normalizePhone,
@@ -28,6 +28,7 @@ import type { Actor } from '../auth/auth.types';
 import { badRequest, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
+import {calendarAt} from '../workshop/work-calendar';
 import {
   blockers,
   caseCounters,
@@ -40,12 +41,23 @@ import {
   vehicles,
 } from '../db/schema';
 import { buildSearchText, computeMissingFields, formatCaseNumber } from './case-rules';
+import {idKey,isNonUniqueAdmission} from '../vehicle-import/vehicle-sheet';
 
 type CaseRow = typeof cases.$inferSelect;
+
+/** Fields only the vehicle import sets (not part of the public case contract). */
+export interface CaseImportFields {
+  admissionNo?: string | null;
+  admissionNoKey?: string | null;
+  admittedAtPrecision?: 'minute' | 'date';
+  origin?: 'excel_import';
+  importKey?: string | null;
+  chassisRef?: string | null;
+}
 type VehicleInput = NonNullable<CreateCaseInput['vehicle']>;
 type CustomerInput = NonNullable<CreateCaseInput['customer']>;
 
-const RESPONSIBLE_ROLES: Role[] = ['accident_expert', 'accident_supervisor', 'service_manager'];
+const RESPONSIBLE_ROLES: Role[] = ['accident_coordinator','accident_expert', 'accident_supervisor', 'system_admin'];
 const FUTURE_TOLERANCE_MS = 10 * 60_000;
 // The UI records times to the minute; ordering checks accept that precision.
 export const MINUTE_TOLERANCE_MS = 60_000;
@@ -90,7 +102,7 @@ export const flagConditions: Record<string, () => SQL> = {
   awaiting_authorization: () =>
     and(
       caseSql.active,
-      sql`exists (select 1 from assessments a where a.case_id = ${cases.id} and a.status = 'final' and a.authorization_status = 'pending')`,
+      sql`exists (select 1 from part_quotes q where q.case_id = ${cases.id} and q.tenant_id = ${cases.tenantId} and q.status = 'pending')`,
     )!,
   parts_overdue: () =>
     and(
@@ -102,6 +114,11 @@ export const flagConditions: Record<string, () => SQL> = {
       caseSql.active,
       sql`exists (select 1 from part_requests p where p.case_id = ${cases.id} and p.status in ('needed', 'rejected'))`,
     )!,
+  // Official deadline and internal forecast are reported separately (docs/REPORTS_FA.md).
+  overdue_official: () => and(caseSql.active, sql`${cases.officialDeadlineAt} < now()`)!,
+  overdue_forecast: () => and(caseSql.active, sql`${cases.forecastDeliveryAt} < now()`)!,
+  // Neither an official deadline nor a forecast: not late, just without a due date.
+  no_deadline: () => and(caseSql.active, isNull(cases.officialDeadlineAt), isNull(cases.forecastDeliveryAt))!,
   // Waiting for the manager's decision or for the cashier to confirm an approved advance.
   finance_pending: () =>
     and(
@@ -123,7 +140,7 @@ export class CasesService {
 
   // ---------------------------------------------------------------- commands
 
-  async create(actor: Actor, input: CreateCaseInput): Promise<CaseDetail> {
+  async create(actor: Actor, input: CreateCaseInput, extra: CaseImportFields = {}): Promise<CaseDetail> {
     const tenantId = actor.user.tenantId;
     const admittedAt = new Date(input.admittedAt);
     assertNotFuture(admittedAt, 'زمان پذیرش نمی‌تواند در آینده باشد');
@@ -134,7 +151,9 @@ export class CasesService {
 
     const id = newId();
     await this.db.transaction(async (tx) => {
-      const vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null);
+      const repairPlan=input.repairDurationDays!==undefined?repairDayPlan(input.admittedAt,input.repairDurationDays,await calendarAt(tx,tenantId,input.admittedAt)):null;
+      let vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null);
+      if (extra.chassisRef && !vehicle.chassisRef) vehicle = await this.setChassisRef(tx, vehicle, extra.chassisRef);
       const customer = await this.upsertCustomer(tx, actor, input.customer ?? {}, null);
       const year = currentJalaliYear();
       const caseNumber = formatCaseNumber(year, await this.nextCaseSeq(tx, tenantId, year));
@@ -157,8 +176,14 @@ export class CasesService {
         responsibleUserId: input.responsibleUserId ?? null,
         stage: input.stage ?? 'reception',
         officialDeadlineAt: toDate(input.officialDeadlineAt),
-        forecastDeliveryAt: toDate(input.forecastDeliveryAt),
+        forecastDeliveryAt: repairPlan?new Date(repairPlan.endAt):toDate(input.forecastDeliveryAt),
+        repairPlan,
         isLegacyEntry: input.isLegacyEntry ?? false,
+        admissionNo: extra.admissionNo ?? input.admissionNo ?? null,
+        admissionNoKey: extra.admissionNoKey ?? (input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null),
+        admittedAtPrecision: extra.admittedAtPrecision ?? 'minute',
+        origin: extra.origin ?? 'manual',
+        importKey: extra.importKey ?? null,
         isTest: actor.user.isTestTenant,
         createdBy: actor.user.id,
         updatedBy: actor.user.id,
@@ -179,6 +204,7 @@ export class CasesService {
           stage: values.stage,
           admittedAt: admittedAt.toISOString(),
           isLegacyEntry: values.isLegacyEntry,
+          ...(extra.origin ? { origin: extra.origin, admissionNo: values.admissionNo, admittedAtPrecision: values.admittedAtPrecision } : {}),
         },
         snapshot: { version: 1, row: row! },
       });
@@ -186,7 +212,7 @@ export class CasesService {
     return this.detail(actor, id);
   }
 
-  async update(actor: Actor, id: string, input: UpdateCaseInput): Promise<CaseDetail> {
+  async update(actor: Actor, id: string, input: UpdateCaseInput, extra: CaseImportFields = {}): Promise<CaseDetail> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
       const current = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
@@ -203,6 +229,10 @@ export class CasesService {
       if (input.responsibleUserId) await this.assertAssignable(tx, tenantId, input.responsibleUserId);
 
       if (input.vehicle) await this.upsertVehicle(tx, actor, input.vehicle, current);
+      if (extra.chassisRef) {
+        const [v] = await tx.select().from(vehicles).where(eq(vehicles.id, current.vehicleId));
+        if (v && !v.chassisRef) await this.setChassisRef(tx, v, extra.chassisRef);
+      }
       let customerId = current.customerId;
       if (input.customer) {
         customerId = (await this.upsertCustomer(tx, actor, input.customer, current))?.id ?? customerId;
@@ -227,7 +257,17 @@ export class CasesService {
       if (admittedAt !== undefined) patch.admittedAt = admittedAt;
       if (deadline !== undefined) patch.officialDeadlineAt = deadline;
       if (input.forecastDeliveryAt !== undefined) patch.forecastDeliveryAt = toDate(input.forecastDeliveryAt);
+      if(input.repairDurationDays!==undefined){
+        if(current.repairPlan&&!input.reason)throw badRequest('REASON_REQUIRED','برای تغییر مدت برنامه تعمیر، دلیل را بنویسید');
+        const start=(admittedAt??current.admittedAt).toISOString();
+        patch.repairPlan=repairDayPlan(start,input.repairDurationDays,current.repairPlan?.calendar??await calendarAt(tx,tenantId,start));
+        patch.forecastDeliveryAt=new Date(patch.repairPlan.endAt);
+      }
       if (customerId !== current.customerId) patch.customerId = customerId;
+      if(input.admissionNo!==undefined){patch.admissionNo=input.admissionNo;patch.admissionNoKey=input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null;}
+      if (extra.admissionNo !== undefined) patch.admissionNo = extra.admissionNo;
+      if (extra.admissionNoKey !== undefined) patch.admissionNoKey = extra.admissionNoKey;
+      if (extra.importKey !== undefined && !current.importKey) patch.importKey = extra.importKey;
 
       const [updated] = await tx
         .update(cases)
@@ -374,11 +414,22 @@ export class CasesService {
 
   async list(actor: Actor, q: CaseListQuery): Promise<Paged<CaseListItem>> {
     const conditions: SQL[] = [eq(cases.tenantId, actor.user.tenantId)];
+    if (q.vehicleIdentity) {
+      const identity = idKey(q.vehicleIdentity);
+      if (identity.length < 6) throw badRequest('VEHICLE_IDENTITY_INVALID', 'VIN یا شماره شاسی کامل را وارد کنید');
+      conditions.push(sql`exists (select 1 from vehicles vh where vh.id = ${cases.vehicleId} and vh.tenant_id = ${actor.user.tenantId}
+        and (upper(regexp_replace(coalesce(vh.vin,''), '[[:space:]_./-]', '', 'g')) = ${identity}
+          or upper(regexp_replace(translate(coalesce(vh.chassis_ref,''), '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789'), '[[:space:]_./-]', '', 'g')) = ${identity}))`);
+    }
     if (q.status !== 'all') conditions.push(eq(cases.status, q.status));
     if (q.stage) conditions.push(eq(cases.stage, q.stage));
     if (q.coverage) conditions.push(eq(cases.coverageType, q.coverage));
     if (q.responsibleUserId) conditions.push(eq(cases.responsibleUserId, q.responsibleUserId));
+    if(q.stationCode)conditions.push(sql`exists (select 1 from tasks t where t.case_id = ${cases.id} and t.tenant_id = ${cases.tenantId} and t.station_snapshot->>'code' = ${q.stationCode})`);
     if (q.flag) conditions.push(flagConditions[q.flag]!());
+    if (q.blockerReason) {
+      conditions.push(sql`exists (select 1 from blockers b where b.case_id = ${cases.id} and b.resolved_at is null and b.reason = ${q.blockerReason})`);
+    }
     if (q.q) {
       const key = searchKey(q.q).replace(/[%_\\]/g, '\\$&');
       if (key) conditions.push(like(cases.searchText, `%${key}%`));
@@ -440,7 +491,7 @@ export class CasesService {
       .limit(1);
     if (!r) throw notFound('پرونده');
 
-    const canSeePii = hasPermission(actor.user.roles, 'customer.pii.read');
+    const canSeePii = actor.user.permissions.has('customer.pii.read');
     const { c, v, cu } = r;
     return {
       ...this.baseItem(c, v, r.responsibleName, r.openBlockers, r.progress),
@@ -462,7 +513,12 @@ export class CasesService {
         plate: v.plate,
         vin: v.vin,
         color: v.color,
+        chassisRef: v.chassisRef,
       },
+      admissionNo: c.admissionNo,
+      repairPlan:c.repairPlan,
+      admittedAtPrecision: c.admittedAtPrecision as CaseDetail['admittedAtPrecision'],
+      origin: c.origin as CaseDetail['origin'],
       odometerKm: c.odometerKm,
       damageDescription: c.damageDescription,
       vehicleLocation: c.vehicleLocation,
@@ -498,6 +554,7 @@ export class CasesService {
       title: t.title,
       technicianName: t.technicianName,
       technicianCode: t.technicianCode,
+      stationId:t.stationId, stationCode:t.stationSnapshot?.code ?? null, stationName:t.stationSnapshot?.name ?? null, assignedUserId:t.assignedUserId, baselineEndAt:iso(t.baselineEndAt),
       status: t.status as Task['status'],
       plannedStartAt: iso(t.plannedStartAt),
       plannedEndAt: iso(t.plannedEndAt),
@@ -551,7 +608,7 @@ export class CasesService {
       .select()
       .from(cases)
       .where(and(eq(cases.id, id), eq(cases.tenantId, tenantId)))
-      .limit(1);
+      .limit(1).for('update');
     if (!row) throw notFound('پرونده');
     if (expectedVersion !== undefined && row.version !== expectedVersion) throw versionConflict(row.version);
     if (row.status !== 'open') throw badRequest('CASE_NOT_OPEN', 'این پرونده بسته یا لغو شده است');
@@ -568,6 +625,7 @@ export class CasesService {
     return {
       id: c.id,
       caseNumber: c.caseNumber,
+      admissionNo: c.admissionNo,
       stage: c.stage as CaseStage,
       status: c.status as CaseStatus,
       coverageType: c.coverageType as CoverageType,
@@ -575,6 +633,9 @@ export class CasesService {
       officialDeadlineAt: iso(c.officialDeadlineAt),
       forecastDeliveryAt: iso(c.forecastDeliveryAt),
       vehicleLabel: [v.brand, v.model, v.trim].filter(Boolean).join(' ') || 'خودرو (مدل نامشخص)',
+      // Some manufacturer model cells include explicit engine/gearbox metadata.
+      // Keep the model name before those terms; never derive it from trim.
+      vehicleSummary: [v.brand, v.model?.split(/\s+(?:با\s+)?(?:موتور|گیربکس)(?=\s|[a-z0-9])/iu)[0]?.trim() || 'مدل نامشخص'].filter(Boolean).join(' '),
       plate: v.plate,
       vin: v.vin,
       responsible: c.responsibleUserId ? { id: c.responsibleUserId, displayName: responsibleName! } : null,
@@ -598,6 +659,7 @@ export class CasesService {
       | 'officialDeadlineAt'
       | 'insurerName'
       | 'insuranceClaimNo'
+      | 'admissionNo'
     >,
     v: typeof vehicles.$inferSelect,
     cu: typeof customers.$inferSelect | null,
@@ -627,6 +689,8 @@ export class CasesService {
         cu?.phone,
         c.goldenCardFileNo,
         c.insuranceClaimNo,
+        c.admissionNo,
+        v.chassisRef,
       ]),
     };
   }
@@ -677,6 +741,16 @@ export class CasesService {
    * with the same VIN is reused (each visit is still a separate case) and only
    * its empty fields are filled. On update, the case's own vehicle is patched.
    */
+  /** Records the admission sheet's chassis number once; it is never treated as a VIN. */
+  private async setChassisRef(tx: DbOrTx, vehicle: typeof vehicles.$inferSelect, chassisRef: string) {
+    const [row] = await tx
+      .update(vehicles)
+      .set({ chassisRef, updatedAt: new Date(), version: vehicle.version + 1 })
+      .where(eq(vehicles.id, vehicle.id))
+      .returning();
+    return row!;
+  }
+
   private async upsertVehicle(tx: DbOrTx, actor: Actor, input: VehicleInput, current: CaseRow | null) {
     const tenantId = actor.user.tenantId;
     const normalized = {

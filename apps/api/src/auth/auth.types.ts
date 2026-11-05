@@ -3,6 +3,7 @@ import type { Request } from 'express';
 
 export interface AuthUser {
   id: string;
+  isOwner?: boolean;
   tenantId: string;
   tenantCode: string;
   tenantName: string;

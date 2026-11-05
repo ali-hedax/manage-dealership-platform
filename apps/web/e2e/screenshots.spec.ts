@@ -56,6 +56,26 @@ test('documentation screenshots', async ({ page }, info) => {
   await page.getByRole('dialog').screenshot({ path: out('qc-form', project) });
   await page.getByRole('dialog').getByRole('button', { name: 'انصراف' }).click();
 
+  // Existing-vehicle import: preview of the synthetic sample (not applied).
+  await page.goto('/cases/import');
+  const sample = await page.request.get('/api/v1/vehicle-imports/sample', { headers: { 'x-manage-client': 'web' } });
+  await page.getByLabel('فایل اکسل (.xlsx)').setInputFiles({
+    name: 'vehicle-import-sample.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: await sample.body(),
+  });
+  await page.getByRole('button', { name: 'پیش‌نمایش' }).click();
+  await page.getByTestId('import-row').first().waitFor();
+  await page.screenshot({ path: out('vehicle-import', project), fullPage: true });
+
+  // Reports center: manager work list and stats.
+  await page.goto('/reports?view=manager');
+  await page.getByTestId('work-row').first().waitFor();
+  await page.screenshot({ path: out('reports-today', project), fullPage: true });
+  await page.goto('/reports?view=manager&tab=stats');
+  await page.getByTestId('chart-stages').waitFor();
+  await page.screenshot({ path: out('reports-stats', project), fullPage: true });
+
   await page.goto('/cases/new');
   await page.getByLabel('پلاک').waitFor();
   await page.screenshot({ path: out('case-new', project), fullPage: true });

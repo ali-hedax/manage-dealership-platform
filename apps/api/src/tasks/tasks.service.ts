@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { addWorkingMinutes,workingDayMinutes,nextWorkingInstant } from '@manage/shared';
+import { calendarAt } from '../workshop/work-calendar';
 import type { CreateTaskInput, Task, TaskActionInput, TaskStatus, UpdateTaskInput } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -7,7 +9,7 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { departments, taskDependencies, tasks } from '../db/schema';
+import { departments, taskDependencies, tasks, workshopStations, users } from '../db/schema';
 
 type TaskRow = typeof tasks.$inferSelect;
 
@@ -32,21 +34,23 @@ export class TasksService {
     return this.handle.db;
   }
 
-  async create(actor: Actor, caseId: string, input: CreateTaskInput): Promise<Task> {
+  /** importRef: set by the vehicle import so the same sheet row never creates a second task. */
+  async create(actor: Actor, caseId: string, input: CreateTaskInput, importRef?: string): Promise<Task> {
     const tenantId = actor.user.tenantId;
     const id = newId();
     await this.db.transaction(async (tx) => {
       const kase = await this.cases.loadForWrite(tx, tenantId, caseId);
       if (kase.stage === 'delivered') throw badRequest('CASE_DELIVERED', 'پرونده تحویل شده است');
       await this.assertDepartment(tx, tenantId, input.departmentId);
-      assertPlannedRange(input.plannedStartAt, input.plannedEndAt);
+      const planning = await this.plan(tx, actor, input,undefined,caseId);
+      assertPlannedRange(input.plannedStartAt, planning.plannedEndAt?.toISOString() ?? input.plannedEndAt);
       const dependsOn = [...new Set(input.dependsOn ?? [])];
       await this.assertSameCase(tx, tenantId, caseId, dependsOn);
 
       const [{ n }] = (await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(tasks)
-        .where(eq(tasks.caseId, caseId))) as [{ n: number }];
+        .where(and(eq(tasks.caseId, caseId),eq(tasks.tenantId,tenantId)))) as [{ n: number }];
       const [row] = await tx
         .insert(tasks)
         .values({
@@ -59,9 +63,13 @@ export class TasksService {
           technicianCode: input.technicianCode ?? null,
           plannedStartAt: toDate(input.plannedStartAt),
           plannedEndAt: toDate(input.plannedEndAt),
+          ...planning,
+          baselineStartAt: planning.plannedStartAt??toDate(input.plannedStartAt),
+          baselineEndAt: planning.plannedEndAt ?? toDate(input.plannedEndAt),
           weight: input.weight,
           sortOrder: n + 1,
           notes: input.notes ?? null,
+          importRef: importRef ?? null,
           isTest: actor.user.isTestTenant,
           createdBy: actor.user.id,
         })
@@ -95,23 +103,29 @@ export class TasksService {
       await this.cases.loadForWrite(tx, tenantId, task.caseId);
       if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
 
-      const patch: Partial<TaskRow> = {};
+      const scheduleChanged=['departmentId','plannedStartAt','plannedEndAt','durationMinutes','durationDays','stationId','assignedUserId','dependsOn'].some(k=>k in input);
+      const existingDependencies=input.durationDays&&input.dependsOn===undefined?await tx.select({id:taskDependencies.dependsOnTaskId}).from(taskDependencies).where(eq(taskDependencies.taskId,task.id)):[];
+      if(scheduleChanged && !input.scheduleReason) throw badRequest('SCHEDULE_REASON_REQUIRED','برای تغییر برنامه یا ارجاع، دلیل را ثبت کنید');
+      const planning = scheduleChanged ? await this.plan(tx,actor,{...input,dependsOn:input.dependsOn??existingDependencies.map(d=>d.id),departmentId:input.departmentId??task.departmentId,stationId:input.stationId===undefined?task.stationId:input.stationId,assignedUserId:input.assignedUserId===undefined?task.assignedUserId:input.assignedUserId,plannedStartAt:input.plannedStartAt===undefined?task.plannedStartAt?.toISOString():input.plannedStartAt,plannedEndAt:input.plannedEndAt===undefined?task.plannedEndAt?.toISOString():input.plannedEndAt},(task.plannedStartAt||task.plannedEndAt||task.actualStartAt)?task.calendarSnapshot:null,task.caseId) : {};
+      const patch: Partial<TaskRow> = {...planning};
       for (const key of ['departmentId', 'title', 'technicianName', 'technicianCode', 'weight', 'notes'] as const) {
         if (input[key] !== undefined) (patch as any)[key] = input[key];
       }
-      if (input.plannedStartAt !== undefined) patch.plannedStartAt = toDate(input.plannedStartAt);
-      if (input.plannedEndAt !== undefined) patch.plannedEndAt = toDate(input.plannedEndAt);
+      if (planning.technicianName) patch.technicianName=planning.technicianName;
+      if (input.plannedStartAt !== undefined && !input.durationDays) patch.plannedStartAt = toDate(input.plannedStartAt);
+      if (input.plannedEndAt !== undefined && input.durationMinutes === undefined && input.durationDays === undefined) patch.plannedEndAt = toDate(input.plannedEndAt);
       assertPlannedRange(
         (patch.plannedStartAt ?? task.plannedStartAt)?.toISOString(),
         (patch.plannedEndAt ?? task.plannedEndAt)?.toISOString(),
       );
 
+      if(!task.baselineEndAt&&!task.plannedEndAt&&patch.plannedEndAt){patch.baselineEndAt=patch.plannedEndAt;patch.baselineStartAt=patch.plannedStartAt??task.plannedStartAt;}
       let depsChange: { before: string[]; after: string[] } | null = null;
       if (input.dependsOn !== undefined) {
         const next = [...new Set(input.dependsOn)];
         if (next.includes(taskId)) throw badRequest('DEPENDENCY_CYCLE', 'فعالیت نمی‌تواند به خودش وابسته باشد');
         await this.assertSameCase(tx, tenantId, task.caseId, next);
-        await this.assertNoCycle(tx, task.caseId, taskId, next);
+        await this.assertNoCycle(tx, tenantId, task.caseId, taskId, next);
         const before = (
           await tx.select().from(taskDependencies).where(eq(taskDependencies.taskId, taskId))
         ).map((d) => d.dependsOnTaskId);
@@ -130,6 +144,7 @@ export class TasksService {
         entityId: taskId,
         caseId: task.caseId,
         action: 'task.updated',
+        reason: input.scheduleReason ?? null,
         before: { ...changes?.before, ...(depsChange ? { dependsOn: depsChange.before } : {}) },
         after: { ...changes?.after, ...(depsChange ? { dependsOn: depsChange.after } : {}) },
         snapshot: { version: updated.version, row: updated },
@@ -142,7 +157,13 @@ export class TasksService {
    * Phase-1 status recording by the supervisor: start → complete → approve,
    * with reopen for corrective work. Blocking goes through BlockersService.
    */
-  async act(actor: Actor, taskId: string, input: TaskActionInput): Promise<Task> {
+  async executeOwn(actor: Actor, taskId: string, input: TaskActionInput) {
+    if(!['start','complete'].includes(input.action) || input.at || input.note) throw forbidden('فقط شروع و پایان کار محول‌شده مجاز است');
+    await this.act(actor,taskId,input,true);
+    return {status:'ok'};
+  }
+
+  async act(actor: Actor, taskId: string, input: TaskActionInput, own = false): Promise<Task> {
     const tenantId = actor.user.tenantId;
     if (input.action === 'approve' && !actor.user.permissions.has('task.approve')) throw forbidden();
     const at = input.at ? new Date(input.at) : new Date();
@@ -151,8 +172,10 @@ export class TasksService {
     let caseId = '';
     await this.db.transaction(async (tx) => {
       const task = await this.loadForWrite(tx, tenantId, taskId, input.expectedVersion);
+      if(own && task.assignedUserId !== actor.user.id) throw forbidden('این کار به شما محول نشده است');
       caseId = task.caseId;
       const kase = await this.cases.loadForWrite(tx, tenantId, task.caseId);
+      if(kase.stage==='delivered')throw badRequest('CASE_DELIVERED','خودرو تحویل شده است');
       const status = task.status as TaskStatus;
       let patch: Partial<TaskRow>;
       let action: string;
@@ -160,7 +183,7 @@ export class TasksService {
       switch (input.action) {
         case 'start': {
           if (status !== 'pending') throw invalidTransition(status, 'شروع');
-          const unfinished = await this.unfinishedDependencies(tx, taskId);
+          const unfinished = await this.unfinishedDependencies(tx, tenantId, taskId);
           if (unfinished.length) {
             throw badRequest('DEPENDENCY_NOT_DONE', 'فعالیت‌های پیش‌نیاز هنوز تمام نشده‌اند', {
               taskIds: unfinished,
@@ -184,7 +207,8 @@ export class TasksService {
           break;
         case 'approve':
           if (status !== 'done') throw invalidTransition(status, 'تأیید');
-          patch = { status: 'approved', approvedAt: at, approvedBy: actor.user.id };
+          if(task.actualEndAt&&at.getTime()<task.actualEndAt.getTime()-MINUTE_TOLERANCE_MS)throw badRequest('INVALID_TIME','تأیید تحویل نمی‌تواند پیش از پایان کار باشد');
+          patch = { status: 'approved', approvedAt:task.actualEndAt&&at<task.actualEndAt?task.actualEndAt:at, approvedBy: actor.user.id };
           action = 'task.approved';
           break;
         case 'reopen':
@@ -234,19 +258,55 @@ export class TasksService {
     const [row] = await tx
       .update(tasks)
       .set({ ...patch, updatedAt: new Date(), version: task.version + 1 })
-      .where(and(eq(tasks.id, task.id), eq(tasks.version, task.version)))
+      .where(and(eq(tasks.id, task.id), eq(tasks.tenantId, task.tenantId), eq(tasks.version, task.version)))
       .returning();
     if (!row) throw versionConflict();
     return row;
   }
 
-  private async unfinishedDependencies(tx: DbOrTx, taskId: string): Promise<string[]> {
+  private async plan(tx:DbOrTx,actor:Actor,input:Partial<CreateTaskInput>,frozen?:TaskRow['calendarSnapshot'],caseId?:string):Promise<Partial<TaskRow>> {
+    let stationSnapshot:TaskRow['stationSnapshot']=null;
+    if(input.stationId) {
+      const [s]=await tx.select().from(workshopStations).where(and(eq(workshopStations.id,input.stationId),eq(workshopStations.tenantId,actor.user.tenantId),eq(workshopStations.isActive,true)));
+      if(!s || s.departmentId!==input.departmentId)throw badRequest('INVALID_STATION','جایگاه باید فعال و متعلق به همین رشته باشد');
+      stationSnapshot={code:s.code,name:s.name,trade:s.trade};
+    }
+    let assigneeName:string|null=null;
+    if(input.assignedUserId) {
+      const [u]=await tx.select().from(users).where(and(eq(users.id,input.assignedUserId),eq(users.tenantId,actor.user.tenantId),eq(users.isActive,true)));
+      if(!u)throw badRequest('INVALID_ASSIGNEE','تعمیرکار معتبر یا فعال نیست');
+      assigneeName=u.displayName;
+    }
+    if(input.durationDays&&input.durationMinutes)throw badRequest('DURATION_CONFLICT','مدت را فقط به روز یا دقیقه وارد کنید');
+    let start=input.plannedStartAt??null;
+    let caseCalendar:TaskRow['calendarSnapshot']=null;
+    if(input.durationDays&&caseId){
+      const kase=await this.cases.loadForWrite(tx,actor.user.tenantId,caseId);
+      caseCalendar=kase.repairPlan?.calendar??null;
+      const dependencies=[...new Set(input.dependsOn??[])];
+      if(dependencies.length){
+        const rows=await tx.select().from(tasks).where(and(eq(tasks.tenantId,actor.user.tenantId),eq(tasks.caseId,caseId),inArray(tasks.id,dependencies)));
+        if(rows.length!==dependencies.length||rows.some(t=>!t.plannedEndAt))throw badRequest('DEPENDENCY_SCHEDULE_REQUIRED','ابتدا پایان برنامه پیش‌نیازهای همین پرونده را مشخص کنید');
+        const previousEnd=Math.max(...rows.map(t=>t.plannedEndAt!.getTime()));
+        if(start&&Date.parse(start)<previousEnd)throw badRequest('DEPENDENCY_TIME_CONFLICT','شروع این جایگاه نمی‌تواند قبل از پایان برنامه پیش‌نیاز باشد');
+        start??=new Date(previousEnd).toISOString();
+      }else start??=kase.repairPlan?.startAt??kase.admittedAt.toISOString();
+    }
+    const calendarSnapshot=frozen ?? caseCalendar ?? await calendarAt(tx,actor.user.tenantId,start??new Date().toISOString());
+    if(input.durationDays&&!input.plannedStartAt&&start)start=nextWorkingInstant(start,calendarSnapshot.calendar);
+    let plannedEndAt=toDate(input.plannedEndAt);
+    const minutes=input.durationDays?Math.round(input.durationDays*workingDayMinutes(calendarSnapshot.calendar)):input.durationMinutes;
+    if(minutes){if(!start)throw badRequest('PLANNED_START_REQUIRED','شروع برنامه برای محاسبه مدت کاری لازم است');plannedEndAt=new Date(addWorkingMinutes(start,minutes,calendarSnapshot.calendar));}
+    return {stationId:input.stationId??null,stationSnapshot,assignedUserId:input.assignedUserId??null,...(assigneeName?{technicianName:assigneeName}:{}),calendarSnapshot,plannedEndAt,...(input.durationDays?{plannedStartAt:toDate(start)}:{})};
+  }
+
+  private async unfinishedDependencies(tx: DbOrTx, tenantId:string, taskId: string): Promise<string[]> {
     const rows = await tx
       .select({ id: tasks.id, status: tasks.status })
       .from(taskDependencies)
       .innerJoin(tasks, eq(tasks.id, taskDependencies.dependsOnTaskId))
-      .where(eq(taskDependencies.taskId, taskId));
-    return rows.filter((r) => !FINISHED.includes(r.status as TaskStatus)).map((r) => r.id);
+      .where(and(eq(taskDependencies.taskId, taskId),eq(tasks.tenantId,tenantId)));
+    return rows.filter((r) => r.status !== 'approved').map((r) => r.id);
   }
 
   private async assertDepartment(tx: DbOrTx, tenantId: string, departmentId: string) {
@@ -268,12 +328,12 @@ export class TasksService {
     }
   }
 
-  private async assertNoCycle(tx: DbOrTx, caseId: string, taskId: string, next: string[]) {
+  private async assertNoCycle(tx: DbOrTx, tenantId:string, caseId: string, taskId: string, next: string[]) {
     const edges = await tx
       .select({ from: taskDependencies.taskId, to: taskDependencies.dependsOnTaskId })
       .from(taskDependencies)
       .innerJoin(tasks, eq(tasks.id, taskDependencies.taskId))
-      .where(eq(tasks.caseId, caseId));
+      .where(and(eq(tasks.caseId, caseId),eq(tasks.tenantId,tenantId)));
     const graph = new Map<string, string[]>();
     for (const e of edges) if (e.from !== taskId) graph.set(e.from, [...(graph.get(e.from) ?? []), e.to]);
     graph.set(taskId, next);

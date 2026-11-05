@@ -4,9 +4,11 @@ import {
   bigint,
   bigserial,
   boolean,
+  customType,
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   primaryKey,
   smallint,
@@ -31,8 +33,29 @@ export const tenants = pgTable('tenants', {
   name: text('name').notNull(),
   brand: text('brand'),
   isTest: boolean('is_test').notNull().default(false),
+  permissionTemplates: jsonb('permission_templates').$type<import('@manage/shared').PermissionTemplates>().notNull().default({}),
+  permissionVersion: integer('permission_version').notNull().default(1),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
+
+// Reference imports never create operational cases, stock movements or customer ownership.
+export const referenceImports = pgTable('reference_imports', {
+  id: uuid('id').primaryKey(), tenantId: uuid('tenant_id').notNull().references(()=>tenants.id),
+  kind: text('kind').notNull(), fileName: text('file_name').notNull(), fileSha256: text('file_sha256').notNull(),
+  sheetName: text('sheet_name').notNull(), headerRow: integer('header_row').notNull(),
+  mapping: jsonb('mapping').notNull(), rows: jsonb('rows').notNull(),
+  status: text('status').notNull().default('preview'),
+  createdAt: ts('created_at').notNull().defaultNow(), appliedAt: ts('applied_at'),
+  createdBy: uuid('created_by').notNull().references(()=>users.id),
+  isTest: boolean('is_test').notNull().default(false),
+});
+export const referenceEntries = pgTable('reference_entries', {
+  id: uuid('id').primaryKey(), tenantId: uuid('tenant_id').notNull().references(()=>tenants.id),
+  kind: text('kind').notNull(), identityKey: text('identity_key').notNull(), lookupKey: text('lookup_key').notNull(),
+  data: jsonb('data').notNull(), sourceImportId: uuid('source_import_id').notNull().references(()=>referenceImports.id),
+  version: integer('version').notNull().default(1), isTest: boolean('is_test').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(), updatedAt: ts('updated_at').notNull().defaultNow(),
+},t=>[uniqueIndex('reference_entries_identity_uq').on(t.tenantId,t.kind,t.identityKey),index('reference_entries_lookup_idx').on(t.tenantId,t.kind,t.lookupKey)]);
 
 export const users = pgTable(
   'users',
@@ -49,6 +72,8 @@ export const users = pgTable(
     displayName: text('display_name').notNull(),
     passwordHash: text('password_hash').notNull(),
     roles: text('roles').array().notNull(),
+    isOwner: boolean('is_owner').notNull().default(false),
+    permissionOverrides: jsonb('permission_overrides').$type<import('@manage/shared').PermissionOverrides>().notNull().default({allow:[],deny:[]}),
     isActive: boolean('is_active').notNull().default(true),
     isTest: boolean('is_test').notNull().default(false),
     failedLoginCount: integer('failed_login_count').notNull().default(0),
@@ -58,7 +83,7 @@ export const users = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
   },
-  (t) => [uniqueIndex('users_tenant_username_uq').on(t.tenantId, t.username), uniqueIndex('users_email_uq').on(t.email)],
+  (t) => [uniqueIndex('users_tenant_username_uq').on(t.tenantId, t.username), uniqueIndex('users_email_uq').on(t.email), uniqueIndex('users_tenant_owner_uq').on(t.tenantId).where(sql`${t.isOwner} = true`)],
 );
 
 export const sessions = pgTable(
@@ -98,6 +123,8 @@ export const authChallenges = pgTable('auth_challenges', {
   consumedAt: ts('consumed_at'),
   invitationDelivery: text('invitation_delivery').notNull().default('manual'),
   invitationSentAt: ts('invitation_sent_at'),
+  // Category of the last failed email delivery (see MAIL_FAILURES); never the raw SMTP error.
+  invitationFailure: text('invitation_failure'),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('auth_challenges_user_idx').on(t.userId, t.purpose)]);
 
@@ -150,6 +177,9 @@ export const vehicles = pgTable(
     plate: text('plate'),
     vin: text('vin'),
     color: text('color'),
+    // Chassis number as recorded on the admission sheet (often a short form);
+    // never treated as a full VIN.
+    chassisRef: text('chassis_ref'),
     isTest: boolean('is_test').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
@@ -204,6 +234,7 @@ export const cases = pgTable(
     // Three independent times: official commitment, internal forecast, actual.
     officialDeadlineAt: ts('official_deadline_at'),
     forecastDeliveryAt: ts('forecast_delivery_at'),
+    repairPlan: jsonb('repair_plan').$type<import('@manage/shared').RepairPlan>(),
     actualDeliveryAt: ts('actual_delivery_at'),
     technicalClosedAt: ts('technical_closed_at'),
     financialClosedAt: ts('financial_closed_at'),
@@ -220,6 +251,17 @@ export const cases = pgTable(
     recipientName: text('recipient_name'),
     recipientRelation: text('recipient_relation'),
     deliveryNote: text('delivery_note'),
+    // Admission card number of the workshop (not the Manage case number) and its
+    // matching key; "Ø¨Ø¯ÙˆÙ† Ù¾Ø°ÛŒØ±Ø´" / "Ø¨Ø±Ú¯Ø´ØªÛŒ" have no key because they are not unique.
+    admissionNo: text('admission_no'),
+    admissionNoKey: text('admission_no_key'),
+    // 'minute' or 'date' when only the admission day is known (imported records).
+    admittedAtPrecision: text('admitted_at_precision').notNull().default('minute'),
+    // 'manual' or 'excel_import'; importKey is the identity a vehicle import
+    // matched on (vin:, adm:, chs:), unique per dealership so re-imports cannot
+    // create a second case.
+    origin: text('origin').notNull().default('manual'),
+    importKey: text('import_key'),
     isLegacyEntry: boolean('is_legacy_entry').notNull().default(false),
     missingFields: text('missing_fields').array().notNull().default(sql`'{}'::text[]`),
     searchText: text('search_text').notNull().default(''),
@@ -238,6 +280,10 @@ export const cases = pgTable(
     uniqueIndex('cases_tenant_number_uq').on(t.tenantId, t.caseNumber),
     index('cases_tenant_status_stage_idx').on(t.tenantId, t.status, t.stage),
     index('cases_vehicle_idx').on(t.vehicleId),
+    uniqueIndex('cases_tenant_import_key_uq')
+      .on(t.tenantId, t.importKey)
+      .where(sql`${t.importKey} is not null`),
+    index('cases_tenant_admission_key_idx').on(t.tenantId, t.admissionNoKey),
   ],
 );
 
@@ -255,7 +301,13 @@ export const tasks = pgTable(
       .notNull()
       .references(() => departments.id),
     title: text('title'),
-    // Technicians have no accounts in phase 1; the supervisor records on their behalf.
+    stationId: uuid('station_id').references((): AnyPgColumn => workshopStations.id),
+    assignedUserId: uuid('assigned_user_id').references(() => users.id),
+    stationSnapshot: jsonb('station_snapshot').$type<{code:string;name:string;trade:string}>(),
+    calendarSnapshot: jsonb('calendar_snapshot').$type<import('@manage/shared').CalendarRevision>(),
+    baselineStartAt: ts('baseline_start_at'),
+    baselineEndAt: ts('baseline_end_at'),
+    // Identity of assignee is distinct from the actor recording on their behalf.
     technicianName: text('technician_name'),
     technicianCode: text('technician_code'),
     status: text('status').notNull().default('pending'),
@@ -271,6 +323,8 @@ export const tasks = pgTable(
     notes: text('notes'),
     // Corrective activity opened by a failed QC item.
     qcInspectionId: uuid('qc_inspection_id').references((): AnyPgColumn => qcInspections.id),
+    // Set when an import created the task; re-importing the same row skips it.
+    importRef: text('import_ref'),
     isTest: boolean('is_test').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
     createdBy: uuid('created_by')
@@ -279,7 +333,13 @@ export const tasks = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
   },
-  (t) => [index('tasks_case_idx').on(t.caseId), index('tasks_tenant_status_idx').on(t.tenantId, t.status)],
+  (t) => [
+    index('tasks_case_idx').on(t.caseId),
+    index('tasks_tenant_status_idx').on(t.tenantId, t.status),
+    uniqueIndex('tasks_case_import_ref_uq')
+      .on(t.caseId, t.importRef)
+      .where(sql`${t.importRef} is not null`),
+  ],
 );
 
 export const taskDependencies = pgTable(
@@ -416,8 +476,8 @@ export const assessmentItems = pgTable(
 );
 
 // One row per needed part of a case. Each step keeps its own time so delays
-// can be attributed: need → stock check / reservation → order (ETA) → receipt
-// with inspection → handover to the repair unit.
+// can be attributed: need â†’ stock check / reservation â†’ order (ETA) â†’ receipt
+// with inspection â†’ handover to the repair unit.
 export const partRequests = pgTable(
   'part_requests',
   {
@@ -644,3 +704,456 @@ export const idempotencyKeys = pgTable(
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.userId, t.key] })],
 );
+
+// Existing-vehicle Excel imports. A preview is stored first; applying it
+// re-evaluates every row against the current data. Rows keep the original cell
+// values (provenance) and the case they created or updated.
+export const vehicleImports = pgTable('vehicle_imports', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  status: text('status').notNull().default('preview'),
+  fileName: text('file_name').notNull(),
+  fileSha256: text('file_sha256').notNull(),
+  sheetName: text('sheet_name').notNull(),
+  headerRow: integer('header_row').notNull(),
+  decisions: jsonb('decisions').notNull(),
+  counts: jsonb('counts').notNull(),
+  blankRows: jsonb('blank_rows').notNull(),
+  unmappedColumns: jsonb('unmapped_columns').notNull(),
+  isTest: boolean('is_test').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id),
+  appliedAt: ts('applied_at'),
+  appliedBy: uuid('applied_by').references(() => users.id),
+});
+
+export const vehicleImportRows = pgTable(
+  'vehicle_import_rows',
+  {
+    id: uuid('id').primaryKey(),
+    importId: uuid('import_id')
+      .notNull()
+      .references(() => vehicleImports.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    rowNo: integer('row_no').notNull(),
+    outcome: text('outcome').notNull(),
+    source: jsonb('source').notNull(),
+    // Same values keyed by column (rowNo, admissionNo, ...) for re-evaluation at apply time.
+    values: jsonb('values').notNull(),
+    identity: text('identity'),
+    caseId: uuid('case_id').references(() => cases.id),
+    caseNumber: text('case_number'),
+    changes: jsonb('changes').notNull(),
+    messages: jsonb('messages').notNull(),
+    isTest: boolean('is_test').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('vehicle_import_rows_import_row_uq').on(t.importId, t.rowNo),
+    index('vehicle_import_rows_case_idx').on(t.caseId),
+  ],
+);
+
+// Parts discrepancy queue (#11). Detected by rules over parts and blockers,
+// one row per condition (dedupe_key unique per dealership, so the same
+// discrepancy is never raised twice). Only a person closes it, with a reason;
+// if the condition disappears the row is marked, not closed.
+export const partDiscrepancies = pgTable(
+  'part_discrepancies',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    partRequestId: uuid('part_request_id').references(() => partRequests.id),
+    blockerId: uuid('blocker_id').references(() => blockers.id),
+    kind: text('kind').notNull(),
+    dedupeKey: text('dedupe_key').notNull(),
+    status: text('status').notNull().default('open'),
+    detail: text('detail').notNull(),
+    detectedAt: ts('detected_at').notNull().defaultNow(),
+    conditionClearedAt: ts('condition_cleared_at'),
+    assigneeUserId: uuid('assignee_user_id').references(() => users.id),
+    resolvedAt: ts('resolved_at'),
+    resolvedBy: uuid('resolved_by').references(() => users.id),
+    resolutionReason: text('resolution_reason'),
+    isTest: boolean('is_test').notNull().default(false),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    uniqueIndex('part_discrepancies_tenant_key_uq').on(t.tenantId, t.dedupeKey),
+    index('part_discrepancies_tenant_status_idx').on(t.tenantId, t.status),
+    index('part_discrepancies_case_idx').on(t.caseId),
+  ],
+);
+
+// ----------------------------------------------------------------------------
+// Daily parts reports (docs/DAILY_PARTS_FA.md): stock snapshots, Emdad Vijeh
+// follow-up, Manage reservations and the 11:00 Tehran daily tasks.
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
+// Exact decimals: quantities (decimal units) and prices; never float.
+const qty = (name: string) => numeric(name, { precision: 20, scale: 4 });
+const money = (name: string) => numeric(name, { precision: 24, scale: 3 });
+
+/** One profile per dealership and report kind: column mapping and the owner's confirmations. */
+export const dailyReportProfiles = pgTable(
+  'daily_report_profiles',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    kind: text('kind').notNull(), // stock | emdad
+    // Normalized header list of the confirmed layout; a different layout is not auto-applied.
+    headerSignature: text('header_signature'),
+    settings: jsonb('settings').notNull().default({}),
+    reminderTime: text('reminder_time').notNull().default('11:00'),
+    reminderUserId: uuid('reminder_user_id').references(() => users.id),
+    updatedBy: uuid('updated_by').references(() => users.id),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [uniqueIndex('daily_report_profiles_tenant_kind_uq').on(t.tenantId, t.kind)],
+);
+
+/** An uploaded daily file and its processing job (staging until applied). */
+export const dailyReportImports = pgTable(
+  'daily_report_imports',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    kind: text('kind').notNull(),
+    status: text('status').notNull().default('uploaded'), // uploaded | parsing | preview | applying | applied | failed | discarded
+    fileName: text('file_name').notNull(),
+    fileSize: integer('file_size').notNull(),
+    fileSha256: text('file_sha256').notNull(),
+    format: text('format').notNull(),
+    parserVersion: text('parser_version').notNull(),
+    sheetName: text('sheet_name'),
+    headerRow: integer('header_row'),
+    diagnostics: jsonb('diagnostics').notNull().default({}),
+    counts: jsonb('counts').notNull().default({}),
+    progress: integer('progress').notNull().default(0),
+    attempts: integer('attempts').notNull().default(0),
+    error: text('error'),
+    // Time the report refers to (declared by the uploader when the file has none).
+    reportAt: ts('report_at'),
+    reportAtPrecision: text('report_at_precision'),
+    reportDeclaredBy: uuid('report_declared_by').references(() => users.id),
+    uploadedBy: uuid('uploaded_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    appliedAt: ts('applied_at'),
+    appliedBy: uuid('applied_by').references(() => users.id),
+    isTest: boolean('is_test').notNull().default(false),
+  },
+  (t) => [index('daily_report_imports_tenant_kind_idx').on(t.tenantId, t.kind, t.createdAt)],
+);
+
+/** Private copy of the uploaded bytes while the job runs; removed after apply or expiry. */
+export const dailyReportFiles = pgTable('daily_report_files', {
+  importId: uuid('import_id')
+    .primaryKey()
+    .references(() => dailyReportImports.id),
+  data: bytea('data').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+});
+
+/** Staged rows with their outcome; kept as the per-row result of the import. */
+export const dailyReportRows = pgTable(
+  'daily_report_rows',
+  {
+    importId: uuid('import_id')
+      .notNull()
+      .references(() => dailyReportImports.id),
+    rowNo: integer('row_no').notNull(),
+    outcome: text('outcome').notNull(),
+    rowKey: text('row_key'),
+    data: jsonb('data').notNull(),
+    messages: jsonb('messages').notNull().default([]),
+    refId: uuid('ref_id'),
+  },
+  (t) => [primaryKey({ columns: [t.importId, t.rowNo] }), index('daily_report_rows_outcome_idx').on(t.importId, t.outcome)],
+);
+
+/** A published stock report. Only one active per dealership; older ones stay as history. */
+export const stockSnapshots = pgTable(
+  'stock_snapshots',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    importId: uuid('import_id')
+      .notNull()
+      .references(() => dailyReportImports.id),
+    reportedAt: ts('reported_at').notNull(),
+    reportedAtPrecision: text('reported_at_precision').notNull(),
+    scope: text('scope'),
+    completeness: text('completeness'), // full | partial | null (unconfirmed)
+    quantityMeaning: text('quantity_meaning'), // on_hand | available | null (unconfirmed)
+    currency: text('currency'), // IRR | IRT | null (unconfirmed)
+    taxIncluded: boolean('tax_included'),
+    status: text('status').notNull().default('active'), // active | superseded
+    itemCount: integer('item_count').notNull(),
+    publishedAt: ts('published_at').notNull().defaultNow(),
+    publishedBy: uuid('published_by')
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => [
+    index('stock_snapshots_tenant_idx').on(t.tenantId, t.reportedAt),
+    uniqueIndex('stock_snapshots_active_uq')
+      .on(t.tenantId)
+      .where(sql`${t.status} = 'active'`),
+  ],
+);
+
+export const stockSnapshotItems = pgTable(
+  'stock_snapshot_items',
+  {
+    id: uuid('id').primaryKey(),
+    snapshotId: uuid('snapshot_id')
+      .notNull()
+      .references(() => stockSnapshots.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    rowNo: integer('row_no').notNull(),
+    rawCode: text('raw_code').notNull(),
+    fullStockCode: text('full_stock_code').notNull(),
+    basePartNumber: text('base_part_number'),
+    supplySuffix: text('supply_suffix'),
+    codeKind: text('code_kind').notNull(), // standard | needs_mapping
+    description: text('description'),
+    unit: text('unit'),
+    vehicleModel: text('vehicle_model'),
+    locationAddress: text('location_address').notNull().default(''),
+    locationText: text('location_text'),
+    baseStatus: text('base_status'),
+    quantity: qty('quantity').notNull(),
+    avgPrice: money('avg_price'),
+    salePrice: money('sale_price'),
+    // Partial or unconfirmed reports: a code missing today keeps its last reported row, labelled with its source.
+    carriedFromSnapshotId: uuid('carried_from_snapshot_id'),
+    carriedReportedAt: ts('carried_reported_at'),
+  },
+  (t) => [
+    uniqueIndex('stock_snapshot_items_code_loc_uq').on(t.snapshotId, t.fullStockCode, t.locationAddress),
+    index('stock_snapshot_items_tenant_code_idx').on(t.tenantId, t.fullStockCode),
+    index('stock_snapshot_items_tenant_base_idx').on(t.tenantId, t.basePartNumber),
+  ],
+);
+
+/** Human-approved family aliases; source codes and historical snapshots stay unchanged. */
+export const stockCodeAliases = pgTable('stock_code_aliases', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  fullStockCode: text('full_stock_code').notNull(),
+  basePartNumber: text('base_part_number'),
+  reason: text('reason').notNull(),
+  approvedBy: uuid('approved_by').notNull().references(() => users.id),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (t) => [uniqueIndex('stock_code_aliases_tenant_code_uq').on(t.tenantId, t.fullStockCode)]);
+
+/** Internal commitments; issues stay deducted until their report reflection is confirmed. */
+export const stockReservations = pgTable(
+  'stock_reservations',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => cases.id),
+    partRequestId: uuid('part_request_id')
+      .notNull()
+      .references(() => partRequests.id),
+    fullStockCode: text('full_stock_code').notNull(),
+    locationAddress: text('location_address').notNull().default(''),
+    quantity: qty('quantity').notNull(),
+    status: text('status').notNull().default('reserved'), // reserved | issued | released | cancelled
+    snapshotId: uuid('snapshot_id')
+      .notNull()
+      .references(() => stockSnapshots.id),
+    // Source price at the time of selection (kept even when later reports change it).
+    unitSalePrice: money('unit_sale_price'),
+    unitAvgPrice: money('unit_avg_price'),
+    currency: text('currency'),
+    reservedBy: uuid('reserved_by')
+      .notNull()
+      .references(() => users.id),
+    reservedAt: ts('reserved_at').notNull().defaultNow(),
+    issuedAt: ts('issued_at'),
+    issuedBy: uuid('issued_by').references(() => users.id),
+    closedAt: ts('closed_at'),
+    closedBy: uuid('closed_by').references(() => users.id),
+    reason: text('reason'),
+    // The source stock report now includes this issue (confirmed by a person).
+    reflectedAt: ts('reflected_at'),
+    reflectedBy: uuid('reflected_by').references(() => users.id),
+    reflectedSnapshotId: uuid('reflected_snapshot_id').references(() => stockSnapshots.id),
+    isTest: boolean('is_test').notNull().default(false),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    index('stock_reservations_tenant_code_idx').on(t.tenantId, t.fullStockCode, t.status),
+    index('stock_reservations_part_idx').on(t.partRequestId),
+  ],
+);
+
+/** Iran Khodro Emdad Vijeh request line, identified by a stable external key. */
+export const emdadRequests = pgTable(
+  'emdad_requests',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    externalKey: text('external_key').notNull(),
+    admissionNo: text('admission_no'),
+    chassis: text('chassis'),
+    emdadNo: text('emdad_no'),
+    requestNo: text('request_no'),
+    initialCode: text('initial_code'),
+    // Latest official values from the reports (source text, not interpretation).
+    official: jsonb('official').notNull(),
+    statusCategory: text('status_category').notNull(),
+    firstImportId: uuid('first_import_id')
+      .notNull()
+      .references(() => dailyReportImports.id),
+    lastImportId: uuid('last_import_id')
+      .notNull()
+      .references(() => dailyReportImports.id),
+    lastReportAt: ts('last_report_at').notNull(),
+    // Match with Manage (never by name, row number or text similarity).
+    caseId: uuid('case_id').references(() => cases.id),
+    partRequestId: uuid('part_request_id').references(() => partRequests.id),
+    matchStatus: text('match_status').notNull(), // matched | unmatched | ambiguous | needs_review
+    matchSource: text('match_source').notNull().default('auto'), // auto | manual (a manual decision is never re-matched)
+    matchNote: text('match_note'),
+    // Internal follow-up, never overwritten by an import.
+    assigneeUserId: uuid('assignee_user_id').references(() => users.id),
+    dueAt: ts('due_at'),
+    note: text('note'),
+    nextAction: text('next_action'),
+    isTest: boolean('is_test').notNull().default(false),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    uniqueIndex('emdad_requests_tenant_key_uq').on(t.tenantId, t.externalKey),
+    index('emdad_requests_tenant_case_idx').on(t.tenantId, t.caseId),
+    index('emdad_requests_tenant_status_idx').on(t.tenantId, t.statusCategory),
+  ],
+);
+
+/** Daily changes of an Emdad request as reported by the source. */
+export const emdadRequestEvents = pgTable(
+  'emdad_request_events',
+  {
+    id: uuid('id').primaryKey(),
+    requestId: uuid('request_id')
+      .notNull()
+      .references(() => emdadRequests.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    importId: uuid('import_id')
+      .notNull()
+      .references(() => dailyReportImports.id),
+    reportAt: ts('report_at').notNull(),
+    changes: jsonb('changes').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('emdad_request_events_import_uq').on(t.requestId, t.importId)],
+);
+
+/** The two daily update tasks (Tehran day); one row per dealership, day and kind. */
+export const dailyTasks = pgTable(
+  'daily_tasks',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    localDate: text('local_date').notNull(), // Tehran calendar day, YYYY-MM-DD (Gregorian)
+    kind: text('kind').notNull(),
+    dueAt: ts('due_at').notNull(),
+    status: text('status').notNull().default('pending'), // pending | done
+    completedImportId: uuid('completed_import_id').references(() => dailyReportImports.id),
+    completedAt: ts('completed_at'),
+    completedBy: uuid('completed_by').references(() => users.id),
+    unchangedDeclared: boolean('unchanged_declared').notNull().default(false),
+    notifiedAt: ts('notified_at'),
+  },
+  (t) => [uniqueIndex('daily_tasks_tenant_day_kind_uq').on(t.tenantId, t.localDate, t.kind)],
+);
+
+/** Internal notifications (no e-mail/SMS); one per user and dedupe key. */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    kind: text('kind').notNull(),
+    title: text('title').notNull(),
+    body: text('body'),
+    link: text('link'),
+    dedupeKey: text('dedupe_key').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    readAt: ts('read_at'),
+  },
+  (t) => [
+    uniqueIndex('notifications_user_key_uq').on(t.tenantId, t.userId, t.dedupeKey),
+    index('notifications_user_idx').on(t.userId, t.readAt),
+  ],
+);
+
+// Append-only revisions keep historical working-time calculations reproducible.
+export const workCalendars = pgTable('work_calendars', {
+  id:uuid('id').primaryKey(), tenantId:uuid('tenant_id').notNull().references(()=>tenants.id),
+  effectiveFrom:text('effective_from').notNull(), calendar:jsonb('calendar').$type<import('@manage/shared').WorkCalendar>().notNull(),
+  reason:text('reason').notNull(), version:integer('version').notNull(),
+  createdBy:uuid('created_by').notNull().references(()=>users.id), createdAt:ts('created_at').notNull().defaultNow(),
+  isTest:boolean('is_test').notNull().default(false),
+},t=>[uniqueIndex('work_calendars_tenant_version_uq').on(t.tenantId,t.version)]);
+export const workshopStations = pgTable('workshop_stations', {
+  id:uuid('id').primaryKey(), tenantId:uuid('tenant_id').notNull().references(()=>tenants.id),
+  departmentId:uuid('department_id').notNull().references(()=>departments.id),
+  code:text('code').notNull(),name:text('name').notNull(),trade:text('trade').notNull(),
+  responsibleUserId:uuid('responsible_user_id').references(()=>users.id), isActive:boolean('is_active').notNull().default(true),
+  version:integer('version').notNull().default(1), isTest:boolean('is_test').notNull().default(false),
+  createdAt:ts('created_at').notNull().defaultNow(),updatedAt:ts('updated_at').notNull().defaultNow(),
+},t=>[uniqueIndex('workshop_stations_tenant_code_uq').on(t.tenantId,t.code)]);
+export const partQuotes = pgTable('part_quotes', {
+  id:uuid('id').primaryKey(),tenantId:uuid('tenant_id').notNull().references(()=>tenants.id),
+  partId:uuid('part_id').notNull().references(()=>partRequests.id),caseId:uuid('case_id').notNull().references(()=>cases.id),
+  quantity:integer('quantity').notNull(),unitPriceRial:bigint('unit_price_rial',{mode:'number'}).notNull(),
+  supplier:text('supplier').notNull(),validUntil:ts('valid_until').notNull(),status:text('status').notNull().default('pending'),
+  source:text('source'),reference:text('reference'),approver:text('approver'),note:text('note'),
+  createdBy:uuid('created_by').notNull().references(()=>users.id),createdAt:ts('created_at').notNull().defaultNow(),
+  decidedBy:uuid('decided_by').references(()=>users.id),decidedAt:ts('decided_at'),
+  version:integer('version').notNull().default(1),isTest:boolean('is_test').notNull().default(false),
+},t=>[index('part_quotes_tenant_part_idx').on(t.tenantId,t.partId)]);

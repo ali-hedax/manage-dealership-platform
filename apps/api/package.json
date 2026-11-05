@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node dist/scripts/migrate.js",
     "db:seed-demo": "node dist/scripts/seed-demo.js",
-    "db:reset-demo": "node dist/scripts/reset-demo.js"
+    "db:reset-demo": "node dist/scripts/reset-demo.js",
+    "mail:check": "node dist/scripts/check-mail.js"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.16",
@@ -22,6 +23,7 @@
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
     "@nestjs/throttler": "^6.4.0",
+    "bidi-js": "1.0.3",
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.6.0",
     "drizzle-orm": "^0.45.2",
@@ -30,6 +32,7 @@
     "nestjs-pino": "^4.4.0",
     "nodemailer": "10.3.1",
     "otpauth": "^9.5.2",
+    "pdfkit": "0.17.2",
     "pg": "^8.16.0",
     "pino": "^9.9.0",
     "pino-http": "^10.5.0",
@@ -37,6 +40,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "uuid": "^11.1.0",
+    "vazirmatn": "33.0.3",
     "zod": "^4.1.0"
   },
   "devDependencies": {
@@ -48,6 +52,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.18.0",
     "@types/nodemailer": "8.0.2",
+    "@types/pdfkit": "0.17.3",
     "@types/pg": "^8.15.0",
     "@types/qrcode": "^1.5.6",
     "@types/supertest": "^6.0.3",

@@ -11,6 +11,7 @@ import {
 } from '@manage/shared';
 import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { WorkspaceLauncher } from '@/components/WorkspaceLauncher';
 import { faNum, formatJalali } from '@/lib/format';
 
 interface Attention {
@@ -29,9 +30,9 @@ export default function DashboardPage() {
 
   if (!can('dashboard.read')) {
     return (
-      <div className="callout callout-blue">
+      <div className="stack"><WorkspaceLauncher/><div className="callout callout-blue">
         نقش شما به داشبورد عملیات دسترسی ندارد. از منوی کناری بخش مربوط به خود را انتخاب کنید.
-      </div>
+      </div></div>
     );
   }
   if (error) return <div className="callout callout-red">داشبورد بارگذاری نشد. صفحه را تازه کنید.</div>;
@@ -47,7 +48,7 @@ export default function DashboardPage() {
     { flag: 'due_soon', count: data.dueSoon, title: 'تحویل در ۴۸ ساعت آینده', detail: 'برای تحویل به‌موقع پیگیری شود', tone: 'amber' },
     { flag: 'unassigned', count: data.unassigned, title: 'بدون مسئول', detail: 'مسئول پرونده تعیین نشده است', tone: 'amber' },
     { flag: 'needs_completion', count: data.needsCompletion, title: 'نیازمند تکمیل اطلاعات', detail: 'اطلاعات پایه یا پوشش ناقص است', tone: 'amber' },
-    { flag: 'awaiting_authorization', count: data.awaitingAuthorization, title: 'منتظر مجوز کارشناسی یا الحاقیه', detail: 'تصمیم کارت طلایی، بیمه یا مشتری ثبت نشده است', tone: 'amber' },
+    { flag: 'awaiting_authorization', count: data.awaitingAuthorization, title: 'منتظر تأیید قیمت خرید بیرون', detail: 'هماهنگی قیمت بازار با کارت طلایی، بیمه یا مشتری باقی مانده است', tone: 'amber' },
     { flag: 'parts_overdue', count: data.partsOverdue, title: 'قطعه با دیرکرد', detail: 'زمان پیش‌بینی رسیدن قطعه گذشته است', tone: 'red' },
     { flag: 'parts_to_order', count: data.partsToOrder, title: 'قطعه سفارش‌نشده', detail: 'نیاز ثبت شده ولی سفارش یا رزرو نشده است', tone: 'amber' },
     { flag: 'finance_pending', count: data.financePending, title: 'منتظر تصمیم یا دریافت مالی', detail: 'پیش‌پرداخت یا استثنا منتظر مدیر یا صندوق است', tone: 'amber' },
@@ -62,14 +63,21 @@ export default function DashboardPage() {
         <div>
           <h1>وضعیت تعمیرگاه</h1>
           <p className="muted small">
-            {faNum(data.activeCases)} خودروی فعال، به‌روزرسانی {formatJalali(data.generatedAt, { time: true })}
+            {faNum(data.activeCases)} پرونده فعال، به‌روزرسانی {formatJalali(data.generatedAt, { time: true })}
           </p>
         </div>
-        {can('case.create') && (
-          <Link className="btn btn-primary" href="/cases/new">
-            ثبت پرونده
-          </Link>
-        )}
+        <div className="row" style={{ gap: 6 }}>
+          {can('report.manager') && (
+            <Link className="btn" href="/reports?view=manager">
+              گزارش مدیر خدمات
+            </Link>
+          )}
+          {can('case.create') && (
+            <Link className="btn btn-primary" href="/cases/new">
+              ثبت پرونده
+            </Link>
+          )}
+        </div>
       </div>
 
       <nav className="pipeline" aria-label="مراحل پرونده‌ها">
@@ -100,7 +108,7 @@ export default function DashboardPage() {
                   <div className="t">{a.title}</div>
                   <div className="d">{a.detail}</div>
                 </span>
-                <span className="xs muted">مشاهده</span>
+                <span className="attention-go" aria-hidden="true">‹</span>
               </Link>
             ))}
             {data.legacyEntries > 0 && (
@@ -112,7 +120,7 @@ export default function DashboardPage() {
                   <div className="t">ثبت‌شده از قبل از Manage</div>
                   <div className="d">خودروهایی که پیش از راه‌اندازی سامانه در تعمیرگاه بودند</div>
                 </span>
-                <span className="xs muted">مشاهده</span>
+                <span className="attention-go" aria-hidden="true">‹</span>
               </Link>
             )}
           </div>

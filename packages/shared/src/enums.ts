@@ -2,6 +2,8 @@
 // used in the API; Persian display labels live in labels.ts.
 
 export const ROLES = [
+  'accident_coordinator', // Unified accident responsibility; legacy roles remain readable.
+  'technician',
   'accident_expert', // کارشناس تصادفات
   'accident_supervisor', // مسئول پیگیری / سرپرست تصادفات
   'service_manager', // مدیر خدمات
@@ -132,6 +134,7 @@ export const DEFAULT_DEPARTMENTS = [
   { code: 'mechanical', name: 'مکانیکی' },
   { code: 'electrical', name: 'برق و باتری‌سازی' },
   { code: 'suspension', name: 'جلوبندی' },
+  { code:'engine_tuning',name:'تنظیم موتور' },
   { code: 'assembly', name: 'مونتاژ و دمونتاژ' },
   { code: 'qc', name: 'کنترل کیفیت' },
 ] as const;
@@ -201,3 +204,38 @@ export type CompletionIssueCode = (typeof COMPLETION_ISSUES)[number];
 
 export const RECIPIENT_RELATIONS = ['owner', 'agent', 'insurer', 'other'] as const;
 export type RecipientRelation = (typeof RECIPIENT_RELATIONS)[number];
+
+// Existing-vehicle Excel import: what happens to each sheet row.
+export const VEHICLE_IMPORT_OUTCOMES = [
+  'new',
+  'update',
+  'unchanged',
+  'duplicate',
+  'incomplete',
+  'needs_review',
+  'error',
+] as const;
+export type VehicleImportOutcome = (typeof VEHICLE_IMPORT_OUTCOMES)[number];
+
+// Where the delivery date of the sheet goes; official deadline and internal
+// forecast are never assumed to be the same thing.
+export const IMPORT_DEADLINE_TARGETS = ['none', 'forecast', 'official'] as const;
+export type ImportDeadlineTarget = (typeof IMPORT_DEADLINE_TARGETS)[number];
+
+// Reports center: one view per responsibility (see docs/REPORTS_FA.md).
+export const REPORT_VIEWS = ['manager', 'parts', 'accident', 'workshop'] as const;
+export type ReportView = (typeof REPORT_VIEWS)[number];
+
+export const REPORT_PERIODS = ['today', 'week', 'month', 'custom'] as const;
+export type ReportPeriod = (typeof REPORT_PERIODS)[number];
+
+// Order of the "today" work list; the reason is shown on every row.
+export const WORK_PRIORITIES = ['overdue', 'today', 'soon', 'later', 'none'] as const;
+export type WorkPriority = (typeof WORK_PRIORITIES)[number];
+
+// Parts discrepancy queue (#11): the system flags; a person reviews and decides.
+export const DISCREPANCY_KINDS = ['handover_vs_shortage', 'wrong_or_defective', 'supply_inconsistent'] as const;
+export type DiscrepancyKind = (typeof DISCREPANCY_KINDS)[number];
+
+export const DISCREPANCY_STATUSES = ['open', 'in_review', 'resolved', 'dismissed'] as const;
+export type DiscrepancyStatus = (typeof DISCREPANCY_STATUSES)[number];

@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import {
   assessmentItemSchema,
+  importAssessmentSchema,
+  type ImportAssessmentInput,
   createAssessmentSchema,
   finalizeAssessmentSchema,
   recordAuthorizationSchema,
@@ -47,6 +49,13 @@ export class AssessmentsController {
     @Body(new ZodPipe(assessmentItemSchema)) body: AssessmentItemInput,
   ) {
     return this.assessments.addItem(actor, id, body);
+  }
+
+  @Post('assessments/:id/import')
+  @RequirePermissions('assessment.manage')
+  importSheet(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(importAssessmentSchema)) body: ImportAssessmentInput) {
+    return this.assessments.importSheet(actor, id, body);
   }
 
   @Patch('assessment-items/:id')

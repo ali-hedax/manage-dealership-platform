@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseSections } from './helpers';
 
 // Issues #9 and #10 in the browser, on demo case 3 (personal payment): the
 // customer approved the estimate and the expert proposed an advance.
@@ -11,31 +11,39 @@ async function openCase3(page: Page, user: string) {
   await login(page, user);
   await page.goto('/cases?q=' + encodeURIComponent('مشتری نمونه سه'));
   await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه سه' }).click();
+  await openCaseSections(page,'parts','finance','history');
   await expect(page.getByTestId('finance-panel')).toBeVisible();
 }
 
-test('advance approval and receipt open the purchase gate; parts clerk orders, receives, hands over and imports', async ({
+test('coordinator collects payment and records customer price approval; parts orders and hands over', async ({
   page,
 }) => {
   const dialog = page.getByRole('dialog');
   const gate = page.getByTestId('finance-gate');
 
-  // Service manager approves the expert's advance (not their own proposal).
-  await openCase3(page, 'manager');
-  await expect(gate).toContainText('پیش‌پرداخت دریافت نشده');
-  const advance = page.getByTestId('finance-approval').first();
-  await expect(advance).toContainText('منتظر تأیید مدیر');
-  await advance.getByRole('button', { name: 'تأیید مدیر' }).click();
-  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
-  await expect(advance).toContainText('تأیید مدیر');
-  await expect(gate).toContainText('پیش‌پرداخت دریافت نشده');
-
-  // Cashier confirms receipt.
-  await openCase3(page, 'cashier');
-  await page.getByTestId('finance-approval').first().getByRole('button', { name: 'تأیید دریافت' }).click();
+  // Unified accident coordinator records the customer's receipt directly.
+  await openCase3(page, 'expert');
+  await page.getByRole('button', {name:'ثبت دریافت از مشتری',exact:true}).click();
+  await dialog.getByLabel('مبلغ دریافتی (ریال) *').fill('21500000');
   await dialog.getByLabel('شماره پیگیری / رسید پرداخت *').fill('POS-E2E-1');
-  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await dialog.getByRole('button',{name:'ثبت',exact:true}).click();
   await expect(gate).toContainText('پیش‌پرداخت دریافت شده');
+  // Market purchase: parts quotes, the coordinator records customer consent.
+  await openCase3(page, 'parts');
+  const currentParts=await (await page.request.get('/api/v1/cases/'+page.url().split('/cases/')[1]+'/parts')).json();
+  const need=currentParts.find((p:{description:string})=>p.description==='آینه بغل چپ');
+  const proposal=await page.request.post(`/api/v1/workshop/parts/${need.id}/quotes`,{headers:{'x-manage-client':'test'},data:{expectedVersion:need.version,unitPriceRial:14000000,supplier:'فروشگاه آزمون',validUntil:new Date(Date.now()+86400000).toISOString()}});
+  expect(proposal.ok()).toBe(true);const quote=(await proposal.json()).find((q:{partId:string;status:string})=>q.partId===need.id&&q.status==='pending');
+  await openCase3(page,'expert');
+  await page.getByRole('button',{name:'ثبت پاسخ پرداخت‌کننده',exact:true}).click();
+  const decision=page.locator('form').filter({has:page.getByRole('heading',{name:'پاسخ به قیمت آینه بغل چپ'})});
+  await decision.getByLabel('مرجع پاسخ').selectOption('customer');
+  await decision.getByLabel('نام تأییدکننده').fill('مشتری آزمون');
+  await decision.getByLabel('شماره ثبت رسمی / مرجع تأیید مشتری').fill('TEST-CUSTOMER-APPROVAL');
+  await decision.getByLabel('شرح پاسخ').fill('مشتری قیمت بازار را تأیید کرد');
+  await decision.getByRole('button',{name:'ثبت پاسخ',exact:true}).click();
+  await expect(page.getByText('پاسخ و مرجع تأیید ثبت شد.')).toBeVisible();
+  expect(quote.id).toBeTruthy();
 
   // Parts clerk: order the approved mirror, receive it, hand it over.
   await openCase3(page, 'parts');
@@ -60,6 +68,7 @@ test('advance approval and receipt open the purchase gate; parts clerk orders, r
   await expect(mirror).toContainText('تکنسین آزمون (مونتاژ و دمونتاژ)');
 
   // Excel import: preview first, then import all rows of the sample.
+  await openCase3(page,'expert');
   await page.getByTestId('parts-panel').getByRole('button', { name: 'ورود از اکسل' }).click();
   await dialog.getByLabel('فایل اکسل (.xlsx)').setInputFiles('public/samples/parts-import-sample.xlsx');
   await expect(dialog.getByTestId('import-preview')).toContainText('۴ ردیف آماده ورود');
@@ -70,5 +79,5 @@ test('advance approval and receipt open the purchase gate; parts clerk orders, r
   // History (not visible to the parts clerk) records every step with its actor.
   await openCase3(page, 'manager');
   await expect(page.locator('.timeline')).toContainText('تحویل قطعه به واحد تعمیر');
-  await expect(page.locator('.timeline')).toContainText('تأیید دریافت پیش‌پرداخت');
+  await expect(page.locator('.timeline')).toContainText('ثبت دریافت تسویه');
 });

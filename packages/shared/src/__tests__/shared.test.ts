@@ -51,11 +51,11 @@ test('invalid Jalali dates are rejected', () => {
   assert.equal(parseJalali('not a date'), null);
 });
 
-test('RBAC: support roles cannot manage tasks; admin cannot read cases', () => {
+test('RBAC: parts cannot manage repairs; system support can read cases', () => {
   assert.equal(hasPermission(['accident_supervisor'], 'task.manage'), true);
   assert.equal(hasPermission(['parts_clerk'], 'task.manage'), false);
   assert.equal(hasPermission(['parts_clerk'], 'customer.pii.read'), false);
-  assert.equal(hasPermission(['system_admin'], 'case.read'), false);
+  assert.equal(hasPermission(['system_admin'], 'case.read'), true);
 });
 
 test('reopening a task requires a reason', () => {

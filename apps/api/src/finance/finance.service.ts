@@ -309,11 +309,15 @@ export class FinanceService {
       db,
       approvals.filter((a) => a.kind === 'exception').map((a) => a.id),
     );
+    const estimate=await this.estimateOf(db,tenantId,caseId);
+    const share=customerShareOf(kase.coverageType,shares?.customerShareRial,estimate).value;
+    const receipts=await db.select({amount:casePayments.amountRial}).from(casePayments).where(and(eq(casePayments.caseId,caseId),eq(casePayments.tenantId,tenantId)));
+    const collected=receipts.reduce((sum,r)=>sum+r.amount,0);
     return {
       coverageType: kase.coverageType,
       estimateRial: await this.estimateOf(db, tenantId, caseId),
       customerShareRial: shares?.customerShareRial ?? null,
-      paid: approvals.filter((a) => a.kind === 'advance' && a.status === 'paid'),
+      paid: [...approvals.filter((a) => a.kind === 'advance' && a.status === 'paid'),...(share!==null&&share>0&&collected>=share?[{coversEstimateRial:estimate}]:[])],
       exceptions: approvals
         .filter((a) => a.kind === 'exception' && a.status === 'approved')
         .map((a) => ({ id: a.id, amountRial: a.amountRial, spentRial: spent.get(a.id) ?? 0 })),

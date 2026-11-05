@@ -1,0 +1,16 @@
+'use client';
+import { useState } from 'react';
+import useSWR from 'swr';
+import { TASK_STATUS_LABELS, type WorkshopTask } from '@manage/shared';
+import { useAuth } from '@/lib/auth';
+import { api, errorMessage, fetcher } from '@/lib/api';
+import {formatJalali,toPersianDigits} from '@/lib/format';
+import { Plate } from '@/components/Plate';
+
+export default function TechnicianPage(){
+  const {me,can}=useAuth();const {data,error,mutate}=useSWR<WorkshopTask[]>(can('task.execute')?'/workshop/my-tasks':null,fetcher,{refreshInterval:30000});
+  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[failure,setFailure]=useState('');
+  async function act(t:WorkshopTask){if(busy)return;setBusy(true);setFailure('');setMessage('');try{await api(`/workshop/my-tasks/${t.id}/actions`,{body:{action:t.status==='pending'?'start':'complete',expectedVersion:t.version}});setMessage(t.status==='pending'?'شروع کار ثبت شد.':'پایان کار ثبت شد؛ منتظر تأیید مسئول تصادفات.');}catch(e){setFailure(errorMessage(e));}finally{await mutate();setBusy(false);}}
+  if(!can('task.execute'))return <p className="callout">کارتابل تعمیرکار برای شما فعال نیست.</p>;
+  return <div className="technician-page"><header><p>{me.displayName}</p><h1>کارهای من</h1><p>خودرو را بررسی کنید؛ شروع و پایان کار را همین‌جا بزنید.</p></header>{message&&<p role="status" className="callout">{message}</p>}{failure&&<p role="alert" className="callout callout-red">{failure}</p>}{error&&<p role="alert">کارها دریافت نشد. <button className="btn" onClick={()=>void mutate()}>تلاش دوباره</button></p>}{!data&&!error&&<p>در حال دریافت کارها…</p>}{data?.filter(t=>t.status!=='approved').map(t=><article key={t.id} className="technician-job"><div className="row"><span className="chip">{t.stationCode||t.departmentName}</span><span>{TASK_STATUS_LABELS[t.status as keyof typeof TASK_STATUS_LABELS]}</span></div><h2>{t.vehicleLabel}</h2><Plate value={t.plate??''} large/><p>{t.title||t.departmentName}</p><p className="muted small">پرونده <bdi>{toPersianDigits(t.caseNumber)}</bdi> · موعد: {formatJalali(t.plannedEndAt,{time:true})}</p>{['pending','in_progress'].includes(t.status)?<button className={`btn technician-action ${t.status==='pending'?'btn-primary':''}`} disabled={busy||(t.status==='pending'&&!t.canStart)} onClick={()=>void act(t)}>{busy?'در حال ثبت…':t.status==='pending'?'شروع کار':'پایان کار'}</button>:<p className="callout">{t.status==='done'?'پایان ثبت شده؛ منتظر تأیید مسئول تصادفات.':'کار متوقف است؛ با مسئول تصادفات هماهنگ کنید.'}</p>}{t.status==='pending'&&!t.canStart&&<p>منتظر تأیید تحویل کار قبلی توسط مسئول تصادفات.</p>}</article>)}{data&&!data.some(t=>t.status!=='approved')&&<div className="technician-job"><h2>کار بازی ندارید</h2><p>وقتی کاری به شما ارجاع شود، همین‌جا نمایش داده می‌شود.</p></div>}</div>;
+}
