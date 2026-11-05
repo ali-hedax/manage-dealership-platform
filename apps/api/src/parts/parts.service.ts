@@ -2,7 +2,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
-  FINANCE_GATE_LABELS,
   PART_SOURCE_LABELS,
   PART_SOURCES,
   assessmentDispatchLines,
@@ -364,27 +363,32 @@ export class PartsService {
     }
     const unitPrice = input.unitPriceRial;
     const aboveApproved = p.approvedUnitPriceRial !== null && unitPrice > p.approvedUnitPriceRial;
-    const needsMarketApproval=source==='external';
+    // Owner rule (2026-11-05): the parts clerk prices freely. A recorded payer
+    // approval is needed only when golden card or insurance pays and the
+    // outside-market price exceeds the assessment-approved unit price (or no
+    // approved price exists to compare with).
+    const kase=source==='external'?await this.loadOpenCase(tx,tenantId,p.caseId):null;
+    const payerPays=kase?.coverageType==='golden_card'||kase?.coverageType==='insurance';
+    const needsMarketApproval=source==='external'&&payerPays&&(p.approvedUnitPriceRial===null||unitPrice>p.approvedUnitPriceRial);
     const quotes=await tx.select().from(partQuotes).where(and(eq(partQuotes.partId,p.id),eq(partQuotes.tenantId,tenantId))).orderBy(desc(partQuotes.createdAt),desc(partQuotes.id));
-    const quote=needsMarketApproval?quotes[0]:undefined;
+    const latest=quotes[0];
+    const quote=needsMarketApproval?latest:latest?.status==='approved'?latest:undefined;
     if(needsMarketApproval) {
-      const kase=await this.loadOpenCase(tx,tenantId,p.caseId);
-      const payer=kase.coverageType==='golden_card'?'golden_card':kase.coverageType==='insurance'?'insurer':kase.coverageType==='personal'?'customer':null;
-      if(quote&&payer&&quote.source!==payer)throw badRequest('MARKET_APPROVAL_REQUIRED','پوشش پرونده تغییر کرده است؛ تأیید پرداخت‌کننده فعلی لازم است');
+      const payer=kase!.coverageType==='golden_card'?'golden_card':'insurer';
+      if(quote&&quote.source!==payer)throw badRequest('MARKET_APPROVAL_REQUIRED','پوشش پرونده تغییر کرده است؛ تأیید پرداخت‌کننده فعلی لازم است');
       if(!quote || quote.status!=='approved' || quote.unitPriceRial!==unitPrice || quote.quantity!==p.quantity || quote.supplier!==(input.supplier??'') || quote.validUntil<new Date()) {
-        throw badRequest(aboveApproved?'PRICE_ABOVE_APPROVED':'MARKET_APPROVAL_REQUIRED','خرید بیرون به تأیید ثبت‌شده همین مبلغ، تعداد و فروشنده توسط مسئول تصادفات نیاز دارد');
+        throw badRequest(aboveApproved?'PRICE_ABOVE_APPROVED':'MARKET_APPROVAL_REQUIRED','قیمت بالاتر از مبلغ تأییدشدهٔ کارت طلایی یا بیمه است؛ مسئول تصادفات باید تأیید پرداخت‌کننده را برای همین مبلغ، تعداد و فروشنده ثبت کند');
       }
       if(quote.decidedAt && at<quote.decidedAt)throw badRequest('ORDER_BEFORE_APPROVAL','زمان خرید نمی‌تواند پیش از تأیید قیمت باشد');
     }
+    // Owner rule (2026-11-05): money never blocks a purchase. The finance state
+    // is recorded and surfaces as an alert to the accident coordinator instead.
     const gate = await this.finance.gate(tx, tenantId, p.caseId, unitPrice * p.quantity);
-    if (!gate.open) {
-      throw badRequest('FINANCE_GATE', FINANCE_GATE_LABELS[gate.reason], { reason: gate.reason });
-    }
     return {
       ...common,
       unitPriceRial: unitPrice,
-      priceApprovalRef: quote?.reference ?? (aboveApproved ? input.priceApprovalRef! : null),
-      priceApprovedBy: quote?.approver ?? (aboveApproved ? input.priceApprovedBy! : null),
+      priceApprovalRef: quote?.reference ?? input.priceApprovalRef ?? null,
+      priceApprovedBy: quote?.approver ?? input.priceApprovedBy ?? null,
       financeBasis: gate.reason,
       financeExceptionId: gate.exceptionId ?? null,
     };

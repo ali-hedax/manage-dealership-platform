@@ -174,10 +174,10 @@ export const FINANCE_GATE_LABELS: Record<FinanceGateReason, string> = {
   no_customer_share: 'خرید مجاز: سهم مشتری ندارد',
   advance_paid: 'خرید مجاز: پیش‌پرداخت دریافت شده',
   exception: 'خرید مجاز با استثنای تأییدشده',
-  shares_unknown: 'خرید متوقف: سهم مشتری مشخص نشده',
-  no_estimate: 'خرید متوقف: کارشناسی نهایی نشده',
-  advance_missing: 'خرید متوقف: پیش‌پرداخت دریافت نشده',
-  re_approval_required: 'خرید متوقف: هزینه افزایش یافته و تأیید مالی دوباره لازم است',
+  shares_unknown: 'هشدار: سهم مشتری مشخص نشده؛ خرید متوقف نمی‌شود',
+  no_estimate: 'هشدار: کارشناسی نهایی نشده؛ خرید متوقف نمی‌شود',
+  advance_missing: 'هشدار: پیش‌پرداخت ثبت نشده؛ تصمیم با مسئول تصادفات است',
+  re_approval_required: 'هشدار: هزینه افزایش یافته؛ پیش‌پرداخت را با مسئول تصادفات بررسی کنید',
 };
 
 export const MODULE_LABELS: Record<ModuleKey, string> = {
