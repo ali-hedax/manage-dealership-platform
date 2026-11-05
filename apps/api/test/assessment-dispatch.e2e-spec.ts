@@ -1,6 +1,8 @@
 import {DEFAULT_WORK_CALENDAR,type Assessment,type CaseDetail,type Part} from '@manage/shared';
 import {createHarness,type Harness,type Client} from './harness';
 import {writeSheet} from '../src/parts/xlsx';
+import {eq} from 'drizzle-orm';
+import {assessments} from '../src/db/schema';
 
 let h:Harness,expert:Client,parts:Client,admin:Client;
 beforeAll(async()=>{h=await createHarness();expert=await h.login('expert');parts=await h.login('parts');admin=await h.login('admin');});
@@ -48,9 +50,20 @@ it('computes day-only case and station plans with short Thursday/holiday and cou
  const departments=(await expert.get('/departments')).body;const departmentId=departments[0].id;
  const first=await expert.post(`/cases/${c.id}/tasks`,{departmentId,durationDays:2});expect(first.status).toBe(201);expect(first.body.plannedEndAt).toBe(new Date('2026-11-09T11:00:00+03:30').toISOString());
  const next=await expert.post(`/cases/${c.id}/tasks`,{departmentId,durationDays:1,dependsOn:[first.body.id]});expect(next.status).toBe(201);expect(next.body.plannedStartAt).toBe(first.body.plannedEndAt);expect(next.body.plannedEndAt).toBe(new Date('2026-11-10T11:00:00+03:30').toISOString());
+ expect((await expert.post(`/cases/${c.id}/tasks`,{departmentId,durationDays:1,dependsOn:[first.body.id],plannedStartAt:c.repairPlan!.startAt})).body.code).toBe('DEPENDENCY_TIME_CONFLICT');
  expect((await expert.post(`/cases/${c.id}/tasks`,{departmentId,durationDays:1})).status).toBe(201);
  const overview=await expert.get('/workshop/overview');expect(overview.body.caseBudgets.find((p:{caseId:string})=>p.caseId===c.id)).toMatchObject({days:10,budgetMinutes:4800,plannedMinutes:1440});
  const latest=(await expert.get(`/cases/${c.id}`)).body as CaseDetail;
  expect((await expert.patch(`/cases/${c.id}`,{expectedVersion:latest.version,repairDurationDays:11})).body.code).toBe('REASON_REQUIRED');
  const changed=await expert.patch(`/cases/${c.id}`,{expectedVersion:latest.version,damageDescription:'شرح اصلاح‌شده'});expect(changed.status).toBe(200);expect(changed.body.repairPlan).toEqual(c.repairPlan);
+});
+
+it('clears only an explicitly confirmed legacy technical wait without issuing an external approval',async()=>{
+ const c=await newCase();let a=(await expert.post(`/cases/${c.id}/assessments`,{kind:'initial',assessorName:'کارشناس آزمون'})).body as Assessment;
+ a=(await expert.post(`/assessments/${a.id}/items`,{expectedVersion:a.version,action:'repair',description:'اجرت آزمون',labourRial:100})).body;
+ a=(await expert.post(`/assessments/${a.id}/finalize`,{expectedVersion:a.version})).body;
+ const b=await expert.post(`/cases/${c.id}/blockers`,{reason:'authorization',description:'سابقه ساختگی روال قبلی'});expect(b.status).toBe(201);
+ await h.db.db.update(assessments).set({authorizationStatus:'pending',blockerId:b.body.id}).where(eq(assessments.id,a.id));
+ const response=await expert.post(`/assessments/${a.id}/finalize`,{expectedVersion:a.version});expect(response.status).toBe(201);expect(response.body.authorizationStatus).toBe('not_required');expect(response.body.authorization).toBeNull();
+ const detail=(await expert.get(`/cases/${c.id}`)).body as CaseDetail;expect(detail.blockers.find(row=>row.id===b.body.id)?.resolvedAt).toBeTruthy();
 });
