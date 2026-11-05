@@ -4,6 +4,12 @@
 
 - The owner can make a private one-hour recovery link for a colleague who lost the password or Authenticator. The colleague sets a new password and reconnects Authenticator, and old sessions end. The owner account cannot use this path. Not yet on the server.
 
+## [Released on Manage] — production domain managebyhedax.ir, 2026-11-05
+
+- Manage now answers at `https://managebyhedax.ir`, with 301 redirects from HTTP, `www`, the raw IP and the former temporary address. Staff sign in once more, and installed mobile apps need reinstalling from the new address. Invitation links use the new address.
+- Removed the Preview wording from the site-gate page, which staff do not see while Authenticator sign-in is on. It reaches the server with the next release.
+- Traffic now passes through the ArvanCloud proxy. Login limits, sessions and audit records keep each visitor's real address.
+
 ## [Released on Manage] — entry and operational workbench, 2026-11-05
 
 - Refined Persian login and explicit selection among permitted desks, with a consistent return destination and fewer duplicate menu entries.
@@ -179,7 +185,6 @@ All notable changes. Versions follow semantic versioning once releases start.
 
 ### Security
 - `drizzle-orm` raised to 0.45.x and `multer` overridden to ≥ 2.5.0 to clear high-severity advisories reported by `pnpm audit`.
-
 
 ## Preview browser sign-in compatibility — 2026-11-01
 
