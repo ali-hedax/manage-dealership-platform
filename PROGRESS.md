@@ -2,7 +2,7 @@
 
 ## دامنه managebyhedax.ir پشت پروکسی آروان — 2026-11-05
 
-Production از طریق پروکسی آروان با `https://managebyhedax.ir` پاسخ می‌دهد؛ برنامه همان `ad54f15` با همان imageهاست، بدون build و migration. [PR #42](https://github.com/ali-hedax/manage-dealership-platform/pull/42) به دستور مالک در `feature/entry-workbench-refresh` ادغام می‌شود (نه main) و checkout سرور و متن gate به همان نسخه می‌رسد؛ کد برنامه و imageها تغییر نمی‌کنند.
+Production از طریق پروکسی آروان با `https://managebyhedax.ir` پاسخ می‌دهد؛ برنامه همان `ad54f15` با همان imageهاست، بدون build و migration. [PR #42](https://github.com/ali-hedax/manage-dealership-platform/pull/42) روی `feature/entry-workbench-refresh` باز است و CI سبز دارد. مالک دستور ادغام داد، ولی کنترل مجوز Claude Code ادغام بدون بازبینی را رد کرد؛ ادغام را باید خود مالک انجام دهد. checkout سرور هنوز `ad54f15` است و متن gate پس از ادغام به سرور می‌رسد.
 
 - گواهی کاربران را آروان مدیریت و تمدید می‌کند. گواهی سرور در `/home/manage/operations/tls/` فقط برای ارتباط آروان با سرور است و **2027-02-03 08:08:19 UTC** منقضی می‌شود. به تصمیم مالک هیچ تمدیدی راه‌اندازی نشده است؛ پیش از این تاریخ باید جایگزین تعیین شود ([راهنما](docs/DEPLOYMENT.md#production-domain-and-certificate)).
 - Caddy فقط بازه‌های رسمی آروان را معتبر می‌داند و یک IP تأییدشده به اپ می‌دهد. جعل هدر، چه از مسیر آروان چه مستقیم، بی‌اثر است؛ محدودیت ورود برای هر کاربر جداست.
