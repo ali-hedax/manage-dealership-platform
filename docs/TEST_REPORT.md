@@ -1,5 +1,13 @@
 # Test report
 
+## Integration into main — 2026-11-05 — passed, not yet deployed
+
+PR #49 (`release/integrate-20261105`, head `e0f9e99`): published release `79f6585` + staff access recovery (#47). Conflicts only in CHANGELOG, PROGRESS and this report.
+
+- CI on `e0f9e99`: all six checks passed (documentation/API inventory, lint/typecheck/build/unit+integration, PostgreSQL 16 migrations and seed, Playwright, Docker images and compose smoke test, dependency audit and secret scan). Merged as `1be462f`.
+- Local Linux (Node 22, pnpm 10): docs check, shared build, lint and typecheck pass; shared 21/21. API test files run one per process because the single-process run exceeded 8 GB here: **192 passed, 0 failed**, 9 PostgreSQL-only tests skipped locally (covered by the CI PostgreSQL job). Includes `staff-recovery.e2e-spec.ts` 7/7.
+- Not tested: staff recovery on the production images behind Arvan (deployment pending).
+
 ## Assessment dispatch and repair-day release — 2026-11-05 — passed and published
 
 Application/test `79f6585`: [all six CI checks](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42016899492) passed: shared 21/21, API 188 plus 9 separate PostgreSQL tests, browser 35 passed/2 optional image skips and daily/support 3/3. Final local daily/support 3/3 after replacing a disclosure-enumeration race with a wait for rendered controls. [Release evidence](RELEASE_DISPATCH_DAYS_20261105.md) records exact images/source, restored-copy migration, original-row preservation, final backup restore and read-only live UI checks. Numeric day input and selection/dispatch controls verified in the owner session without submitting production operations. All original dates, users, official decisions and access preserved; only nullable repair_plan added. Published with the owner's continuing authorization, no main merge.

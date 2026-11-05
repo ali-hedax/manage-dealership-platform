@@ -1,5 +1,48 @@
 # Repository audit — 2026-11-01
 
+## Update 2026-11-05 — main is the single base
+
+With explicit owner approval, PR #49 merged the published platform (#28–#48, release `79f6585`) and staff recovery (#47) into main (`1be462f`). The stacked PRs #30 and #32–#48 and the superseded #25 and #27 were then closed with a pointer to #49. The branches below are no longer needed and are marked for deletion (the session that did the integration could not delete branches; the owner deletes them from GitHub's Branches page). Every commit of a merged branch is reachable from main; a deleted branch can be restored from its closed PR page or with `git push origin <sha>:refs/heads/<name>`.
+
+| Branch | Last commit | Reason |
+| --- | --- | --- |
+| `chore/production-domain-managebyhedax` | `549c763b4e5263c2ad03a78ee56a4dd641d8ae11` | merged into main |
+| `docs/readme-refresh` | `87a0853481c0efaa6ab8de035d8de395e31c18f9` | merged into main |
+| `docs/repository-audit-20261101` | `e21b64690b8204237cdbd6169fb8b03b33a784a3` | merged into main |
+| `feature/accident-mvp` | `0269e5ce710b4d3416a2499b7a570a592423210d` | merged into main |
+| `feature/accident-workflow-redesign` | `5681ddab9998db69e501a3f3d8724717ac0e3125` | merged into main |
+| `feature/assessment-intake-simplification` | `2af7fcf56484dbd5af4f95afe255be1d196df9ae` | merged into main |
+| `feature/assessment-parts` | `b61de9b466c0fb1e2e53986b6c2d24736ace1bd7` | merged into main |
+| `feature/assessment-parts-dispatch` | `65284510bbbb9ce8a8d6249eeb7aec7ea04ef09b` | merged into main |
+| `feature/daily-parts-reports` | `9b07cb0816a92e49db2a0755042866577eec601e` | merged into main |
+| `feature/department-workspaces` | `ac77e02d8119079d95784ad615b4768e78b1672c` | merged into main |
+| `feature/entry-workbench-refresh` | `475a8979130221856599c1cfbea61851abe78302` | merged into main |
+| `feature/login-redesign` | `ab53f74865d3e47c9d18d5fb2fa4ebf231eeed2c` | merged into main |
+| `feature/online-pwa` | `11502044738513f3cd04cb13a3574017f2691b79` | merged into main |
+| `feature/parts-finance` | `c4c2ae68a91344546c1a3be64936f6c90ad43657` | merged into main |
+| `feature/personal-auth-totp` | `82152c2c9298b5c37c870e618e171592892b3820` | merged into main |
+| `feature/preview-deploy` | `e90aae7bd635da68a4aff13bee327c54c446ff1d` | merged into main |
+| `feature/qc-delivery` | `17a0b4ce885e517e5ab1404d7897d113762fc447` | merged into main |
+| `feature/reference-data` | `43ca48209d8942b7edac91d595841aed05e6d343` | merged into main |
+| `feature/reports-center` | `8ec36cdf04ba8e4c069857259c52f71064adbac2` | merged into main |
+| `feature/staff-access-recovery` | `474d99ed5d366c369560c54b25a60c8ff8c1e6dc` | merged into main |
+| `feature/staff-email-invitations` | `b7e4c93d5e29053019e359c34a53691d649642f2` | merged into main |
+| `feature/ui-polish` | `346ad91f17b6948171f6bd0c4015da43a4a4d017` | merged into main |
+| `feature/ui-states` | `701f02c08373a20193b1459fe6b60be403633387` | merged into main |
+| `feature/vehicle-excel-import` | `24714efcd9d67dcbb44803a887e3944c8b1ef420` | merged into main |
+| `fix/invitation-email-delivery` | `8290a8c0296b96f836420129a0999d9fec16a82f` | merged into main |
+| `fix/short-case-vehicle-label` | `67157c317229146797531536315b39b037468920` | merged into main |
+| `fix/system-admin-workbench` | `db5ce5b03e256110b81a651801b968a2dd81abe5` | merged into main |
+| `release/integrate-20261105` | `e0f9e99b14e91ce03ef4109c807a9ee7765bf2f4` | merged into main |
+| `build/preview-images-pr28` | `8bd0d0aebc99b7936903811e23f2f9bd17d1b8a0` | superseded: build-only (#29, closed earlier) |
+| `build/preview-images-pr30` | `4f32b47b27a2c5ada62e00a03bc0d7539ca0f8ab` | superseded: build-only (#31, closed earlier) |
+| `fix/preview-image-artifacts` | `0e9bb59bda057fcbf6722a8f5d68f6eff4c7ce20` | superseded: #25, image export already in main CI |
+| `docs/staff-preview-release-record` | `76df0b3810ad1a0d17c3059b95f9fa5ea9685ca1` | superseded: #27, its new record file copied into main |
+
+Kept on purpose (legacy prototype lineage, AGENTS.md): `feature/nobat-dahi` (#1), `chore/rename-index-html` (#3), `feature/b2b-auto-report`, `chore/preserve-local-prototype-20261101` (#22), `docs/github-professional-20261012`.
+
+---
+
 Repository: [ali-hedax/manage-dealership-platform](https://github.com/ali-hedax/manage-dealership-platform). Public; default branch main; connected GitHub account has admin/push access. No merge, deletion, branch-protection, server/configuration, DNS or Production change was performed during this audit. Source by HEDAX was not accessed.
 
 ## Branch and pull-request snapshot
