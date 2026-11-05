@@ -1,5 +1,9 @@
 # Changelog
 
+## [Published] — assessment dispatch and working-day repair plans, 2026-11-05
+
+Application `79f6585` published after all six CI checks and restored-copy migration/data-preservation verification. Single/all assessment dispatch, duplicate-safe complete supplements, working-day intake and station shares are operational. Existing official approval history, outside-market quote controls, dates and user access are preserved. See [release record](docs/RELEASE_DISPATCH_DAYS_20261105.md).
+
 ## [In review] — assessment dispatch and working-day repair plans, 2026-11-05
 
 - Select individual/all replacement lines in assessment and send needs directly to parts; show already sent quantities and dispatch only increases. Full supplement files reconcile prior exact codes and preserve previous versions; reductions/code changes with supply history require review.

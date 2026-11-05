@@ -1,5 +1,9 @@
 # Test report
 
+## Assessment dispatch and repair-day release — 2026-11-05 — passed and published
+
+Application/test `79f6585`: [all six CI checks](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42016899492) passed: shared 21/21, API 188 plus 9 separate PostgreSQL tests, browser 35 passed/2 optional image skips and daily/support 3/3. Final local daily/support 3/3 after replacing a disclosure-enumeration race with a wait for rendered controls. [Release evidence](RELEASE_DISPATCH_DAYS_20261105.md) records exact images/source, restored-copy migration, original-row preservation, final backup restore and read-only live UI checks. Numeric day input and selection/dispatch controls verified in the owner session without submitting production operations. All original dates, users, official decisions and access preserved; only nullable repair_plan added. Published with the owner's continuing authorization, no main merge.
+
 ## Assessment dispatch and working-day repair plans — 2026-11-05 — in validation
 
 Working branch `feature/assessment-parts-dispatch`, incorporating the current entry-workbench branch through 475a897 and preserving the production source f2a3758/domain configuration. Owner clarified that recording initial/supplement assessments and sending needs require no generic authorization; only outside-market buying needs recorded price coordination. Added single/all selection, current-version/tenant/transaction checks, exact-code/root matching, incremental quantities and explicit review for reductions/code changes. Complete supplement imports reconcile rather than duplicate existing lines; historical versions remain intact. Company supply is not blocked by a generic assessment or price-increase gate; outside-market quote approval and existing payment controls remain enforced.
