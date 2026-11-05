@@ -6,6 +6,26 @@
 - Recording assessments no longer creates a generic authorization wait. Outside-market purchases still require the exact approved quote; regular company supply follows its normal path.
 - Enter repair duration in working days; the server calculates the forecast from a frozen dealership calendar. Allocate day shares to stations, automatically sequence dependencies and report the case budget without counting parallel allocations twice. Existing case dates remain unchanged until explicitly revised.
 
+## [Unreleased] — interface polish, 2026-11-05
+
+- SVG logo set (full lockup and compact wordmark); sidebar and phone bar show "by HEDAX" as readable text.
+- Case, plate and admission numbers in Persian digits on every list and board.
+- Removed developer text from the interface (local-sync line, documentation file name, repeated "no admission number" sentence).
+- Tab title per area; distinct menu icons; hamburger icon on the phone menu button; duplicate logo removed from desk selection.
+
+## [Unreleased] — login page refresh, 2026-11-05
+
+- Login heading «ورود به حساب کاری», email label «ایمیل کاری», shorter guidance; product descriptor «سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو» under the approved slogan.
+- Show/hide password moved into the password field as an eye icon; «رمز را فراموش کرده‌اید؟» directly under the password; submit button no longer greyed out before typing (native required-field validation instead).
+- Two-factor note under the continue button in personal (email + Authenticator) mode; install action restyled as a quiet phone link.
+- Numbered route (01 پذیرش و کارشناسی · 02 تأمین و تعمیر · 03 کنترل و تحویل) and «محصولی از هداکس» signature on the brand panel. No API, auth or permission change.
+
+## [Released on Manage] — production domain managebyhedax.ir, 2026-11-05
+
+- Manage now answers at `https://managebyhedax.ir`, with 301 redirects from HTTP, `www`, the raw IP and the former temporary address. Staff sign in once more, and installed mobile apps need reinstalling from the new address. Invitation links use the new address.
+- Removed the Preview wording from the site-gate page, which staff do not see while Authenticator sign-in is on. It reaches the server with the next release.
+- Traffic now passes through the ArvanCloud proxy. Login limits, sessions and audit records keep each visitor's real address.
+
 ## [Released on Manage] — entry and operational workbench, 2026-11-05
 
 - Refined Persian login and explicit selection among permitted desks, with a consistent return destination and fewer duplicate menu entries.

@@ -8,6 +8,54 @@ Added a nullable repair-plan calendar snapshot (migration 0015, no backfill) for
 
 Completed so far: API assessment/parts/workshop/new flows 30/30; shared 21/21; shared/API/web builds and lint passed. New browser end-to-end journey and full regression are running; not published. Exact-code/manual supply versus outside-market gate, calendar half-day/holiday examples, frozen snapshot and overlap assertions are included. Add final results, PR/CI and any release evidence before calling complete.
 
+## Interface polish — 2026-11-05 — branch `feature/ui-polish`
+
+Local Linux, built API + web (PGlite synthetic seed): web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped (optional screenshots)**; the one initial failure (discrepancy queue filtered by the Latin case number) was updated to the Persian-digit case number and passed on rerun. Full CI pending on the PR.
+
+## Login page refresh — 2026-11-05 — branch `feature/login-redesign`
+
+Local, Linux, built web + API (PGlite synthetic seed): `pnpm --filter @manage/web typecheck` and `build` pass. Browser `entry-refresh`, `pwa`, `personal-auth` (desktop project) **10/10** passed, including Authenticator login, install guide keyboard/iPhone flows and phone-width overflow. Visual check at 1440×900 and 390×844 in username mode and in personal mode (auth options mocked to TOTP); password toggle switches the field type; no horizontal overflow. Full CI not yet run on this branch.
+
+## ArvanCloud proxy, client address and sign-in — 2026-11-05
+
+Client address, live through Arvan from a workstation at a known public address (`ad54f15`):
+
+- API received the real address in all three cases: normal request, forged `X-Forwarded-For` through Arvan, forged header sent directly to the VM. Arvan's peer `94.101.183.7` is inside the trusted list.
+- Login limit: same client 400 ×10 then 429 ×2; forged header stays 429; a different client still gets 400. Requests had an empty body, so nothing was written.
+- Real activity: the first real sign-in recorded after the change has a non-Arvan address; no audit or session row since the change has an Arvan address.
+- `X-Forwarded-Proto: https` arrives from Arvan (read from a temporary access log, removed immediately). The app decides nothing from the protocol: `COOKIE_SECURE=true` and `PUBLIC_APP_URL` are explicit.
+
+Redirects: `http://www` goes to `https://www`, then the apex, then `/login`. It never lands on HTTP, but Arvan issues the first hop before reaching the VM, so it is **not a direct redirect**. The VM itself answers `http` + `www` with 301 to the apex.
+
+Sign-in, Edge 21/21 on an **isolated copy**, not production: same api/web image IDs, same Caddyfile and certificate, real domain name mapped through an SSH tunnel, RAM database, synthetic owner, internal network, removed afterwards. Invitation link, password, enrollment, wrong password, replayed code, wrong code, sign-in with a fresh code, Secure + HttpOnly + SameSite=Lax + host-only cookie, verified session, sign-out, old cookie refused by the server. It does not cross the Arvan hop. Two earlier runs were discarded because of test-script faults: one sent requests to the real address with a synthetic cookie; they returned 401/204 and wrote nothing.
+
+Forgot password: the login link opens a page telling the person to contact the administrator. **Self-service recovery does not exist.**
+
+PWA, Edge 12/12 through Arvan on the real address: manifest parsed, icons served, no installability errors, phone guide opens, no horizontal scroll. There is no service worker, by design. **Not tested:** the install itself on a real phone.
+
+**Not tested by this agent:** sign-in with a real account, which needs that person's Authenticator. CI: see the PR.
+
+## Production domain switch — 2026-11-05 — live
+
+Live from the workstation after `--dns-finish` and `switch-to-domain.sh` (`ad54f15`, same api/web/gate images by ID; no build, no migration):
+
+- `curl -I`: `http://managebyhedax.ir` 301, `https://www.managebyhedax.ir` 301, `http://85.198.52.255` 301, all to `https://managebyhedax.ir/`.
+- `curl -I https://managebyhedax.ir`: **302 to `/login`** for an anonymous client, by design; `/login` 200 with certificate verification OK. The 200 in the original request is reached only after that redirect.
+- Former name over HTTP and HTTPS: 301 keeping path and query. Raw IP over HTTPS: handshake failed until `default_sni` was added, then 301; its certificate is self-signed, so browsers warn first. POST with client header and empty body 400, confirming the proxy chain. Manifest 200, `/api/v1/auth/me` 401, POST without client header 403.
+- Certificate: Let's Encrypt YE1, both names, valid until 2027-02-03 08:08:19 UTC. DNS-01 issuance worked first time.
+- Brand grep of this branch and of the running web, api and gate containers: no "Managed by HEDAX" or "Manage Preview" in any served file. Live title and manifest name: "Manage by HEDAX". "Manage Preview" remains only in script comments and historical docs. Database dump: no old address.
+- **Not tested:** a real sign-in, because it needs the owner's Authenticator. CI not run: local commits only.
+
+## Production domain preparation — 2026-11-05 — before the switch
+
+Environment: production VM, read-only checks plus a transitional Caddy config; final config tested in a throwaway container with no published ports and a temporary self-signed certificate.
+
+- Final config: `http` apex, `www`, raw IP and old name 301 to `https://managebyhedax.ir` with path and query kept; `https` www 301; `https` apex `/` 302 to `/login`, `/login` 200, manifest 200.
+- Let's Encrypt staging over HTTP-01: **failed twice**, "Timeout during connect". Foreign TCP probes of 443 fail on all seven foreign nodes and succeed from Iran; a 70-second capture on eth0 during validation showed one external SYN to port 80, not the retries of a reachable validator. Port 80 from foreign nodes was not measured separately because that probe request timed out.
+- DNS: foreign nodes resolve the domain to the VM; no CAA record. DNS-01 issuance, the certificate install step and `switch-to-domain.sh` past its certificate check are **not yet run**.
+- `switch-to-domain.sh` on the VM with no certificate: exit 1 before any change; `.env` and the Caddyfile checksums unchanged.
+- `node --test deploy/preview/gate.test.mjs`: 2/2. `node scripts/check-docs.mjs`: pass. shellcheck not available locally; CI does not cover the new script yet. CI not run: this branch is a local commit.
+
 ## Published entry/workbench — 2026-11-05
 
 Application/test `ad54f15`; all six [CI 41974333191](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41974333191) pass: shared 17, API 185 plus nine PG-only tests separately, browser 34 with two optional screenshot skips, daily/support/reservation 3. Final local entry/Auth/ICS 6/6, workshop/holiday API 12/12, daily 3/3; build/lint pass. Older trials below are history, not the final gate. [Release evidence](RELEASE_ENTRY_20261105.md).

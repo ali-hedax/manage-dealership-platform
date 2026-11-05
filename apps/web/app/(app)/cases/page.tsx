@@ -204,7 +204,7 @@ function CasesList() {
                     <Link href={`/cases/${c.id}`} className="num" style={{ fontWeight: 700 }} onClick={(e) => e.stopPropagation()}>
                       {toPersianDigits(c.caseNumber)}
                     </Link>
-                    <div className="small">پذیرش ایران‌خودرو: <bdi>{c.admissionNo?toPersianDigits(c.admissionNo):'ندارد؛ پیگیری با شماره منیج'}</bdi></div>
+                    {c.admissionNo?<div className="small">پذیرش ایران‌خودرو: <bdi>{toPersianDigits(c.admissionNo)}</bdi></div>:<div className="small muted">بدون شماره پذیرش</div>}
                     <div className="xs muted">تاریخ پذیرش {formatJalali(c.admittedAt)}</div>
                   </td>
                   <td>

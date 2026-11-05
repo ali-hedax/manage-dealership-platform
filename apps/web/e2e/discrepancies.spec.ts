@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { toPersianDigits } from '@manage/shared';
 import { login } from './helpers';
 
 // Parts discrepancy queue in the parts report: a part is handed over but the
@@ -27,7 +28,7 @@ test('parts clerk reviews a handover-vs-shortage discrepancy and records the out
   await login(page, 'parts');
   await page.goto('/reports?view=parts');
   const queue = page.getByTestId('discrepancy-queue');
-  const item = queue.getByTestId('discrepancy').filter({ hasText: kase.caseNumber });
+  const item = queue.getByTestId('discrepancy').filter({ hasText: toPersianDigits(kase.caseNumber) });
   await expect(item).toContainText('تحویل ثبت‌شده، اما واحد تعمیر کمبود اعلام کرده');
   await expect(item).toContainText('آینه بغل آزمون');
   await expect(page.getByTestId('work-row').filter({ hasText: 'مغایرت قطعه' }).first()).toBeVisible();
@@ -44,7 +45,7 @@ test('parts clerk reviews a handover-vs-shortage discrepancy and records the out
   await expect(item).toHaveCount(0);
 
   await queue.getByRole('button', { name: 'رفع‌شده' }).click();
-  const done = queue.getByTestId('discrepancy').filter({ hasText: kase.caseNumber });
+  const done = queue.getByTestId('discrepancy').filter({ hasText: toPersianDigits(kase.caseNumber) });
   await expect(done).toContainText('آینه در قفسه واحد پیدا شد');
   await done.getByRole('button', { name: 'سابقه رسیدگی' }).click();
   await expect(done).toContainText('شناسایی خودکار');
