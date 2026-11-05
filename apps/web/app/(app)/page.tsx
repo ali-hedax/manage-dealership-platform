@@ -48,7 +48,7 @@ export default function DashboardPage() {
     { flag: 'due_soon', count: data.dueSoon, title: 'تحویل در ۴۸ ساعت آینده', detail: 'برای تحویل به‌موقع پیگیری شود', tone: 'amber' },
     { flag: 'unassigned', count: data.unassigned, title: 'بدون مسئول', detail: 'مسئول پرونده تعیین نشده است', tone: 'amber' },
     { flag: 'needs_completion', count: data.needsCompletion, title: 'نیازمند تکمیل اطلاعات', detail: 'اطلاعات پایه یا پوشش ناقص است', tone: 'amber' },
-    { flag: 'awaiting_authorization', count: data.awaitingAuthorization, title: 'منتظر مجوز کارشناسی یا الحاقیه', detail: 'تصمیم کارت طلایی، بیمه یا مشتری ثبت نشده است', tone: 'amber' },
+    { flag: 'awaiting_authorization', count: data.awaitingAuthorization, title: 'منتظر تأیید قیمت خرید بیرون', detail: 'هماهنگی قیمت بازار با کارت طلایی، بیمه یا مشتری باقی مانده است', tone: 'amber' },
     { flag: 'parts_overdue', count: data.partsOverdue, title: 'قطعه با دیرکرد', detail: 'زمان پیش‌بینی رسیدن قطعه گذشته است', tone: 'red' },
     { flag: 'parts_to_order', count: data.partsToOrder, title: 'قطعه سفارش‌نشده', detail: 'نیاز ثبت شده ولی سفارش یا رزرو نشده است', tone: 'amber' },
     { flag: 'finance_pending', count: data.financePending, title: 'منتظر تصمیم یا دریافت مالی', detail: 'پیش‌پرداخت یا استثنا منتظر مدیر یا صندوق است', tone: 'amber' },
