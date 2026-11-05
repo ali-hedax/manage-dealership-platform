@@ -348,6 +348,34 @@ describe('acceptance 4 and 8: personal case, advance payment and the purchase ga
     expect((await order(fender!, 7_500_000)).body.code).toBe('PRICE_ABOVE_APPROVED');
   });
 
+  it('raises non-blocking advance and parts-amount alerts the coordinator answers once (owner rule 2026-11-05)', async () => {
+    const admin = await h.login('admin');
+    expect((await expert.put('/settings/alerts', { partsAlertThresholdRial: 5_000_000 })).status).toBe(403);
+    expect((await admin.get('/settings/alerts')).body).toMatchObject({ partsAlertThresholdRial: 500_000_000, defaultRial: 500_000_000 });
+    expect((await admin.put('/settings/alerts', { partsAlertThresholdRial: 5_000_000 })).body.partsAlertThresholdRial).toBe(5_000_000);
+
+    const c = await newCase({ coverageType: 'personal' });
+    await authorized(c.id, [{ description: 'درب', unitPriceRial: 8_000_000 }, { description: 'قاب سپر', unitPriceRial: 3_000_000 }], 'customer');
+    await expert.post(`/cases/${c.id}/parts/from-assessment`, { source: 'external' });
+    const alerts = (await expert.get(`/alerts?caseId=${c.id}`)).body;
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'advance', level: 1 }),
+        expect.objectContaining({ kind: 'parts_amount', level: 2, totalRial: 11_000_000, thresholdRial: 5_000_000 }),
+      ]),
+    );
+    const qc = await h.login('qc');
+    expect((await qc.post(`/cases/${c.id}/alerts/respond`, { kind: 'advance', level: 1, response: 'received' })).status).toBe(403);
+    const left = await expert.post(`/cases/${c.id}/alerts/respond`, { kind: 'advance', level: 1, response: 'not_received', note: 'مشتری فردا می‌آورد' });
+    expect(left.body).toEqual([expect.objectContaining({ kind: 'parts_amount', level: 2 })]);
+    expect(left.status).toBe(201);
+    expect((await expert.post(`/cases/${c.id}/alerts/respond`, { kind: 'advance', level: 1, response: 'received' })).body.code).toBe('ALERT_NOT_OPEN');
+    expect((await expert.post(`/cases/${c.id}/alerts/respond`, { kind: 'parts_amount', level: 2, response: 'not_needed' })).body).toEqual([]);
+    const history = (await expert.get(`/cases/${c.id}/alerts/history`)).body;
+    expect(history.map((x: { kind: string; response: string }) => `${x.kind}:${x.response}`).sort()).toEqual(['advance:not_received', 'parts_amount:not_needed']);
+    await admin.put('/settings/alerts', { partsAlertThresholdRial: 500_000_000 });
+  });
+
   it('records payer shares; a mixed case without shares is blocked', async () => {
     const c = await newCase({ coverageType: 'mixed' });
     await authorized(c.id, [{ description: 'کاپوت', unitPriceRial: 15_000_000 }], 'insurer');

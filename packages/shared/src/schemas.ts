@@ -70,6 +70,20 @@ export const technicianAccountSchema = z.object({
 export type TechnicianAccountInput = z.infer<typeof technicianAccountSchema>;
 
 export const technicianPinSchema = z.object({ pin: pinSchema });
+
+/** Coordinator's answer to a non-blocking alert (advance or parts amount). */
+export const alertResponseSchema = z.object({
+  kind: z.enum(['advance', 'parts_amount']),
+  level: z.number().int().min(1).max(1000),
+  response: z.enum(['received', 'not_received', 'not_needed']),
+  note: z.string().trim().max(500).optional(),
+});
+export type AlertResponseInput = z.infer<typeof alertResponseSchema>;
+
+export const alertSettingsSchema = z.object({
+  partsAlertThresholdRial: z.number().int().min(1_000_000).max(1_000_000_000_000),
+});
+export type AlertSettingsInput = z.infer<typeof alertSettingsSchema>;
 export type TechnicianPinInput = z.infer<typeof technicianPinSchema>;
 
 export const customerInputSchema = z.object({
