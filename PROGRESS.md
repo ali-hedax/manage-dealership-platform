@@ -1,13 +1,14 @@
 # PROGRESS — Manage by HEDAX
 
-## انتقال به دامنه managebyhedax.ir — 2026-11-05 — انجام شد
+## دامنه managebyhedax.ir پشت پروکسی آروان — 2026-11-05
 
-Production اکنون فقط با `https://managebyhedax.ir` پاسخ می‌دهد؛ برنامه همان `ad54f15` با همان imageهاست، بدون build و migration. شاخه `chore/production-domain-managebyhedax` فقط commit محلی است و push نشده؛ انتشار بعدی باید این شاخه را در خود داشته باشد تا متن gate به سرور برسد.
+Production از طریق پروکسی آروان با `https://managebyhedax.ir` پاسخ می‌دهد؛ برنامه همان `ad54f15` با همان imageهاست، بدون build و migration. شاخه `chore/production-domain-managebyhedax` push شده و PR روی `feature/entry-workbench-refresh` باز است؛ انتشار بعدی باید آن را در خود داشته باشد تا متن gate به سرور برسد.
 
-- گواهی Let's Encrypt برای هر دو نام با DNS-01 از رایانه مالک گرفته شد، چون VM در هیچ جهت به خارج از ایران راه ندارد. انقضا: **2027-02-03 08:08 UTC**. تمدید دستی است؛ مالک درباره تمدید خودکار تصمیم نگرفته و چیزی راه‌اندازی نشده است ([راهنما](docs/DEPLOYMENT.md#production-domain-and-certificate)).
-- پشتیبان‌ها: `/home/manage/backups/operational/20261105T090716Z` و `/home/manage/backups/domain-switch-20261105T090723Z`. پیکربندی زنده: `/home/manage/operations/caddy/Caddyfile` و `operational.yml`. `.env` فقط در `PREVIEW_HOST` و `PUBLIC_APP_URL` تغییر کرد. SMTP دست نخورد.
-- نام قطعی برند «Manage by HEDAX» است؛ لوگو تغییر نکرد. hostname سرور و نام‌های داخلی (`PREVIEW_HOST`، `deploy/preview/`، `/__preview/health`) به دستور مالک فعلاً می‌مانند.
-- گام بعد: مالک یک بار با حساب خودش وارد شود، چون ورود واقعی آزموده نشده است. سپس تصمیم مالک درباره تمدید گواهی و push این شاخه.
+- گواهی کاربران را آروان مدیریت و تمدید می‌کند. گواهی سرور در `/home/manage/operations/tls/` فقط برای ارتباط آروان با سرور است و **2027-02-03 08:08:19 UTC** منقضی می‌شود. به تصمیم مالک هیچ تمدیدی راه‌اندازی نشده است؛ پیش از این تاریخ باید جایگزین تعیین شود ([راهنما](docs/DEPLOYMENT.md#production-domain-and-certificate)).
+- Caddy فقط بازه‌های رسمی آروان را معتبر می‌داند و یک IP تأییدشده به اپ می‌دهد. جعل هدر، چه از مسیر آروان چه مستقیم، بی‌اثر است؛ محدودیت ورود برای هر کاربر جداست.
+- باز: `http://www` ابتدا به `https://www` می‌رود، چون آروان پیش از رسیدن به سرور ریدایرکت می‌کند؛ مستقیم‌شدن آن فقط از پنل آروان ممکن است.
+- آزمون ورود کامل روی نسخه جدا با داده ساختگی انجام شد (۲۱/۲۱). ورود با حساب واقعی و نصب PWA روی گوشی واقعی با مالک است. بازیابی خودکار رمز وجود ندارد.
+- پشتیبان‌ها: `/home/manage/backups/domain-switch-20261105T090723Z` و `/home/manage/backups/arvan-proxy-20261105T092134Z`. SMTP، Source، hedax.ir و hostname تغییر نکردند.
 
 ## نسخه عملیاتی جاری — ورود و میزهای کار تازه — 2026-11-05
 

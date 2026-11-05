@@ -1,6 +1,6 @@
 # Deployment
 
-**Production domain (2026-11-05):** production answers only at `https://managebyhedax.ir`. The certificate expires **2027-02-03 08:08 UTC** and renewal is manual. See [Production domain and certificate](#production-domain-and-certificate).
+**Production domain (2026-11-05):** production answers at `https://managebyhedax.ir` through the ArvanCloud proxy. The origin certificate expires **2027-02-03 08:08:19 UTC** and nothing renews it. See [Production domain and certificate](#production-domain-and-certificate).
 
 **Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
 
@@ -85,18 +85,17 @@ On the LAN without a public domain: an internal CA certificate or a reverse prox
 
 ## Production domain and certificate
 
-Caddy stays the web server (no nginx or certbot on the host). `deploy/operational/Caddyfile.production` answers 301 to `https://managebyhedax.ir` for HTTP, `www`, the raw IP and the former sslip.io name, and proxies the canonical name to the gate. An anonymous request to `/` answers 302 to `/login` by design; `/login` answers 200.
+Traffic path: visitor → ArvanCloud proxy (Arvan-managed certificate, renewed by Arvan) → HTTPS → Caddy on the VM → gate → web → API. Caddy stays the web server (no nginx or certbot on the host).
 
-The VM has no international connectivity in either direction (measured 2026-11-05): every ACME server times out from the VM, and Let's Encrypt validators cannot connect to ports 80/443. Certbot and Caddy's automatic issuance therefore cannot work there, and HTTP-01 fails. Certificates come from a workstation with `deploy/operational/renew-certificate.mjs`, using DNS-01; the private key is generated on the VM and stays there.
+`deploy/operational/Caddyfile.production` answers 301 to `https://managebyhedax.ir` for HTTP, `www`, the raw IP and the former sslip.io name, and proxies the canonical name to the gate. An anonymous request to `/` answers 302 to `/login` by design; `/login` answers 200.
 
-```bash
-node deploy/operational/renew-certificate.mjs --dns-prepare   # prints two TXT records for Arvan DNS (owner adds them)
-node deploy/operational/renew-certificate.mjs --dns-finish    # checks the records, issues and installs on the VM
-# then on the VM, as manage, once:
-bash switch-to-domain.sh /path/to/deploy/operational/Caddyfile.production
-```
+**Client address.** Caddy trusts only Arvan's [official ranges](https://www.arvancloud.ir/fa/ips.txt), reads `X-Forwarded-For` right to left, and sends the API one verified value. The API uses the right-most value (`trust proxy` = 1) and the web server passes it on (`TRUST_PROXY_HEADERS=true`), so login limits, sessions and audit rows see the visitor. **If Arvan adds a range and it is not listed, visitors behind it share an Arvan address and share one login limit.** Compare the list with the Caddyfile periodically.
 
-`switch-to-domain.sh` refuses a missing, staging or short-lived certificate, backs up first, updates `PREVIEW_HOST` and `PUBLIC_APP_URL`, recreates `api` and `gate` with the same images and reloads Caddy. SMTP settings are not touched. **Renewal is manual; the owner has not chosen an automatic path and none is set up.** Before expiry, run `--dns-prepare`, replace the two TXT values in Arvan DNS, then run `--dns-finish`, which also reloads Caddy; do not rerun the switch script. HSTS is on, so an expired certificate blocks staff with no browser bypass. The private key is inside the private `operations.tgz` of each operational backup. Rollback data for the switch: `/home/manage/backups/domain-switch-20261105T090723Z`. The former sslip.io certificate cannot renew from the VM, so HTTPS on that name stops at its expiry on 2027-01-30; its HTTP redirect continues.
+**Origin certificate.** A static Let's Encrypt pair in `/home/manage/operations/tls/`, used only between Arvan and the VM, expires **2027-02-03 08:08:19 UTC**. By owner decision no renewal runs anywhere. Whether Arvan refuses an expired origin certificate depends on its origin settings and has not been tested. Decide a replacement before that date. The VM has no international connectivity in either direction (measured 2026-11-05), so certbot cannot run there. `deploy/operational/renew-certificate.mjs` remains available to run by hand from a workstation with DNS-01; the private key is generated on the VM and stays there. It reloads Caddy itself. The private key is also inside the private `operations.tgz` of each operational backup.
+
+Direct requests to the VM bypass Arvan and are not blocked, but cannot forge an address: the peer is untrusted, so its own address is used. The former sslip.io certificate cannot renew; HTTPS on that name stops at its expiry on 2027-01-30, and its HTTP redirect continues.
+
+Rollback data: `/home/manage/backups/domain-switch-20261105T090723Z` and `/home/manage/backups/arvan-proxy-20261105T092134Z`.
 
 ## Production checklist (each release)
 

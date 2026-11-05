@@ -1,5 +1,24 @@
 # Test report
 
+## ArvanCloud proxy, client address and sign-in — 2026-11-05
+
+Client address, live through Arvan from a workstation at a known public address (`ad54f15`):
+
+- API received the real address in all three cases: normal request, forged `X-Forwarded-For` through Arvan, forged header sent directly to the VM. Arvan's peer `94.101.183.7` is inside the trusted list.
+- Login limit: same client 400 ×10 then 429 ×2; forged header stays 429; a different client still gets 400. Requests had an empty body, so nothing was written.
+- Real activity: the first real sign-in recorded after the change has a non-Arvan address; no audit or session row since the change has an Arvan address.
+- `X-Forwarded-Proto: https` arrives from Arvan (read from a temporary access log, removed immediately). The app decides nothing from the protocol: `COOKIE_SECURE=true` and `PUBLIC_APP_URL` are explicit.
+
+Redirects: `http://www` goes to `https://www`, then the apex, then `/login`. It never lands on HTTP, but Arvan issues the first hop before reaching the VM, so it is **not a direct redirect**. The VM itself answers `http` + `www` with 301 to the apex.
+
+Sign-in, Edge 21/21 on an **isolated copy**, not production: same api/web image IDs, same Caddyfile and certificate, real domain name mapped through an SSH tunnel, RAM database, synthetic owner, internal network, removed afterwards. Invitation link, password, enrollment, wrong password, replayed code, wrong code, sign-in with a fresh code, Secure + HttpOnly + SameSite=Lax + host-only cookie, verified session, sign-out, old cookie refused by the server. It does not cross the Arvan hop. Two earlier runs were discarded because of test-script faults: one sent requests to the real address with a synthetic cookie; they returned 401/204 and wrote nothing.
+
+Forgot password: the login link opens a page telling the person to contact the administrator. **Self-service recovery does not exist.**
+
+PWA, Edge 12/12 through Arvan on the real address: manifest parsed, icons served, no installability errors, phone guide opens, no horizontal scroll. There is no service worker, by design. **Not tested:** the install itself on a real phone.
+
+**Not tested by this agent:** sign-in with a real account, which needs that person's Authenticator. CI: see the PR.
+
 ## Production domain switch — 2026-11-05 — live
 
 Live from the workstation after `--dns-finish` and `switch-to-domain.sh` (`ad54f15`, same api/web/gate images by ID; no build, no migration):

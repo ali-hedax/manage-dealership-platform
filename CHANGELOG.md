@@ -4,6 +4,7 @@
 
 - Manage now answers at `https://managebyhedax.ir`, with 301 redirects from HTTP, `www`, the raw IP and the former temporary address. Staff sign in once more, and installed mobile apps need reinstalling from the new address. Invitation links use the new address.
 - Removed the Preview wording from the site-gate page, which staff do not see while Authenticator sign-in is on. It reaches the server with the next release.
+- Traffic now passes through the ArvanCloud proxy. Login limits, sessions and audit records keep each visitor's real address.
 
 ## [Released on Manage] — entry and operational workbench, 2026-11-05
 
