@@ -1,6 +1,6 @@
 # Deployment
 
-**Production domain (2026-11-05):** the switch to `https://managebyhedax.ir` is prepared but **not applied**; staff still use the old address until the certificate exists. See [Production domain and certificate](#production-domain-and-certificate).
+**Production domain (2026-11-05):** production answers only at `https://managebyhedax.ir`. The certificate expires **2027-02-03 08:08 UTC** and renewal is manual. See [Production domain and certificate](#production-domain-and-certificate).
 
 **Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
 
@@ -96,7 +96,7 @@ node deploy/operational/renew-certificate.mjs --dns-finish    # checks the recor
 bash switch-to-domain.sh /path/to/deploy/operational/Caddyfile.production
 ```
 
-`switch-to-domain.sh` refuses a missing, staging or short-lived certificate, backs up first, updates `PREVIEW_HOST` and `PUBLIC_APP_URL`, recreates `api` and `gate` with the same images and reloads Caddy. SMTP settings are not touched. **Renewal is manual:** repeat the two commands before expiry until the owner chooses an automatic path. HSTS is on, so an expired certificate blocks staff with no browser bypass.
+`switch-to-domain.sh` refuses a missing, staging or short-lived certificate, backs up first, updates `PREVIEW_HOST` and `PUBLIC_APP_URL`, recreates `api` and `gate` with the same images and reloads Caddy. SMTP settings are not touched. **Renewal is manual; the owner has not chosen an automatic path and none is set up.** Before expiry, run `--dns-prepare`, replace the two TXT values in Arvan DNS, then run `--dns-finish`, which also reloads Caddy; do not rerun the switch script. HSTS is on, so an expired certificate blocks staff with no browser bypass. The private key is inside the private `operations.tgz` of each operational backup. Rollback data for the switch: `/home/manage/backups/domain-switch-20261105T090723Z`. The former sslip.io certificate cannot renew from the VM, so HTTPS on that name stops at its expiry on 2027-01-30; its HTTP redirect continues.
 
 ## Production checklist (each release)
 

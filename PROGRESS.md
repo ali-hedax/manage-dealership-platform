@@ -1,14 +1,13 @@
 # PROGRESS — Manage by HEDAX
 
-## انتقال به دامنه managebyhedax.ir — 2026-11-05 — آماده، سوییچ نشده
+## انتقال به دامنه managebyhedax.ir — 2026-11-05 — انجام شد
 
-شاخه `chore/production-domain-managebyhedax` از `402cc82` (فقط commit محلی، push نشده). برنامه روی سرور همان `ad54f15` است و نشانی کارکنان هنوز نشانی قبلی است.
+Production اکنون فقط با `https://managebyhedax.ir` پاسخ می‌دهد؛ برنامه همان `ad54f15` با همان imageهاست، بدون build و migration. شاخه `chore/production-domain-managebyhedax` فقط commit محلی است و push نشده؛ انتشار بعدی باید این شاخه را در خود داشته باشد تا متن gate به سرور برسد.
 
-- مانع: VM در هر دو جهت به خارج از ایران راه ندارد؛ همه سرورهای ACME از VM timeout و اعتبارسنج Let's Encrypt به پورت 80 نمی‌رسد. certbot و HTTP-01 ممکن نیست. DNS دامنه از خارج سالم است و CAA ندارد، پس DNS-01 ممکن است.
-- روی سرور انجام شد: پشتیبان `/home/manage/backups/operational/20261105T082344Z` و `/home/manage/backups/domain-cutover-20261105T082350Z`؛ Caddy با پیکربندی موقت `/home/manage/operations/caddy/Caddyfile` دوباره ساخته شد (سایت قبلی بدون تغییر، به‌علاوه مسیر توکن ACME روی پورت 80). `operational.yml` همان نسخه این شاخه است. `.env` تغییر نکرد.
-- سفارش واقعی DNS-01 در `~/.manage-acme` روی رایانه مالک ساخته شد و تا 2026-11-12 اعتبار دارد.
-- گام بعد: مالک دو رکورد TXT را در DNS آروان ثبت کند؛ سپس `renew-certificate.mjs --dns-finish` و بعد `switch-to-domain.sh` ([راهنما](docs/DEPLOYMENT.md#production-domain-and-certificate)) و آزمون‌های curl. تمدید خودکار نیازمند تصمیم مالک است.
-- صفحه gate در حالت Authenticator نمایش داده نمی‌شود؛ متن اصلاح‌شده‌اش با انتشار بعدی به سرور می‌رسد. `/opt/manage` عمداً دست‌نخورده ماند.
+- گواهی Let's Encrypt برای هر دو نام با DNS-01 از رایانه مالک گرفته شد، چون VM در هیچ جهت به خارج از ایران راه ندارد. انقضا: **2027-02-03 08:08 UTC**. تمدید دستی است؛ مالک درباره تمدید خودکار تصمیم نگرفته و چیزی راه‌اندازی نشده است ([راهنما](docs/DEPLOYMENT.md#production-domain-and-certificate)).
+- پشتیبان‌ها: `/home/manage/backups/operational/20261105T090716Z` و `/home/manage/backups/domain-switch-20261105T090723Z`. پیکربندی زنده: `/home/manage/operations/caddy/Caddyfile` و `operational.yml`. `.env` فقط در `PREVIEW_HOST` و `PUBLIC_APP_URL` تغییر کرد. SMTP دست نخورد.
+- نام قطعی برند «Manage by HEDAX» است؛ لوگو تغییر نکرد. hostname سرور و نام‌های داخلی (`PREVIEW_HOST`، `deploy/preview/`، `/__preview/health`) به دستور مالک فعلاً می‌مانند.
+- گام بعد: مالک یک بار با حساب خودش وارد شود، چون ورود واقعی آزموده نشده است. سپس تصمیم مالک درباره تمدید گواهی و push این شاخه.
 
 ## نسخه عملیاتی جاری — ورود و میزهای کار تازه — 2026-11-05
 

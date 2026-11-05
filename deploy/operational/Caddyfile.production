@@ -8,6 +8,8 @@
 	# Plain-HTTP redirects are declared below so they are 301, not Caddy's 308.
 	auto_https disable_redirects
 	skip_install_trust
+	# Clients connecting by IP send no SNI; without this the handshake fails.
+	default_sni 85.198.52.255
 }
 
 (canonical_redirect) {

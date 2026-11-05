@@ -1,6 +1,17 @@
 # Test report
 
-## Production domain preparation — 2026-11-05 — not switched
+## Production domain switch — 2026-11-05 — live
+
+Live from the workstation after `--dns-finish` and `switch-to-domain.sh` (`ad54f15`, same api/web/gate images by ID; no build, no migration):
+
+- `curl -I`: `http://managebyhedax.ir` 301, `https://www.managebyhedax.ir` 301, `http://85.198.52.255` 301, all to `https://managebyhedax.ir/`.
+- `curl -I https://managebyhedax.ir`: **302 to `/login`** for an anonymous client, by design; `/login` 200 with certificate verification OK. The 200 in the original request is reached only after that redirect.
+- Former name over HTTP and HTTPS: 301 keeping path and query. Raw IP over HTTPS: handshake failed until `default_sni` was added, then 301; its certificate is self-signed, so browsers warn first. POST with client header and empty body 400, confirming the proxy chain. Manifest 200, `/api/v1/auth/me` 401, POST without client header 403.
+- Certificate: Let's Encrypt YE1, both names, valid until 2027-02-03 08:08:19 UTC. DNS-01 issuance worked first time.
+- Brand grep of this branch and of the running web, api and gate containers: no "Managed by HEDAX" or "Manage Preview" in any served file. Live title and manifest name: "Manage by HEDAX". "Manage Preview" remains only in script comments and historical docs. Database dump: no old address.
+- **Not tested:** a real sign-in, because it needs the owner's Authenticator. CI not run: local commits only.
+
+## Production domain preparation — 2026-11-05 — before the switch
 
 Environment: production VM, read-only checks plus a transitional Caddy config; final config tested in a throwaway container with no published ports and a temporary self-signed certificate.
 
