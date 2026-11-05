@@ -20,6 +20,8 @@ test('personal login asks for the Authenticator code after the password',async({
   await page.getByLabel('کد تأیید',{exact:true}).fill('۱۲۳۴۵۶');
   await expect(page.getByLabel('کد تأیید',{exact:true})).toHaveValue('123456');
   await page.getByRole('button',{name:'تأیید کد و ورود',exact:true}).click();
+  await expect(page).toHaveURL(/\/launch$/);
+  await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:/مدیر خدمات/}).click();
   await expect(page.getByRole('heading',{name:'میز کار مدیر خدمات'})).toBeVisible();
 });
 
