@@ -80,7 +80,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <WorkspaceLauncher compact/>
       <nav className="pipeline" aria-label="مراحل پرونده‌ها">
         {pipelineStages.map((s) => {
           const n = stageCount(s);
@@ -109,7 +108,7 @@ export default function DashboardPage() {
                   <div className="t">{a.title}</div>
                   <div className="d">{a.detail}</div>
                 </span>
-                <span className="xs muted">مشاهده</span>
+                <span className="attention-go" aria-hidden="true">‹</span>
               </Link>
             ))}
             {data.legacyEntries > 0 && (
@@ -121,7 +120,7 @@ export default function DashboardPage() {
                   <div className="t">ثبت‌شده از قبل از Manage</div>
                   <div className="d">خودروهایی که پیش از راه‌اندازی سامانه در تعمیرگاه بودند</div>
                 </span>
-                <span className="xs muted">مشاهده</span>
+                <span className="attention-go" aria-hidden="true">‹</span>
               </Link>
             )}
           </div>
