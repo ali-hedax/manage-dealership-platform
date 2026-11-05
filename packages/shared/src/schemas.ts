@@ -391,6 +391,7 @@ export const partActionSchema = z
     // receive
     receiptDocNo: optionalText(64),
     inspection: z.enum(PART_INSPECTIONS).optional(),
+    salePriceRial: rial.optional(),
     // hand_over
     departmentId: uuid.nullish(),
     recipientName: optionalText(120),

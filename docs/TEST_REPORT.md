@@ -1,5 +1,14 @@
 # Test report
 
+## Phase 2 role-based parts workflow — 2026-11-06
+
+Base `436575f`, branch `feature/phase2-parts`. Synthetic data only.
+
+- Shared suite 21/21. The focused API regression run completed 62 tests, including four phase-2 scenarios covering exact stock commitments, assigned technician pickup, Emdad and market, priced handover, versioned Persian PDF/Excel, and external planning/late alerts. Nine PostgreSQL-only cases are reserved for the CI PostgreSQL job.
+- The browser parts workbench test passed, including the old-queue disclosure and 390px viewport check. [Desktop 1440 × 900](screenshots/phase2/parts-workbench-desktop.webp) · [Mobile 390 × 844](screenshots/phase2/parts-workbench-mobile.webp).
+- Existing QC/discrepancy fixtures provide an explicit synthetic sale price because handover now requires one. The technician readiness test checks the assigned pickup payload. The daily-report reminder assertion reflects the parts role's new upload access, and its browser fixture opens the relocated old queues.
+- Build, lint, typecheck and documentation checks ran locally. Full-suite results and the GitHub Actions checks are tracked on the PR.
+
 ## Phase 1 of the role-based plan — 2026-11-05 — branch `feature/phase1-roles`, not deployed
 
 Local Linux (Node 22, pnpm 10): docs check (129 API routes), shared build, lint and typecheck for shared/API/web pass. API test files run one per process: **200 passed, 0 failed**; 9 PostgreSQL-only tests skipped locally and covered by the CI PostgreSQL job.

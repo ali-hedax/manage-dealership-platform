@@ -101,5 +101,5 @@ it('tells the technician when a part of the vehicle is ready to collect',async()
  const part=(await c.get(`/cases/${caseId}/parts`)).body.find((x:{id:string})=>x.id===partId);
  const rec=await p.post(`/parts/${partId}/actions`,{action:'receive',expectedVersion:part.version,inspection:'ok'});
  expect(rec.status).toBe(201);
- expect((await mineOf()).partsReady).toEqual({count:1,names:['قطعه آزمون بازار']});
+ expect((await mineOf()).partsReady).toMatchObject({count:1,names:['قطعه آزمون بازار'],pickup:[{id:partId,version:rec.body.version}]});
 });

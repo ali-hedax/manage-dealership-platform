@@ -9,7 +9,7 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { departments, taskDependencies, tasks, workshopStations, users } from '../db/schema';
+import { departments, externalWork, taskDependencies, tasks, workshopStations, users } from '../db/schema';
 
 type TaskRow = typeof tasks.$inferSelect;
 
@@ -36,62 +36,65 @@ export class TasksService {
 
   /** importRef: set by the vehicle import so the same sheet row never creates a second task. */
   async create(actor: Actor, caseId: string, input: CreateTaskInput, importRef?: string): Promise<Task> {
+    const id = await this.db.transaction(tx => this.createIn(tx, actor, caseId, input, importRef));
+    return this.get(actor, caseId, id);
+  }
+
+  async createIn(tx: DbOrTx, actor: Actor, caseId: string, input: CreateTaskInput, importRef?: string): Promise<string> {
     const tenantId = actor.user.tenantId;
     const id = newId();
-    await this.db.transaction(async (tx) => {
-      const kase = await this.cases.loadForWrite(tx, tenantId, caseId);
-      if (kase.stage === 'delivered') throw badRequest('CASE_DELIVERED', 'پرونده تحویل شده است');
-      await this.assertDepartment(tx, tenantId, input.departmentId);
-      const planning = await this.plan(tx, actor, input,undefined,caseId);
-      assertPlannedRange(input.plannedStartAt, planning.plannedEndAt?.toISOString() ?? input.plannedEndAt);
-      const dependsOn = [...new Set(input.dependsOn ?? [])];
-      await this.assertSameCase(tx, tenantId, caseId, dependsOn);
+    const kase = await this.cases.loadForWrite(tx, tenantId, caseId);
+    if (kase.stage === 'delivered') throw badRequest('CASE_DELIVERED', 'پرونده تحویل شده است');
+    await this.assertDepartment(tx, tenantId, input.departmentId);
+    const planning = await this.plan(tx, actor, input,undefined,caseId);
+    assertPlannedRange(input.plannedStartAt, planning.plannedEndAt?.toISOString() ?? input.plannedEndAt);
+    const dependsOn = [...new Set(input.dependsOn ?? [])];
+    await this.assertSameCase(tx, tenantId, caseId, dependsOn);
 
-      const [{ n }] = (await tx
-        .select({ n: sql<number>`count(*)::int` })
-        .from(tasks)
-        .where(and(eq(tasks.caseId, caseId),eq(tasks.tenantId,tenantId)))) as [{ n: number }];
-      const [row] = await tx
-        .insert(tasks)
-        .values({
-          id,
-          tenantId,
-          caseId,
-          departmentId: input.departmentId,
-          title: input.title ?? null,
-          technicianName: input.technicianName ?? null,
-          technicianCode: input.technicianCode ?? null,
-          plannedStartAt: toDate(input.plannedStartAt),
-          plannedEndAt: toDate(input.plannedEndAt),
-          ...planning,
-          baselineStartAt: planning.plannedStartAt??toDate(input.plannedStartAt),
-          baselineEndAt: planning.plannedEndAt ?? toDate(input.plannedEndAt),
-          weight: input.weight,
-          sortOrder: n + 1,
-          notes: input.notes ?? null,
-          importRef: importRef ?? null,
-          isTest: actor.user.isTestTenant,
-          createdBy: actor.user.id,
-        })
-        .returning();
-      if (dependsOn.length) {
-        await tx.insert(taskDependencies).values(dependsOn.map((d) => ({ taskId: id, dependsOnTaskId: d })));
-      }
-      await this.audit.record(tx, actor, {
-        entityType: 'task',
-        entityId: id,
+    const [{ n }] = (await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(tasks)
+      .where(and(eq(tasks.caseId, caseId),eq(tasks.tenantId,tenantId)))) as [{ n: number }];
+    const [row] = await tx
+      .insert(tasks)
+      .values({
+        id,
+        tenantId,
         caseId,
-        action: 'task.created',
-        after: {
-          departmentId: input.departmentId,
-          title: input.title ?? null,
-          technicianName: input.technicianName ?? null,
-          dependsOn,
-        },
-        snapshot: { version: 1, row: { ...row!, dependsOn } },
-      });
+        departmentId: input.departmentId,
+        title: input.title ?? null,
+        technicianName: input.technicianName ?? null,
+        technicianCode: input.technicianCode ?? null,
+        plannedStartAt: toDate(input.plannedStartAt),
+        plannedEndAt: toDate(input.plannedEndAt),
+        ...planning,
+        baselineStartAt: planning.plannedStartAt??toDate(input.plannedStartAt),
+        baselineEndAt: planning.plannedEndAt ?? toDate(input.plannedEndAt),
+        weight: input.weight,
+        sortOrder: n + 1,
+        notes: input.notes ?? null,
+        importRef: importRef ?? null,
+        isTest: actor.user.isTestTenant,
+        createdBy: actor.user.id,
+      })
+      .returning();
+    if (dependsOn.length) {
+      await tx.insert(taskDependencies).values(dependsOn.map((d) => ({ taskId: id, dependsOnTaskId: d })));
+    }
+    await this.audit.record(tx, actor, {
+      entityType: 'task',
+      entityId: id,
+      caseId,
+      action: 'task.created',
+      after: {
+        departmentId: input.departmentId,
+        title: input.title ?? null,
+        technicianName: input.technicianName ?? null,
+        dependsOn,
+      },
+      snapshot: { version: 1, row: { ...row!, dependsOn } },
     });
-    return this.get(actor, caseId, id);
+    return id;
   }
 
   async update(actor: Actor, taskId: string, input: UpdateTaskInput): Promise<Task> {
@@ -164,78 +167,83 @@ export class TasksService {
   }
 
   async act(actor: Actor, taskId: string, input: TaskActionInput, own = false): Promise<Task> {
+    const updated = await this.db.transaction(tx => this.actIn(tx, actor, taskId, input, own));
+    return this.get(actor, updated.caseId, taskId);
+  }
+
+  async actIn(tx: DbOrTx, actor: Actor, taskId: string, input: TaskActionInput, own = false, external = false): Promise<TaskRow> {
     const tenantId = actor.user.tenantId;
     if (input.action === 'approve' && !actor.user.permissions.has('task.approve')) throw forbidden();
     const at = input.at ? new Date(input.at) : new Date();
     assertNotFuture(at, 'زمان ثبت‌شده نمی‌تواند در آینده باشد');
+    const task = await this.loadForWrite(tx, tenantId, taskId, input.expectedVersion);
+    if(own && task.assignedUserId !== actor.user.id) throw forbidden('این کار به شما محول نشده است');
+    if (!external && (input.action === 'start' || input.action === 'complete')) {
+      const [job] = await tx.select({ id: externalWork.taskId }).from(externalWork)
+        .where(and(eq(externalWork.taskId, taskId), eq(externalWork.tenantId, tenantId)));
+      if (job) throw badRequest('EXTERNAL_WORK_ACTION', 'این مرحله در بخش کار بیرون از نمایندگی پیگیری می‌شود');
+    }
+    const kase = await this.cases.loadForWrite(tx, tenantId, task.caseId);
+    if(kase.stage==='delivered')throw badRequest('CASE_DELIVERED','خودرو تحویل شده است');
+    const status = task.status as TaskStatus;
+    let patch: Partial<TaskRow>;
+    let action: string;
 
-    let caseId = '';
-    await this.db.transaction(async (tx) => {
-      const task = await this.loadForWrite(tx, tenantId, taskId, input.expectedVersion);
-      if(own && task.assignedUserId !== actor.user.id) throw forbidden('این کار به شما محول نشده است');
-      caseId = task.caseId;
-      const kase = await this.cases.loadForWrite(tx, tenantId, task.caseId);
-      if(kase.stage==='delivered')throw badRequest('CASE_DELIVERED','خودرو تحویل شده است');
-      const status = task.status as TaskStatus;
-      let patch: Partial<TaskRow>;
-      let action: string;
-
-      switch (input.action) {
-        case 'start': {
-          if (status !== 'pending') throw invalidTransition(status, 'شروع');
-          const unfinished = await this.unfinishedDependencies(tx, tenantId, taskId);
-          if (unfinished.length) {
-            throw badRequest('DEPENDENCY_NOT_DONE', 'فعالیت‌های پیش‌نیاز هنوز تمام نشده‌اند', {
-              taskIds: unfinished,
-            });
-          }
-          patch = { status: 'in_progress', actualStartAt: at };
-          action = 'task.started';
-          break;
+    switch (input.action) {
+      case 'start': {
+        if (status !== 'pending') throw invalidTransition(status, 'شروع');
+        const unfinished = await this.unfinishedDependencies(tx, tenantId, taskId);
+        if (unfinished.length) {
+          throw badRequest('DEPENDENCY_NOT_DONE', 'فعالیت‌های پیش‌نیاز هنوز تمام نشده‌اند', {
+            taskIds: unfinished,
+          });
         }
-        case 'complete':
-          if (status !== 'in_progress') throw invalidTransition(status, 'اتمام');
-          if (task.actualStartAt && at.getTime() < task.actualStartAt.getTime() - MINUTE_TOLERANCE_MS) {
-            throw badRequest('INVALID_TIME', 'زمان اتمام نمی‌تواند قبل از زمان شروع باشد');
-          }
-          patch = {
-            status: 'done',
-            actualEndAt: task.actualStartAt && at < task.actualStartAt ? task.actualStartAt : at,
-            completedBy: actor.user.id,
-          };
-          action = 'task.completed';
-          break;
-        case 'approve':
-          if (status !== 'done') throw invalidTransition(status, 'تأیید');
-          if(task.actualEndAt&&at.getTime()<task.actualEndAt.getTime()-MINUTE_TOLERANCE_MS)throw badRequest('INVALID_TIME','تأیید تحویل نمی‌تواند پیش از پایان کار باشد');
-          patch = { status: 'approved', approvedAt:task.actualEndAt&&at<task.actualEndAt?task.actualEndAt:at, approvedBy: actor.user.id };
-          action = 'task.approved';
-          break;
-        case 'reopen':
-          if (!FINISHED.includes(status)) throw invalidTransition(status, 'بازگشایی');
-          patch = { status: 'in_progress', actualEndAt: null, completedBy: null, approvedAt: null, approvedBy: null };
-          action = 'task.reopened';
-          break;
+        patch = { status: 'in_progress', actualStartAt: at };
+        action = 'task.started';
+        break;
       }
+      case 'complete':
+        if (status !== 'in_progress') throw invalidTransition(status, 'اتمام');
+        if (task.actualStartAt && at.getTime() < task.actualStartAt.getTime() - MINUTE_TOLERANCE_MS) {
+          throw badRequest('INVALID_TIME', 'زمان اتمام نمی‌تواند قبل از زمان شروع باشد');
+        }
+        patch = {
+          status: 'done',
+          actualEndAt: task.actualStartAt && at < task.actualStartAt ? task.actualStartAt : at,
+          completedBy: actor.user.id,
+        };
+        action = 'task.completed';
+        break;
+      case 'approve':
+        if (status !== 'done') throw invalidTransition(status, 'تأیید');
+        if(task.actualEndAt&&at.getTime()<task.actualEndAt.getTime()-MINUTE_TOLERANCE_MS)throw badRequest('INVALID_TIME','تأیید تحویل نمی‌تواند پیش از پایان کار باشد');
+        patch = { status: 'approved', approvedAt:task.actualEndAt&&at<task.actualEndAt?task.actualEndAt:at, approvedBy: actor.user.id };
+        action = 'task.approved';
+        break;
+      case 'reopen':
+        if (!FINISHED.includes(status)) throw invalidTransition(status, 'بازگشایی');
+        patch = { status: 'in_progress', actualEndAt: null, completedBy: null, approvedAt: null, approvedBy: null };
+        action = 'task.reopened';
+        break;
+    }
 
-      const updated = await this.save(tx, task, patch);
-      await this.audit.record(tx, actor, {
-        entityType: 'task',
-        entityId: taskId,
-        caseId: task.caseId,
-        action,
-        reason: input.note ?? null,
-        occurredAt: at,
-        before: { status },
-        after: { status: updated.status },
-        snapshot: { version: updated.version, row: updated },
-      });
-
-      if (input.action === 'start' && PRE_REPAIR_STAGES.includes(kase.stage)) {
-        await this.cases.applyStage(tx, actor, kase, { stage: 'in_repair' }, 'خودکار: شروع اولین فعالیت تعمیر');
-      }
+    const updated = await this.save(tx, task, patch);
+    await this.audit.record(tx, actor, {
+      entityType: 'task',
+      entityId: taskId,
+      caseId: task.caseId,
+      action,
+      reason: input.note ?? null,
+      occurredAt: at,
+      before: { status },
+      after: { status: updated.status },
+      snapshot: { version: updated.version, row: updated },
     });
-    return this.get(actor, caseId, taskId);
+
+    if (input.action === 'start' && PRE_REPAIR_STAGES.includes(kase.stage)) {
+      await this.cases.applyStage(tx, actor, kase, { stage: 'in_repair' }, 'خودکار: شروع اولین فعالیت تعمیر');
+    }
+    return updated;
   }
 
   async get(actor: Actor, caseId: string, taskId: string): Promise<Task> {

@@ -162,6 +162,7 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
 
   // Parts desk header.
   await page.goto('/accidents/parts');
+  await page.getByText('همهٔ صف‌ها', { exact: true }).click();
   await expect(page.getByTestId('daily-status')).toContainText('خروج‌های منتظر انعکاس');
 
   // Phone width on every new screen.

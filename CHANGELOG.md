@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — phase 2 of the role-based plan
+
+- The parts clerk opens a prioritized vehicle workbench with stock, Emdad, market and handover actions. The prior queues remain available.
+- The parts clerk or assigned technician can record a priced handover. The accident coordinator sees long waits.
+- Confirmed consumption produces a versioned parts statement with Persian PDF and Excel exports.
+- External work follows the repair plan, contractor coordination and coordinator approval, with missed promises in both workbenches.
+
 ## [Unreleased] — phase 1 of the role-based plan, 2026-11-05
 
 - Technicians sign in with a username and a 4-digit PIN (no email or Authenticator) and see only their own work. Owner and system administrator create technicians, set a new PIN and deactivate them under «کارکنان». Five wrong PINs lock the account for 15 minutes.

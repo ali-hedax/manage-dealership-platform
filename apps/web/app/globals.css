@@ -1780,3 +1780,20 @@ tr.is-late td { background:var(--red-soft); }
 :is(.sidebar,.topbar) .btn { min-block-size: 44px; }
 .sidebar .account .xs { color: var(--on-navy-muted); }
 .sidebar .brand-lockup { align-items: flex-end; }
+
+.parts-workbench, .parts-workbench-card, .parts-workbench-line { min-inline-size: 0; overflow-wrap: anywhere; }
+.parts-workbench-header, .parts-workbench-line-main {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;
+}
+.parts-workbench-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.parts-workbench-stats strong { display: block; font-size: 1.5rem; color: var(--navy); }
+.parts-workbench-card .panel-head { flex-wrap: wrap; }
+.parts-workbench-line { display: grid; gap: .75rem; }
+.parts-workbench-line + .parts-workbench-line { border-block-start: 1px solid var(--line); padding-block-start: .75rem; }
+.parts-workbench-line-main p { margin-block: .25rem; }
+.parts-workbench-line form { background: var(--bg); padding: .75rem; border-radius: .75rem; }
+@media (max-width: 520px) {
+  .parts-workbench-stats { gap: .35rem; }
+  .parts-workbench-stats .panel-body { padding: .6rem .45rem; }
+  .parts-workbench-header .btn, .parts-workbench-line-main .btn { max-inline-size: 100%; white-space: normal; }
+}

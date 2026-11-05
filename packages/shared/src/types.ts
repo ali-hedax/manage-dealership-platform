@@ -204,6 +204,7 @@ export interface Part {
   stockCheckedAt: string | null;
   reservedAt: string | null;
   approvedUnitPriceRial: number | null;
+  salePriceRial: number | null;
   unitPriceRial: number | null;
   priceApprovalRef: string | null;
   priceApprovedBy: string | null;

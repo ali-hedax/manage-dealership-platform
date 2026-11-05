@@ -1,6 +1,10 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import {
   createPartSchema,
+  partPickupSchema,
+  partsWorkbenchActionSchema,
+  type PartPickup,
+  type PartsWorkbenchAction,
   importPartsSchema,
   partActionSchema,
   partsFromAssessmentSchema,
@@ -13,11 +17,31 @@ import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
 import { IdParam } from '../common/params';
 import { ZodPipe } from '../common/zod.pipe';
+import { PartsWorkbenchService } from './parts-workbench.service';
 import { PartsService } from './parts.service';
 
 @Controller()
 export class PartsController {
-  constructor(private readonly parts: PartsService) {}
+  constructor(private readonly parts: PartsService, private readonly workbench: PartsWorkbenchService) {}
+
+  @Get('parts/workbench')
+  @RequirePermissions('part.manage')
+  work(@CurrentActor() actor: Actor, @Query('transit') transit?: string) {
+    return this.workbench.list(actor, transit === '1');
+  }
+
+  @Post('parts/workbench/:id/actions')
+  @RequirePermissions('part.manage')
+  workAction(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(partsWorkbenchActionSchema)) input: PartsWorkbenchAction) {
+    return this.workbench.act(actor, id, input);
+  }
+
+  @Post('tasks/:id/part-pickup')
+  @RequirePermissions('task.execute')
+  pickup(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(partPickupSchema)) input: PartPickup) {
+    return this.workbench.pickup(actor, id, input);
+  }
 
   @Get('cases/:id/parts')
   @RequirePermissions('case.read')

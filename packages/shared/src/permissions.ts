@@ -53,7 +53,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   accident_supervisor: COORDINATOR,
   technician: ['task.execute'],
   service_manager: ['case.read','report.manager','dashboard.read','audit.read','workshop.read','stock.read','emdad.read'],
-  parts_clerk: ['case.read','blocker.report','part.manage','part.quote','dashboard.read','reference.parts.read','reference.parts.manage','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage','workshop.read'],
+  parts_clerk: ['case.read','blocker.report','part.manage','part.quote','dashboard.read','reference.parts.read','reference.parts.manage','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage','workshop.read','daily_reports.upload'],
   cashier: ['case.read','customer.pii.read','finance.payment','finance.close','dashboard.read'],
   qc_inspector: ['case.read','blocker.report','qc.inspect','dashboard.read'],
   system_admin: PERMISSIONS.filter(p => !['finance.approve','part.price_authorize','case.release_authorize'].includes(p)),

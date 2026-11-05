@@ -228,6 +228,7 @@ export class DemoSeedService {
       at: ago(2 * DAY),
       departmentId: dept('electrical'),
       recipientName: 'تکنسین نمونه د',
+      salePriceRial: 12_000_000,
     });
     await this.tasks.act(supervisor, body1.id, { action: 'start', expectedVersion: 1, at: ago(2 * DAY) });
     let s1 = await this.assessments.create(expert, c1.id, {

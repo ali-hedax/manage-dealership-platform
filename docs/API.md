@@ -64,7 +64,10 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/cases/:id/alerts/history` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | GET | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | GET | `/api/v1/cases/:id/completion` | [source](../apps/api/src/completion/completion.controller.ts) |
+| GET | `/api/v1/cases/:id/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/cases/:id/finance` | [source](../apps/api/src/finance/finance.controller.ts) |
+| GET | `/api/v1/cases/:id/parts-statement/export` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| GET | `/api/v1/cases/:id/parts-statement` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/cases/:id/parts` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/cases/:id/provenance` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | GET | `/api/v1/cases/:id/timeline` | [source](../apps/api/src/accident/accident.controllers.ts) |
@@ -83,6 +86,11 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/notifications` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/part-discrepancies/:id/history` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | GET | `/api/v1/part-discrepancies` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
+| GET | `/api/v1/parts/contractors` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| GET | `/api/v1/parts/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| GET | `/api/v1/parts/operations/notices` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| GET | `/api/v1/parts/workbench/notices` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| GET | `/api/v1/parts/workbench` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/reference-data/:kind/sample` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-data/:kind` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id/report` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
@@ -112,6 +120,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PATCH | `/api/v1/cases/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PATCH | `/api/v1/daily-reports/profiles/:kind` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | PATCH | `/api/v1/emdad/requests/:id/follow-up` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
+| PATCH | `/api/v1/parts/contractors/:id` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | PATCH | `/api/v1/tasks/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PATCH | `/api/v1/workshop/stations/:id` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/assessment-items/:id/remove` | [source](../apps/api/src/assessments/assessments.controller.ts) |
@@ -136,9 +145,12 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/cases/:id/blockers` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/delivery` | [source](../apps/api/src/completion/completion.controller.ts) |
+| POST | `/api/v1/cases/:id/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/cases/:id/finance/approvals` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/cases/:id/finance/payments` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/cases/:id/financial-close` | [source](../apps/api/src/completion/completion.controller.ts) |
+| POST | `/api/v1/cases/:id/parts-statement/:partId/consume` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| POST | `/api/v1/cases/:id/parts-statement` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/cases/:id/parts/from-assessment` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/cases/:id/parts/import` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/cases/:id/parts` | [source](../apps/api/src/parts/parts.controller.ts) |
@@ -160,6 +172,9 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/part-discrepancies/:id/assign` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/part-discrepancies/:id/resolve` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/parts/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
+| POST | `/api/v1/parts/contractors` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| POST | `/api/v1/parts/external-work/:id/actions` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| POST | `/api/v1/parts/workbench/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/reference-data/:kind/search` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/:id/apply` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
@@ -169,6 +184,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/stock/reservations/:id/actions` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/tasks/:id/part-pickup` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/vehicle-imports/:id/apply` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | POST | `/api/v1/vehicle-imports` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | POST | `/api/v1/workshop/calendar` | [source](../apps/api/src/workshop/workshop.controller.ts) |

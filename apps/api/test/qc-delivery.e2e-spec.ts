@@ -83,7 +83,7 @@ async function installPart(caseId: string) {
   for (const [action, extra] of [
     ['check_stock', { inStock: true }],
     ['reserve', {}],
-    ['hand_over', { departmentId: dept('body'), recipientName: 'سرپرست صافکاری آزمون' }],
+    ['hand_over', { departmentId: dept('body'), salePriceRial: 1_500_000, recipientName: 'سرپرست صافکاری آزمون' }],
   ] as const) {
     const res = await parts.post(`/parts/${p!.id}/actions`, { action, expectedVersion: p!.version, ...extra });
     expect(res.status).toBe(201);

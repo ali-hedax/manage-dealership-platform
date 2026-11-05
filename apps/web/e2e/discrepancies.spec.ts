@@ -17,7 +17,7 @@ test('parts clerk reviews a handover-vs-shortage discrepancy and records the out
   for (const [action, extra] of [
     ['check_stock', { inStock: true }],
     ['reserve', {}],
-    ['hand_over', { departmentId: depts[0].id, recipientName: 'تکنسین آزمون' }],
+    ['hand_over', { departmentId: depts[0].id, salePriceRial: 1_500_000, recipientName: 'تکنسین آزمون' }],
   ] as const) {
     part = await (await api(`/parts/${part.id}/actions`, { action, expectedVersion: part.version, ...extra })).json();
   }
