@@ -42,6 +42,7 @@ Manage must not share the Source by HEDAX server's processes, database, credenti
 
 | | Development | CI | Preview / Staging | Production (cloud) | Dealership LAN |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-05 | Manage Production | 696eb6f | Owner-requested publication | No new migration (15 retained) | Exact CI images, restored backups and live concise model/owner list verified; full data/auth/settings preserved; 35-second final switch. [Record](RELEASE_SHORT_LABEL_20261105.md) |
 | 2026-11-04 | Manage Production | d0a66b2 | Owner-approved release | No new migration (15 retained) | Exact CI images; all data/auth/settings preserved, final restored/encrypted recovery and live compact UI verified; 39-second switch. [Record](RELEASE_ASSESSMENT_20261104.md) |
 | How | `pnpm dev` | GitHub Actions | Compose on an isolated VM | Compose on an isolated VM | Compose on the local server |
 | DB | PGlite | PGlite + PostgreSQL 16 | PostgreSQL | PostgreSQL | PostgreSQL |

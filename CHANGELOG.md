@@ -1,8 +1,9 @@
 # Changelog
 
-## [Unreleased] — short vehicle labels in case lists, 2026-11-04
+## [Released on Manage] — short vehicle labels in case lists, 2026-11-05
 
-- Case lists and accident-desk queues show brand/model above the owner name, using a separate summary instead of the long manufacturer trim. Full trim and search/detail data are retained.
+- Case lists and accident-desk queues show brand/model name above the owner name, omitting the long manufacturer trim and explicit engine/gearbox annotations embedded in model cells. Full model/trim and search/detail data are retained.
+- Published owner-approved `696eb6f` using exact verified CI images, restored backups and preserved data/authentication/settings; final switch 35 seconds. [Release evidence](docs/RELEASE_SHORT_LABEL_20261105.md).
 
 ## [Released on Manage] — assessment intake and compact case workbench, 2026-11-04
 

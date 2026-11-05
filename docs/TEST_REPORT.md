@@ -1,8 +1,10 @@
 # Test report
 
-## Short vehicle labels — 2026-11-04 — in verification
+## Short vehicle labels — 2026-11-05 — published, 696eb6f
 
-Shared/API/web builds passed. Existing long-trim browser regression now verifies that the full manufacturer trim survives editing while the case-list cell shows brand/model and excludes the trim. Targeted browser and CI results pending; production unchanged at this record.
+All six [CI 41969252059](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41969252059) jobs passed: API 181 passed / 9 PostgreSQL-only skips covered separately on PostgreSQL; shared 17/17, full browser, security, docs and Docker/HTTPS. API typecheck/lint and shared/API/web builds passed locally; related browser **3/3** passed. The long-trim scenario verifies preserved source trim, a concise model label, and no engine/gearbox annotations in the list even when those were entered in model.
+
+Exact CI artifact ZIP digest, source tree and running image IDs matched. Restored-copy read-only model-summary check passed with unchanged table fingerprints. Production switch preserved every table, session/user and byte-identical environment; no migration or seed. Live owner UI: 17 rows, owner below model, no engine/gearbox words, max model-label length 28. Final operational/20261105T044951Z backup restored with matching fingerprints; encrypted off-server recovery decrypted/checksummed in memory and local plaintext removed; three temporary DBs removed. [Release record](RELEASE_SHORT_LABEL_20261105.md).
 
 ## Published assessment intake and compact workbench — 2026-11-04, d0a66b2
 
