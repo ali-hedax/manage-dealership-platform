@@ -1,5 +1,11 @@
 # PROGRESS — Manage by HEDAX
 
+## یکپارچه‌سازی شاخه‌ها در main — 2026-11-05
+
+به دستور صریح مالک («همه را یکی کن و نسخه نهایی را منتشر کن») شاخه `release/integrate-20261105` ساخته شد: پایه آخرین نسخه منتشرشده `feature/assessment-parts-dispatch` (اپلیکیشن `79f6585`، شامل کل زنجیره #28 تا #48 و main قبلی) + ادغام `feature/staff-access-recovery` (#47). تعارض فقط در CHANGELOG/PROGRESS/TEST_REPORT بود و هر دو طرف حفظ شد. شاخه‌های نمونه اولیه (`feature/nobat-dahi`، `chore/rename-index-html`، `feature/b2b-auto-report`، `chore/preserve-local-prototype-20261101`، `docs/github-professional-20261012`) طبق قاعده AGENTS جدا ماندند؛ شاخه‌های فقط-ساخت تصویر (`build/*`، `fix/preview-image-artifacts`) و `docs/staff-preview-release-record` قدیمی ادغام نشدند. هیچ شاخه یا PR حذف/بسته نشد.
+
+**تنها تغییر کد نسبت به سرور:** بازیابی دسترسی کارکنان (#47)، بدون migration. **قدم بعد:** انتشار روی سرور Manage با روال همیشگی (تصاویر دقیق CI همین commit، پشتیبان، بازیابی، کنترل خواندنی زنده) از سیستم مالک.
+
 ## ارسال کارشناسی و برنامه روزکاری — منتشر شد — 2026-11-05
 
 آخرین commit برنامه/آزمون `79f658515e94e9138453002c7a6edd8a4b960530` روی سرور نصب شد؛ هر شش بررسی CI 42016899492 موفق. [گزارش انتشار و شواهد](docs/RELEASE_DISPATCH_DAYS_20261105.md)، [PR #48](https://github.com/ali-hedax/manage-dealership-platform/pull/48). تغییرات تازه رابط و مبنای عملیاتی/دامنه حفظ شد؛ main ادغام نشده است.
