@@ -1,5 +1,9 @@
 # PROGRESS — Manage by HEDAX
 
+## بازیابی دسترسی کارکنان — 2026-11-05 — ساخته شده، منتشر نشده
+
+شاخه `feature/staff-access-recovery` از `402cc82`، به درخواست مالک. لینک خصوصی یک‌ساعته و یک‌بارمصرف که فقط مالک برای کارمند فعال می‌سازد ([راهنما](docs/PERSONAL_AUTH_FA.md#بازیابی-دسترسی-کارکنان)). migration ندارد. انتشار روی سرور نیازمند image تازه از CI، پشتیبان و تأیید مالک است. راه بازیابی خود حساب مالک تعیین نشده است. گام بعد: بررسی PR و تصمیم انتشار.
+
 ## نسخه عملیاتی جاری — ورود و میزهای کار تازه — 2026-11-05
 
 آخرین commit برنامه/آزمون **`ad54f1513e1ed74130c343b9303b3fdf99af71b7`**، پیاده‌سازی `1239beb`، با مجوز صریح مالک بدون تأیید دوباره منتشر شد. هر شش [CI 41974333191](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41974333191) موفق؛ تصویر دقیق CI با digest، source tree و image ID برابر نصب شد. [PR #41](https://github.com/ali-hedax/manage-dealership-platform/pull/41)، [گزارش انتشار](docs/RELEASE_ENTRY_20261105.md). ثبت پس از این commit فقط مستندات است.

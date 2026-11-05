@@ -18,6 +18,8 @@ The cookie is HttpOnly, SameSite=Lax and Secure when `COOKIE_SECURE=true`. Cooki
 
 Invitations require `user.manage`: `POST /auth/invitations` takes `email`, `displayName`, `roles` and returns a private activation URL; `GET /auth/invitations` lists invitations. Public accept takes `token` and a password (12–128 characters), returns an enrollment challenge plus confidential QR/secret; confirm takes `challengeId`, `proof`, `code`. Confirmation activates the account; then sign in normally. See [Persian guide](PERSONAL_AUTH_FA.md). Never log invitation URLs, proofs, QR seeds, passwords or cookies.
 
+`POST /auth/users/:id/recovery` requires `user.manage` and the actual owner; returns `recoveryUrl` (single use, one hour) and `expiresAt`. Errors: 403 for anyone else, 404 outside the tenant, 409 `RECOVERY_OWNER` and `RECOVERY_NOT_ACTIVE`. The link uses the same public accept and confirm endpoints. On confirmation the password and Authenticator are replaced and all sessions of that user are revoked; roles and permissions do not change.
+
 ## Domain contracts
 
 The exact request fields and enums are [shared schemas](../packages/shared/src/schemas.ts); personal-auth contracts are [email.contracts.ts](../apps/api/src/auth/email.contracts.ts). Controllers below name the schema passed to `ZodPipe`. All IDs are UUIDs. Tenant comes from the session; clients cannot select a tenant. [Permissions](../packages/shared/src/permissions.ts) and service-level workflow rules are enforced on the server.
@@ -121,6 +123,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/auth/invitations/email` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/login` | [source](../apps/api/src/auth/auth.controller.ts) |
+| POST | `/api/v1/auth/users/:id/recovery` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/logout` | [source](../apps/api/src/auth/auth.controller.ts) |
 | POST | `/api/v1/blockers/:id/follow-up` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/blockers/:id/resolve` | [source](../apps/api/src/accident/accident.controllers.ts) |

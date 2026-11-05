@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased] — staff access recovery, 2026-11-05
+
+- The owner can make a private one-hour recovery link for a colleague who lost the password or Authenticator. The colleague sets a new password and reconnects Authenticator, and old sessions end. The owner account cannot use this path. Not yet on the server.
+
 ## [Released on Manage] — entry and operational workbench, 2026-11-05
 
 - Refined Persian login and explicit selection among permitted desks, with a consistent return destination and fewer duplicate menu entries.

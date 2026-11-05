@@ -1,5 +1,14 @@
 # Test report
 
+## Staff access recovery — 2026-11-05 — not deployed
+
+Branch `feature/staff-access-recovery`. No migration: `auth_challenges.purpose` is free text, and the new values are `recover` and `recover_enroll`.
+
+- `apps/api/test/staff-recovery.e2e-spec.ts` 7/7 locally on PGlite: only the actual owner can issue; owner account, inactive and other-tenant targets refused; password and Authenticator replaced; old sessions, old password and old code refused; link single use; wrong code leaves old credentials working; expired, replaced, deactivated and forged links refused; owner protected if ownership moves mid-way; login and recovery challenges not interchangeable; audit rows present and free of the secret; response not stored by idempotency.
+- Existing `personal-auth.e2e-spec.ts` still passes. API and web typecheck pass; API lint passes.
+- Browser tests added to `personal-auth.spec.ts` and the full suite: see CI on the PR. They mock the API.
+- **Not tested:** the flow on the production images behind Arvan, because it is not deployed.
+
 ## Published entry/workbench — 2026-11-05
 
 Application/test `ad54f15`; all six [CI 41974333191](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41974333191) pass: shared 17, API 185 plus nine PG-only tests separately, browser 34 with two optional screenshot skips, daily/support/reservation 3. Final local entry/Auth/ICS 6/6, workshop/holiday API 12/12, daily 3/3; build/lint pass. Older trials below are history, not the final gate. [Release evidence](RELEASE_ENTRY_20261105.md).

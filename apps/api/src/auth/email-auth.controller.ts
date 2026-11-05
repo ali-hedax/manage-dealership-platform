@@ -2,6 +2,7 @@ import { Body, Controller, Get, Inject, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { APP_CONFIG, type AppConfig } from '../config';
+import { IdParam } from '../common/params';
 import { ZodPipe } from '../common/zod.pipe';
 import { AuthService } from './auth.service';
 import { EmailAuthService } from './email-auth.service';
@@ -33,6 +34,8 @@ export class EmailAuthController {
   emailInvitation(@CurrentActor() actor:Actor,@Body(new ZodPipe(invitationSchema)) body:InvitationInput) {return this.email.invite(actor,body,'email');}
   @RequirePermissions('user.manage') @Post('invitations') @Throttle({default:{limit:5,ttl:60000}})
   invite(@CurrentActor() actor:Actor,@Body(new ZodPipe(invitationSchema)) body:InvitationInput) {return this.email.invite(actor,body);}
+  @RequirePermissions('user.manage') @Post('users/:id/recovery') @Throttle({default:{limit:5,ttl:60000}})
+  recovery(@CurrentActor() actor:Actor,@IdParam() id:string) {return this.email.issueRecovery(actor,id);}
   @Public() @Post('invitations/accept') @Throttle({default:{limit:10,ttl:60000}})
   accept(@Body(new ZodPipe(passwordSetSchema)) body:PasswordSetInput,@Req() req:AuthedRequest) {return this.email.enroll(body,meta(req));}
   @Public() @Post('invitations/confirm') @Throttle({default:{limit:10,ttl:60000}})
