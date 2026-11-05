@@ -77,6 +77,7 @@ const caseFields = {
   insuranceClaimNo: optionalText(64),
   coverageNotes: optionalText(2000),
   responsibleUserId: uuid.nullish(),
+  repairDurationDays: z.number().min(0.25).max(365).multipleOf(0.25).optional(),
   officialDeadlineAt: optionalIsoDate,
   forecastDeliveryAt: optionalIsoDate,
   stage: z.enum(CASE_STAGES).optional(),
@@ -145,6 +146,7 @@ export const createTaskSchema = z.object({
   stationId: uuid.nullish(),
   assignedUserId: uuid.nullish(),
   durationMinutes: z.number().int().min(1).max(100000).optional(),
+  durationDays: z.number().min(0.25).max(180).multipleOf(0.25).optional(),
   scheduleReason: optionalText(1000),
   departmentId: uuid,
   title: optionalText(200),
@@ -319,7 +321,10 @@ export type CreatePartInput = z.infer<typeof createPartSchema>;
 
 export const partsFromAssessmentSchema = z.object({
   source: z.enum(PART_SOURCES).optional(),
-});
+  assessmentId: uuid.optional(),
+  expectedVersion: z.number().int().min(1).optional(),
+  itemIds: z.array(uuid).min(1).max(500).optional(),
+}).superRefine((v,ctx)=>{if((v.itemIds||v.assessmentId||v.expectedVersion)&&(!v.itemIds||!v.assessmentId||!v.expectedVersion))ctx.addIssue({code:'custom',message:'شناسه و نسخه کارشناسی و اقلام انتخابی را با هم بفرستید'});});
 export type PartsFromAssessmentInput = z.infer<typeof partsFromAssessmentSchema>;
 
 export const importPartsSchema = z.object({

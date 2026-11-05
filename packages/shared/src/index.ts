@@ -12,3 +12,4 @@ export * from './daily-reports';
 export * from './workshop';
 
 export * from './iran-holidays';
+export * from './assessment-dispatch';

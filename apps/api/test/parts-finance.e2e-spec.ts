@@ -184,7 +184,7 @@ describe('acceptance 2: golden card, waiting for a company part', () => {
 });
 
 describe('acceptance 3: body insurance, price change approved by the assessor', () => {
-  it('requires the assessor approval reference above the approved price and the line authorization', async () => {
+  it('allows company/insurer supply without a generic assessment or price gate', async () => {
     const c = await newCase({ coverageType: 'insurance', insurerName: 'بیمه آزمون', insuranceClaimNo: 'TEST-CL-3' });
     const v1 = await authorized(
       c.id,
@@ -197,18 +197,9 @@ describe('acceptance 3: body insurance, price change approved by the assessor', 
     let [fender, door] = (await expert.post(`/cases/${c.id}/parts/from-assessment`, { source: 'insurer_supplier' }))
       .body as Part[];
 
-    const above = await partAct(fender!, 'order', { supplier: 'تأمین‌کننده بیمه آزمون', unitPriceRial: 23_000_000 });
-    expect(above.body.code).toBe('PRICE_ABOVE_APPROVED');
-    const ok = await partAct(fender!, 'order', {
-      supplier: 'تأمین‌کننده بیمه آزمون',
-      unitPriceRial: 23_000_000,
-      priceApprovedBy: 'کارشناس بیمه آزمون',
-      priceApprovalRef: 'INS-PRICE-TEST-1',
-      etaAt: daysAhead(3),
-    });
-    expect(ok.status).toBe(201);
-    fender = ok.body;
-    expect(fender).toMatchObject({ priceApprovalRef: 'INS-PRICE-TEST-1', unitPriceRial: 23_000_000 });
+    const ok=await partAct(fender!,'order',{supplier:'تأمین‌کننده بیمه آزمون',unitPriceRial:23_000_000,etaAt:daysAhead(3)});
+    expect(ok.status).toBe(201);fender=ok.body;
+    expect(fender).toMatchObject({priceApprovalRef:null,unitPriceRial:23_000_000});
 
     // A supplement re-prices the door: until its authorization the door cannot be ordered.
     let v2: Assessment = (
@@ -218,17 +209,7 @@ describe('acceptance 3: body insurance, price change approved by the assessor', 
     v2 = (await expert.patch(`/assessment-items/${doorLine.id}`, { expectedVersion: v2.version, unitPriceRial: 55_000_000 }))
       .body;
     v2 = (await expert.post(`/assessments/${v2.id}/finalize`, { expectedVersion: v2.version })).body;
-    const blocked = await partAct(door!, 'order', { unitPriceRial: 50_000_000 });
-    expect(blocked.body.code).toBe('AUTHORIZATION_REQUIRED');
-
-    await expert.post(`/assessments/${v2.id}/authorization`, {
-      expectedVersion: v2.version,
-      decision: 'approved',
-      source: 'insurer',
-      method: 'official_system',
-      reference: 'TEST-AUTH-V2',
-    });
-    door = (await partAct(door!, 'order', { unitPriceRial: 50_000_000 })).body;
+    door=(await partAct(door!,'order',{unitPriceRial:50_000_000})).body;
     expect(door.status).toBe('ordered');
     expect(v1.status).toBe('final');
   });

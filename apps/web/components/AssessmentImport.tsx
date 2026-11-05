@@ -40,7 +40,7 @@ export function AssessmentImport({ assessment, onClose, onDone }: { assessment: 
     <button type="button" className="btn" disabled={busy} onClick={onClose}>بستن</button>
     <button type="button" className="btn btn-primary" disabled={busy || !preview || !!preview.result.errors.length || !preview.result.rows.length || !confirmed} onClick={() => void apply()}>افزودن به پیش‌نویس</button>
   </>}><div className="stack" data-testid="assessment-import">
-    <p className="small muted">فایل کپی‌شده از PDF را بارگذاری کنید. ستون‌ها از روی عنوان شناسایی می‌شوند؛ قطعات و اجرت جدا خوانده می‌شوند.</p>
+    <p className="small muted">فایل کپی‌شده از PDF را بارگذاری کنید. در فایل کامل الحاقیه، اقلام قبلی تطبیق می‌خورند و تکراری ثبت نمی‌شوند؛ تغییر تعداد و مبلغ در پیش‌نمایش مشخص است. اقلام غایب از فایل خودکار حذف نمی‌شوند.</p>
     <label className="field"><span>فایل کارشناسی (.xlsx)</span><input type="file" className="input" disabled={busy} accept=".xlsx" onChange={e => { clear(); setFile(e.target.files?.[0] ?? null); }} /></label>
     <label className="field"><span>واحد مبلغ در فایل</span><select className="input" disabled={busy} value={currency} onChange={e => { clear(); setCurrency(e.target.value as 'rial' | 'toman'); }}><option value="rial">ریال</option><option value="toman">تومان</option></select></label>
     <button type="button" className="btn" disabled={!file || busy} onClick={() => void read()}>{busy ? 'در حال بررسی…' : 'بررسی و پیش‌نمایش'}</button>
@@ -48,9 +48,9 @@ export function AssessmentImport({ assessment, onClose, onDone }: { assessment: 
     {preview && <>
       <p role="status">{faNum(preview.result.rows.length)} قلم آماده بررسی؛ {faNum(preview.result.skipped.length)} مورد کنار گذاشته‌شده</p>
       {!!preview.result.errors.length && <div className="callout callout-red" role="alert">فایل خطا دارد؛ هیچ ردیفی ثبت نمی‌شود.<ul>{preview.result.errors.map((r, i) => <li key={i}>{r.sheet}، ردیف {faNum(r.row)}: {r.message}</li>)}</ul></div>}
-      <div className="table-scroll import-preview-table"><table className="table static"><thead><tr><th>ردیف فایل</th><th>نوع / شرح</th><th>کد قطعه</th><th>تعداد</th><th>مبلغ کل (ریال)</th></tr></thead><tbody>{preview.result.rows.map((r, i) => <tr key={i}><td>{faNum(r.row)}</td><td><span className="chip">{r.action === 'replace' ? 'قطعه' : 'اجرت'}</span> {r.description}</td><td><bdi>{r.partNumber || '—'}</bdi></td><td>{faNum(r.quantity)}</td><td>{rial(r.quantity * r.unitPriceRial + r.labourRial)}</td></tr>)}</tbody></table></div>
+      <div className="table-scroll import-preview-table"><table className="table static"><thead><tr><th>ردیف فایل</th><th>نتیجه تطبیق</th><th>نوع / شرح</th><th>کد قطعه</th><th>تعداد</th><th>مبلغ کل (ریال)</th></tr></thead><tbody>{preview.result.rows.map((r, i) => <tr key={i}><td>{faNum(r.row)}</td><td>{r.outcome==='unchanged'?'قبلی؛ بدون ثبت دوباره':r.outcome==='updated'?'اصلاح قلم قبلی':'قلم جدید'}</td><td><span className="chip">{r.action === 'replace' ? 'قطعه' : 'اجرت'}</span> {r.description}</td><td><bdi>{r.partNumber || '—'}</bdi></td><td>{faNum(r.quantity)}</td><td>{rial(r.quantity * r.unitPriceRial + r.labourRial)}</td></tr>)}</tbody></table></div>
       {!!preview.result.skipped.length && <details className="compact-disclosure"><summary>ردیف‌های کنار گذاشته‌شده</summary><ul>{preview.result.skipped.map((r, i) => <li key={i}>{r.sheet}، ردیف {faNum(r.row)}: {r.reason}</li>)}</ul></details>}
-      <p className="small muted">این مرحله فقط پیش‌نویس کارشناسی را تکمیل می‌کند؛ تأیید رسمی و ایجاد درخواست قطعه در مراحل جدا انجام می‌شوند. اجرت واردشده را برای ارجاع به رشتهٔ مربوط ویرایش کنید.</p>
+      <p className="small muted">این مرحله فقط پیش‌نویس کارشناسی را تکمیل می‌کند؛ برای ارسال، اقلام را در کارشناسی انتخاب و «ارسال به قطعات و تأمین» را بزنید. اجرت واردشده را برای ارجاع به رشتهٔ مربوط ویرایش کنید.</p>
       <label className="check"><input type="checkbox" disabled={busy} checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> اقلام و واحد مبلغ را بررسی کردم</label>
     </>}
   </div></Dialog>;

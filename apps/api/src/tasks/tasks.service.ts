@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { addWorkingMinutes } from '@manage/shared';
-import { calendarAt } from '../workshop/workshop.service';
+import { addWorkingMinutes,workingDayMinutes,nextWorkingInstant } from '@manage/shared';
+import { calendarAt } from '../workshop/work-calendar';
 import type { CreateTaskInput, Task, TaskActionInput, TaskStatus, UpdateTaskInput } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -42,7 +42,7 @@ export class TasksService {
       const kase = await this.cases.loadForWrite(tx, tenantId, caseId);
       if (kase.stage === 'delivered') throw badRequest('CASE_DELIVERED', 'پرونده تحویل شده است');
       await this.assertDepartment(tx, tenantId, input.departmentId);
-      const planning = await this.plan(tx, actor, input);
+      const planning = await this.plan(tx, actor, input,undefined,caseId);
       assertPlannedRange(input.plannedStartAt, planning.plannedEndAt?.toISOString() ?? input.plannedEndAt);
       const dependsOn = [...new Set(input.dependsOn ?? [])];
       await this.assertSameCase(tx, tenantId, caseId, dependsOn);
@@ -64,7 +64,7 @@ export class TasksService {
           plannedStartAt: toDate(input.plannedStartAt),
           plannedEndAt: toDate(input.plannedEndAt),
           ...planning,
-          baselineStartAt: toDate(input.plannedStartAt),
+          baselineStartAt: planning.plannedStartAt??toDate(input.plannedStartAt),
           baselineEndAt: planning.plannedEndAt ?? toDate(input.plannedEndAt),
           weight: input.weight,
           sortOrder: n + 1,
@@ -103,16 +103,17 @@ export class TasksService {
       await this.cases.loadForWrite(tx, tenantId, task.caseId);
       if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
 
-      const scheduleChanged=['departmentId','plannedStartAt','plannedEndAt','durationMinutes','stationId','assignedUserId','dependsOn'].some(k=>k in input);
+      const scheduleChanged=['departmentId','plannedStartAt','plannedEndAt','durationMinutes','durationDays','stationId','assignedUserId','dependsOn'].some(k=>k in input);
+      const existingDependencies=input.durationDays&&input.dependsOn===undefined?await tx.select({id:taskDependencies.dependsOnTaskId}).from(taskDependencies).where(eq(taskDependencies.taskId,task.id)):[];
       if(scheduleChanged && !input.scheduleReason) throw badRequest('SCHEDULE_REASON_REQUIRED','برای تغییر برنامه یا ارجاع، دلیل را ثبت کنید');
-      const planning = scheduleChanged ? await this.plan(tx,actor,{...input,departmentId:input.departmentId??task.departmentId,stationId:input.stationId===undefined?task.stationId:input.stationId,assignedUserId:input.assignedUserId===undefined?task.assignedUserId:input.assignedUserId,plannedStartAt:input.plannedStartAt===undefined?task.plannedStartAt?.toISOString():input.plannedStartAt,plannedEndAt:input.plannedEndAt===undefined?task.plannedEndAt?.toISOString():input.plannedEndAt},(task.plannedStartAt||task.plannedEndAt||task.actualStartAt)?task.calendarSnapshot:null) : {};
+      const planning = scheduleChanged ? await this.plan(tx,actor,{...input,dependsOn:input.dependsOn??existingDependencies.map(d=>d.id),departmentId:input.departmentId??task.departmentId,stationId:input.stationId===undefined?task.stationId:input.stationId,assignedUserId:input.assignedUserId===undefined?task.assignedUserId:input.assignedUserId,plannedStartAt:input.plannedStartAt===undefined?task.plannedStartAt?.toISOString():input.plannedStartAt,plannedEndAt:input.plannedEndAt===undefined?task.plannedEndAt?.toISOString():input.plannedEndAt},(task.plannedStartAt||task.plannedEndAt||task.actualStartAt)?task.calendarSnapshot:null,task.caseId) : {};
       const patch: Partial<TaskRow> = {...planning};
       for (const key of ['departmentId', 'title', 'technicianName', 'technicianCode', 'weight', 'notes'] as const) {
         if (input[key] !== undefined) (patch as any)[key] = input[key];
       }
       if (planning.technicianName) patch.technicianName=planning.technicianName;
-      if (input.plannedStartAt !== undefined) patch.plannedStartAt = toDate(input.plannedStartAt);
-      if (input.plannedEndAt !== undefined && input.durationMinutes === undefined) patch.plannedEndAt = toDate(input.plannedEndAt);
+      if (input.plannedStartAt !== undefined && !input.durationDays) patch.plannedStartAt = toDate(input.plannedStartAt);
+      if (input.plannedEndAt !== undefined && input.durationMinutes === undefined && input.durationDays === undefined) patch.plannedEndAt = toDate(input.plannedEndAt);
       assertPlannedRange(
         (patch.plannedStartAt ?? task.plannedStartAt)?.toISOString(),
         (patch.plannedEndAt ?? task.plannedEndAt)?.toISOString(),
@@ -263,7 +264,7 @@ export class TasksService {
     return row;
   }
 
-  private async plan(tx:DbOrTx,actor:Actor,input:Partial<CreateTaskInput>,frozen?:TaskRow['calendarSnapshot']):Promise<Partial<TaskRow>> {
+  private async plan(tx:DbOrTx,actor:Actor,input:Partial<CreateTaskInput>,frozen?:TaskRow['calendarSnapshot'],caseId?:string):Promise<Partial<TaskRow>> {
     let stationSnapshot:TaskRow['stationSnapshot']=null;
     if(input.stationId) {
       const [s]=await tx.select().from(workshopStations).where(and(eq(workshopStations.id,input.stationId),eq(workshopStations.tenantId,actor.user.tenantId),eq(workshopStations.isActive,true)));
@@ -276,13 +277,27 @@ export class TasksService {
       if(!u)throw badRequest('INVALID_ASSIGNEE','تعمیرکار معتبر یا فعال نیست');
       assigneeName=u.displayName;
     }
-    const calendarSnapshot=frozen ?? await calendarAt(tx,actor.user.tenantId,input.plannedStartAt??new Date().toISOString());
-    let plannedEndAt=toDate(input.plannedEndAt);
-    if(input.durationMinutes) {
-      if(!input.plannedStartAt)throw badRequest('PLANNED_START_REQUIRED','شروع برنامه برای محاسبه مدت کاری لازم است');
-      plannedEndAt=new Date(addWorkingMinutes(input.plannedStartAt,input.durationMinutes,calendarSnapshot.calendar));
+    if(input.durationDays&&input.durationMinutes)throw badRequest('DURATION_CONFLICT','مدت را فقط به روز یا دقیقه وارد کنید');
+    let start=input.plannedStartAt??null;
+    let caseCalendar:TaskRow['calendarSnapshot']=null;
+    if(input.durationDays&&caseId){
+      const kase=await this.cases.loadForWrite(tx,actor.user.tenantId,caseId);
+      caseCalendar=kase.repairPlan?.calendar??null;
+      const dependencies=[...new Set(input.dependsOn??[])];
+      if(dependencies.length){
+        const rows=await tx.select().from(tasks).where(and(eq(tasks.tenantId,actor.user.tenantId),eq(tasks.caseId,caseId),inArray(tasks.id,dependencies)));
+        if(rows.length!==dependencies.length||rows.some(t=>!t.plannedEndAt))throw badRequest('DEPENDENCY_SCHEDULE_REQUIRED','ابتدا پایان برنامه پیش‌نیازهای همین پرونده را مشخص کنید');
+        const previousEnd=Math.max(...rows.map(t=>t.plannedEndAt!.getTime()));
+        if(start&&Date.parse(start)<previousEnd)throw badRequest('DEPENDENCY_TIME_CONFLICT','شروع این جایگاه نمی‌تواند قبل از پایان برنامه پیش‌نیاز باشد');
+        start??=new Date(previousEnd).toISOString();
+      }else start??=kase.repairPlan?.startAt??kase.admittedAt.toISOString();
     }
-    return {stationId:input.stationId??null,stationSnapshot,assignedUserId:input.assignedUserId??null,...(assigneeName?{technicianName:assigneeName}:{}),calendarSnapshot,plannedEndAt};
+    const calendarSnapshot=frozen ?? caseCalendar ?? await calendarAt(tx,actor.user.tenantId,start??new Date().toISOString());
+    if(input.durationDays&&!input.plannedStartAt&&start)start=nextWorkingInstant(start,calendarSnapshot.calendar);
+    let plannedEndAt=toDate(input.plannedEndAt);
+    const minutes=input.durationDays?Math.round(input.durationDays*workingDayMinutes(calendarSnapshot.calendar)):input.durationMinutes;
+    if(minutes){if(!start)throw badRequest('PLANNED_START_REQUIRED','شروع برنامه برای محاسبه مدت کاری لازم است');plannedEndAt=new Date(addWorkingMinutes(start,minutes,calendarSnapshot.calendar));}
+    return {stationId:input.stationId??null,stationSnapshot,assignedUserId:input.assignedUserId??null,...(assigneeName?{technicianName:assigneeName}:{}),calendarSnapshot,plannedEndAt,...(input.durationDays?{plannedStartAt:toDate(start)}:{})};
   }
 
   private async unfinishedDependencies(tx: DbOrTx, tenantId:string, taskId: string): Promise<string[]> {

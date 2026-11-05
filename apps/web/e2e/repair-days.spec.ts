@@ -1,0 +1,20 @@
+import {test,expect} from '@playwright/test';
+import {login,openCaseSections} from './helpers';
+import {workingMinutesBetween} from '@manage/shared';
+test('day-only intake feeds sequential station allocations and keeps dates and overlapping-budget math server-side',async({page},info)=>{
+ await login(page,'expert');await page.goto('/cases/new');
+ await page.getByLabel('مدل',{exact:true}).fill('تارا ساختگی برنامه');await page.getByLabel('VIN (شماره شاسی)').fill('TESTVIN000DAYPLAN');
+ await page.getByLabel('نام و نام خانوادگی').fill('مشتری آزمون روز کاری');await page.getByLabel('تلفن همراه').fill('09000005519');
+ await expect(page.getByLabel('پیش‌بینی تحویل',{exact:true})).not.toBeVisible();await page.getByLabel('مدت تعمیر (روز کاری)',{exact:true}).fill('10');
+ await expect(page.getByText('پایان محاسبه‌شده:',{exact:false})).toBeVisible();await page.getByRole('button',{name:'ثبت پرونده',exact:true}).click();
+ await expect(page.locator('.case-hero')).toBeVisible();const id=page.url().split('/cases/')[1].split(/[?#]/)[0];
+ let kase=await(await page.request.get(`/api/v1/cases/${id}`)).json();expect(kase.repairPlan.days).toBe(10);expect(kase.repairPlan.durationMinutes).toBeGreaterThan(0);expect(kase.forecastDeliveryAt).toBe(kase.repairPlan.endAt);
+ await openCaseSections(page,'tasks');await page.getByRole('button',{name:'افزودن فعالیت',exact:true}).click();await page.locator('select[name="departmentId"]').selectOption({label:'صافکاری'});
+ await page.getByLabel('سهم این جایگاه (روز کاری)',{exact:true}).fill('2');await page.getByRole('button',{name:'ذخیره فعالیت',exact:true}).click();await expect(page.getByTestId('task')).toHaveCount(1);
+ kase=await(await page.request.get(`/api/v1/cases/${id}`)).json();const first=kase.tasks[0];expect(first.plannedStartAt).toBe(kase.repairPlan.startAt);expect(first.plannedEndAt).toBeTruthy();
+ await page.getByRole('button',{name:'افزودن فعالیت',exact:true}).click();await page.locator('select[name="departmentId"]').selectOption({label:'نقاشی'});await page.getByLabel('سهم این جایگاه (روز کاری)',{exact:true}).fill('1');
+ await page.getByRole('checkbox',{name:'صافکاری',exact:true}).check();await page.getByRole('button',{name:'ذخیره فعالیت',exact:true}).click();await expect(page.getByTestId('task')).toHaveCount(2);
+ kase=await(await page.request.get(`/api/v1/cases/${id}`)).json();const second=kase.tasks[1];expect(Date.parse(second.plannedStartAt)).toBeGreaterThanOrEqual(Date.parse(first.plannedEndAt));expect(workingMinutesBetween(first.plannedEndAt,second.plannedStartAt,kase.repairPlan.calendar.calendar)).toBe(0);expect(workingMinutesBetween(second.plannedStartAt,second.plannedEndAt,kase.repairPlan.calendar.calendar)).toBe(kase.repairPlan.dayMinutes);await expect(page.getByText('زمان تخصیص‌یافته بدون دوباره‌شمردن هم‌پوشانی:',{exact:false})).toContainText('۳');
+ await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:info.outputPath('repair-day-plan-mobile.png'),fullPage:true});
+});

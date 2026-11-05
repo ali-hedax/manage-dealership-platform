@@ -1,5 +1,13 @@
 # Test report
 
+## Assessment dispatch and working-day repair plans — 2026-11-05 — in validation
+
+Working branch `feature/assessment-parts-dispatch`, base documentation 402cc82 / operational ad54f15. Owner clarified that recording initial/supplement assessments and sending needs require no generic authorization; only outside-market buying needs recorded price coordination. Added single/all selection, current-version/tenant/transaction checks, exact-code/root matching, incremental quantities and explicit review for reductions/code changes. Complete supplement imports reconcile rather than duplicate existing lines; historical versions remain intact. Company supply is not blocked by a generic assessment or price-increase gate; outside-market quote approval and existing payment controls remain enforced.
+
+Added a nullable repair-plan calendar snapshot (migration 0015, no backfill) for numeric working-day case intake and numeric station shares. Dates compute server-side, dependency successors start after planned predecessors, parallel intervals count once in the case budget; original task baselines and prior cases' dates stay preserved. One day uses the longest configured shift-day; Thursday consumes its actual shorter hours. Manual official dates remain in an optional disclosure.
+
+Completed so far: API assessment/parts/workshop/new flows 30/30; shared 21/21; shared/API/web builds and lint passed. New browser end-to-end journey and full regression are running; not published. Exact-code/manual supply versus outside-market gate, calendar half-day/holiday examples, frozen snapshot and overlap assertions are included. Add final results, PR/CI and any release evidence before calling complete.
+
 ## Published entry/workbench — 2026-11-05
 
 Application/test `ad54f15`; all six [CI 41974333191](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41974333191) pass: shared 17, API 185 plus nine PG-only tests separately, browser 34 with two optional screenshot skips, daily/support/reservation 3. Final local entry/Auth/ICS 6/6, workshop/holiday API 12/12, daily 3/3; build/lint pass. Older trials below are history, not the final gate. [Release evidence](RELEASE_ENTRY_20261105.md).

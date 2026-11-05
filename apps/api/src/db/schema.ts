@@ -234,6 +234,7 @@ export const cases = pgTable(
     // Three independent times: official commitment, internal forecast, actual.
     officialDeadlineAt: ts('official_deadline_at'),
     forecastDeliveryAt: ts('forecast_delivery_at'),
+    repairPlan: jsonb('repair_plan').$type<import('@manage/shared').RepairPlan>(),
     actualDeliveryAt: ts('actual_delivery_at'),
     technicalClosedAt: ts('technical_closed_at'),
     financialClosedAt: ts('financial_closed_at'),

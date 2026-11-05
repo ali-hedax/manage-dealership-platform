@@ -3,6 +3,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   toPersianDigits,
+  assessmentPartKey,
   type ImportAssessmentInput,
   type AssessmentImportPreview,
   type Assessment,
@@ -29,9 +30,6 @@ import { parseAssessmentSheet } from './assessment-sheet';
 type AssessmentRow = typeof assessments.$inferSelect;
 type ItemRow = typeof assessmentItems.$inferSelect;
 
-// Stages before the vehicle waits for authorization; finalizing the initial
-// assessment moves such a case to "awaiting approval".
-const PRE_APPROVAL_STAGES = ['reception', 'assessment'];
 
 const createdByUser = alias(users, 'assessment_created_by');
 const finalizedByUser = alias(users, 'assessment_finalized_by');
@@ -57,8 +55,8 @@ export function totalsOf(items: Pick<ItemRow, 'quantity' | 'unitPriceRial' | 'la
  * Versioned assessments. Version 1 is the initial assessment; hidden damage
  * found later creates a supplement (الحاقیه): a new draft that copies the
  * previous items, so the previous version stays exactly as it was approved.
- * A final version waiting for authorization holds an "authorization" blocker
- * on the case; only recording the external decision resolves it.
+ * Technical recording/finalization creates no purchasing-authorization blocker.
+ * Historical external decisions remain immutable records.
  */
 @Injectable()
 export class AssessmentsService {
@@ -166,28 +164,28 @@ export class AssessmentsService {
       const tenantId = actor.user.tenantId;
       const a = await this.loadDraft(tx, tenantId, assessmentId, input.expectedVersion);
       const previous = await tx.select().from(assessmentItems).where(and(eq(assessmentItems.tenantId, tenantId), eq(assessmentItems.assessmentId, a.id)));
-      for (const row of result.rows) {
-        if (previous.some(p => p.action === row.action && p.description === row.description && p.partNumber === row.partNumber)) {
-          result.errors.push({ sheet: row.sheet, row: row.row, message: 'این قلم قبلاً در پیش‌نویس وجود دارد؛ برای اصلاح آن از ویرایش استفاده کنید' });
-        }
+      const changes:{row:AssessmentImportPreview['rows'][number];existing:ItemRow|null}[]=[];
+      for(const row of result.rows){
+        const matches=previous.filter(p=>assessmentPartKey(p)===assessmentPartKey(row));
+        if(matches.length>1){result.errors.push({sheet:row.sheet,row:row.row,message:'چند قلم قبلی با این کد وجود دارد؛ ابتدا کارشناسی را اصلاح کنید'});continue;}
+        const old=matches[0]??null;
+        const unchanged=old&&['description','partNumber','quantity','unitPriceRial','labourRial'].every(k=>old[k as keyof ItemRow]===row[k as keyof typeof row]);
+        row.outcome=unchanged?'unchanged':old?'updated':'new';
+        if(!unchanged)changes.push({row,existing:old});
       }
       if (input.dryRun) return;
       if (result.errors.length || !result.rows.length) throw badRequest('ASSESSMENT_IMPORT_INVALID', 'فایل خطا دارد؛ هیچ قلمی وارد نشد. پیش‌نمایش را دوباره بررسی کنید');
-      const offset = Math.max(0, ...previous.map(p => p.lineNo));
-      const items = result.rows.map((r, index) => ({
-        id: newId(), tenantId, assessmentId: a.id, lineNo: offset + index + 1,
-        action: r.action, description: r.description, partNumber: r.partNumber,
-        quantity: r.quantity, unitPriceRial: r.unitPriceRial, labourRial: r.labourRial,
-        evidence: r.evidence, isTest: actor.user.isTestTenant,
-      }));
-      await tx.insert(assessmentItems).values(items);
-      const saved = await this.touch(tx, a);
-      await this.audit.record(tx, actor, {
-        entityType: 'assessment', entityId: a.id, caseId: a.caseId,
-        action: 'assessment.items_imported',
-        after: { currency: input.currency, items, skipped: result.skipped.length },
-        snapshot: { version: saved.version, row: saved },
-      });
+      let lineNo=Math.max(0,...previous.map(p=>p.lineNo));
+      const written=[];
+      for(const {row:r,existing:old} of changes){
+        const fields={description:r.description,partNumber:r.partNumber,quantity:r.quantity,unitPriceRial:r.unitPriceRial,labourRial:r.labourRial,evidence:r.evidence};
+        if(old){const [updated]=await tx.update(assessmentItems).set({...fields,changed:true,approvalStatus:'pending',updatedAt:new Date()}).where(and(eq(assessmentItems.id,old.id),eq(assessmentItems.tenantId,tenantId))).returning();written.push(updated);}
+        else{const [inserted]=await tx.insert(assessmentItems).values({...fields,id:newId(),tenantId,assessmentId:a.id,lineNo:++lineNo,action:r.action,isTest:actor.user.isTestTenant}).returning();written.push(inserted);}
+      }
+      if(changes.length){
+        const saved=await this.touch(tx,a);
+        await this.audit.record(tx,actor,{entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.items_imported',before:{items:changes.flatMap(c=>c.existing?[c.existing]:[])},after:{currency:input.currency,items:written,unchanged:result.rows.filter(r=>r.outcome==='unchanged').length,skipped:result.skipped.length},snapshot:{version:saved.version,row:saved}});
+      }
       result.applied = true;
     });
     return result;
@@ -199,10 +197,11 @@ export class AssessmentsService {
       const a = await this.loadDraft(tx, tenantId, assessmentId, input.expectedVersion);
       if (input.labourDepartmentId) await this.assertDepartment(tx, tenantId, input.labourDepartmentId);
       const existing = await tx
-        .select({ lineNo: assessmentItems.lineNo })
+        .select()
         .from(assessmentItems)
         .where(eq(assessmentItems.assessmentId, a.id));
       const lineNo = Math.max(0, ...existing.map((x) => x.lineNo)) + 1;
+      if(input.action==='replace'&&existing.some(i=>assessmentPartKey(i)===assessmentPartKey({...input,partNumber:input.partNumber??null})))throw badRequest('ASSESSMENT_ITEM_DUPLICATE','این شماره فنی قبلاً در کارشناسی وجود دارد؛ تعداد همان قلم را ویرایش کنید');
       const id = newId();
       await tx.insert(assessmentItems).values({
         id,
@@ -268,7 +267,12 @@ export class AssessmentsService {
         after[key] = value;
       }
       if (!Object.keys(patch).length) return { item, a };
-      // A changed line needs a fresh decision even if the old one was approved.
+      const next={...item,...patch};
+      if(next.action==='replace'){
+        const peers=await tx.select().from(assessmentItems).where(and(eq(assessmentItems.tenantId,tenantId),eq(assessmentItems.assessmentId,a.id)));
+        if(peers.some(i=>i.id!==item.id&&assessmentPartKey(i)===assessmentPartKey(next)))throw badRequest('ASSESSMENT_ITEM_DUPLICATE','این شماره فنی در قلم دیگری ثبت شده است؛ تعداد همان قلم را اصلاح کنید');
+      }
+      // Revisions remain visible and preserve the previous version; purchasing approval is separate.
       await tx
         .update(assessmentItems)
         .set({ ...patch, changed: true, approvalStatus: 'pending', updatedAt: new Date() })
@@ -320,14 +324,24 @@ export class AssessmentsService {
     const tenantId = actor.user.tenantId;
     const forecast = input.forecastDeliveryAt ? new Date(input.forecastDeliveryAt) : null;
     await this.db.transaction(async (tx) => {
+      const recorded=await this.loadRow(tx,tenantId,assessmentId);
+      if(recorded.status==='final'&&recorded.authorizationStatus==='pending'){
+        if(recorded.version!==input.expectedVersion)throw versionConflict(recorded.version);
+        const kase=await this.cases.loadForWrite(tx,tenantId,recorded.caseId);
+        await this.closeBlocker(tx,actor,recorded.blockerId,new Date(),'ثبت کارشناسی طبق روال فعلی؛ بدون انتظار مجوز عمومی');
+        const [saved]=await tx.update(assessments).set({authorizationStatus:'not_required',version:recorded.version+1,updatedAt:new Date()}).where(and(eq(assessments.tenantId,tenantId),eq(assessments.id,recorded.id),eq(assessments.version,recorded.version))).returning();
+        if(!saved)throw versionConflict();
+        await this.audit.record(tx,actor,{entityType:'assessment',entityId:recorded.id,caseId:recorded.caseId,action:'assessment.requirement_updated',before:{authorizationStatus:recorded.authorizationStatus},after:{authorizationStatus:'not_required'},snapshot:{version:saved.version,row:saved}});
+        if(forecast)await this.cases.applyForecast(tx,actor,kase,forecast,'اصلاح صریح پیش‌بینی هنگام ثبت کارشناسی');
+        return;
+      }
       const a = await this.loadDraft(tx, tenantId, assessmentId, input.expectedVersion);
-      let kase = await this.cases.loadForWrite(tx, tenantId, a.caseId);
+      const kase = await this.cases.loadForWrite(tx, tenantId, a.caseId);
       const items = await tx.select().from(assessmentItems).where(eq(assessmentItems.assessmentId, a.id));
       if (!items.length) throw badRequest('EMPTY_ASSESSMENT', 'کارشناسی بدون قلم را نمی‌توان نهایی کرد');
       const totals = totalsOf(items);
 
       let previous: AssessmentRow | null = null;
-      let needsAuthorization = true;
       if (a.previousId) {
         previous = await this.loadRow(tx, tenantId, a.previousId);
         const previousItems = await tx
@@ -340,24 +354,12 @@ export class AssessmentsService {
         if (!changed && !removed) {
           throw badRequest('NO_CHANGES', 'الحاقیه هیچ تغییری نسبت به نسخه قبل ندارد');
         }
-        // Removing lines only lowers the cost; new or changed lines need a new decision.
-        needsAuthorization = changed > 0 || totals.totalRial > previous.partsRial + previous.labourRial;
+        // Recording a technical supplement does not require a purchasing authorization.
       }
 
       const now = new Date();
-      let blockerId: string | null = null;
-      if (needsAuthorization) {
-        const label = a.kind === 'supplement' ? `الحاقیه نسخه ${toPersianDigits(a.versionNo)}` : 'کارشناسی اولیه';
-        const blocker = await this.blockers.insert(tx, actor, a.caseId, {
-          taskId: null,
-          reason: 'authorization',
-          description: `در انتظار مجوز ${label}`,
-          // The case has been waiting since the assessment (or, for hidden damage, the discovery).
-          occurredAt: (a.discoveredAt ?? a.assessedAt) < now ? (a.discoveredAt ?? a.assessedAt) : now,
-        });
-        blockerId = blocker.id;
-      }
-      const status: AuthorizationStatus = needsAuthorization ? 'pending' : 'not_required';
+      const blockerId: string | null = null;
+      const status: AuthorizationStatus = 'not_required';
       const [saved] = await tx
         .update(assessments)
         .set({
@@ -366,7 +368,7 @@ export class AssessmentsService {
           finalizedBy: actor.user.id,
           partsRial: totals.partsRial,
           labourRial: totals.labourRial,
-          approvedRial: needsAuthorization ? null : totals.totalRial,
+          approvedRial: totals.approvedRial,
           authorizationStatus: status,
           blockerId,
           updatedAt: now,
@@ -375,7 +377,7 @@ export class AssessmentsService {
         .where(and(eq(assessments.id, a.id), eq(assessments.version, a.version)))
         .returning();
       if (!saved) throw versionConflict();
-      if (!needsAuthorization) {
+      {
         await tx
           .update(assessmentItems)
           .set({ approvalStatus: 'approved', updatedAt: now })
@@ -398,15 +400,6 @@ export class AssessmentsService {
 
       if (previous) await this.supersede(tx, actor, previous, a.versionNo, now);
 
-      if (a.kind === 'initial' && needsAuthorization && PRE_APPROVAL_STAGES.includes(kase.stage)) {
-        kase = await this.cases.applyStage(
-          tx,
-          actor,
-          kase,
-          { stage: 'awaiting_approval' },
-          'خودکار: کارشناسی نهایی و در انتظار مجوز',
-        );
-      }
       if (forecast) {
         const label = a.kind === 'supplement' ? `الحاقیه نسخه ${toPersianDigits(a.versionNo)}` : 'کارشناسی';
         await this.cases.applyForecast(tx, actor, kase, forecast, `به‌روزرسانی پیش‌بینی تحویل با ${label}`);
@@ -426,7 +419,7 @@ export class AssessmentsService {
       if (a.status === 'superseded') {
         throw badRequest('ASSESSMENT_SUPERSEDED', 'این نسخه با الحاقیه جایگزین شده است؛ مجوز را روی نسخه جدید ثبت کنید');
       }
-      if (a.status !== 'final' || a.authorizationStatus !== 'pending') {
+      if (a.status !== 'final' || !['pending','not_required'].includes(a.authorizationStatus)) {
         throw badRequest('AUTHORIZATION_NOT_PENDING', 'این نسخه در انتظار مجوز نیست');
       }
       // Staff often record afterwards: the decision may predate its entry in Manage, not the assessment.
@@ -706,7 +699,7 @@ export class AssessmentsService {
 
   private async closeBlocker(tx: DbOrTx, actor: Actor, blockerId: string | null, at: Date, note: string) {
     if (!blockerId) return;
-    const [b] = await tx.select().from(blockers).where(eq(blockers.id, blockerId));
+    const [b] = await tx.select().from(blockers).where(and(eq(blockers.id, blockerId),eq(blockers.tenantId,actor.user.tenantId)));
     if (b && !b.resolvedAt) await this.blockers.close(tx, actor, b, at, note);
   }
 

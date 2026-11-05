@@ -94,8 +94,6 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   const [orderRef, setOrderRef] = useState('');
   const [price, setPrice] = useState('');
   const [eta, setEta] = useState<string | null>(null);
-  const [approvedBy, setApprovedBy] = useState('');
-  const [approvalRef, setApprovalRef] = useState('');
   const [receiptDocNo, setReceiptDocNo] = useState('');
   const [inspection, setInspection] = useState<PartInspection>('ok');
   const [departmentId, setDepartmentId] = useState('');
@@ -123,8 +121,6 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       setOrderRef(p.orderRef ?? '');
       setPrice(p.unitPriceRial ? String(p.unitPriceRial) : p.approvedUnitPriceRial ? String(p.approvedUnitPriceRial) : '');
       setEta(p.etaAt);
-      setApprovedBy('');
-      setApprovalRef('');
       setReceiptDocNo('');
       setInspection('ok');
       setDepartmentId('');
@@ -152,10 +148,6 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       void mutateFinance();
       onChange();
     }
-  }
-
-  async function fromAssessment() {
-    await run(() => api(`/cases/${kase.id}/parts/from-assessment`, { body: {} }), 'قطعات از کارشناسی ثبت شد');
   }
 
   async function submit() {
@@ -194,8 +186,6 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
         orderRef: orderRef || null,
         unitPriceRial: source === 'customer' ? undefined : parseAmount(price),
         etaAt: eta,
-        priceApprovedBy: approvedBy || null,
-        priceApprovalRef: approvalRef || null,
       });
     }
     if (action === 'update_eta') body.etaAt = eta;
@@ -222,19 +212,13 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   }
 
   const ordering = mode?.kind === 'action' && mode.action === 'order' ? mode.part : null;
-  const aboveApproved =
-    !!ordering &&
-    source !== 'customer' &&
-    ordering.approvedUnitPriceRial !== null &&
-    parseAmount(price) > ordering.approvedUnitPriceRial;
-
   const canSubmit = (() => {
     if (!mode) return false;
     if (mode.kind === 'new') return !!description.trim();
     if (mode.kind === 'import') return !!preview && !preview.result.errors.length && preview.result.rows.length > 0;
     switch (mode.action) {
       case 'order':
-        return (source === 'customer' || !!price) && (!aboveApproved || (!!approvedBy.trim() && !!approvalRef.trim()));
+        return source === 'customer' || !!price;
       case 'update_eta':
         return !!eta;
       case 'receive':
@@ -271,9 +255,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
         </h2>
         {request && editable && (
           <div className="row" style={{ gap: 6 }}>
-            <button className="btn btn-sm" disabled={busy} onClick={fromAssessment}>
-              ثبت از کارشناسی
-            </button>
+            <a className="btn btn-sm" href="#case-assessment">انتخاب و ارسال از کارشناسی</a>
             <button className="btn btn-sm" onClick={() => open({ kind: 'new' })}>
               افزودن قطعه
             </button>
@@ -295,7 +277,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       {parts && !list.length && (
         <div className="panel-body muted small">
           قطعه‌ای ثبت نشده است.
-          {request && editable ? ' اقلام تعویضیِ مجوزدار را با «ثبت از کارشناسی» اضافه کنید.' : ''}
+          {request && editable ? ' اقلام را در بخش کارشناسی انتخاب و به قطعات و تأمین ارسال کنید.' : ''}
         </div>
       )}
 
@@ -347,7 +329,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
               </span>
             )}
             {p.unitPriceRial === null && p.approvedUnitPriceRial !== null && (
-              <span>قیمت تأییدشده: {rial(p.approvedUnitPriceRial)}</span>
+              <span>برآورد کارشناسی: {rial(p.approvedUnitPriceRial)}</span>
             )}
             {p.etaAt && p.status === 'ordered' && (
               <span>
@@ -409,7 +391,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
             <StockFamilyPreview partNumber={partNumber} />
             <SourceSelect value={source} onChange={setSource} />
             <label className="field">
-              <span>قیمت تأییدشده واحد (ریال)</span>
+              <span>برآورد واحد کارشناسی (ریال)</span>
               <input className="input ltr-input" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
               <span className="hint">خرید بالاتر از این مبلغ به تأیید کارشناس نیاز دارد.</span>
             </label>
@@ -492,25 +474,11 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
                     <span>قیمت واحد خرید (ریال) *</span>
                     <input className="input ltr-input" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
                     {ordering?.approvedUnitPriceRial !== null && ordering?.approvedUnitPriceRial !== undefined && (
-                      <span className="hint">قیمت تأییدشده: {rial(ordering.approvedUnitPriceRial)}</span>
+                      <span className="hint">برآورد کارشناسی: {rial(ordering.approvedUnitPriceRial)}</span>
                     )}
                   </label>
                 )}
-                {aboveApproved && (
-                  <div className="callout callout-amber small stack" style={{ gap: 8 }}>
-                    قیمت بیشتر از مبلغ تأییدشده است؛ تأیید کارشناس را ثبت کنید یا الحاقیه بزنید.
-                    <div className="grid-2">
-                      <label className="field">
-                        <span>کارشناس تأییدکننده *</span>
-                        <input className="input" value={approvedBy} onChange={(e) => setApprovedBy(e.target.value)} />
-                      </label>
-                      <label className="field">
-                        <span>شماره تأیید *</span>
-                        <input className="input ltr-input" value={approvalRef} onChange={(e) => setApprovalRef(e.target.value)} />
-                      </label>
-                    </div>
-                  </div>
-                )}
+                {source==='external'&&<p className="callout callout-amber small">پس از عدم تأمین انبار، شرکت و امداد، پیشنهاد قیمت بازار را ثبت کنید. خرید بیرون فقط با تأیید ثبت‌شده همان قیمت، تعداد و فروشنده توسط مسئول تصادفات انجام می‌شود.</p>}
                 <JalaliInput label="زمان پیش‌بینی رسیدن" value={eta} onChange={setEta} withTime />
                 {finance && !finance.gate.open && source !== 'customer' && (
                   <div className="callout callout-red small">{finance.gate.message}</div>

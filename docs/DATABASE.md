@@ -91,3 +91,7 @@ Additive `tenants.permission_templates` (role presets) and `permission_version`,
 ## 0012_daily_parts_reports
 
 **Unreleased.** Additive only: new tables `daily_report_profiles`, `daily_report_files`, `daily_report_imports`, `daily_report_rows`, `daily_tasks`, `stock_snapshots`, `stock_snapshot_items`, `stock_reservations`, `emdad_requests`, `emdad_request_events` and `notifications`; no existing row is changed or removed. It has run only on in-memory PGlite in tests so far, and may still be edited until its first install. `down/0012_daily_parts_reports.down.sql` is for disposable databases only. See [daily parts reports](DAILY_PARTS_FA.md).
+
+## 0015 — repair-day plan snapshot
+
+`cases.repair_plan` is nullable JSONB: entered working-day duration, equivalent working minutes, admission anchor/end, and immutable calendar revision. Existing cases remain null and existing official/forecast dates are not rewritten. New/explicitly revised plans compute the internal forecast server-side; changes are versioned/audited and revisions require a reason. Rollback: `apps/api/src/db/down/0015_fancy_mongoose.sql` drops only the added column; export plan data before an owner-authorized rollback.

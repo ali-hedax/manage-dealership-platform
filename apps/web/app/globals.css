@@ -39,6 +39,9 @@
 
   --sidebar-w: 248px;
 }
+.assessment-dispatch { padding-block:16px; border-block:1px solid var(--silver); margin-block:12px; gap:12px; }
+.dispatch-select { display:inline-flex; align-items:center; gap:8px; min-block-size:44px; min-inline-size:44px; cursor:pointer; }
+.dispatch-select input { inline-size:20px; block-size:20px; accent-color:var(--blue-strong); }
 
 /* Compact case workbench: the current action first, supporting detail on demand. */
 .case-section { background:var(--surface); border:1px solid var(--silver); border-radius:var(--radius-m); scroll-margin-block-start:88px; overflow:clip; }

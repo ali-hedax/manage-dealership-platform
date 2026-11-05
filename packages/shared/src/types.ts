@@ -321,13 +321,14 @@ export interface TimelineEvent {
 }
 
 export interface AssessmentImportPreview {
-  rows: { sheet: string; row: number; action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string }[];
+  rows: { sheet: string; row: number; action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string; outcome?: 'new' | 'unchanged' | 'updated' }[];
   errors: { sheet: string; row: number; message: string }[];
   skipped: { sheet: string; row: number; reason: string }[];
   applied: boolean;
 }
 
 export interface CaseDetail extends Omit<CaseListItem, 'customerName'> {
+  repairPlan?: import('./workshop').RepairPlan | null;
   version: number;
   customer: { id: string; fullName: string | null; phone: string | null; phoneMasked: boolean } | null;
   vehicle: {

@@ -260,7 +260,7 @@ export class ReportsService {
         staleBlockers: sql<number>`(select count(*)::int from blockers b where b.case_id = ${cases.id} and b.resolved_at is null and coalesce(b.last_follow_up_at, b.recorded_at) < now() - interval '24 hours')`,
         lastStageChangeAt: sql<Date | null>`(select max(a.occurred_at) from audit_events a where a.case_id = ${cases.id} and a.action = 'case.stage_changed')`,
         hasFinalAssessment: sql<boolean>`exists (select 1 from assessments a where a.case_id = ${cases.id} and a.status = 'final')`,
-        authorizationPending: sql<boolean>`exists (select 1 from assessments a where a.case_id = ${cases.id} and a.status = 'final' and a.authorization_status = 'pending')`,
+        authorizationPending: sql<boolean>`exists (select 1 from part_quotes q where q.case_id = ${cases.id} and q.tenant_id = ${cases.tenantId} and q.status = 'pending')`,
         activeStationCodes:sql<string[]>`coalesce((select array_agg(distinct t.station_snapshot->>'code') from tasks t where t.case_id = ${cases.id} and t.tenant_id = ${cases.tenantId} and t.status in ('in_progress','blocked','done') and t.station_snapshot->>'code' is not null),'{}')`,
         financeProposals: sql<number>`(select count(*)::int from financial_approvals f where f.case_id = ${cases.id} and f.status = 'proposed')`,
       })
@@ -462,8 +462,8 @@ export class ReportsService {
         let next = 'بررسی موجودی';
         if (kind === 'to_order') {
           if (r.authorized === false) {
-            status = 'نیازمند مجوز';
-            next = 'پیگیری مجوز قلم کارشناسی';
+            status = 'نیازمند بررسی کارشناسی';
+            next = 'بررسی نیاز فعلی قطعه';
           } else if (!r.financeGateOpen) {
             status = 'مانع مالی';
             next = 'پیگیری تأیید یا دریافت مالی';
@@ -513,7 +513,7 @@ export class ReportsService {
     const stopped = base.filter((c) => c.openReasons.length);
     const kpis: ReportKpi[] = [
       kpi('active', 'پرونده‌های فعال (در فیلتر)', 'پرونده', base.length, 'پرونده‌های فعال با فیلتر مسئول', ''),
-      kpi('assessment', 'منتظر کارشناسی یا مجوز', 'پرونده', waitingAssessment.length, 'بدون کارشناسی نهایی یا مجوز منتظر', undefined, 'assessment'),
+      kpi('assessment', 'کارشناسی یا تأیید قیمت بازار', 'پرونده', waitingAssessment.length, 'بدون کارشناسی نهایی یا تأیید قیمت بازار منتظر', undefined, 'assessment'),
       kpi('incomplete', 'بدون مسئول یا نیازمند تکمیل', 'پرونده', incomplete.length, 'بدون مسئول یا دارای فیلد ناقص', undefined, 'incomplete'),
       kpi('overdue', 'موعد گذشته', 'پرونده', overdue.length, 'مهلت رسمی، یا در نبود آن پیش‌بینی، گذشته', 'flag=overdue'),
       kpi('due_soon', 'موعد ۴۸ ساعت آینده', 'پرونده', soon.length, 'همان موعد در ۴۸ ساعت آینده', 'flag=due_soon'),
@@ -527,7 +527,7 @@ export class ReportsService {
         description: `${STAGE_LABELS[c.stage as CaseStage]} — ${COVERAGE_LABELS[c.coverageType as keyof typeof COVERAGE_LABELS]}`,
         status: STAGE_LABELS[c.stage as CaseStage],
         stoppedBy: reasonsText(c),
-        nextAction: c.openReasons.length ? `رفع مانع: ${reasonsText(c)}` : c.authorizationPending ? 'پیگیری مجوز' : !c.responsibleUserId ? 'تعیین مسئول' : c.missingFields.length ? 'تکمیل اطلاعات پرونده' : NEXT_BY_STAGE[c.stage as CaseStage],
+        nextAction: c.openReasons.length ? `رفع مانع: ${reasonsText(c)}` : c.authorizationPending ? 'پیگیری تأیید قیمت خرید بیرون' : !c.responsibleUserId ? 'تعیین مسئول' : c.missingFields.length ? 'تکمیل اطلاعات پرونده' : NEXT_BY_STAGE[c.stage as CaseStage],
       }, now);
     });
     const charts: ReportResult['charts'] = [

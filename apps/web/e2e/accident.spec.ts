@@ -25,6 +25,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await page.getByLabel('شرح خسارت').fill('ضربه به گلگیر جلو چپ');
   await page.getByRole('button', { name: 'کارت طلایی / امداد خودرو' }).click();
   await page.getByLabel('شماره پرونده کارت طلایی / امداد').fill('GC-E2E-1');
+  await page.getByText('موعد رسمی یا پیش‌بینی ثبت‌شده از قبل',{exact:true}).click();
   await page.getByLabel('مهلت رسمی / تعهد اولیه', { exact: true }).fill('۱۵۰۰/۰۱/۱۰');
   await page.getByLabel('مهلت رسمی / تعهد اولیه — ساعت').fill('۱۲:۰۰');
   await page.getByLabel('مهلت رسمی / تعهد اولیه — ساعت').blur();

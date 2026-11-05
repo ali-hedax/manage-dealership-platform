@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import useSWR from 'swr';
+import { useState,useEffect } from 'react';
+import useSWR,{useSWRConfig} from 'swr';
 import {
   ASSESSMENT_ITEM_ACTION_LABELS,
   ASSESSMENT_KIND_LABELS,
@@ -11,6 +11,9 @@ import {
   AUTHORIZATION_SOURCES,
   AUTHORIZATION_STATUS_LABELS,
   ITEM_APPROVAL_LABELS,
+  assessmentDispatchLines,
+  type AssessmentDispatchLine,
+  type Part,
   type Assessment,
   type AssessmentItem,
   type AssessmentItemAction,
@@ -85,6 +88,9 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const [mode, setMode] = useState<Mode>(null);
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
+  const {mutate:refreshCache}=useSWRConfig();
+  const {data:requests}=useSWR<Part[]>(can('part.request')?`/cases/${kase.id}/parts`:null,fetcher);
+  const [selected,setSelected]=useState<string[]>([]),[sending,setSending]=useState(false);
 
   // Dialog state.
   const [assessorName, setAssessorName] = useState('');
@@ -105,6 +111,13 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const list = versions ?? [];
   const current = list.at(-1);
   const older = list.slice(0, -1).reverse();
+  const dispatchLines=current&&requests?assessmentDispatchLines(current.items,list.flatMap(a=>a.items),requests):[];
+  useEffect(()=>{setSelected([]);},[current?.id,current?.version]);
+  async function dispatchParts(){
+    if(!current||!selected.length||sending)return;setSending(true);
+    try{const items=await api<Part[]>(`/cases/${kase.id}/parts/from-assessment`,{body:{assessmentId:current.id,expectedVersion:current.version,itemIds:selected}});await refreshCache(`/cases/${kase.id}/parts`,items,{revalidate:false});await mutate();setSelected([]);onChange();toast('اقلام انتخابی به قطعات و تأمین ارسال شدند');window.location.hash='case-parts';}
+    catch(e){toast(errorMessage(e),'error');void refreshCache(`/cases/${kase.id}/parts`);void mutate();}finally{setSending(false);}
+  }
 
   function start(m: NonNullable<Mode>) {
     setMode(m);
@@ -299,11 +312,12 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
           onRemove={(i) => remove(current, i)}
           onFinalize={() => start({ kind: 'finalize', a: current })}
           onAuthorize={() => start({ kind: 'authorize', a: current })}
+          dispatch={can('part.request')&&editable&&requests?{lines:dispatchLines,selected,onToggle:id=>setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]),onAll:checked=>setSelected(checked?dispatchLines.filter(l=>l.state==='ready').map(l=>l.itemId):[]),onSend:()=>void dispatchParts(),busy:sending}:undefined}
         />
         </>
       )}
 
-      {importing && current && <AssessmentImport assessment={current} onClose={() => setImporting(false)} onDone={() => { setImporting(false); void mutate(); onChange(); toast('اقلام اکسل به پیش‌نویس اضافه شدند؛ نهایی‌سازی و مجوز جداگانه است'); }} />}
+      {importing && current && <AssessmentImport assessment={current} onClose={() => setImporting(false)} onDone={() => { setImporting(false); void mutate(); onChange(); toast('کارشناسی با فایل تطبیق داده شد؛ قطعات موردنظر را انتخاب و ارسال کنید'); }} />}
 
       {older.length > 0 && (
         <details>
@@ -460,8 +474,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
         {mode?.kind === 'finalize' && (
           <>
             <div className="callout callout-blue small">
-              پس از نهایی شدن، اقلام این نسخه قابل تغییر نیستند. اگر مجوز لازم باشد، تا ثبت تصمیم مجوز یک مانع «مجوز»
-              روی پرونده باز می‌ماند.
+              پس از نهایی‌شدن، اصلاح اقلام با الحاقیه انجام می‌شود. ثبت کارشناسی و ارسال قطعه مجوز جدا نمی‌خواهد؛ تأیید قیمت برای خرید بیرون در بخش قطعات ثبت می‌شود.
             </div>
             <div className="small">
               جمع کل: <b>{rial(mode.a.totals.totalRial)}</b>
@@ -550,6 +563,7 @@ function signed(n: number): string {
   if (n === 0) return 'بدون تغییر';
   return `${n > 0 ? 'افزایش' : 'کاهش'} ${rial(Math.abs(n))}`;
 }
+type DispatchSelection={lines:AssessmentDispatchLine[];selected:string[];onToggle:(id:string)=>void;onAll:(checked:boolean)=>void;onSend:()=>void;busy:boolean};
 
 function Version({
   a,
@@ -560,6 +574,7 @@ function Version({
   onRemove,
   onFinalize,
   onAuthorize,
+  dispatch,
 }: {
   a: Assessment;
   editable: boolean;
@@ -569,6 +584,7 @@ function Version({
   onRemove?: (i: AssessmentItem) => void;
   onFinalize?: () => void;
   onAuthorize?: () => void;
+  dispatch?: DispatchSelection;
 }) {
   const draft = a.status === 'draft';
   const canEdit = draft && editable && manage;
@@ -601,9 +617,9 @@ function Version({
               </button>
             </>
           )}
-          {a.status === 'final' && a.authorizationStatus === 'pending' && editable && authorize && (
-            <button className="btn btn-sm btn-primary" onClick={onAuthorize}>
-              ثبت مجوز
+          {a.status === 'final' && a.authorizationStatus === 'pending' && editable && manage && (
+            <button className="btn btn-sm btn-primary" onClick={onFinalize}>
+              ثبت کارشناسی بدون انتظار مجوز
             </button>
           )}
         </div>
@@ -632,12 +648,14 @@ function Version({
         )}
       </div>
       {a.reason && <div className="small">{a.reason}</div>}
+      {dispatch&&<div className="assessment-dispatch row" aria-label="ارسال اقلام کارشناسی"><label className="dispatch-select"><input type="checkbox" aria-label="انتخاب همه قطعات قابل ارسال" disabled={dispatch.busy||!dispatch.lines.some(l=>l.state==='ready')} checked={dispatch.lines.some(l=>l.state==='ready')&&dispatch.lines.filter(l=>l.state==='ready').every(l=>dispatch.selected.includes(l.itemId))} ref={el=>{if(el)el.indeterminate=dispatch.selected.length>0&&!dispatch.lines.filter(l=>l.state==='ready').every(l=>dispatch.selected.includes(l.itemId));}} onChange={e=>dispatch.onAll(e.target.checked)}/>انتخاب همه</label><button type="button" className="btn btn-primary" disabled={dispatch.busy||!dispatch.selected.length} onClick={dispatch.onSend}>{dispatch.busy?'در حال ارسال…':`ارسال به قطعات و تأمین (${faNum(dispatch.selected.length)})`}</button><span className="small muted">اقلام قبلی دوباره ارسال نمی‌شوند؛ افزایش تعداد فقط به اندازه مابه‌التفاوت ارسال می‌شود.</span></div>}
 
       {a.items.length > 0 && (
         <div className="table-scroll">
           <table className="table static items">
             <thead>
               <tr>
+                {dispatch&&<th scope="col">انتخاب / ارسال</th>}
                 <th>#</th>
                 <th>شرح</th>
                 <th className="num">تعداد</th>
@@ -650,6 +668,7 @@ function Version({
             <tbody>
               {a.items.map((i) => (
                 <tr key={i.id} data-testid="assessment-item">
+                  {dispatch&&<td>{dispatch.lines.find(l=>l.itemId===i.id)?.state==='ready'?<label className="dispatch-select"><input type="checkbox" aria-label={`انتخاب ${i.description}`} checked={dispatch.selected.includes(i.id)} disabled={dispatch.busy} onChange={()=>dispatch.onToggle(i.id)}/><span className="small">{faNum(dispatch.lines.find(l=>l.itemId===i.id)!.quantity)} عدد</span></label>:<span className="small">{dispatch.lines.find(l=>l.itemId===i.id)?.message}</span>}</td>}
                   <td className="num line">{toPersianDigits(i.lineNo)}</td>
                   <td className="desc">
                     <div>
@@ -674,7 +693,7 @@ function Version({
                       <span
                         className={`chip ${i.approvalStatus === 'rejected' ? 'chip-red' : i.approvalStatus === 'approved' ? 'chip-green' : ''}`}
                       >
-                        {ITEM_APPROVAL_LABELS[i.approvalStatus]}
+                        {a.authorizationStatus==='not_required'&&i.approvalStatus!=='rejected'?'ثبت‌شده':ITEM_APPROVAL_LABELS[i.approvalStatus]}
                       </span>
                     )}
                   </td>

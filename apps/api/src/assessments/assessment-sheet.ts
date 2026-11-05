@@ -1,4 +1,4 @@
-import { assessmentItemSchema, normalizePersian, toLatinDigits, type AssessmentImportPreview } from '@manage/shared';
+import { assessmentItemSchema, assessmentPartKey, normalizePersian, toLatinDigits, type AssessmentImportPreview } from '@manage/shared';
 import { readWorkbook, XlsxError } from '../parts/xlsx';
 
 const key = (s: string) => normalizePersian(toLatinDigits(s)).replace(/[\s\u200c:()«»]/g, '').trim();
@@ -88,7 +88,7 @@ export function parseAssessmentSheet(data: Uint8Array, currency: 'rial' | 'toman
       if (!validated.success || (amount !== null && (!Number.isFinite(amount) || (section === 'replace' && Math.abs(quantity * price - amount) > 0.01)))) {
         error(sheet.name, rowNo, 'شرح، تعداد یا مبلغ معتبر نیست یا مبلغ با تعداد × فی همخوانی ندارد'); continue;
       }
-      const identity = JSON.stringify([section, key(description), key(code)]);
+      const identity = section === 'replace' ? assessmentPartKey(candidate) : JSON.stringify([section, key(description), key(code)]);
       if (seen.has(identity)) { error(sheet.name, rowNo, 'قلم تکراری است؛ تکرار احتمالی صفحه را بررسی کنید'); continue; }
       seen.add(identity); result.rows.push(candidate);
       if (result.rows.length > 500) { error(sheet.name, rowNo, 'حداکثر ۵۰۰ قلم را در یک فایل وارد کنید'); return result; }

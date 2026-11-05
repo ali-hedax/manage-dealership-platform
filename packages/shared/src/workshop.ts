@@ -35,6 +35,8 @@ export interface PartQuote {
 }
 export interface CalendarRevision { id:string|null; version:number; effectiveFrom:string; calendar:WorkCalendar }
 export interface WorkshopTask {
+  dayMinutes?:number|null;
+  plannedWorkMinutes?:number|null;
   id:string; caseId:string; caseNumber:string; vehicleLabel:string; plate:string|null; title:string|null;
   stationCode:string|null; stationName:string|null; departmentName:string; technicianName:string|null;
   status:string; version:number; plannedStartAt:string|null; plannedEndAt:string|null; baselineEndAt:string|null;
@@ -42,6 +44,7 @@ export interface WorkshopTask {
   workMinutes:number|null; lateMinutes:number|null; transferMinutes:number|null; calendarConfirmed:boolean;
 }
 export interface WorkshopOverview {
+  caseBudgets?:{caseId:string;caseNumber:string;days:number;dayMinutes:number;budgetMinutes:number;plannedMinutes:number;forecastEndAt:string}[];
   tasks:WorkshopTask[]; stations:WorkshopStation[]; quotes:PartQuote[];
   blockers:{id:string;caseId:string;reason:string;description:string|null;occurredAt:string;resolvedAt:string|null;taskId:string|null}[];
   // Per-case union of blocker intervals; never summed as independent causes.
@@ -77,4 +80,23 @@ export function unionElapsedMinutes(ranges:{start:string;end:string}[]):number {
   let sum=0,end=-Infinity;
   for(const [a,b]of sorted){sum+=Math.max(0,b!-Math.max(a!,end));end=Math.max(end,b!);}
   return Math.round(sum/60_000);
+}
+
+/** A day is one full configured working shift-day; short days consume fewer minutes. */
+export function workingDayMinutes(calendar:WorkCalendar):number {return Math.max(...calendar.week.map(day=>day.reduce((n,s)=>n+s.end-s.start,0)));}
+export interface RepairPlan {days:number;durationMinutes:number;dayMinutes:number;calendar:CalendarRevision;startAt:string;endAt:string}
+export function repairDayPlan(startAt:string,days:number,calendar:CalendarRevision):RepairPlan {
+ startAt=nextWorkingInstant(startAt,calendar.calendar);
+ const dayMinutes=workingDayMinutes(calendar.calendar);const durationMinutes=Math.round(days*dayMinutes);
+ return {days,durationMinutes,dayMinutes,calendar,startAt,endAt:addWorkingMinutes(startAt,durationMinutes,calendar.calendar)};
+}
+export function nextWorkingInstant(start:string,calendar:WorkCalendar):string {
+ let cursor=Date.parse(start);if(!Number.isFinite(cursor))throw new Error('INVALID_WORK_START');
+ for(let n=0;n<3660;n++){for(const [a,b] of intervals(cursor,calendar)){const from=Math.max(a,cursor);if(from<b)return new Date(from).toISOString();}cursor=bounds(cursor).midnight+DAY;}
+ throw new Error('CALENDAR_RANGE_EXCEEDED');
+}
+export function unionWorkingMinutes(intervals:readonly {start:string;end:string}[],calendar:WorkCalendar):number {
+ const sorted=intervals.filter(i=>Date.parse(i.end)>Date.parse(i.start)).map(i=>({start:Date.parse(i.start),end:Date.parse(i.end)})).sort((a,b)=>a.start-b.start);
+ const merged:{start:number;end:number}[]=[];for(const i of sorted){const last=merged.at(-1);if(last&&i.start<=last.end)last.end=Math.max(last.end,i.end);else merged.push({...i});}
+ return merged.reduce((n,i)=>n+workingMinutesBetween(new Date(i.start).toISOString(),new Date(i.end).toISOString(),calendar),0);
 }

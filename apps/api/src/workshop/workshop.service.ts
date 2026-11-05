@@ -1,21 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import { REPAIR_TRADES, REPAIR_TRADE_LABELS, DEFAULT_WORK_CALENDAR, unionElapsedMinutes, workingMinutesBetween, type CalendarRevision, type PartQuote, type WorkshopOverview, type WorkshopStation, type WorkshopTask, type saveCalendarSchema, type stationSchema, type quoteSchema, type quoteDecisionSchema } from '@manage/shared';
+import { REPAIR_TRADES, REPAIR_TRADE_LABELS, unionElapsedMinutes, unionWorkingMinutes, workingDayMinutes, workingMinutesBetween, type PartQuote, type WorkshopOverview, type WorkshopStation, type WorkshopTask, type saveCalendarSchema, type stationSchema, type quoteSchema, type quoteDecisionSchema } from '@manage/shared';
 import type { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
-import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
+import { DATABASE, type DatabaseHandle,type DbOrTx } from '../db/database';
 import { blockers, cases, departments, partQuotes, partRequests, taskDependencies, tasks, tenants, users, vehicles, workCalendars, workshopStations } from '../db/schema';
 import { CasesService } from '../cases/cases.service';
 
-export async function calendarAt(db:DbOrTx,tenantId:string,date:string):Promise<CalendarRevision> {
-  const rows=await db.select().from(workCalendars).where(eq(workCalendars.tenantId,tenantId)).orderBy(desc(workCalendars.effectiveFrom),desc(workCalendars.version));
-  const day=new Date(Date.parse(date)+210*60_000).toISOString().slice(0,10);
-  const row=rows.find(r=>r.effectiveFrom<=day);
-  return row ? {id:row.id,version:row.version,effectiveFrom:row.effectiveFrom,calendar:row.calendar} : {id:null,version:0,effectiveFrom:'2000-01-01',calendar:DEFAULT_WORK_CALENDAR};
-}
+export {calendarAt} from './work-calendar';
+import {calendarAt} from './work-calendar';
 const iso=(d:Date|null)=>d?.toISOString()??null;
 @Injectable()
 export class WorkshopService {
@@ -92,7 +88,7 @@ export class WorkshopService {
     return rows.map(({t,c,v,d})=>{
       const calendar=t.calendarSnapshot?.calendar;
       const end=iso(t.actualEndAt)??now,deadline=iso(t.baselineEndAt),snapshot=t.stationSnapshot;
-      return {id:t.id,caseId:c.id,caseNumber:c.caseNumber,vehicleLabel:[v.brand,v.model,v.trim].filter(Boolean).join(' '),plate:v.plate,title:t.title,stationCode:snapshot?.code??null,stationName:snapshot?.name??null,departmentName:d.name,technicianName:t.technicianName,status:t.status,version:t.version,plannedStartAt:iso(t.plannedStartAt),plannedEndAt:iso(t.plannedEndAt),baselineEndAt:deadline,actualStartAt:iso(t.actualStartAt),actualEndAt:iso(t.actualEndAt),approvedAt:iso(t.approvedAt),canStart:t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'&&!deps.some(e=>e.id===t.id&&e.status!=='approved'),workMinutes:calendar&&t.actualStartAt?workingMinutesBetween(t.actualStartAt.toISOString(),end,calendar):null,lateMinutes:calendar&&deadline?workingMinutesBetween(deadline,end,calendar):null,transferMinutes:calendar&&t.actualEndAt?workingMinutesBetween(t.actualEndAt.toISOString(),iso(t.approvedAt)??now,calendar):null,calendarConfirmed:!!calendar?.holidaysVerifiedThrough&&calendar.holidaysVerifiedThrough>=new Date(Date.parse(end)+210*60000).toISOString().slice(0,10)};
+      return {dayMinutes:calendar?workingDayMinutes(calendar):null,plannedWorkMinutes:calendar&&t.baselineStartAt&&t.baselineEndAt?workingMinutesBetween(t.baselineStartAt.toISOString(),t.baselineEndAt.toISOString(),calendar):null,id:t.id,caseId:c.id,caseNumber:c.caseNumber,vehicleLabel:[v.brand,v.model,v.trim].filter(Boolean).join(' '),plate:v.plate,title:t.title,stationCode:snapshot?.code??null,stationName:snapshot?.name??null,departmentName:d.name,technicianName:t.technicianName,status:t.status,version:t.version,plannedStartAt:iso(t.plannedStartAt),plannedEndAt:iso(t.plannedEndAt),baselineEndAt:deadline,actualStartAt:iso(t.actualStartAt),actualEndAt:iso(t.actualEndAt),approvedAt:iso(t.approvedAt),canStart:t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'&&!deps.some(e=>e.id===t.id&&e.status!=='approved'),workMinutes:calendar&&t.actualStartAt?workingMinutesBetween(t.actualStartAt.toISOString(),end,calendar):null,lateMinutes:calendar&&deadline?workingMinutesBetween(deadline,end,calendar):null,transferMinutes:calendar&&t.actualEndAt?workingMinutesBetween(t.actualEndAt.toISOString(),iso(t.approvedAt)??now,calendar):null,calendarConfirmed:!!calendar?.holidaysVerifiedThrough&&calendar.holidaysVerifiedThrough>=new Date(Date.parse(end)+210*60000).toISOString().slice(0,10)};
     });
   }
   async quotes(actor:Actor,caseId?:string):Promise<PartQuote[]> {
@@ -140,6 +136,8 @@ export class WorkshopService {
     const taskRows=await this.taskList(actor),bs=await this.db.select().from(blockers).where(eq(blockers.tenantId,actor.user.tenantId));
     const now=new Date().toISOString();
     const caseStops=[...new Set(bs.map(b=>b.caseId))].map(caseId=>({caseId,minutes:unionElapsedMinutes(bs.filter(b=>b.caseId===caseId).map(b=>({start:b.occurredAt.toISOString(),end:iso(b.resolvedAt)??now}))),basis:'elapsed_union' as const}));
-    return {tasks:taskRows,stations:await this.stations(actor),quotes:await this.quotes(actor),blockers:bs.map(b=>({id:b.id,caseId:b.caseId,reason:b.reason,description:b.description,occurredAt:b.occurredAt.toISOString(),resolvedAt:iso(b.resolvedAt),taskId:b.taskId})),caseStops};
+    const plannedCases=await this.db.select().from(cases).where(and(eq(cases.tenantId,actor.user.tenantId),eq(cases.status,'open')));
+    const caseBudgets=plannedCases.filter(c=>c.repairPlan).map(c=>{const plan=c.repairPlan!;const intervals=taskRows.filter(t=>t.caseId===c.id&&t.plannedStartAt&&t.plannedEndAt).map(t=>({start:t.plannedStartAt!,end:t.plannedEndAt!}));return {caseId:c.id,caseNumber:c.caseNumber,days:plan.days,dayMinutes:plan.dayMinutes,budgetMinutes:plan.durationMinutes,plannedMinutes:unionWorkingMinutes(intervals,plan.calendar.calendar),forecastEndAt:plan.endAt};});
+    return {caseBudgets,tasks:taskRows,stations:await this.stations(actor),quotes:await this.quotes(actor),blockers:bs.map(b=>({id:b.id,caseId:b.caseId,reason:b.reason,description:b.description,occurredAt:b.occurredAt.toISOString(),resolvedAt:iso(b.resolvedAt),taskId:b.taskId})),caseStops};
   }
 }

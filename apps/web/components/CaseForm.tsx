@@ -9,6 +9,8 @@ import {
   COVERAGE_TYPES,
   STAGE_LABELS,
   toLatinDigits,
+  repairDayPlan,
+  type CalendarRevision,
   type CaseDetail,
   type CaseStage,
   type CoverageType,
@@ -17,6 +19,7 @@ import {
 import { api, errorMessage, fetcher, newKey } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
+import {formatJalali} from '@/lib/format';
 import { JalaliInput } from './JalaliInput';
 import { Plate } from './Plate';
 import { ReferenceLookup } from './ReferenceLookup';
@@ -51,6 +54,7 @@ interface FormState {
   responsibleUserId: string;
   officialDeadlineAt: string | null;
   forecastDeliveryAt: string | null;
+  repairDurationDays: string;
   reason: string;
 }
 
@@ -79,6 +83,7 @@ const empty = (): FormState => ({
   responsibleUserId: '',
   officialDeadlineAt: null,
   forecastDeliveryAt: null,
+  repairDurationDays: '',
   reason: '',
 });
 
@@ -108,6 +113,7 @@ function fromCase(c: CaseDetail): FormState {
     responsibleUserId: c.responsible?.id ?? '',
     officialDeadlineAt: c.officialDeadlineAt,
     forecastDeliveryAt: c.forecastDeliveryAt,
+    repairDurationDays:c.repairPlan?String(c.repairPlan.days):'',
     reason: '',
   };
 }
@@ -141,6 +147,10 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
   const [historySource, setHistorySource] = useState('');
   const idempotencyKey = useRef(newKey());
   const { data: assignable } = useSWR<UserRef[]>('/users/assignable', fetcher);
+  const {data:workCalendar}=useSWR<{current:CalendarRevision}>(can('workshop.read')?'/workshop/calendar':null,fetcher);
+  const planChanged=!!f.repairDurationDays&&(!existing?.repairPlan||Number(toLatinDigits(f.repairDurationDays))!==existing.repairPlan.days||Date.parse(f.admittedAt??'')!==Date.parse(existing.admittedAt));
+  let planPreview:string|null=null;
+  try{const calendar=existing?.repairPlan?.calendar??workCalendar?.current;if(calendar&&f.admittedAt&&Number(f.repairDurationDays)>0)planPreview=repairDayPlan(f.admittedAt,Number(f.repairDurationDays),calendar).endAt;}catch{/* Validation remains authoritative on the server. */}
 
   // Draft: restore once, then save on every change (create mode only).
   useEffect(() => {
@@ -182,13 +192,14 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
 
   const sensitiveChanged =
     editing &&
-    (f.officialDeadlineAt !== existing!.officialDeadlineAt ||
+    (planChanged||f.officialDeadlineAt !== existing!.officialDeadlineAt ||
       (f.admittedAt && new Date(f.admittedAt).getTime() !== new Date(existing!.admittedAt).getTime()));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
     if (!f.admittedAt) return setError('زمان پذیرش را وارد کنید');
+    if(existing?.repairPlan&&!f.repairDurationDays)return setError('مدت برنامه قبلی را خالی نکنید؛ برای اصلاح، تعداد روز تازه وارد کنید');
     if(f.trim.length>1000)return setError('شرح تیپ خودرو بیش از ۱۰۰۰ نویسه است؛ متن حفظ شده، لطفاً آن را کوتاه کنید');
     if (sensitiveChanged && !f.reason.trim()) return setError('برای تغییر مهلت رسمی یا زمان پذیرش، دلیل را بنویسید');
     setBusy(true);
@@ -217,6 +228,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
       responsibleUserId: f.responsibleUserId || null,
       officialDeadlineAt: f.officialDeadlineAt,
       forecastDeliveryAt: f.forecastDeliveryAt,
+      ...(planChanged?{repairDurationDays:Number(toLatinDigits(f.repairDurationDays))}:{}),
     };
     // A masked phone is not editable by this role; send only what is known.
     const customer: Record<string, string | null> = { fullName: nul(f.fullName) };
@@ -437,7 +449,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </div>
       </section>
 
-      <Section title="مسئولیت و زمان‌ها" note="سه زمان مستقل: مهلت رسمی، پیش‌بینی داخلی و تحویل واقعی">
+      <Section title="مسئولیت و مدت تعمیر" note="تعداد روز کاری را وارد کنید؛ تاریخ پایان با تقویم نمایندگی محاسبه می‌شود">
         <label className="field">
           <span>مسئول پرونده</span>
           <select
@@ -454,6 +466,9 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
             ))}
           </select>
         </label>
+        <label className="field"><span>مدت تعمیر (روز کاری)</span><input className="input" type="number" aria-label="مدت تعمیر (روز کاری)" name="repairDurationDays" min={0.25} max={365} step={0.25} value={f.repairDurationDays??''} onChange={e=>set('repairDurationDays',e.target.value)}/><span className="hint">یک روز معادل یک روز کاملِ ساعات تنظیم‌شده نمایندگی است؛ پنجشنبه نیمه‌وقت، استراحت و تعطیلات لحاظ می‌شوند.</span></label>
+        {planPreview&&<p className="callout callout-blue">پایان محاسبه‌شده: {formatJalali(planPreview,{time:true})}</p>}
+        <details className="span-all compact-disclosure"><summary>موعد رسمی یا پیش‌بینی ثبت‌شده از قبل</summary><div className="grid-2">
         <JalaliInput
           label="مهلت رسمی / تعهد اولیه"
           name="officialDeadlineAt"
@@ -470,6 +485,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
           withTime
           hint="برآورد فعلی کارشناس با توجه به ظرفیت"
         />
+        </div></details>
         {sensitiveChanged && (
           <label className="field span-all">
             <span>دلیل تغییر مهلت رسمی یا زمان پذیرش *</span>

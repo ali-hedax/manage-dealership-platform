@@ -5,6 +5,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import {
   BLOCKER_REASONS,
+  unionWorkingMinutes,
   BLOCKER_REASON_LABELS,
   type BlockerReason,
   type CaseDetail,
@@ -17,7 +18,7 @@ import {
 } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { duration, formatJalali } from '@/lib/format';
+import { duration, formatJalali,faNum } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import { TaskStatusChip } from './Chips';
 import { Dialog } from './Dialog';
@@ -36,6 +37,7 @@ type Pending =
   | null;
 
 export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () => void }) {
+  const plannedMinutes=kase.repairPlan?unionWorkingMinutes(kase.tasks.filter(t=>t.plannedStartAt&&t.plannedEndAt).map(t=>({start:t.plannedStartAt!,end:t.plannedEndAt!})),kase.repairPlan.calendar.calendar):null;
   const { can } = useAuth();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
@@ -139,6 +141,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
         )}
       </div>
 
+      {kase.repairPlan&&plannedMinutes!==null&&<p className="panel-body callout callout-blue">برنامه کل: {faNum(kase.repairPlan.days)} روز کاری · زمان تخصیص‌یافته بدون دوباره‌شمردن هم‌پوشانی: {faNum(plannedMinutes/kase.repairPlan.dayMinutes)} روز · {plannedMinutes>kase.repairPlan.durationMinutes?'عبور از بودجه زمانی: '+faNum((plannedMinutes-kase.repairPlan.durationMinutes)/kase.repairPlan.dayMinutes)+' روز':'زمان باقی‌مانده برای برنامه‌ریزی: '+faNum((kase.repairPlan.durationMinutes-plannedMinutes)/kase.repairPlan.dayMinutes)+' روز'}</p>}
       {adding && <AddTask kase={kase} onDone={() => (setAdding(false), onChange())} />}
       {editing && <AddTask key={editing.id} kase={kase} initial={editing} onDone={() => {setEditing(null);onChange();}} />}
       <ol className="repair-route" aria-label="مسیر برنامه‌ریزی‌شده تعمیر">
@@ -312,7 +315,7 @@ function AddTask({ kase, onDone, initial }: { kase: CaseDetail; onDone: () => vo
   const [departmentId, setDepartmentId] = useState(initial?.department.id ?? '');
   const {data:stations}=useSWR<WorkshopStation[]>('/workshop/stations',fetcher);
   const {data:staff}=useSWR<{id:string;displayName:string}[]>('/workshop/staff',fetcher);
-  const [stationId,setStationId]=useState(initial?.stationId??''),[assignedUserId,setAssignedUserId]=useState(initial?.assignedUserId??''),[durationMinutes,setDurationMinutes]=useState(''),[scheduleReason,setScheduleReason]=useState('');
+  const [stationId,setStationId]=useState(initial?.stationId??''),[assignedUserId,setAssignedUserId]=useState(initial?.assignedUserId??''),[durationMinutes,setDurationMinutes]=useState(''),[durationDays,setDurationDays]=useState(''),[scheduleReason,setScheduleReason]=useState('');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [technicianName, setTechnicianName] = useState(initial?.technicianName ?? '');
   const [technicianCode, setTechnicianCode] = useState(initial?.technicianCode ?? '');
@@ -331,6 +334,7 @@ function AddTask({ kase, onDone, initial }: { kase: CaseDetail; onDone: () => vo
           expectedVersion: initial?.version,
           scheduleReason: initial ? scheduleReason : undefined,
           departmentId, stationId:stationId||null, assignedUserId:assignedUserId||null, durationMinutes:durationMinutes?Number(durationMinutes):undefined,
+          durationDays:durationDays?Number(durationDays):undefined,
           title: title || null,
           technicianName: technicianName || null,
           technicianCode: technicianCode || null,
@@ -377,9 +381,12 @@ function AddTask({ kase, onDone, initial }: { kase: CaseDetail; onDone: () => vo
       </div>
       <label className="field"><span>جایگاه دارای کد</span><select className="input" name="stationId" value={stationId} onChange={e=>{setStationId(e.target.value);const s=stations?.find(s=>s.id===e.target.value);if(s){setAssignedUserId(s.responsibleUserId??'');setDepartmentId(s.departmentId);}}}><option value="">انتخاب جایگاه</option>{stations?.filter(s=>s.isActive&&(!departmentId||s.departmentId===departmentId)).map(s=><option value={s.id} key={s.id}>{s.code} · {s.name}</option>)}</select></label>
       <label className="field"><span>حساب تعمیرکار</span><select className="input" name="assignedUserId" value={assignedUserId} onChange={e=>{setAssignedUserId(e.target.value);setTechnicianName(staff?.find(u=>u.id===e.target.value)?.displayName??'');}}><option value="">ثبت توسط مسئول / بدون حساب تعمیرکار</option>{staff?.map(u=><option value={u.id} key={u.id}>{u.displayName}</option>)}</select></label>
-      <label className="field"><span>مدت کار به دقیقه کاری</span><input name="durationMinutes" className="input" type="number" min={1} max={100000} value={durationMinutes} onChange={e=>setDurationMinutes(e.target.value)}/><span className="small muted">با تعیین شروع، پایان طبق تقویم محاسبه می‌شود.</span></label>
+      {kase.repairPlan&&<p className="callout callout-blue">برنامه کل پرونده: {faNum(kase.repairPlan.days)} روز کاری؛ پایان {formatJalali(kase.forecastDeliveryAt,{time:true})}</p>}
+      <label className="field"><span>سهم این جایگاه (روز کاری)</span><input aria-label="سهم این جایگاه (روز کاری)" name="durationDays" className="input" type="number" min={0.25} max={180} step={0.25} value={durationDays} onChange={e=>{setDurationDays(e.target.value);setDurationMinutes('');setPlannedStartAt(null);setPlannedEndAt(null);}}/><span className="small muted">پایان خودکار محاسبه می‌شود. شروع خالی: پس از پیش‌نیازها یا از زمان پذیرش؛ برای کار هم‌زمان، پیش‌نیاز تعیین نکنید.</span></label>
+      <details className="compact-disclosure"><summary>تنظیم زمان دقیق یا سابقه قبلی</summary><div className="stack"><label className="field"><span>مدت کار به دقیقه کاری</span><input name="durationMinutes" className="input" type="number" min={1} max={100000} value={durationMinutes} onChange={e=>{setDurationMinutes(e.target.value);setDurationDays('');}}/></label>
       <JalaliInput label="شروع برنامه‌ای" value={plannedStartAt} onChange={setPlannedStartAt} withTime />
       <JalaliInput label="پایان برنامه‌ای" value={plannedEndAt} onChange={setPlannedEndAt} withTime />
+      </div></details>
       <label className="field">
         <span>وزن در پیشرفت (۱ تا ۱۰)</span>
         <input

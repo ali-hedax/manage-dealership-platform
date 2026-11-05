@@ -5,6 +5,8 @@ import {
   FINANCE_GATE_LABELS,
   PART_SOURCE_LABELS,
   PART_SOURCES,
+  assessmentDispatchLines,
+  assessmentPartKey,
   toLatinDigits,
   type CreatePartInput,
   type ImportPartsInput,
@@ -56,9 +58,9 @@ const invalidTransition = (status: string) =>
   badRequest('INVALID_TRANSITION', `این اقدام در وضعیت فعلی قطعه (${status}) ممکن نیست`);
 
 /**
- * Parts lifecycle. Ordering is the controlled step: the assessment line must
- * be authorized, a price above the approved one needs the assessor's approval
- * reference, and purchases pass the financial gate. Handover to the repair
+ * Technical needs can be sent before finalization. Only outside-market buying
+ * requires the exact recorded quote approval; purchase/payment controls remain.
+ * Removed, rejected or changed needs require review. Handover to the repair
  * unit resolves "part not arrived" blockers that name the part.
  */
 @Injectable()
@@ -83,23 +85,41 @@ export class PartsService {
     return this.get(actor, id);
   }
 
-  /** Creates needs for authorized "replace" lines of the current assessment not requested yet. */
+  /** Dispatch technical needs; market-price authorization is a separate purchase action. */
   async fromAssessment(actor: Actor, caseId: string, input: PartsFromAssessmentInput): Promise<Part[]> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
-      await this.loadOpenCase(tx, tenantId, caseId);
-      const lines = await this.authorizedLines(tx, tenantId, caseId);
-      if (!lines) throw badRequest('NO_FINAL_ASSESSMENT', 'کارشناسی نهایی برای این پرونده ثبت نشده است');
+      let kase=await this.loadOpenCase(tx, tenantId, caseId);
+      const versions=await tx.select().from(assessments).where(and(eq(assessments.tenantId,tenantId),eq(assessments.caseId,caseId))).orderBy(desc(assessments.versionNo));
+      const current=versions.find(a=>a.status==='draft'||a.status==='final');
+      if(!current)throw badRequest('NO_FINAL_ASSESSMENT','کارشناسی برای این پرونده ثبت نشده است');
+      if(input.assessmentId&&input.assessmentId!==current.id)throw badRequest('ASSESSMENT_CHANGED','نسخه کارشناسی تغییر کرده است؛ صفحه را تازه کنید');
+      if(input.expectedVersion&&input.expectedVersion!==current.version)throw versionConflict(current.version);
+      const all=await tx.select().from(assessmentItems).where(and(eq(assessmentItems.tenantId,tenantId),inArray(assessmentItems.assessmentId,versions.map(a=>a.id))));
+      const items=all.filter(i=>i.assessmentId===current.id);
       const existing = await tx
-        .select({ root: partRequests.assessmentItemId })
+        .select()
         .from(partRequests)
-        .where(and(eq(partRequests.caseId, caseId), ne(partRequests.status, 'cancelled')));
-      const requested = new Set(existing.map((e) => e.root));
-      const todo = lines.filter((l) => l.item.action === 'replace' && l.approved && !requested.has(l.root));
-      if (!todo.length) {
-        throw badRequest('NOTHING_TO_REQUEST', 'قلم تعویضیِ مجوزدار و ثبت‌نشده‌ای در کارشناسی فعلی وجود ندارد');
+        .where(and(eq(partRequests.tenantId,tenantId),eq(partRequests.caseId, caseId), ne(partRequests.status, 'cancelled')));
+      const lines=assessmentDispatchLines(items as Parameters<typeof assessmentDispatchLines>[0],all as Parameters<typeof assessmentDispatchLines>[1],existing as Parameters<typeof assessmentDispatchLines>[2]);
+      const selected=input.itemIds?new Set(input.itemIds):null;
+      if(selected&&[...selected].some(id=>!lines.some(l=>l.itemId===id)))throw badRequest('ASSESSMENT_ITEM_INVALID','قلم انتخابی متعلق به کارشناسی فعلی نیست');
+      const chosen=lines.filter(l=>!selected||selected.has(l.itemId));
+      if(selected&&chosen.some(l=>l.state==='review'||l.state==='excluded'))throw badRequest('ASSESSMENT_ITEM_REVIEW','بعضی اقلام انتخابی نیازمند اصلاح یا بررسی‌اند؛ هیچ قطعه‌ای ارسال نشد');
+      const todo=chosen.filter(l=>l.state==='ready');
+      if(current.authorizationStatus==='pending'&&current.blockerId){
+        const [oldBlocker]=await tx.select().from(blockers).where(and(eq(blockers.id,current.blockerId),eq(blockers.tenantId,tenantId),eq(blockers.caseId,caseId)));
+        if(oldBlocker&&!oldBlocker.resolvedAt)await this.blockers.close(tx,actor,oldBlocker,new Date(),'اجرای روال جدید: ثبت کارشناسی و ارسال قطعه نیازمند مجوز خرید نیست');
+        const [updated]=await tx.update(assessments).set({authorizationStatus:'not_required',version:current.version+1,updatedAt:new Date()}).where(and(eq(assessments.id,current.id),eq(assessments.tenantId,tenantId),eq(assessments.version,current.version))).returning();
+        if(!updated)throw versionConflict();
+        await this.audit.record(tx,actor,{entityType:'assessment',entityId:current.id,caseId,action:'assessment.requirement_updated',before:{authorizationStatus:current.authorizationStatus},after:{authorizationStatus:'not_required'},snapshot:{version:updated.version,row:updated}});
       }
-      for (const { item, root } of todo) {
+
+      if (!todo.length&&!selected) {
+        throw badRequest('NOTHING_TO_REQUEST', 'قلم تعویضیِ تازه یا افزایش تعداد قابل ارسالی وجود ندارد');
+      }
+      for (const line of todo) {
+        const item=items.find(i=>i.id===line.itemId)!;
         await this.insert(
           tx,
           actor,
@@ -107,15 +127,16 @@ export class PartsService {
           {
             description: item.description,
             partNumber: item.partNumber,
-            quantity: item.quantity,
+            quantity: line.quantity,
             source: input.source ?? 'company',
             approvedUnitPriceRial: item.unitPriceRial,
             notes: null,
-            assessmentItemId: root,
+            assessmentItemId: line.rootId,
           },
           'از کارشناسی',
         );
       }
+      if(todo.length&&['reception','assessment','awaiting_approval'].includes(kase.stage))kase=await this.cases.applyStage(tx,actor,kase,{stage:'awaiting_parts'},'ارسال اقلام کارشناسی به قطعات و تأمین');
     });
     return this.list(actor, caseId);
   }
@@ -305,13 +326,17 @@ export class PartsService {
     const source = input.source ?? (p.source as PartSource);
     if (source === 'stock') throw badRequest('USE_RESERVE', 'قطعه انبار با «رزرو» ثبت می‌شود، نه سفارش');
 
-    // Authorization: a line from the assessment is ordered only once approved.
+    // A removed/rejected or changed technical need cannot be ordered. Pending
+    // assessment authorization is historical metadata, not a company-order gate.
     if (p.assessmentItemId) {
       const lines = (await this.authorizedLines(tx, tenantId, p.caseId)) ?? [];
       const line = lines.find((l) => l.root === p.assessmentItemId);
-      if (!line?.approved) {
-        throw badRequest('AUTHORIZATION_REQUIRED', 'سفارش این قطعه پیش از ثبت مجوز قلم کارشناسی ممکن نیست');
+      if (!line || line.item.approvalStatus==='rejected' || line.item.action!=='replace' || assessmentPartKey(line.item)!==assessmentPartKey(p)) {
+        throw badRequest('ASSESSMENT_ITEM_REVIEW', 'این نیاز در کارشناسی فعلی حذف، رد یا تغییر کرده است؛ پیش از سفارش بررسی کنید');
       }
+      const requests=await tx.select().from(partRequests).where(and(eq(partRequests.tenantId,tenantId),eq(partRequests.caseId,p.caseId),ne(partRequests.status,'cancelled')));
+      const key=assessmentPartKey(line.item);
+      if(lines.filter(l=>l.item.action==='replace'&&assessmentPartKey(l.item)===key).length>1||requests.filter(r=>r.assessmentItemId===line.root||assessmentPartKey(r)===key).reduce((n,r)=>n+r.quantity,0)>line.item.quantity)throw badRequest('ASSESSMENT_ITEM_REVIEW','تعداد نیازهای ارسال‌شده یا کدهای تکراری با کارشناسی فعلی سازگار نیست؛ پیش از خرید بررسی کنید');
     }
 
     const etaAt = input.etaAt ? new Date(input.etaAt) : null;
@@ -339,7 +364,7 @@ export class PartsService {
     }
     const unitPrice = input.unitPriceRial;
     const aboveApproved = p.approvedUnitPriceRial !== null && unitPrice > p.approvedUnitPriceRial;
-    const needsMarketApproval=source==='external'||aboveApproved;
+    const needsMarketApproval=source==='external';
     const quotes=await tx.select().from(partQuotes).where(and(eq(partQuotes.partId,p.id),eq(partQuotes.tenantId,tenantId))).orderBy(desc(partQuotes.createdAt),desc(partQuotes.id));
     const quote=needsMarketApproval?quotes[0]:undefined;
     if(needsMarketApproval) {
@@ -347,7 +372,7 @@ export class PartsService {
       const payer=kase.coverageType==='golden_card'?'golden_card':kase.coverageType==='insurance'?'insurer':kase.coverageType==='personal'?'customer':null;
       if(quote&&payer&&quote.source!==payer)throw badRequest('MARKET_APPROVAL_REQUIRED','پوشش پرونده تغییر کرده است؛ تأیید پرداخت‌کننده فعلی لازم است');
       if(!quote || quote.status!=='approved' || quote.unitPriceRial!==unitPrice || quote.quantity!==p.quantity || quote.supplier!==(input.supplier??'') || quote.validUntil<new Date()) {
-        throw badRequest(aboveApproved?'PRICE_ABOVE_APPROVED':'MARKET_APPROVAL_REQUIRED','خرید بازار یا افزایش قیمت به تأیید ثبت‌شده همین مبلغ، تعداد و فروشنده توسط مسئول تصادفات نیاز دارد');
+        throw badRequest(aboveApproved?'PRICE_ABOVE_APPROVED':'MARKET_APPROVAL_REQUIRED','خرید بیرون به تأیید ثبت‌شده همین مبلغ، تعداد و فروشنده توسط مسئول تصادفات نیاز دارد');
       }
       if(quote.decidedAt && at<quote.decidedAt)throw badRequest('ORDER_BEFORE_APPROVAL','زمان خرید نمی‌تواند پیش از تأیید قیمت باشد');
     }
@@ -366,8 +391,8 @@ export class PartsService {
   }
 
   /**
-   * Lines of the current final assessment with their root line id (first
-   * version) and whether they are authorized; null without a final version.
+   * Current draft/final technical lines with original lineage. The legacy
+   * approved flag means non-rejected technical eligibility, not buying approval.
    */
   async authorizedLines(tx: DbOrTx, tenantId: string, caseId: string) {
     const versions = await tx
@@ -375,7 +400,7 @@ export class PartsService {
       .from(assessments)
       .where(and(eq(assessments.tenantId, tenantId), eq(assessments.caseId, caseId)))
       .orderBy(desc(assessments.versionNo));
-    const current = versions.find((v) => v.status === 'final');
+    const current = versions.find((v) => v.status === 'draft'||v.status === 'final');
     if (!current) return null;
     const all = await tx
       .select()
@@ -394,7 +419,7 @@ export class PartsService {
     };
     return all
       .filter((i) => i.assessmentId === current.id)
-      .map((item) => ({ item, root: rootOf(item.id), approved: item.approvalStatus === 'approved' }));
+      .map((item) => ({ item, root: rootOf(item.id), approved: item.approvalStatus !== 'rejected' }));
   }
 
   private async insert(

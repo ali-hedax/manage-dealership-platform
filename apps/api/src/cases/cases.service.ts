@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, like, ne, sql, type SQL } from 'dr
 import { alias } from 'drizzle-orm/pg-core';
 import {
   currentJalaliYear,
+  repairDayPlan,
   maskPhone,
   normalizePersian,
   normalizePhone,
@@ -27,6 +28,7 @@ import type { Actor } from '../auth/auth.types';
 import { badRequest, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
+import {calendarAt} from '../workshop/work-calendar';
 import {
   blockers,
   caseCounters,
@@ -100,7 +102,7 @@ export const flagConditions: Record<string, () => SQL> = {
   awaiting_authorization: () =>
     and(
       caseSql.active,
-      sql`exists (select 1 from assessments a where a.case_id = ${cases.id} and a.status = 'final' and a.authorization_status = 'pending')`,
+      sql`exists (select 1 from part_quotes q where q.case_id = ${cases.id} and q.tenant_id = ${cases.tenantId} and q.status = 'pending')`,
     )!,
   parts_overdue: () =>
     and(
@@ -149,6 +151,7 @@ export class CasesService {
 
     const id = newId();
     await this.db.transaction(async (tx) => {
+      const repairPlan=input.repairDurationDays!==undefined?repairDayPlan(input.admittedAt,input.repairDurationDays,await calendarAt(tx,tenantId,input.admittedAt)):null;
       let vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null);
       if (extra.chassisRef && !vehicle.chassisRef) vehicle = await this.setChassisRef(tx, vehicle, extra.chassisRef);
       const customer = await this.upsertCustomer(tx, actor, input.customer ?? {}, null);
@@ -173,7 +176,8 @@ export class CasesService {
         responsibleUserId: input.responsibleUserId ?? null,
         stage: input.stage ?? 'reception',
         officialDeadlineAt: toDate(input.officialDeadlineAt),
-        forecastDeliveryAt: toDate(input.forecastDeliveryAt),
+        forecastDeliveryAt: repairPlan?new Date(repairPlan.endAt):toDate(input.forecastDeliveryAt),
+        repairPlan,
         isLegacyEntry: input.isLegacyEntry ?? false,
         admissionNo: extra.admissionNo ?? input.admissionNo ?? null,
         admissionNoKey: extra.admissionNoKey ?? (input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null),
@@ -253,6 +257,12 @@ export class CasesService {
       if (admittedAt !== undefined) patch.admittedAt = admittedAt;
       if (deadline !== undefined) patch.officialDeadlineAt = deadline;
       if (input.forecastDeliveryAt !== undefined) patch.forecastDeliveryAt = toDate(input.forecastDeliveryAt);
+      if(input.repairDurationDays!==undefined){
+        if(current.repairPlan&&!input.reason)throw badRequest('REASON_REQUIRED','برای تغییر مدت برنامه تعمیر، دلیل را بنویسید');
+        const start=(admittedAt??current.admittedAt).toISOString();
+        patch.repairPlan=repairDayPlan(start,input.repairDurationDays,current.repairPlan?.calendar??await calendarAt(tx,tenantId,start));
+        patch.forecastDeliveryAt=new Date(patch.repairPlan.endAt);
+      }
       if (customerId !== current.customerId) patch.customerId = customerId;
       if(input.admissionNo!==undefined){patch.admissionNo=input.admissionNo;patch.admissionNoKey=input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null;}
       if (extra.admissionNo !== undefined) patch.admissionNo = extra.admissionNo;
@@ -506,6 +516,7 @@ export class CasesService {
         chassisRef: v.chassisRef,
       },
       admissionNo: c.admissionNo,
+      repairPlan:c.repairPlan,
       admittedAtPrecision: c.admittedAtPrecision as CaseDetail['admittedAtPrecision'],
       origin: c.origin as CaseDetail['origin'],
       odometerKm: c.odometerKm,
