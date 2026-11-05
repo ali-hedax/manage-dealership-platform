@@ -14,7 +14,7 @@ test('personal login asks for the Authenticator code after the password',async({
   await page.route('**/api/v1/auth/email/verify',async r=>{
     expect(r.request().postDataJSON().code).toBe('123456');await r.fulfill({json:{...me,authentication:'totp'}});
   });
-  await page.goto('/login');await page.getByLabel('ایمیل',{exact:true}).fill('owner@example.test');
+  await page.goto('/login');await page.getByLabel('ایمیل کاری',{exact:true}).fill('owner@example.test');
   await page.getByLabel('رمز عبور',{exact:true}).fill('synthetic-personal-password');
   await page.getByRole('button',{name:'ادامه',exact:true}).click();
   await page.getByLabel('کد تأیید',{exact:true}).fill('۱۲۳۴۵۶');

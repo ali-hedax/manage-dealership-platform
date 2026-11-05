@@ -1,5 +1,9 @@
 # Test report
 
+## Login page refresh — 2026-11-05 — branch `feature/login-redesign`
+
+Local, Linux, built web + API (PGlite synthetic seed): `pnpm --filter @manage/web typecheck` and `build` pass. Browser `entry-refresh`, `pwa`, `personal-auth` (desktop project) **10/10** passed, including Authenticator login, install guide keyboard/iPhone flows and phone-width overflow. Visual check at 1440×900 and 390×844 in username mode and in personal mode (auth options mocked to TOTP); password toggle switches the field type; no horizontal overflow. Full CI not yet run on this branch.
+
 ## ArvanCloud proxy, client address and sign-in — 2026-11-05
 
 Client address, live through Arvan from a workstation at a known public address (`ad54f15`):
