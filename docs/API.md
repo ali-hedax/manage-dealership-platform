@@ -123,8 +123,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/auth/invitations/email` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/login` | [source](../apps/api/src/auth/auth.controller.ts) |
-| POST | `/api/v1/auth/users/:id/recovery` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/logout` | [source](../apps/api/src/auth/auth.controller.ts) |
+| POST | `/api/v1/auth/users/:id/recovery` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/blockers/:id/follow-up` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/blockers/:id/resolve` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
