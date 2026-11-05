@@ -38,7 +38,7 @@ test('invitation setup explains QR enrollment and confirms the first code',async
 });
 
 test('owner makes a private recovery link for a colleague, never for the owner account',async({page})=>{
-  await login(page,'manager');
+  await login(page,'admin');
   const me=await (await page.request.get('/api/v1/auth/me')).json();
   await page.route('**/api/v1/auth/me',r=>r.fulfill({json:{...me,isOwner:true}}));
   const colleague='00000000-0000-4000-8000-000000000001';
