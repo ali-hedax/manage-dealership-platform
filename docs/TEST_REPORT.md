@@ -1,5 +1,9 @@
 # Test report
 
+## Platform states and search — 2026-11-05 — branch `feature/ui-states`
+
+Local Linux, built API + web: web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped**. First run exposed a duplicate accessible name between the new sidebar search and the case-list search; the sidebar field was renamed «جست‌وجوی سریع از هر صفحه» and the full suite rerun green. Full CI pending on the PR.
+
 ## Interface polish — 2026-11-05 — branch `feature/ui-polish`
 
 Local Linux, built API + web (PGlite synthetic seed): web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped (optional screenshots)**; the one initial failure (discrepancy queue filtered by the Latin case number) was updated to the Persian-digit case number and passed on rerun. Full CI pending on the PR.
