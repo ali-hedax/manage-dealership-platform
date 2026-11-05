@@ -1,32 +1,36 @@
-# Manage by HEDAX
+<div align="center">
 
-**Dealership operations platform — phase 1: accident-repair vehicles.**
+<img src="apps/web/public/brand/logo-light.png" alt="Manage by HEDAX" width="300">
 
-[فارسی](README.md) · [API](docs/API.md) · [GitHub workflow](docs/GITHUB_WORKFLOW.md) · [Architecture](docs/ARCHITECTURE.md) · [Progress](PROGRESS.md) · [Roadmap](docs/ROADMAP.md)
+### Dealership operations, from intake to delivery.
 
-> **Main branch:** platform PRs #16–#21 and documentation #23 are now merged with explicit owner approval. Staff invitation email is reviewed on a separate feature branch/PR. See [branch/CI audit](docs/GITHUB_AUDIT.md).
->
-> **Status: hosted personal-authentication Preview.** The owner reports completing their own login. Runs with synthetic data only. Not yet installed on the dealership server, not connected to any official system (manufacturer, roadside assistance, insurers, inventory, accounting), and offline/LAN sync is not active yet. See [PROGRESS.md](PROGRESS.md).
+[فارسی](README.md) · [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Roadmap](docs/ROADMAP.md) · [Progress](PROGRESS.md)
 
-Manage tracks every accident-repair vehicle from admission to delivery, so the service manager and accident supervisor can see where each car is, what it is waiting for, and who has to act. Persian (RTL) is the default language; tenants (dealerships) are separated in the data model from day one.
+</div>
 
-## Working today
+Manage follows every vehicle in a dealership workshop from admission to handover, so the service manager, accident supervisor, assessors, parts, cashier and quality control always know where each car is, what it is waiting for and who has to act. The interface is Persian (RTL) and the data model separates dealerships (tenants) from day one, for multi-dealership and multi-brand use.
 
-- Login with separate roles; permissions enforced by the API
-- Cases with vehicle and owner; search by plate, VIN, name, phone or case number
-- Coverage type (golden card / roadside, body insurance, personal, mixed, unknown)
-- Three independent times: official deadline, internal forecast, actual delivery
-- Legacy entry of vehicles already in the workshop, with past admission time
-- Repair activities per department with dependencies; start / block / complete / supervisor approval
-- Blockers with occurrence time, recording time, follow-ups and resolution
-- Manager dashboard whose counts link to the exact filtered lists
-- Append-only audit trail (database trigger)
+**Status:** the first module (accident repair) is in use and under test at an Iran Khodro dealership. Integrations with official systems (manufacturer, roadside assistance, insurers, accounting) and offline operation are on the [roadmap](docs/ROADMAP.md). Release notes: [CHANGELOG.md](CHANGELOG.md).
 
-Versioned assessment and supplements, the parts lifecycle (with Excel import), the financial purchase gate, and QC with corrective work, technical and financial close and the vehicle handover are implemented (branches `feature/assessment-parts`, `feature/parts-finance`, `feature/qc-delivery`). Local Preview: `pnpm preview` → http://localhost:3100. Next deliveries: part-discrepancy review queue, reports and Persian PDF, then LAN server + cloud sync.
+<p align="center">
+  <img src="docs/screenshots/readme-dashboard.jpg" alt="Service manager dashboard" width="74%">
+  &nbsp;
+  <img src="docs/screenshots/readme-cases-mobile.jpg" alt="Case list on a phone" width="22%">
+  <br><sub>Service manager dashboard and the case list on a phone (synthetic data).</sub>
+</p>
 
-## Hosted Preview sign-in
+## A vehicle's route
 
-Private invitation → choose a personal password → enroll Google Authenticator → sign in with email, password and a fresh code. Email identifies the account; the second factor is Authenticator. The new staff workflow adds invitation email separately; see [staff guide and rollout status](docs/STAFF_FA.md). Local shared demo credentials do not work in personal mode. [Persian sign-in guide and recovery limitations](docs/PERSONAL_AUTH_FA.md).
+| Stage | What Manage covers |
+| --- | --- |
+| Intake and case | Vehicle and owner, search by plate, VIN, chassis, name, phone or case number; Excel import of vehicles already in the workshop; coverage type |
+| Assessment and approval | Versioned assessment and supplements, assessment import from Excel, official approval records, partial item approval |
+| Parts and sourcing | Part needs from the assessment, orders and ETAs, receipt and inspection, reservations from the daily stock report, discrepancy queue |
+| Repair and stations | Coded repair plan per department and station; start, blocker, completion and supervisor approval; working calendar and holidays |
+| Finance | Payer shares, prepayment with manager and cashier approval, capped exceptions, settlement |
+| Quality and handover | QC with corrective work, separate technical and financial close, vehicle handover and archive |
+| Management | Role-based workspaces, "needs action" dashboard, reports with PDF and Excel export, three independent times (official deadline, internal forecast, actual delivery) |
+| Security and access | Configurable roles and permissions enforced by the API, email + Google Authenticator sign-in, append-only audit trail, installable mobile app (PWA) |
 
 ## Run locally (no Docker, no PostgreSQL install)
 
@@ -61,7 +65,7 @@ Latest results: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 ## Layout
 
-`apps/api` (NestJS, Drizzle, PostgreSQL) · `apps/web` (Next.js) · `packages/shared` (contracts, permissions, Jalali dates) · `docs/`. The earlier single-file prototype `index (4).html` is kept unchanged; see [the audit](docs/GITHUB_AUDIT.md) and [gradual feature migration plan](docs/PROTOTYPE_MIGRATION.md). The active web/API application already uses TypeScript.
+`apps/api` (NestJS, Drizzle, PostgreSQL) · `apps/web` (Next.js) · `packages/shared` (contracts, permissions, Jalali dates) · `docs/`. The earlier single-file prototype `index (4).html` is kept unchanged; see the [feature migration plan](docs/PROTOTYPE_MIGRATION.md).
 
 ## Documentation
 
@@ -69,4 +73,4 @@ Latest results: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 ## Rights
 
-Maintainer: [ali-hedax](https://github.com/ali-hedax). No open-source license is granted; a public repository does not permit redistribution of the code or the brand. The license type is the owner's decision.
+© HEDAX. All rights reserved. No open-source license is granted; the code and the brand may not be redistributed. Maintainer: [ali-hedax](https://github.com/ali-hedax).
