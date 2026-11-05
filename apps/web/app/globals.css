@@ -1663,3 +1663,13 @@ tr.is-late td { background:var(--red-soft); }
  .entry-login .side::after { display:none; }
  .entry-route,.entry-signature { display:none; }
 }
+
+/* Logo set (2026-11-05): compact SVG wordmark with a readable text signature
+   wherever the full lockup would shrink "by HEDAX" below legibility. */
+.brand-lockup { display:inline-flex; flex-direction:column; align-items:flex-start; gap:3px; direction:ltr; text-decoration:none; }
+.brand-lockup:hover { text-decoration:none; }
+.sidebar .brand .brand-lockup img { width:124px; }
+.brand-by { font-size:10.5px; font-weight:600; letter-spacing:2.4px; color:#a0aec0; line-height:1; padding-inline-start:2px; }
+.brand-lockup-sm img { width:96px; }
+.brand-lockup-sm .brand-by { font-size:9.5px; letter-spacing:2px; }
+.topbar .btn svg { flex:none; }

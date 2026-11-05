@@ -91,7 +91,7 @@ export function DiscrepancyQueue() {
                 <span className={`chip ${TONE[d.status]}`}>{DISCREPANCY_STATUS_LABELS[d.status]}</span>
                 <b>{DISCREPANCY_KIND_LABELS[d.kind]}</b>
                 <Link href={`/cases/${d.caseId}`}>
-                  <bdi>{d.caseNumber}</bdi>
+                  <bdi>{toPersianDigits(d.caseNumber)}</bdi>
                 </Link>
                 {d.plate && <span className="xs muted">{toPersianDigits(d.plate)}</span>}
               </div>
