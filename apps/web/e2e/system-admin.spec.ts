@@ -12,6 +12,8 @@ test('owner-configured support desk exposes daily upload, all operational queues
  const me=await (await page.request.get('/api/v1/auth/me')).json();
  expect(me.isOwner).toBe(false);expect(me.permissions).toHaveLength(PERMISSIONS.length);
  const desk=page.getByRole('navigation',{name:'کارهای مدیر سیستم',exact:true});
+ // Locator.all() does not wait for the newly navigated workspace to render.
+ await expect(desk.locator('details > summary')).toHaveCount(2);
  for(const summary of await desk.locator('details > summary').all())await summary.click();
  for(const name of ['به‌روزرسانی گزارش‌های روزانه','موجودی روزانه و رزرو','پیگیری امداد ویژه','پذیرش خودرو','برنامه و پیگیری تعمیر','مالی و تسویه','کنترل کیفیت و تحویل','گزارش جامع خدمات','کارکنان و دعوت'])await expect(desk.getByRole('link',{name:new RegExp(`^${name}(?:\\s|$)`)})).toBeVisible();
  await expect(page.getByRole('heading',{name:'پرونده‌ها برای پیگیری و پشتیبانی',exact:true})).toBeVisible();
