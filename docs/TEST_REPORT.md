@@ -1,5 +1,15 @@
 # Test report
 
+## Production domain preparation — 2026-11-05 — not switched
+
+Environment: production VM, read-only checks plus a transitional Caddy config; final config tested in a throwaway container with no published ports and a temporary self-signed certificate.
+
+- Final config: `http` apex, `www`, raw IP and old name 301 to `https://managebyhedax.ir` with path and query kept; `https` www 301; `https` apex `/` 302 to `/login`, `/login` 200, manifest 200.
+- Let's Encrypt staging over HTTP-01: **failed twice**, "Timeout during connect". Foreign TCP probes of 443 fail on all seven foreign nodes and succeed from Iran; a 70-second capture on eth0 during validation showed one external SYN to port 80, not the retries of a reachable validator. Port 80 from foreign nodes was not measured separately because that probe request timed out.
+- DNS: foreign nodes resolve the domain to the VM; no CAA record. DNS-01 issuance, the certificate install step and `switch-to-domain.sh` past its certificate check are **not yet run**.
+- `switch-to-domain.sh` on the VM with no certificate: exit 1 before any change; `.env` and the Caddyfile checksums unchanged.
+- `node --test deploy/preview/gate.test.mjs`: 2/2. `node scripts/check-docs.mjs`: pass. shellcheck not available locally; CI does not cover the new script yet. CI not run: this branch is a local commit.
+
 ## Published entry/workbench — 2026-11-05
 
 Application/test `ad54f15`; all six [CI 41974333191](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41974333191) pass: shared 17, API 185 plus nine PG-only tests separately, browser 34 with two optional screenshot skips, daily/support/reservation 3. Final local entry/Auth/ICS 6/6, workshop/holiday API 12/12, daily 3/3; build/lint pass. Older trials below are history, not the final gate. [Release evidence](RELEASE_ENTRY_20261105.md).

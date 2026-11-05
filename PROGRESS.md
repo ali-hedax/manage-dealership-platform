@@ -1,5 +1,15 @@
 # PROGRESS — Manage by HEDAX
 
+## انتقال به دامنه managebyhedax.ir — 2026-11-05 — آماده، سوییچ نشده
+
+شاخه `chore/production-domain-managebyhedax` از `402cc82` (فقط commit محلی، push نشده). برنامه روی سرور همان `ad54f15` است و نشانی کارکنان هنوز نشانی قبلی است.
+
+- مانع: VM در هر دو جهت به خارج از ایران راه ندارد؛ همه سرورهای ACME از VM timeout و اعتبارسنج Let's Encrypt به پورت 80 نمی‌رسد. certbot و HTTP-01 ممکن نیست. DNS دامنه از خارج سالم است و CAA ندارد، پس DNS-01 ممکن است.
+- روی سرور انجام شد: پشتیبان `/home/manage/backups/operational/20261105T082344Z` و `/home/manage/backups/domain-cutover-20261105T082350Z`؛ Caddy با پیکربندی موقت `/home/manage/operations/caddy/Caddyfile` دوباره ساخته شد (سایت قبلی بدون تغییر، به‌علاوه مسیر توکن ACME روی پورت 80). `operational.yml` همان نسخه این شاخه است. `.env` تغییر نکرد.
+- سفارش واقعی DNS-01 در `~/.manage-acme` روی رایانه مالک ساخته شد و تا 2026-11-12 اعتبار دارد.
+- گام بعد: مالک دو رکورد TXT را در DNS آروان ثبت کند؛ سپس `renew-certificate.mjs --dns-finish` و بعد `switch-to-domain.sh` ([راهنما](docs/DEPLOYMENT.md#production-domain-and-certificate)) و آزمون‌های curl. تمدید خودکار نیازمند تصمیم مالک است.
+- صفحه gate در حالت Authenticator نمایش داده نمی‌شود؛ متن اصلاح‌شده‌اش با انتشار بعدی به سرور می‌رسد. `/opt/manage` عمداً دست‌نخورده ماند.
+
 ## نسخه عملیاتی جاری — ورود و میزهای کار تازه — 2026-11-05
 
 آخرین commit برنامه/آزمون **`ad54f1513e1ed74130c343b9303b3fdf99af71b7`**، پیاده‌سازی `1239beb`، با مجوز صریح مالک بدون تأیید دوباره منتشر شد. هر شش [CI 41974333191](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/41974333191) موفق؛ تصویر دقیق CI با digest، source tree و image ID برابر نصب شد. [PR #41](https://github.com/ali-hedax/manage-dealership-platform/pull/41)، [گزارش انتشار](docs/RELEASE_ENTRY_20261105.md). ثبت پس از این commit فقط مستندات است.

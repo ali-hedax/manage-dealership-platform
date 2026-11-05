@@ -10,3 +10,9 @@ services:
   gate:
     environment:
       TOTP_AUTH_ENABLED: "true"
+  caddy:
+    volumes:
+      # Same target as the Preview overlay, so this file replaces its Caddyfile.
+      - /home/manage/operations/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/manage/operations/tls:/etc/caddy/tls:ro
+      - /home/manage/operations/acme-webroot:/srv/acme:ro

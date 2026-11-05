@@ -1,0 +1,56 @@
+# Manage by HEDAX production reverse proxy. Mounted by operational.yml.
+# Canonical address: https://managebyhedax.ir (every other name answers 301).
+#
+# The certificate is a static Let's Encrypt file pair because this VM cannot
+# reach any ACME server. deploy/operational/renew-certificate.mjs obtains it
+# from a workstation; the VM only serves the HTTP-01 token. See docs/DEPLOYMENT.md.
+{
+	# Plain-HTTP redirects are declared below so they are 301, not Caddy's 308.
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+(canonical_redirect) {
+	header -Server
+	redir https://managebyhedax.ir{uri} 301
+}
+
+http:// {
+	handle_path /.well-known/acme-challenge/* {
+		root * /srv/acme
+		file_server
+	}
+	handle {
+		import canonical_redirect
+	}
+}
+
+managebyhedax.ir {
+	tls /etc/caddy/tls/fullchain.pem /etc/caddy/tls/privkey.pem
+	encode zstd gzip
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Strict-Transport-Security "max-age=31536000"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+	# reverse_proxy keeps Host and sets X-Forwarded-For/-Proto/-Host itself,
+	# overwriting client-supplied values (web has TRUST_PROXY_HEADERS=true).
+	reverse_proxy gate:8080
+}
+
+www.managebyhedax.ir {
+	tls /etc/caddy/tls/fullchain.pem /etc/caddy/tls/privkey.pem
+	import canonical_redirect
+}
+
+# Former temporary name: old bookmarks and invitation links keep working.
+manage-85-198-52-255.sslip.io {
+	import canonical_redirect
+}
+
+# A public certificate is not available for the raw IP, so browsers warn once.
+https://85.198.52.255 {
+	tls internal
+	import canonical_redirect
+}

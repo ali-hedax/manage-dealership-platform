@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] — production domain managebyhedax.ir, 2026-11-05
+
+- Prepared the move to `https://managebyhedax.ir` with 301 redirects from HTTP, `www`, the raw IP and the former temporary address. Not active until the certificate is issued.
+- Removed the Preview wording from the site-gate page.
+
 ## [Released on Manage] — entry and operational workbench, 2026-11-05
 
 - Refined Persian login and explicit selection among permitted desks, with a consistent return destination and fewer duplicate menu entries.
