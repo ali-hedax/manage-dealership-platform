@@ -1636,3 +1636,40 @@ tr.is-late td { background:var(--red-soft); }
 .account .install-touch { margin-block-end:8px; }
 .network-status { position:sticky; inset-block-start:0; z-index:60; padding:12px max(16px,env(safe-area-inset-right)) 12px max(16px,env(safe-area-inset-left)); background:var(--amber-soft); color:#744210; border-block-end:1px solid #eed8a5; font-size:var(--fs-m); }
 @media (display-mode:standalone) { body { padding-block-start:env(safe-area-inset-top); padding-block-end:env(safe-area-inset-bottom); } }
+
+/* Login refresh (2026-11-05): eye toggle inside the password field, numbered
+   route, HEDAX signature, two-factor note and a quiet install link. */
+.entry-login .side { position:relative; overflow:hidden; }
+.entry-login .side::after { content:""; position:absolute; inset-inline-start:-220px; inset-block-end:-300px; inline-size:540px; block-size:540px; border-radius:50%; border:1px solid rgba(99,164,232,.16); box-shadow:0 0 0 72px rgba(99,164,232,.035); pointer-events:none; }
+.entry-login .side > * { position:relative; z-index:1; }
+.entry-route { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); max-inline-size:560px; gap:12px; }
+.entry-route li { border-block-start-color:rgba(255,255,255,.18); padding-inline-end:0; }
+.entry-route li:first-child { border-block-start-color:var(--blue); }
+.entry-route b { display:block; font-size:12px; font-weight:700; color:#a0aec0; letter-spacing:.5px; margin-block-end:2px; }
+.entry-signature { display:flex; justify-content:space-between; gap:16px; max-inline-size:560px; font-size:13px; color:#a0aec0; }
+.entry-signature-mark { direction:ltr; letter-spacing:2px; font-weight:700; color:var(--silver); }
+.password-field { position:relative; }
+.password-field .input { inline-size:100%; padding-inline-end:48px; }
+.password-toggle { position:absolute; inset-block:0; inset-inline-end:4px; inline-size:44px; display:grid; place-items:center; border:0; background:transparent; color:var(--steel-2); cursor:pointer; border-radius:var(--radius-s); }
+.password-toggle:hover { color:var(--ink); }
+.password-toggle[aria-pressed="true"] { color:var(--blue-strong); }
+.forgot-link { align-self:flex-end; margin-block-start:6px; }
+.login-2fa { display:flex; align-items:center; gap:8px; margin:0; padding:10px 12px; border-radius:var(--radius-s); background:var(--silver-2); color:var(--steel); font-size:var(--fs-s); }
+.login-2fa svg { color:var(--green); flex:none; }
+.entry-login .install-login .btn { border:0; background:transparent; padding-inline:0; min-block-size:40px; color:var(--steel); font-weight:500; gap:8px; }
+.entry-login .install-login .btn::before { content:""; inline-size:16px; block-size:16px; background:currentColor; -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='7' y='2' width='10' height='20' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E") center/contain no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='7' y='2' width='10' height='20' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E") center/contain no-repeat; }
+.entry-login .install-login .btn:hover { background:transparent; color:var(--blue-strong); text-decoration:underline; }
+@media(max-width:700px) {
+ .entry-login .side::after { display:none; }
+ .entry-route,.entry-signature { display:none; }
+}
+
+/* Logo set (2026-11-05): compact SVG wordmark with a readable text signature
+   wherever the full lockup would shrink "by HEDAX" below legibility. */
+.brand-lockup { display:inline-flex; flex-direction:column; align-items:flex-start; gap:3px; direction:ltr; text-decoration:none; }
+.brand-lockup:hover { text-decoration:none; }
+.sidebar .brand .brand-lockup img { width:124px; }
+.brand-by { font-size:10.5px; font-weight:600; letter-spacing:2.4px; color:#a0aec0; line-height:1; padding-inline-start:2px; }
+.brand-lockup-sm img { width:96px; }
+.brand-lockup-sm .brand-by { font-size:9.5px; letter-spacing:2px; }
+.topbar .btn svg { flex:none; }

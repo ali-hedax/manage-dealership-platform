@@ -4,6 +4,20 @@
 
 - The owner can make a private one-hour recovery link for a colleague who lost the password or Authenticator. The colleague sets a new password and reconnects Authenticator, and old sessions end. The owner account cannot use this path. Not yet on the server.
 
+## [Unreleased] — interface polish, 2026-11-05
+
+- SVG logo set (full lockup and compact wordmark); sidebar and phone bar show "by HEDAX" as readable text.
+- Case, plate and admission numbers in Persian digits on every list and board.
+- Removed developer text from the interface (local-sync line, documentation file name, repeated "no admission number" sentence).
+- Tab title per area; distinct menu icons; hamburger icon on the phone menu button; duplicate logo removed from desk selection.
+
+## [Unreleased] — login page refresh, 2026-11-05
+
+- Login heading «ورود به حساب کاری», email label «ایمیل کاری», shorter guidance; product descriptor «سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو» under the approved slogan.
+- Show/hide password moved into the password field as an eye icon; «رمز را فراموش کرده‌اید؟» directly under the password; submit button no longer greyed out before typing (native required-field validation instead).
+- Two-factor note under the continue button in personal (email + Authenticator) mode; install action restyled as a quiet phone link.
+- Numbered route (01 پذیرش و کارشناسی · 02 تأمین و تعمیر · 03 کنترل و تحویل) and «محصولی از هداکس» signature on the brand panel. No API, auth or permission change.
+
 ## [Released on Manage] — production domain managebyhedax.ir, 2026-11-05
 
 - Manage now answers at `https://managebyhedax.ir`, with 301 redirects from HTTP, `www`, the raw IP and the former temporary address. Staff sign in once more, and installed mobile apps need reinstalling from the new address. Invitation links use the new address.

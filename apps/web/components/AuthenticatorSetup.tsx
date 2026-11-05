@@ -15,7 +15,7 @@ export function AuthenticatorSetup() {
       else {setEnrollment(await api<Enrollment>('/auth/invitations/accept',{body:{token,password}}));setPassword('');setToken('');}
     }catch(err){setError(errorMessage(err));}finally{setBusy(false);}
   }
-  return <div className="login"><div className="side"><img src="/brand/logo-dark.png" alt="Manage by HEDAX" width={190} height={63}/><div className="claim">حساب شخصی شما در Manage</div></div><form className="form" onSubmit={submit}>
+  return <div className="login"><div className="side"><img src="/brand/manage-logo-dark.svg" alt="Manage by HEDAX" width={190} height={48}/><div className="claim">حساب شخصی شما در Manage</div></div><form className="form" onSubmit={submit}>
     <h1>{enrollment?'اتصال Google Authenticator':recovery?'بازیابی دسترسی':'فعال‌سازی حساب'}</h1>
     {done?<><p role="status">{recovery?'دسترسی بازیابی شد و نشست‌های قبلی شما بسته شدند. ':'حساب فعال شد. '}پس از نمایش کد تازه در Authenticator، با ایمیل، رمز شخصی و آن کد وارد شوید.</p><Link className="btn btn-primary" href="/login">رفتن به ورود</Link></>:
       enrollment?<><p className="muted small">در Google Authenticator روی + و سپس «اسکن QR» بزنید. این صفحه را تا پایان فعال‌سازی نبندید.{recovery&&' پس از پایان، ورودی قدیمی Manage را از Authenticator پاک کنید؛ دیگر کار نمی‌کند.'}</p><img src={enrollment.qrDataUrl} alt="QR اتصال حساب به Authenticator؛ محرمانه نگه دارید" width={260} height={260} style={{maxInlineSize:'100%',blockSize:'auto',alignSelf:'center'}}/>

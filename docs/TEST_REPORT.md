@@ -9,6 +9,14 @@ Branch `feature/staff-access-recovery`. No migration: `auth_challenges.purpose` 
 - Browser tests added to `personal-auth.spec.ts` and the full suite: see CI on the PR. They mock the API.
 - **Not tested:** the flow on the production images behind Arvan, because it is not deployed.
 
+## Interface polish — 2026-11-05 — branch `feature/ui-polish`
+
+Local Linux, built API + web (PGlite synthetic seed): web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped (optional screenshots)**; the one initial failure (discrepancy queue filtered by the Latin case number) was updated to the Persian-digit case number and passed on rerun. Full CI pending on the PR.
+
+## Login page refresh — 2026-11-05 — branch `feature/login-redesign`
+
+Local, Linux, built web + API (PGlite synthetic seed): `pnpm --filter @manage/web typecheck` and `build` pass. Browser `entry-refresh`, `pwa`, `personal-auth` (desktop project) **10/10** passed, including Authenticator login, install guide keyboard/iPhone flows and phone-width overflow. Visual check at 1440×900 and 390×844 in username mode and in personal mode (auth options mocked to TOTP); password toggle switches the field type; no horizontal overflow. Full CI not yet run on this branch.
+
 ## ArvanCloud proxy, client address and sign-in — 2026-11-05
 
 Client address, live through Arvan from a workstation at a known public address (`ad54f15`):
