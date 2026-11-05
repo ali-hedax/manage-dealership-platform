@@ -59,8 +59,9 @@ export default function DashboardPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
+      <header className="page-head entry-welcome">
         <div>
+          <span className="entry-line" aria-hidden="true" />
           <h1>وضعیت تعمیرگاه</h1>
           <p className="muted small">
             {faNum(data.activeCases)} پرونده فعال، به‌روزرسانی {formatJalali(data.generatedAt, { time: true })}
@@ -78,7 +79,7 @@ export default function DashboardPage() {
             </Link>
           )}
         </div>
-      </div>
+      </header>
 
       <nav className="pipeline" aria-label="مراحل پرونده‌ها">
         {pipelineStages.map((s) => {
