@@ -1,5 +1,15 @@
 # Test report
 
+## Phase 1 of the role-based plan — 2026-11-05 — branch `feature/phase1-roles`, not deployed
+
+Local Linux (Node 22, pnpm 10): docs check (129 API routes), shared build, lint and typecheck for shared/API/web pass. API test files run one per process: **200 passed, 0 failed**; 9 PostgreSQL-only tests skipped locally and covered by the CI PostgreSQL job.
+
+- New `technician-pin.e2e-spec.ts` 5/5: technician created by user.manage signs in with username + PIN and gets only `task.execute`; wrong PINs → 401, fifth → 423 and stays locked; non-technician accounts never get a PIN session; PIN reset ends old sessions; deactivation blocks sign-in; works in personal (Authenticator) mode and a later role change invalidates the PIN session.
+- `parts-finance.e2e-spec.ts` 12/12: purchases proceed and record `advance_missing` / `re_approval_required`; free pricing for personal cases; golden card needs payer approval only above the approved price; advance and parts-amount alerts listed, answered once, kept in history; threshold editable only with settings.manage.
+- `workshop.e2e-spec.ts` 10/10: technician task shows parts waiting, then ready to collect after receipt.
+- Browser: web typecheck passes; the technician tab of the login page is built on `feature/new-look` against `POST /api/v1/auth/technician-login`. Full Playwright: CI on the PR.
+- Not tested: production images behind Arvan (not deployed).
+
 ## Integration into main — 2026-11-05 — passed, not yet deployed
 
 PR #49 (`release/integrate-20261105`, head `e0f9e99`): published release `79f6585` + staff access recovery (#47). Conflicts only in CHANGELOG, PROGRESS and this report.
