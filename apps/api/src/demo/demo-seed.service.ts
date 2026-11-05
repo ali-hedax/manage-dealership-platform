@@ -185,7 +185,7 @@ export class DemoSeedService {
       weight: 2,
     });
     // Assessment approved in the golden-card system, then hidden damage found
-    // during body work: the supplement waits for a new authorization.
+    // during body work: the supplement is recorded without a generic approval wait.
     let a1 = await this.assessments.create(expert, c1.id, {
       kind: 'initial',
       assessorName: 'کارشناس امداد نمونه',
