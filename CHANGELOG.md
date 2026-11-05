@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — interface polish, 2026-11-05
+
+- SVG logo set (full lockup and compact wordmark); sidebar and phone bar show "by HEDAX" as readable text.
+- Case, plate and admission numbers in Persian digits on every list and board.
+- Removed developer text from the interface (local-sync line, documentation file name, repeated "no admission number" sentence).
+- Tab title per area; distinct menu icons; hamburger icon on the phone menu button; duplicate logo removed from desk selection.
+
 ## [Unreleased] — login page refresh, 2026-11-05
 
 - Login heading «ورود به حساب کاری», email label «ایمیل کاری», shorter guidance; product descriptor «سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو» under the approved slogan.

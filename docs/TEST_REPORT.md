@@ -1,5 +1,9 @@
 # Test report
 
+## Interface polish — 2026-11-05 — branch `feature/ui-polish`
+
+Local Linux, built API + web (PGlite synthetic seed): web typecheck and build pass. Full Playwright desktop + mobile **34 passed, 2 skipped (optional screenshots)**; the one initial failure (discrepancy queue filtered by the Latin case number) was updated to the Persian-digit case number and passed on rerun. Full CI pending on the PR.
+
 ## Login page refresh — 2026-11-05 — branch `feature/login-redesign`
 
 Local, Linux, built web + API (PGlite synthetic seed): `pnpm --filter @manage/web typecheck` and `build` pass. Browser `entry-refresh`, `pwa`, `personal-auth` (desktop project) **10/10** passed, including Authenticator login, install guide keyboard/iPhone flows and phone-width overflow. Visual check at 1440×900 and 390×844 in username mode and in personal mode (auth options mocked to TOTP); password toggle switches the field type; no horizontal overflow. Full CI not yet run on this branch.
