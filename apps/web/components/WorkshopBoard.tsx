@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import {EmptyState} from '@/components/EmptyState';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { BLOCKER_REASON_LABELS, TASK_STATUS_LABELS, type WorkshopOverview, type WorkshopTask } from '@manage/shared';
@@ -13,7 +14,7 @@ const mins=(v:number|null)=>v===null?'نامعلوم':`${faNum(v)} دقیقه ک
 export function WorkshopBoard(){
   const {can}=useAuth();const [filter,setFilter]=useState('active'),[q,setQ]=useState(''),[station,setStation]=useState('');
   const {data,error,mutate}=useSWR<WorkshopOverview>(can('workshop.read')?'/workshop/overview':null,fetcher,{refreshInterval:30000});
-  if(!can('workshop.read'))return <p className="callout">این بخش برای شما فعال نیست.</p>;
+  if(!can('workshop.read'))return <EmptyState heading="h1" icon="shield" title="برنامهٔ تعمیر برای نقش شما فعال نیست" action={{href:'/launch',label:'بازگشت به میز کار'}}>برای دسترسی به برنامه و گزارش تعمیر، با مدیر سامانه هماهنگ کنید.</EmptyState>;
   if(error)return <p role="alert" className="callout">دریافت برنامه تعمیر ممکن نشد. <button className="btn" onClick={()=>void mutate()}>تلاش دوباره</button></p>;
   if(!data)return <p>در حال دریافت برنامه تعمیر…</p>;
   const counts={active:data.tasks.filter(t=>!['done','approved'].includes(t.status)).length,late:data.tasks.filter(t=>(t.lateMinutes??0)>0).length,transfer:data.tasks.filter(t=>t.status==='done').length,approval:data.quotes.filter(t=>t.status==='pending').length};

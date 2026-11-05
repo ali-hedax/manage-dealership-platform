@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased] — platform states and search, 2026-11-05
+
+- Quick case search in the sidebar from any page (plate, chassis or case number); press "/" to focus.
+- Shared empty/permission state with icon, explanation and next step; branded "page not found" and error pages with retry.
+- User avatar with initials in the account area.
+- Repair plan page uses the same brand blue as the rest of the platform; neutral style for plain notices.
+- Dashboard: duplicate desk card removed (the «ورود به میز کار» button remains); each «نیازمند اقدام» row ends in an arrow instead of a repeated «مشاهده».
+- Case page: for overview roles (e.g. service manager) the section matching the current stage opens automatically, and «موانع» opens when blockers are open.
+
 ## [Unreleased] — interface polish, 2026-11-05
 
 - SVG logo set (full lockup and compact wordmark); sidebar and phone bar show "by HEDAX" as readable text.

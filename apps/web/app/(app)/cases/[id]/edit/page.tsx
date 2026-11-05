@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
+import {EmptyState} from '@/components/EmptyState';
 import useSWR from 'swr';
 import { toPersianDigits, type CaseDetail } from '@manage/shared';
 import { CaseForm } from '@/components/CaseForm';
@@ -12,7 +13,7 @@ export default function EditCasePage() {
   const { can } = useAuth();
   // Always edit the latest version: the form sends it as expectedVersion.
   const { data, error } = useSWR<CaseDetail>(`/cases/${id}`, fetcher, { revalidateOnFocus: false });
-  if (!can('case.update')) return <div className="callout callout-blue">نقش شما اجازه ویرایش پرونده ندارد.</div>;
+  if (!can('case.update')) return <EmptyState heading="h1" icon="shield" title="ویرایش پرونده برای نقش شما فعال نیست" action={{href:'/cases',label:'بازگشت به پرونده‌ها'}}>اگر باید اطلاعات پرونده را اصلاح کنید، از مدیر سامانه بخواهید این دسترسی را به نقش شما بدهد.</EmptyState>;
   if (error) return <div className="callout callout-red">پرونده بارگذاری نشد.</div>;
   if (!data) return <p className="muted">در حال بارگذاری…</p>;
   return (
