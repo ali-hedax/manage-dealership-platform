@@ -16,7 +16,7 @@ test('personal login asks for the Authenticator code after the password',async({
   });
   await page.goto('/login');await page.getByLabel('ایمیل کاری',{exact:true}).fill('owner@example.test');
   await page.getByLabel('رمز عبور',{exact:true}).fill('synthetic-personal-password');
-  await page.getByRole('button',{name:'ادامه',exact:true}).click();
+  await page.getByRole('button',{name:'ورود',exact:true}).click();
   await page.getByLabel('کد تأیید',{exact:true}).fill('۱۲۳۴۵۶');
   await expect(page.getByLabel('کد تأیید',{exact:true})).toHaveValue('123456');
   await page.getByRole('button',{name:'تأیید کد و ورود',exact:true}).click();

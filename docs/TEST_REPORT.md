@@ -10,6 +10,17 @@ Local Linux (Node 22, pnpm 10): docs check (129 API routes), shared build, lint 
 - Browser: web typecheck passes; the technician tab of the login page is built on `feature/new-look` against `POST /api/v1/auth/technician-login`. Full Playwright: CI on the PR.
 - Not tested: production images behind Arvan (not deployed).
 
+## Navy and gold interface — 2026-11-05
+
+Branch `feature/new-look`, base `6ae461f`, application `921e22f`.
+
+- Local frozen install with pnpm 10.34.6, shared build, all workspace lint/typecheck, production build, and the documentation/API inventory check passed.
+- Targeted Playwright checks passed at 1440×900 and 390×844 using the built web app and the synthetic PGlite API. Verified staff email/Authenticator presentation and actual seeded username sign-in, tab selection with keyboard and direct link, PIN focus/backspace/mixed-digit paste and ASCII payload, missing endpoint (real HTTP 404), simulated 401/423/405/network responses and simulated success navigation, mobile menu and no horizontal overflow on the captured routes.
+- Reviewed 11 PNG screenshots for both login tabs, workspace selection, dashboard, case list, and the open mobile menu. Screenshots use synthetic data.
+- Local browser tests ran on the Chromium 153 headless shell after the Playwright Chromium download returned an invalid archive. The shell restricts network interface enumeration, so the local harness skips that startup-only lookup. Repository CI uses its standard Node 22 and Playwright installation.
+- The main Playwright suite passed 39 tests. Two optional screenshot regeneration tests were skipped by default. The daily-report and support suite passed all 3 tests.
+- Live technician session issuance remains an integration check for `feature/phase1-roles`. All checks in this report section ran on the local synthetic stack.
+
 ## Integration into main — 2026-11-05 — passed, not yet deployed
 
 PR #49 (`release/integrate-20261105`, head `e0f9e99`): published release `79f6585` + staff access recovery (#47). Conflicts only in CHANGELOG, PROGRESS and this report.

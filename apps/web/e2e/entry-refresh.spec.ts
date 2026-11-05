@@ -3,7 +3,7 @@ import {login} from './helpers';
 
 test('entry, permitted desk selection and folded filters stay usable on phone',async({page},info)=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/login');
- await expect(page.getByRole('heading',{name:'ورود به حساب کاری'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'خوش آمدید'})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('entry-login-mobile.png'),fullPage:true});
  await login(page,'qc');await expect(page).toHaveURL(/\/launch$/);

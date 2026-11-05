@@ -8,6 +8,11 @@
 - Parts are priced freely. A recorded payer approval is needed only when golden card or insurance pays and the outside price is above the assessment-approved price.
 - The technician card shows «قطعه آماده است؛ از انبار بگیرید» with the part names, and how many parts are still on the way.
 
+## [Unreleased] — navy and gold interface, 2026-11-05
+
+- The login, sidebar, dashboard and workspace selection use a navy-and-gold palette with clearer focus states and larger touch targets.
+- The login screen separates staff sign-in from technician sign-in. Staff keep their existing sign-in, recovery and phone-install flows. The technician tab accepts a four-digit PIN, including pasted Persian or English digits, and displays an availability message until the separate server endpoint is enabled.
+
 ## [Published] — assessment dispatch and working-day repair plans, 2026-11-05
 
 Application `79f6585` published after all six CI checks and restored-copy migration/data-preservation verification. Single/all assessment dispatch, duplicate-safe complete supplements, working-day intake and station shares are operational. Existing official approval history, outside-market quote controls, dates and user access are preserved. See [release record](docs/RELEASE_DISPATCH_DAYS_20261105.md).

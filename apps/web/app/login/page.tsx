@@ -1,13 +1,15 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { api, ApiError, errorMessage } from '@/lib/api';
-import type {Me} from '@manage/shared';
+import { toLatinDigits, toPersianDigits, type Me } from '@manage/shared';
 import {InstallButton} from '@/components/InstallApp';
 
-function LoginForm() {
+type LoginSubmission = { busy: boolean; setBusy: (busy: boolean) => void };
+
+function StaffLoginForm({ active, busy, setBusy }: LoginSubmission & { active: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const [username, setUsername] = useState('');
@@ -16,7 +18,6 @@ function LoginForm() {
   const [tenantCode, setTenantCode] = useState('');
   const [needTenant, setNeedTenant] = useState(false);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
   const [emailEnabled,setEmailEnabled] = useState(false);
   const [challenge,setChallenge] = useState<{challengeId:string;proof:string}|null>(null);
   const [code,setCode] = useState('');
@@ -24,6 +25,7 @@ function LoginForm() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -48,13 +50,13 @@ function LoginForm() {
   }
 
   return (
-    <form className="form" onSubmit={submit}>
-      <div>
-        <h1>{challenge ? 'تأیید ورود' : 'ورود به حساب کاری'}</h1>
-        <p className="muted small" style={{ margin: '6px 0 0' }}>
-          {challenge ? 'کد شش‌رقمی حساب Manage را از برنامهٔ Google Authenticator وارد کنید.' : emailEnabled ? 'با ایمیل کاری و رمز شخصی وارد شوید.' : 'با نام کاربری و رمز عبوری که مدیر سیستم به شما داده است وارد شوید.'}
-        </p>
-      </div>
+    <form className="form" method="post" onSubmit={submit}>
+      {challenge && (
+        <div>
+          <h2>تأیید ورود</h2>
+          <p className="muted small">کد شش‌رقمی حساب منیج را از برنامهٔ Google Authenticator وارد کنید.</p>
+        </div>
+      )}
       {!emailEnabled && needTenant && (
         <label className="field">
           <span>کد نمایندگی</span>
@@ -72,12 +74,13 @@ function LoginForm() {
           className="input ltr-input"
           name="username"
           type={emailEnabled?'email':'text'}
+          placeholder={emailEnabled ? 'name@dealer.ir' : undefined}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
-          autoFocus
+          autoFocus={active}
           required
         />
       </label>
@@ -102,14 +105,14 @@ function LoginForm() {
         </div>
         {emailEnabled && <Link className="small forgot-link" href="/reset-password">رمز را فراموش کرده‌اید؟</Link>}
       </div></>}
-      {challenge && <label className="field"><span>کد تأیید</span><input className="input ltr-input" name="code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value.replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)).replace(/\D/g,''))} maxLength={6} pattern="[0-9]{6}" required autoFocus /></label>}
+      {challenge && <label className="field"><span>کد تأیید</span><input className="input ltr-input" name="code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(toLatinDigits(e.target.value).replace(/\D/g,''))} maxLength={6} pattern="[0-9]{6}" required autoFocus={active} /></label>}
       {error && (
         <div className="callout callout-red" role="alert">
           {error}
         </div>
       )}
       <button className="btn btn-primary" type="submit" disabled={busy}>
-        {busy ? 'در حال ورود…' : challenge ? 'تأیید کد و ورود' : emailEnabled?'ادامه':'ورود'}
+        {busy ? 'در حال ورود…' : challenge ? 'تأیید کد و ورود' : 'ورود'}
       </button>
       {emailEnabled && !challenge && <p className="login-2fa"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>در مرحلهٔ بعد، کد Google Authenticator خواسته می‌شود.</p>}
       {challenge && <><p className="small muted">کد در برنامه هر ۳۰ ثانیه عوض می‌شود. اگر کد قبلی را استفاده کرده‌اید، منتظر کد تازه بمانید.</p><button className="btn" type="button" onClick={()=>{setChallenge(null);setCode('');setError('');}}>بازگشت به ایمیل و رمز</button></>}
@@ -118,20 +121,185 @@ function LoginForm() {
   );
 }
 
+const technicianUnavailable = 'ورود تعمیرکار به‌زودی فعال می‌شود؛ فعلاً از مسئول تصادفات کمک بگیرید.';
+const technicianErrors: Partial<Record<number, string>> = {
+  401: 'نام کاربری یا رمز اشتباه است.',
+  423: 'چند بار اشتباه وارد شد؛ ۱۵ دقیقه دیگر دوباره امتحان کنید.',
+  404: technicianUnavailable,
+  405: technicianUnavailable,
+};
+
+function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
+  const router = useRouter();
+  const [username, setUsername] = useState('');
+  const [digits, setDigits] = useState(['', '', '', '']);
+  const [error, setError] = useState('');
+  const inputs = useRef<Array<HTMLInputElement | null>>([]);
+  const pin = digits.join('');
+
+  function updateDigit(index: number, digit: string) {
+    setDigits(previous => previous.map((value, position) => position === index ? digit : value));
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !username.trim() || pin.length !== 4) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('/auth/technician-login', { body: { username: username.trim(), pin } });
+      router.replace('/workshop/technician');
+    } catch (err) {
+      setError((err instanceof ApiError && technicianErrors[err.status]) || errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="form" method="post" onSubmit={submit}>
+      <label className="field">
+        <span>نام کاربری</span>
+        <input
+          className="input ltr-input"
+          name="username"
+          value={username}
+          placeholder="safkar2"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          onChange={event => setUsername(event.target.value)}
+          required
+        />
+      </label>
+      <fieldset className="login-pin">
+        <legend>رمز ۴ رقمی</legend>
+        <div className="login-pin-grid" dir="ltr">
+          {digits.map((digit, index) => (
+            <input
+              key={index}
+              ref={input => { inputs.current[index] = input; }}
+              className="input"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={1}
+              aria-label={`رقم ${toPersianDigits(index + 1)} رمز`}
+              value={toPersianDigits(digit)}
+              onFocus={event => event.currentTarget.select()}
+              onChange={event => {
+                const next = toLatinDigits(event.target.value);
+                if (!/^[0-9]?$/.test(next)) return;
+                updateDigit(index, next);
+                if (next) inputs.current[index + 1]?.focus();
+              }}
+              onKeyDown={event => {
+                if (event.key === 'Backspace' && !digit && index > 0) {
+                  event.preventDefault();
+                  updateDigit(index - 1, '');
+                  inputs.current[index - 1]?.focus();
+                }
+              }}
+              onPaste={event => {
+                event.preventDefault();
+                const pasted = toLatinDigits(event.clipboardData.getData('text').trim());
+                if (/^[0-9]{4}$/.test(pasted)) {
+                  setDigits(pasted.split(''));
+                  inputs.current[3]?.focus();
+                }
+              }}
+              required
+            />
+          ))}
+        </div>
+      </fieldset>
+      {error && <div className="callout callout-red" role="alert">{error}</div>}
+      <button className="btn btn-primary" type="submit" disabled={busy}>
+        {busy ? 'در حال ورود…' : 'ورود به کارتابل'}
+      </button>
+      <p className="login-help muted small">رمز را فراموش کرده‌اید؟ به مسئول تصادفات بگویید تا تازه‌اش کند.</p>
+    </form>
+  );
+}
+
+const loginModes = [
+  { id: 'staff', label: 'کارکنان' },
+  { id: 'technician', label: 'تعمیرکار' },
+] as const;
+
+function LoginPanels() {
+  const params = useSearchParams();
+  const [mode, setMode] = useState(params.get('mode') === 'technician' ? 'technician' : 'staff');
+  const [busy, setBusy] = useState(false);
+  const tabs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  function handleTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (busy) return;
+    let next: number;
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'ArrowRight': next = 1 - index; break;
+      case 'Home': next = 0; break;
+      case 'End': next = loginModes.length - 1; break;
+      default: return;
+    }
+    event.preventDefault();
+    setMode(loginModes[next]!.id);
+    tabs.current[next]?.focus();
+  }
+
+  return (
+    <div className="entry-login-body">
+      <header className="entry-login-heading">
+        <h1>خوش آمدید</h1>
+        <p className="muted">برای شروع کار امروز وارد شوید.</p>
+      </header>
+      <div className="login-tabs" role="tablist" aria-label="نوع ورود">
+        {loginModes.map(({ id, label }, index) => (
+          <button
+            key={id}
+            ref={tab => { tabs.current[index] = tab; }}
+            id={`login-tab-${id}`}
+            type="button"
+            role="tab"
+            tabIndex={mode === id ? 0 : -1}
+            aria-selected={mode === id}
+            aria-controls={`login-panel-${id}`}
+            aria-disabled={busy && mode !== id}
+            onClick={() => { if (!busy) setMode(id); }}
+            onKeyDown={event => handleTabKey(event, index)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div id="login-panel-staff" role="tabpanel" aria-labelledby="login-tab-staff" hidden={mode !== 'staff'}>
+        <StaffLoginForm active={mode === 'staff'} busy={busy} setBusy={setBusy} />
+      </div>
+      <div id="login-panel-technician" role="tabpanel" aria-labelledby="login-tab-technician" hidden={mode !== 'technician'}>
+        {mode === 'technician' && <TechnicianLoginForm busy={busy} setBusy={setBusy} />}
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
     <main className="login entry-login">
       <div className="side">
-        <img src="/brand/manage-logo-dark.svg" alt="Manage by HEDAX" width={190} height={48} />
+        <span className="brand-lockup" role="img" aria-label="Manage by HEDAX">
+          <img src="/brand/manage-wordmark-dark.svg" alt="" width={124} height={30} />
+          <span className="brand-by" aria-hidden="true">by HEDAX</span>
+        </span>
         <div className="entry-story">
-          <div className="claim">از پذیرش<br/>تا تحویل،<br/>با دید روشن.</div>
-          <p>سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو</p>
-          <ol className="entry-route"><li><b>01</b>پذیرش و کارشناسی</li><li><b>02</b>تأمین و تعمیر</li><li><b>03</b>کنترل و تحویل</li></ol>
+          <span className="entry-line" aria-hidden="true" />
+          <div className="claim">هر خودرو،<br /> یک مسیر روشن.</div>
+          <p>منیج پیگیری می‌کند، شما تصمیم می‌گیرید.</p>
+          <p className="entry-description">سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو</p>
         </div>
-        <p className="entry-signature"><span>محصولی از هداکس</span><span className="entry-signature-mark">HEDAX</span></p>
+        <p className="entry-signature"><span>نمایندگی ۱۳۰۷ ایران‌خودرو حسینی · قم</span><span>محصولی از هداکس</span></p>
       </div>
       <Suspense>
-        <LoginForm />
+        <LoginPanels />
       </Suspense>
     </main>
   );
