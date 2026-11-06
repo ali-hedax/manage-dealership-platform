@@ -120,6 +120,13 @@
       "when": 1793905270318,
       "tag": "0016_natural_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793914219304,
+      "tag": "0017_parts_workbench",
+      "breakpoints": true
     }
   ]
 }

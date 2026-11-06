@@ -23,7 +23,8 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, departments, partRequests, partQuotes, users } from '../db/schema';
+import { assessmentItems, assessments, blockers, departments, partRequests, partQuotes, stockReservations, users } from '../db/schema';
+import { StockService } from '../daily-reports/stock.service';
 import { FinanceService, PURCHASE_SOURCES } from '../finance/finance.service';
 import { readFirstSheet, XlsxError } from './xlsx';
 
@@ -70,6 +71,7 @@ export class PartsService {
     private readonly cases: CasesService,
     private readonly blockers: BlockersService,
     private readonly finance: FinanceService,
+    private readonly stock: StockService,
   ) {}
 
   private get db() {
@@ -158,97 +160,122 @@ export class PartsService {
   }
 
   async act(actor: Actor, id: string, input: PartActionInput): Promise<Part> {
-    const tenantId = actor.user.tenantId;
     const at = input.at ? new Date(input.at) : new Date();
     assertNotFuture(at, 'زمان ثبت‌شده نمی‌تواند در آینده باشد');
-    await this.db.transaction(async (tx) => {
-      const p = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
-      let patch: Partial<PartRow> = {};
-      let action = `part.${input.action}`;
-      let before: Record<string, unknown> | null = null;
-
-      switch (input.action) {
-        case 'check_stock':
-          if (p.status !== 'needed') throw invalidTransition(p.status);
-          patch = { inStock: input.inStock!, stockCheckedAt: at };
-          action = 'part.stock_checked';
-          break;
-        case 'reserve':
-          if (p.status !== 'needed') throw invalidTransition(p.status);
-          if (p.inStock !== true) {
-            throw badRequest('NOT_IN_STOCK', 'رزرو فقط پس از ثبت موجودی در انبار ممکن است');
-          }
-          patch = { status: 'reserved', source: 'stock', reservedAt: at };
-          action = 'part.reserved';
-          break;
-        case 'order':
-          patch = await this.orderPatch(tx, tenantId, p, input, at);
-          action = 'part.ordered';
-          break;
-        case 'update_eta':
-          if (p.status !== 'ordered') throw invalidTransition(p.status);
-          before = { etaAt: iso(p.etaAt) };
-          patch = { etaAt: new Date(input.etaAt!) };
-          action = 'part.eta_changed';
-          break;
-        case 'receive':
-          if (p.status !== 'ordered') throw invalidTransition(p.status);
-          if (p.orderedAt && at.getTime() < p.orderedAt.getTime() - MINUTE_TOLERANCE_MS) {
-            throw badRequest('INVALID_TIME', 'زمان رسید نمی‌تواند قبل از سفارش باشد');
-          }
-          patch = {
-            status: input.inspection === 'ok' ? 'received' : 'rejected',
-            receivedAt: at,
-            receiptDocNo: input.receiptDocNo ?? null,
-            inspection: input.inspection!,
-            inspectionNote: input.note ?? null,
-          };
-          action = input.inspection === 'ok' ? 'part.received' : 'part.rejected';
-          break;
-        case 'hand_over':
-          if (p.status !== 'received' && p.status !== 'reserved') throw invalidTransition(p.status);
-          if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
-          patch = {
-            status: 'handed_over',
-            handedOverAt: at,
-            handedOverDepartmentId: input.departmentId ?? null,
-            recipientName: input.recipientName!,
-          };
-          action = 'part.handed_over';
-          break;
-        case 'cancel':
-          if (p.status === 'handed_over' || p.status === 'cancelled') throw invalidTransition(p.status);
-          patch = { status: 'cancelled', cancelledAt: at, cancelReason: input.note! };
-          action = 'part.cancelled';
-          break;
-      }
-
-      const saved = await this.save(tx, p, patch);
-      const after: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(patch)) after[k] = v instanceof Date ? v.toISOString() : v;
-      await this.audit.record(tx, actor, {
-        entityType: 'part',
-        entityId: p.id,
-        caseId: p.caseId,
-        action,
-        reason: input.note ?? null,
-        occurredAt: at,
-        before: before ?? { status: p.status },
-        after: { description: p.description, ...after },
-        snapshot: { version: saved.version, row: saved },
-      });
-
-      if (input.action === 'hand_over') {
-        const waiting = await tx
-          .select()
-          .from(blockers)
-          .where(and(eq(blockers.partRequestId, p.id), isNull(blockers.resolvedAt)));
-        for (const b of waiting) {
-          await this.blockers.closeAndRelease(tx, actor, b, at, `تحویل قطعه «${p.description}» به واحد تعمیر`);
-        }
-      }
-    });
+    await this.db.transaction((tx) => this.actIn(tx, actor, id, input, at));
     return this.get(actor, id);
+  }
+
+  async actIn(tx: DbOrTx, actor: Actor, id: string, input: PartActionInput, at = new Date(), receivedByTechnician = false) {
+    const tenantId = actor.user.tenantId;
+    const p = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
+    let patch: Partial<PartRow> = {};
+    let action = `part.${input.action}`;
+    let before: Record<string, unknown> | null = null;
+
+    switch (input.action) {
+      case 'check_stock':
+        if (p.status !== 'needed') throw invalidTransition(p.status);
+        patch = { inStock: input.inStock!, stockCheckedAt: at };
+        action = 'part.stock_checked';
+        break;
+      case 'reserve':
+        if (p.status !== 'needed') throw invalidTransition(p.status);
+        if (p.inStock !== true) {
+          throw badRequest('NOT_IN_STOCK', 'رزرو فقط پس از ثبت موجودی در انبار ممکن است');
+        }
+        patch = { status: 'reserved', source: 'stock', reservedAt: at };
+        action = 'part.reserved';
+        break;
+      case 'order':
+        patch = await this.orderPatch(tx, tenantId, p, input, at);
+        action = 'part.ordered';
+        break;
+      case 'update_eta':
+        if (p.status !== 'ordered') throw invalidTransition(p.status);
+        before = { etaAt: iso(p.etaAt) };
+        patch = { etaAt: new Date(input.etaAt!) };
+        action = 'part.eta_changed';
+        break;
+      case 'receive':
+        if (p.status !== 'ordered') throw invalidTransition(p.status);
+        if (p.orderedAt && at.getTime() < p.orderedAt.getTime() - MINUTE_TOLERANCE_MS) {
+          throw badRequest('INVALID_TIME', 'زمان رسید نمی‌تواند قبل از سفارش باشد');
+        }
+        patch = {
+          status: input.inspection === 'ok' ? 'received' : 'rejected',
+          receivedAt: at,
+          receiptDocNo: input.receiptDocNo ?? null,
+          inspection: input.inspection!,
+          inspectionNote: input.note ?? null,
+        };
+        action = input.inspection === 'ok' ? 'part.received' : 'part.rejected';
+        break;
+      case 'hand_over': {
+        if (p.status !== 'received' && p.status !== 'reserved') throw invalidTransition(p.status);
+        if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
+        const salePriceRial = input.salePriceRial ?? p.salePriceRial ?? p.unitPriceRial;
+        if (salePriceRial === null) throw badRequest('PART_SALE_PRICE_REQUIRED', 'قیمت فروش این قطعه را وارد کنید');
+        const reservations = await tx.select().from(stockReservations).where(and(
+          eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, id), eq(stockReservations.status, 'reserved'),
+        )).orderBy(asc(stockReservations.id));
+        for (const r of reservations) {
+          await this.stock.actIn(tx, actor, r.id, { action: 'issue', expectedVersion: r.version }, receivedByTechnician);
+        }
+        patch = {
+          salePriceRial,
+          handedOverBy: actor.user.id,
+          status: 'handed_over',
+          handedOverAt: at,
+          handedOverDepartmentId: input.departmentId ?? null,
+          recipientName: input.recipientName!,
+        };
+        action = receivedByTechnician ? 'part.picked_up' : 'part.handed_over';
+        break;
+      }
+      case 'cancel': {
+        if (p.status === 'handed_over' || p.status === 'cancelled') throw invalidTransition(p.status);
+        const reservations = await tx.select().from(stockReservations).where(and(
+          eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, id), eq(stockReservations.status, 'reserved'),
+        )).orderBy(asc(stockReservations.id));
+        for (const r of reservations) {
+          await this.stock.actIn(tx, actor, r.id, { action: 'release', expectedVersion: r.version, reason: input.note! });
+        }
+        patch = { status: 'cancelled', cancelledAt: at, cancelReason: input.note! };
+        action = 'part.cancelled';
+        break;
+      }
+    }
+
+    if (input.salePriceRial !== undefined) patch.salePriceRial = input.salePriceRial;
+    if (input.action === 'order' && patch.unitPriceRial != null && input.salePriceRial === undefined) {
+      patch.salePriceRial = patch.unitPriceRial;
+    }
+    const saved = await this.save(tx, p, patch);
+    const after: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patch)) after[k] = v instanceof Date ? v.toISOString() : v;
+    await this.audit.record(tx, actor, {
+      entityType: 'part',
+      entityId: p.id,
+      caseId: p.caseId,
+      action,
+      reason: input.note ?? null,
+      occurredAt: at,
+      before: before ?? { status: p.status },
+      after: { description: p.description, ...after },
+      snapshot: { version: saved.version, row: saved },
+    });
+
+    if (input.action === 'hand_over') {
+      const waiting = await tx
+        .select()
+        .from(blockers)
+        .where(and(eq(blockers.tenantId, tenantId), eq(blockers.partRequestId, p.id), isNull(blockers.resolvedAt)));
+      for (const b of waiting) {
+        await this.blockers.closeAndRelease(tx, actor, b, at, `تحویل قطعه «${p.description}» به واحد تعمیر`);
+      }
+    }
+    return saved;
   }
 
   // ----------------------------------------------------------------- queries
@@ -287,6 +314,7 @@ export class PartsService {
       reservedAt: iso(p.reservedAt),
       approvedUnitPriceRial: p.approvedUnitPriceRial,
       unitPriceRial: p.unitPriceRial,
+      salePriceRial: p.salePriceRial,
       priceApprovalRef: p.priceApprovalRef,
       priceApprovedBy: p.priceApprovedBy,
       supplier: p.supplier,

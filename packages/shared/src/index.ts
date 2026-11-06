@@ -13,3 +13,5 @@ export * from './workshop';
 
 export * from './iran-holidays';
 export * from './assessment-dispatch';
+
+export * from './parts-workbench';

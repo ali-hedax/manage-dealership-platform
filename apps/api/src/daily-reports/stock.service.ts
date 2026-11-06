@@ -167,6 +167,50 @@ export class StockService {
     };
   }
 
+  /** Match only exact full codes or an unambiguous eligible location for a base code. */
+  async exactOptions(actor: Actor, partNumbers: string[], tx: DbOrTx = this.db, includeUnavailable = false) {
+    const out = new Map<string, {
+      snapshotId: string; fullStockCode: string; locationAddress: string;
+      available: string; salePrice: string | null; currency: string | null;
+    }[]>();
+    if (!partNumbers.length) return out;
+    this.needPermission(actor, 'stock.read');
+    const tenantId = actor.user.tenantId;
+    const snap = await this.active(tx, tenantId);
+    if (!snap || !snapshotInfo(snap).reservable) return out;
+    const byCode = new Map<string, string[]>();
+    for (const raw of partNumbers) {
+      const code = toLatinDigits(raw).replace(/\s+/g, '').toUpperCase();
+      if (!/^[0-9A-Z]+$/.test(code)) continue;
+      byCode.set(code, [...(byCode.get(code) ?? []), raw]);
+    }
+    const codes = [...byCode.keys()];
+    const base = sql<string>`coalesce(${stockSnapshotItems.basePartNumber}, ${stockCodeAliases.basePartNumber})`;
+    const commitments = this.commitments(tx, tenantId);
+    for (let i = 0; i < codes.length; i += 500) {
+      const batch = codes.slice(i, i + 500);
+      const rows = await tx.select({
+        fullStockCode: stockSnapshotItems.fullStockCode, locationAddress: stockSnapshotItems.locationAddress,
+        salePrice: stockSnapshotItems.salePrice, base,
+        available: sql<string>`(${stockSnapshotItems.quantity} - coalesce(${commitments.reserved}, 0) - coalesce(${commitments.issued}, 0))::text`,
+      }).from(stockSnapshotItems)
+        .leftJoin(stockCodeAliases, and(eq(stockCodeAliases.tenantId, tenantId), eq(stockCodeAliases.fullStockCode, stockSnapshotItems.fullStockCode)))
+        .leftJoin(commitments, and(eq(commitments.code, stockSnapshotItems.fullStockCode), eq(commitments.loc, stockSnapshotItems.locationAddress)))
+        .where(and(eq(stockSnapshotItems.tenantId, tenantId), eq(stockSnapshotItems.snapshotId, snap.id),
+          sql`(${inArray(stockSnapshotItems.fullStockCode, batch)} or ${inArray(base, batch)})`));
+      for (const row of rows) {
+        if (!includeUnavailable && Number(row.available) <= 0) continue;
+        const match = new Set([...(byCode.get(row.fullStockCode) ?? []), ...(byCode.get(row.base) ?? [])]);
+        for (const raw of match) {
+          const { fullStockCode, locationAddress, salePrice, available } = row;
+          const option = { snapshotId: snap.id, fullStockCode, locationAddress, salePrice, available, currency: snap.currency };
+          out.set(raw, [...(out.get(raw) ?? []), option]);
+        }
+      }
+    }
+    return out;
+  }
+
   /** Exact decimal subtraction in the database (no float). */
   private async available(tx: DbOrTx, rows: { quantity: string; reserved: string; issued: string }[]): Promise<string[]> {
     if (!rows.length) return [];
@@ -183,124 +227,129 @@ export class StockService {
   }
 
   async reserve(actor: Actor, input: ReserveInput): Promise<StockReservation> {
-    this.needPermission(actor, 'stock.reserve');
-    const tenantId = actor.user.tenantId;
-    const id = newId();
-    await this.db.transaction(async (tx) => {
-      const [need] = await tx
-        .select()
-        .from(partRequests)
-        .where(and(eq(partRequests.id, input.partRequestId), eq(partRequests.tenantId, tenantId)))
-        .for('update');
-      if (!need) throw notFound('نیاز قطعه');
-      if (['cancelled', 'handed_over'].includes(need.status)) throw badRequest('PART_NOT_OPEN', 'این نیاز قطعه لغو یا تحویل شده است');
-      const [kase] = await tx.select({ id: cases.id, stage: cases.stage, status: cases.status }).from(cases).where(and(eq(cases.id, need.caseId), eq(cases.tenantId, tenantId)));
-      if (!kase || kase.stage === 'delivered' || kase.status !== 'open') throw badRequest('CASE_NOT_OPEN', 'پرونده باز نیست؛ رزرو ثبت نشد');
-      // Serializes every reservation of the same code and location, across requests and workers.
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`stock:${tenantId}:${input.fullStockCode}:${input.locationAddress}`}))`);
-      const snap = await this.active(tx, tenantId);
-      if (!snap) throw badRequest('NO_STOCK_REPORT', 'گزارش موجودی ثبت نشده است');
-      if (snap.id !== input.snapshotId) throw conflict('STOCK_REPORT_CHANGED', 'گزارش موجودی تازه‌تری ثبت شده است؛ گزینه‌ها را دوباره ببینید و انتخاب کنید');
-      if (!snapshotInfo(snap).reservable) throw badRequest('STOCK_NOT_CONFIRMED', 'دامنه انبار، کامل‌بودن گزارش و معنای ستون موجودی هنوز توسط مالک تأیید نشده است؛ رزرو فعال نیست');
-      const [item] = await tx
-        .select()
-        .from(stockSnapshotItems)
-        .where(and(eq(stockSnapshotItems.snapshotId, snap.id), eq(stockSnapshotItems.fullStockCode, input.fullStockCode), eq(stockSnapshotItems.locationAddress, input.locationAddress)));
-      if (!item) throw notFound('این کد کامل در این محل در گزارش فعال');
-      const sums = (await tx.execute(sql`
-        select
-          (${need.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where part_request_id = ${need.id} and status in ('reserved','issued')), 0))::text as need_left,
-          (${item.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where tenant_id = ${tenantId} and full_stock_code = ${item.fullStockCode} and location_address = ${item.locationAddress} and (status = 'reserved' or (status = 'issued' and reflected_at is null))), 0))::text as stock_left,
-          (${input.quantity}::numeric > ${need.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where part_request_id = ${need.id} and status in ('reserved','issued')), 0)) as over_need,
-          (${input.quantity}::numeric > ${item.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where tenant_id = ${tenantId} and full_stock_code = ${item.fullStockCode} and location_address = ${item.locationAddress} and (status = 'reserved' or (status = 'issued' and reflected_at is null))), 0)) as over_stock
-      `)) as unknown as { rows: { need_left: string; stock_left: string; over_need: boolean; over_stock: boolean }[] };
-      const s = sums.rows[0]!;
-      if (s.over_need) throw badRequest('OVER_NEED', `مقدار بیشتر از باقی‌مانده نیاز است (باقی‌مانده: ${dec(s.need_left)})`, { needLeft: dec(s.need_left) });
-      if (s.over_stock) throw conflict('INSUFFICIENT_STOCK', `موجودی قابل رزرو کافی نیست (قابل رزرو: ${dec(s.stock_left)})`, { available: dec(s.stock_left) });
-      await tx.insert(stockReservations).values({
-        id,
-        tenantId,
-        caseId: need.caseId,
-        partRequestId: need.id,
-        fullStockCode: item.fullStockCode,
-        locationAddress: item.locationAddress,
-        quantity: input.quantity,
-        snapshotId: snap.id,
-        unitSalePrice: item.salePrice,
-        unitAvgPrice: item.avgPrice,
-        currency: snap.currency,
-        reservedBy: actor.user.id,
-        isTest: actor.user.isTestTenant,
-      });
-      await this.audit.record(tx, actor, {
-        entityType: 'part',
-        entityId: need.id,
-        caseId: need.caseId,
-        action: 'stock.reserved',
-        after: { reservationId: id, fullStockCode: item.fullStockCode, locationAddress: item.locationAddress, quantity: input.quantity, snapshotId: snap.id, unitSalePrice: item.salePrice, currency: snap.currency },
-        snapshot: { version: 1, row: { id, partRequestId: need.id, fullStockCode: item.fullStockCode, quantity: input.quantity, status: 'reserved' } },
-      });
-    });
+    const id = await this.db.transaction((tx) => this.reserveIn(tx, actor, input));
     return (await this.reservations(actor, { ids: [id] }))[0]!;
   }
 
-  async act(actor: Actor, id: string, input: ReservationActionInput): Promise<StockReservation> {
-    this.needPermission(actor, input.action === 'release' || input.action === 'cancel' ? 'stock.release' : 'stock.issue');
+  async reserveIn(tx: DbOrTx, actor: Actor, input: ReserveInput): Promise<string> {
+    this.needPermission(actor, 'stock.reserve');
     const tenantId = actor.user.tenantId;
-    await this.db.transaction(async (tx) => {
-      const [r] = await tx
-        .select()
-        .from(stockReservations)
-        .where(and(eq(stockReservations.id, id), eq(stockReservations.tenantId, tenantId)))
-        .for('update');
-      if (!r) throw notFound('رزرو');
-      if (r.version !== input.expectedVersion) throw versionConflict(r.version);
-      const now = new Date();
-      const invalid = () => conflict('INVALID_RESERVATION_STEP', 'این اقدام در وضعیت فعلی رزرو ممکن نیست');
-      let patch: Partial<Reservation>;
-      switch (input.action) {
-        case 'issue':
-          if (r.status !== 'reserved') throw invalid();
-          patch = { status: 'issued', issuedAt: now, issuedBy: actor.user.id };
-          break;
-        case 'release':
-          if (r.status !== 'reserved') throw invalid();
-          patch = { status: 'released', closedAt: now, closedBy: actor.user.id, reason: input.reason! };
-          break;
-        case 'cancel':
-          // Undoes an issue recorded by mistake, only before the report reflects it.
-          if (r.status !== 'issued' || r.reflectedAt) throw invalid();
-          patch = { status: 'cancelled', closedAt: now, closedBy: actor.user.id, reason: input.reason! };
-          break;
-        case 'reflect': {
-          if (r.status !== 'issued' || r.reflectedAt) throw invalid();
-          const snap = await this.active(tx, tenantId);
-          // Only a report taken after the issue can contain it.
-          if (!snap || !r.issuedAt || snap.reportedAt.getTime() <= r.issuedAt.getTime()) {
-            throw badRequest('REPORT_BEFORE_ISSUE', 'گزارش فعال قبل از خروج تهیه شده است؛ پس از ورود گزارش بعدی تأیید کنید');
-          }
-          patch = { reflectedAt: now, reflectedBy: actor.user.id, reflectedSnapshotId: snap.id, reason: input.reason ?? r.reason };
-          break;
-        }
-      }
-      const [row] = await tx
-        .update(stockReservations)
-        .set({ ...patch, updatedAt: now, version: r.version + 1 })
-        .where(and(eq(stockReservations.id, id), eq(stockReservations.version, r.version)))
-        .returning();
-      if (!row) throw versionConflict();
-      await this.audit.record(tx, actor, {
-        entityType: 'part',
-        entityId: r.partRequestId,
-        caseId: r.caseId,
-        action: `stock.${input.action === 'reflect' ? 'reflected' : input.action === 'issue' ? 'issued' : input.action === 'release' ? 'released' : 'issue_cancelled'}`,
-        reason: input.reason ?? null,
-        before: { reservationId: id, status: r.status, reflectedAt: r.reflectedAt?.toISOString() ?? null },
-        after: { reservationId: id, status: row.status, reflectedAt: row.reflectedAt?.toISOString() ?? null },
-        snapshot: { version: row.version, row: { id, status: row.status } },
-      });
+    const id = newId();
+    const [need] = await tx
+      .select()
+      .from(partRequests)
+      .where(and(eq(partRequests.id, input.partRequestId), eq(partRequests.tenantId, tenantId)))
+      .for('update');
+    if (!need) throw notFound('نیاز قطعه');
+    if (['cancelled', 'handed_over'].includes(need.status)) throw badRequest('PART_NOT_OPEN', 'این نیاز قطعه لغو یا تحویل شده است');
+    const [kase] = await tx.select({ id: cases.id, stage: cases.stage, status: cases.status }).from(cases).where(and(eq(cases.id, need.caseId), eq(cases.tenantId, tenantId)));
+    if (!kase || kase.stage === 'delivered' || kase.status !== 'open') throw badRequest('CASE_NOT_OPEN', 'پرونده باز نیست؛ رزرو ثبت نشد');
+    // Serializes every reservation of the same code and location, across requests and workers.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`stock:${tenantId}:${input.fullStockCode}:${input.locationAddress}`}))`);
+    const snap = await this.active(tx, tenantId);
+    if (!snap) throw badRequest('NO_STOCK_REPORT', 'گزارش موجودی ثبت نشده است');
+    if (snap.id !== input.snapshotId) throw conflict('STOCK_REPORT_CHANGED', 'گزارش موجودی تازه‌تری ثبت شده است؛ گزینه‌ها را دوباره ببینید و انتخاب کنید');
+    if (!snapshotInfo(snap).reservable) throw badRequest('STOCK_NOT_CONFIRMED', 'دامنه انبار، کامل‌بودن گزارش و معنای ستون موجودی هنوز توسط مالک تأیید نشده است؛ رزرو فعال نیست');
+    const [item] = await tx
+      .select()
+      .from(stockSnapshotItems)
+      .where(and(eq(stockSnapshotItems.snapshotId, snap.id), eq(stockSnapshotItems.tenantId, tenantId), eq(stockSnapshotItems.fullStockCode, input.fullStockCode), eq(stockSnapshotItems.locationAddress, input.locationAddress)));
+    if (!item) throw notFound('این کد کامل در این محل در گزارش فعال');
+    const sums = (await tx.execute(sql`
+      select
+        (${need.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where part_request_id = ${need.id} and status in ('reserved','issued')), 0))::text as need_left,
+        (${item.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where tenant_id = ${tenantId} and full_stock_code = ${item.fullStockCode} and location_address = ${item.locationAddress} and (status = 'reserved' or (status = 'issued' and reflected_at is null))), 0))::text as stock_left,
+        (${input.quantity}::numeric > ${need.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where part_request_id = ${need.id} and status in ('reserved','issued')), 0)) as over_need,
+        (${input.quantity}::numeric > ${item.quantity}::numeric - coalesce((select sum(quantity) from stock_reservations where tenant_id = ${tenantId} and full_stock_code = ${item.fullStockCode} and location_address = ${item.locationAddress} and (status = 'reserved' or (status = 'issued' and reflected_at is null))), 0)) as over_stock
+    `)) as unknown as { rows: { need_left: string; stock_left: string; over_need: boolean; over_stock: boolean }[] };
+    const s = sums.rows[0]!;
+    if (s.over_need) throw badRequest('OVER_NEED', `مقدار بیشتر از باقی‌مانده نیاز است (باقی‌مانده: ${dec(s.need_left)})`, { needLeft: dec(s.need_left) });
+    if (s.over_stock) throw conflict('INSUFFICIENT_STOCK', `موجودی قابل رزرو کافی نیست (قابل رزرو: ${dec(s.stock_left)})`, { available: dec(s.stock_left) });
+    await tx.insert(stockReservations).values({
+      id,
+      tenantId,
+      caseId: need.caseId,
+      partRequestId: need.id,
+      fullStockCode: item.fullStockCode,
+      locationAddress: item.locationAddress,
+      quantity: input.quantity,
+      snapshotId: snap.id,
+      unitSalePrice: item.salePrice,
+      unitAvgPrice: item.avgPrice,
+      currency: snap.currency,
+      reservedBy: actor.user.id,
+      isTest: actor.user.isTestTenant,
     });
+    await this.audit.record(tx, actor, {
+      entityType: 'part',
+      entityId: need.id,
+      caseId: need.caseId,
+      action: 'stock.reserved',
+      after: { reservationId: id, fullStockCode: item.fullStockCode, locationAddress: item.locationAddress, quantity: input.quantity, snapshotId: snap.id, unitSalePrice: item.salePrice, currency: snap.currency },
+      snapshot: { version: 1, row: { id, partRequestId: need.id, fullStockCode: item.fullStockCode, quantity: input.quantity, status: 'reserved' } },
+    });
+    return id;
+  }
+
+  async act(actor: Actor, id: string, input: ReservationActionInput): Promise<StockReservation> {
+    await this.db.transaction((tx) => this.actIn(tx, actor, id, input));
     return (await this.reservations(actor, { ids: [id] }))[0]!;
+  }
+
+  async actIn(tx: DbOrTx, actor: Actor, id: string, input: ReservationActionInput, assignedTechnicianPickup = false): Promise<void> {
+    if (!assignedTechnicianPickup || input.action !== 'issue') this.needPermission(actor, input.action === 'release' || input.action === 'cancel' ? 'stock.release' : 'stock.issue');
+    const tenantId = actor.user.tenantId;
+    const [r] = await tx
+      .select()
+      .from(stockReservations)
+      .where(and(eq(stockReservations.id, id), eq(stockReservations.tenantId, tenantId)))
+      .for('update');
+    if (!r) throw notFound('رزرو');
+    if (r.version !== input.expectedVersion) throw versionConflict(r.version);
+    const now = new Date();
+    const invalid = () => conflict('INVALID_RESERVATION_STEP', 'این اقدام در وضعیت فعلی رزرو ممکن نیست');
+    let patch: Partial<Reservation>;
+    switch (input.action) {
+      case 'issue':
+        if (r.status !== 'reserved') throw invalid();
+        patch = { status: 'issued', issuedAt: now, issuedBy: actor.user.id };
+        break;
+      case 'release':
+        if (r.status !== 'reserved') throw invalid();
+        patch = { status: 'released', closedAt: now, closedBy: actor.user.id, reason: input.reason! };
+        break;
+      case 'cancel':
+        // Undoes an issue recorded by mistake, only before the report reflects it.
+        if (r.status !== 'issued' || r.reflectedAt) throw invalid();
+        patch = { status: 'cancelled', closedAt: now, closedBy: actor.user.id, reason: input.reason! };
+        break;
+      case 'reflect': {
+        if (r.status !== 'issued' || r.reflectedAt) throw invalid();
+        const snap = await this.active(tx, tenantId);
+        // Only a report taken after the issue can contain it.
+        if (!snap || !r.issuedAt || snap.reportedAt.getTime() <= r.issuedAt.getTime()) {
+          throw badRequest('REPORT_BEFORE_ISSUE', 'گزارش فعال قبل از خروج تهیه شده است؛ پس از ورود گزارش بعدی تأیید کنید');
+        }
+        patch = { reflectedAt: now, reflectedBy: actor.user.id, reflectedSnapshotId: snap.id, reason: input.reason ?? r.reason };
+        break;
+      }
+    }
+    const [row] = await tx
+      .update(stockReservations)
+      .set({ ...patch, updatedAt: now, version: r.version + 1 })
+      .where(and(eq(stockReservations.id, id), eq(stockReservations.version, r.version)))
+      .returning();
+    if (!row) throw versionConflict();
+    await this.audit.record(tx, actor, {
+      entityType: 'part',
+      entityId: r.partRequestId,
+      caseId: r.caseId,
+      action: `stock.${input.action === 'reflect' ? 'reflected' : input.action === 'issue' ? 'issued' : input.action === 'release' ? 'released' : 'issue_cancelled'}`,
+      reason: input.reason ?? null,
+      before: { reservationId: id, status: r.status, reflectedAt: r.reflectedAt?.toISOString() ?? null },
+      after: { reservationId: id, status: row.status, reflectedAt: row.reflectedAt?.toISOString() ?? null },
+      snapshot: { version: row.version, row: { id, status: row.status } },
+    });
   }
 
   async reservations(

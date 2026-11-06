@@ -13,6 +13,8 @@ import {AppIcon} from '@/components/AppIcon';
 import {WorkspaceLauncher} from '@/components/WorkspaceLauncher';
 import {DailyStatusPanel} from '@/components/DailyStatusPanel';
 import {WorkspaceActions} from '@/components/WorkspaceActions';
+import {PartsWorkbench} from '@/components/PartsWorkbench';
+import {PartsOperationNotices} from '@/components/PartsOperations';
 import {AlertsPanel} from '@/components/AlertsPanel';
 export default function AccidentWorkspace(){
  const {workspace}=useParams<{workspace?:string[]}>(),key=workspace?.[0]==='supervisor'?'expert':workspace?.[0];const {me,can}=useAuth();const w=WORKSPACES.find(x=>x.key===key),allowed=!!w&&workspaceVisible(w,me);
@@ -22,11 +24,13 @@ export default function AccidentWorkspace(){
  function search(e:FormEvent){e.preventDefault();setQuery(term.trim());setPage(1);}
  if(!key)return <div className="stack"><header className="unit-header"><span className="workspace-symbol"><AppIcon name="car"/></span><div><h1>واحد تصادفات</h1><p>میز کار خود را انتخاب کنید؛ هر میز، کارها و میان‌برهای مرتبط را یک‌جا نشان می‌دهد.</p></div></header><WorkspaceLauncher/></div>;
  if(!w||!allowed||workspace!.length!==1)return <div className="callout"><h1>این میز کار برای شما فعال نیست</h1><p>مالک می‌تواند دسترسی‌های شما را از بخش کارکنان تنظیم کند.</p><Link href="/accidents">بازگشت به واحد تصادفات</Link></div>;
- return <div className="stack"><div className="unit-breadcrumb"><Link href="/accidents">واحد تصادفات</Link><span aria-hidden="true"> / </span><span>{w.label}</span></div><header className="unit-header"><span className="workspace-symbol"><AppIcon name={w.icon}/></span><div><h1>میز کار {w.label}</h1><p className="muted">{w.description}</p></div></header>
+ const legacy = <div className="stack">
  {['parts','manager','owner','admin'].includes(w.key)&&<DailyStatusPanel/>}
- {w.key==='expert'&&<AlertsPanel/>}
+ {w.key==='expert'&&<><AlertsPanel/><PartsOperationNotices/></>}
  <WorkspaceActions workspace={w}/>
  {w.key==='owner'&&<details className="compact-disclosure panel"><summary>ورود به میزهای کار واحد</summary><div className="panel-body"><WorkspaceLauncher compact/></div></details>}
  {can('case.read')&&<section className="panel"><div className="panel-head"><div><h2>{w.queueLabel}</h2><p className="muted small">{data?`${faNum(data.total)} پرونده منطبق با این صف`:' '}؛ برای اقدام، پرونده را باز کنید.</p></div></div><div className="panel-body"><form onSubmit={search} className="workspace-search"><label className="field">جست‌وجو در همین صف<input className="input" value={term} maxLength={100} onChange={e=>setTerm(e.target.value)} placeholder="شماره منیج، پذیرش، پلاک یا شاسی"/></label><button type="submit" className="btn">جست‌وجو</button></form>{error&&<p role="alert">دریافت صف ناموفق بود؛ صفحه را تازه کنید.</p>}{isLoading&&<p role="status">در حال دریافت پرونده‌ها…</p>}{data&&<><div className="table-scroll"><table className="table"><thead><tr><th>پرونده و پذیرش</th><th>خودرو و مالک</th><th>مرحله</th></tr></thead><tbody>{data.items.map(c=><tr key={c.id}><td><Link href={`/cases/${c.id}${w.key==='finance'?'#case-finance':w.key==='parts'?'#case-parts':w.key==='quality'?'#case-quality':''}`}>{toPersianDigits(c.caseNumber)}</Link>{c.admissionNo?<div className="small">پذیرش: {toPersianDigits(c.admissionNo)}</div>:<div className="small muted">بدون شماره پذیرش</div>}</td><td>{c.vehicleSummary ?? c.vehicleLabel}<div className="small muted">{c.customerName||'نام ثبت نشده'}</div></td><td>{STAGE_LABELS[c.stage]}</td></tr>)}</tbody></table></div>{!data.total&&<p className="callout">در این صف پرونده‌ای وجود ندارد. این نتیجه فقط مربوط به فیلتر همین میز است؛ <Link href="/cases">همه پرونده‌ها</Link> را هم می‌توانید بررسی کنید.</p>}<div className="row"><button className="btn" disabled={page===1} onClick={()=>setPage(p=>p-1)}>صفحه قبل</button><span>صفحه {faNum(page)} از {faNum(Math.max(1,Math.ceil(data.total/25)))}</span><button className="btn" disabled={page*25>=data.total} onClick={()=>setPage(p=>p+1)}>صفحه بعد</button></div></>}</div></section>}
  </div>;
+ if (w.key === 'parts') return <div className="stack"><PartsWorkbench/><details className="panel compact-disclosure"><summary>همهٔ صف‌ها</summary><div className="panel-body">{legacy}</div></details></div>;
+ return <div className="stack"><div className="unit-breadcrumb"><Link href="/accidents">واحد تصادفات</Link><span aria-hidden="true"> / </span><span>{w.label}</span></div><header className="unit-header"><span className="workspace-symbol"><AppIcon name={w.icon}/></span><div><h1>میز کار {w.label}</h1><p className="muted">{w.description}</p></div></header>{legacy}</div>;
 }

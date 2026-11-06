@@ -93,6 +93,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   const [supplier, setSupplier] = useState('');
   const [orderRef, setOrderRef] = useState('');
   const [price, setPrice] = useState('');
+  const [salePrice, setSalePrice] = useState('');
   const [eta, setEta] = useState<string | null>(null);
   const [receiptDocNo, setReceiptDocNo] = useState('');
   const [inspection, setInspection] = useState<PartInspection>('ok');
@@ -120,6 +121,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       setSupplier(p.supplier ?? '');
       setOrderRef(p.orderRef ?? '');
       setPrice(p.unitPriceRial ? String(p.unitPriceRial) : p.approvedUnitPriceRial ? String(p.approvedUnitPriceRial) : '');
+      setSalePrice(p.salePriceRial === null && p.unitPriceRial === null ? '' : String(p.salePriceRial ?? p.unitPriceRial));
       setEta(p.etaAt);
       setReceiptDocNo('');
       setInspection('ok');
@@ -190,7 +192,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
     }
     if (action === 'update_eta') body.etaAt = eta;
     if (action === 'receive') Object.assign(body, { receiptDocNo: receiptDocNo || null, inspection });
-    if (action === 'hand_over') Object.assign(body, { departmentId: departmentId || null, recipientName: recipient });
+    if (action === 'hand_over') Object.assign(body, { departmentId: departmentId || null, recipientName: recipient, salePriceRial: parseAmount(salePrice) ?? undefined });
     await run(() => api(`/parts/${part.id}/actions`, { body }), `${ACTION_TITLES[action]} ثبت شد`);
   }
 
@@ -224,7 +226,7 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
       case 'receive':
         return inspection === 'ok' || !!note.trim();
       case 'hand_over':
-        return !!recipient.trim();
+        return !!recipient.trim() && !!salePrice.trim();
       case 'cancel':
         return !!note.trim();
       default:
@@ -519,6 +521,10 @@ export function PartsPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
                 <label className="field">
                   <span>تحویل‌گیرنده *</span>
                   <input className="input" value={recipient} onChange={(e) => setRecipient(e.target.value)} />
+                </label>
+                <label className="field">
+                  <span>قیمت فروش (ریال) *</span>
+                  <input className="input ltr-input" inputMode="numeric" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} />
                 </label>
               </div>
             )}

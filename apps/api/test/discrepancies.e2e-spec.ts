@@ -52,7 +52,7 @@ describe('parts discrepancy queue', () => {
     let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'چراغ جلو آزمون', source: 'stock' })).body;
     p = await step(p, 'check_stock', { inStock: true });
     p = await step(p, 'reserve');
-    await step(p, 'hand_over', { departmentId: dept('body'), recipientName: 'تکنسین آزمون' });
+    await step(p, 'hand_over', { departmentId: dept('body'), salePriceRial: 1_500_000, recipientName: 'تکنسین آزمون' });
     // The unit still reports the part missing (case-level blocker, not linked to the part).
     expect((await supervisor.post(`/cases/${c.id}/blockers`, { reason: 'part_not_arrived', description: 'واحد می‌گوید چراغ نرسیده' })).status).toBe(201);
 

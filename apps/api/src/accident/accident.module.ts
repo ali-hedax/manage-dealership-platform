@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DailyReportsModule } from '../daily-reports/daily-reports.module';
 import { AlertsController } from '../alerts/alerts.controller';
 import { AlertsService } from '../alerts/alerts.service';
 import { WorkshopController } from '../workshop/workshop.controller';
@@ -14,7 +15,10 @@ import { CompletionService } from '../completion/completion.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { FinanceController } from '../finance/finance.controller';
 import { FinanceService } from '../finance/finance.service';
+import { PartsOperationsController } from '../parts/parts-operations.controller';
+import { PartsOperationsService } from '../parts/parts-operations.service';
 import { PartsController } from '../parts/parts.controller';
+import { PartsWorkbenchService } from '../parts/parts-workbench.service';
 import { PartsService } from '../parts/parts.service';
 import { DiscrepanciesController } from '../discrepancies/discrepancies.controller';
 import { DiscrepanciesService } from '../discrepancies/discrepancies.service';
@@ -32,6 +36,7 @@ import {
 
 /** Phase-1 module: accident repair cases, assessments, parts, finance gate, repair activities, blockers, QC and delivery, dashboard. */
 @Module({
+  imports: [DailyReportsModule],
   controllers: [
     AlertsController,
     WorkshopController,
@@ -42,6 +47,7 @@ import {
     DashboardController,
     AssessmentsController,
     PartsController,
+    PartsOperationsController,
     FinanceController,
     CompletionController,
     VehicleImportController,
@@ -58,6 +64,8 @@ import {
     DashboardService,
     AssessmentsService,
     PartsService,
+    PartsWorkbenchService,
+    PartsOperationsService,
     FinanceService,
     CompletionService,
     VehicleImportService,

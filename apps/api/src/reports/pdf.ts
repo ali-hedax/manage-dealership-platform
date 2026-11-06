@@ -257,3 +257,41 @@ export function renderReportPdf(r: ReportResult, dealership: string): Promise<Bu
 }
 
 export const __bidi = { tokens, visual };
+
+export function renderPersianListPdf(title: string, header: string[], sections: { title: string; rows: string[] }[]): Promise<Buffer> {
+  const doc = new PDFDocument({ size: 'A4', margin: 32, info: { Title: title, Producer: 'Manage by HEDAX' } });
+  doc.registerFont('fa', FONT);
+  doc.registerFont('fa-bold', BOLD);
+  const chunks: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+  const done = new Promise<Buffer>((resolve, reject) => {
+    doc.once('end', () => resolve(Buffer.concat(chunks)));
+    doc.once('error', reject);
+  });
+  const left = doc.page.margins.left;
+  const right = doc.page.width - doc.page.margins.right;
+  const top = doc.page.margins.top;
+  const bottom = doc.page.height - doc.page.margins.bottom;
+  let y = top;
+  function print(text: string, bold = false) {
+    doc.font(bold ? 'fa-bold' : 'fa').fontSize(bold ? 12 : 10);
+    for (const line of wrap(doc, toPersianDigits(text), right - left)) {
+      if (y + 16 > bottom) {
+        doc.addPage();
+        y = top;
+      }
+      drawLine(doc, line, left, right, y);
+      y += 16;
+    }
+  }
+  print(title, true);
+  for (const detail of header) print(detail);
+  for (const section of sections) {
+    y += 8;
+    print(section.title, true);
+    for (const row of section.rows) { print(row); y += 4; }
+    if (!section.rows.length) print('ردیفی ثبت نشده است');
+  }
+  doc.end();
+  return done;
+}

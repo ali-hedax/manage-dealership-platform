@@ -49,3 +49,6 @@ export function parseAmount(s: string): number {
   const n = Number(toLatinDigits(s).replace(/[,٬\s]/g, ''));
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
 }
+
+export const parseRials = (value: FormDataEntryValue | null) =>
+  typeof value === 'string' && value.trim() ? Number(toLatinDigits(value).replace(/[٬,\s]/g, '')) : undefined;

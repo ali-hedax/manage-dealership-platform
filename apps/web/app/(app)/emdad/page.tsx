@@ -12,7 +12,7 @@ import {EmdadDetail} from '@/components/EmdadDetail';
 
 function Emdad(){
  const {can}=useAuth();const toast=useToast();const params=useSearchParams();
- const [term,setTerm]=useState(''),[q,setQ]=useState(''),[status,setStatus]=useState<EmdadStatusCategory|''>(''),[match,setMatch]=useState<EmdadMatchStatus|''>((params.get('match') as EmdadMatchStatus)||'');
+ const [term,setTerm]=useState(params.get('q')??''),[q,setQ]=useState(params.get('q')??''),[status,setStatus]=useState<EmdadStatusCategory|''>(''),[match,setMatch]=useState<EmdadMatchStatus|''>((params.get('match') as EmdadMatchStatus)||'');
  const [assignee,setAssignee]=useState<''|'me'|'none'>(params.get('assignee')==='me'?'me':''),[openOnly,setOpenOnly]=useState(params.get('openOnly')==='1'),[codeIssue,setCodeIssue]=useState(false),[stale,setStale]=useState(false),[page,setPage]=useState(1),[open,setOpen]=useState<string|null>(null);
  const [dueToday,setDueToday]=useState(params.get('dueToday')==='1'),[review,setReview]=useState(params.get('review')==='1');
  const filter={...(q?{q}:{}),...(status?{status}:{}),...(match?{match}:{}),...(assignee?{assignee}:{}),...(openOnly?{openOnly}:{}),...(dueToday?{dueToday}:{}),...(review?{review}:{}),...(codeIssue?{codeIssue}:{}),...(stale?{stale}:{})};

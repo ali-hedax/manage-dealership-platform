@@ -505,6 +505,11 @@ export const partRequests = pgTable(
     stockCheckedAt: ts('stock_checked_at'),
     reservedAt: ts('reserved_at'),
     approvedUnitPriceRial: bigint('approved_unit_price_rial', { mode: 'number' }),
+    salePriceRial: bigint('sale_price_rial', { mode: 'number' }),
+    handedOverBy: uuid('handed_over_by').references(() => users.id),
+    consumedAt: ts('consumed_at'),
+    returnedAt: ts('returned_at'),
+    returnReason: text('return_reason'),
     unitPriceRial: bigint('unit_price_rial', { mode: 'number' }),
     priceApprovalRef: text('price_approval_ref'),
     priceApprovedBy: text('price_approved_by'),
@@ -1184,3 +1189,41 @@ export const caseAlertResponses = pgTable(
   },
   (t) => [uniqueIndex('case_alert_responses_uq').on(t.caseId, t.kind, t.level), index('case_alert_responses_tenant_idx').on(t.tenantId)],
 );
+
+
+export const externalContractors = pgTable('external_contractors', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  name: text('name').notNull(),
+  phone: text('phone').notNull(),
+  specialty: text('specialty').notNull(),
+  active: boolean('active').notNull().default(true),
+  isTest: boolean('is_test').notNull().default(false),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, t => [index('external_contractors_tenant_idx').on(t.tenantId)]);
+
+export const externalWork = pgTable('external_work', {
+  taskId: uuid('task_id').primaryKey().references(() => tasks.id),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  contractorId: uuid('contractor_id').references(() => externalContractors.id),
+  contractorName: text('contractor_name'),
+  mode: text('mode').$type<'send' | 'visit'>(),
+  appointmentAt: ts('appointment_at'),
+  promisedAt: ts('promised_at'),
+  priceRial: bigint('price_rial', { mode: 'number' }),
+  isTest: boolean('is_test').notNull().default(false),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, t => [index('external_work_tenant_idx').on(t.tenantId)]);
+
+export const partsStatements = pgTable('parts_statements', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  caseId: uuid('case_id').notNull().references(() => cases.id),
+  version: integer('version').notNull(),
+  snapshot: jsonb('snapshot').$type<import('@manage/shared').StatementSnapshot>().notNull(),
+  sentAt: ts('sent_at').notNull().defaultNow(),
+  sentBy: uuid('sent_by').notNull().references(() => users.id),
+  isTest: boolean('is_test').notNull().default(false),
+}, t => [uniqueIndex('parts_statement_case_version_uq').on(t.tenantId, t.caseId, t.version)]);

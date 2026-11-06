@@ -1,5 +1,11 @@
 # Database
 
+## 0017: parts workbench
+
+`0017_parts_workbench.sql` adds nullable sale price, handover actor, confirmed consumption and return details to `part_requests`. It creates tenant-scoped `external_contractors`, `external_work` (one per existing planned task) and immutable application snapshots in `parts_statements` (unique case/version per tenant). Existing deliveries remain intact and consumption is confirmed explicitly. The shared official Emdad import and existing exact-stock reservation tables keep their history. All new writes record audit/change-log entries in the same transaction.
+
+The matching `0017_parts_workbench.down.sql` is for disposable rehearsal data. Retain additive schema when rolling back application images. See [staff instructions](PHASE2_PARTS_FA.md).
+
 ## 0014: repair workflow, station codes and market-price approvals
 
 `0014_parallel_mattie_franklin.sql` adds tenant-scoped `work_calendars` (append-only effective revisions), `workshop_stations` (mutable/versioned), and `part_quotes` (versioned proposal and external-decision history). Task rows gain station/assignee references, a station snapshot, a frozen calendar snapshot and immutable original planned start/end timestamps. Existing tasks retain null snapshots/baselines; no historical durations, assignments or customer data are invented. Every mutation writes audit and change-log snapshots in the same transaction. Cross-tenant station, staff, quote and case references are validated by services. Code uniqueness is scoped to the tenant.

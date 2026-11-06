@@ -439,7 +439,7 @@ describe('11:00 Tehran tasks and reminders', () => {
     const inbox = await admin.get('/notifications');
     expect(inbox.body.unread).toBeGreaterThan(0);
     expect((await admin.post('/notifications/read', { ids: 'all' })).body.unread).toBe(0);
-    expect((await parts.get('/notifications')).body.unread).toBe(0);
+    expect((await parts.get('/notifications')).body.unread).toBeGreaterThan(0);
     expect((await admin.get('/notifications')).body.items.some((n: { link: string }) => n.link.startsWith('/daily-reports'))).toBe(true);
     expect((await expert.get('/notifications')).body.items).toHaveLength(0);
   });

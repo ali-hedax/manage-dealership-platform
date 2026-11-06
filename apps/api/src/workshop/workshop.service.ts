@@ -87,8 +87,8 @@ export class WorkshopService {
     const now=new Date().toISOString();
     // Part readiness per vehicle: received or reserved and not yet handed over.
     const caseIds=[...new Set(rows.map(r=>r.c.id))];
-    const partRows=caseIds.length?await this.db.select({caseId:partRequests.caseId,status:partRequests.status,description:partRequests.description}).from(partRequests).where(and(eq(partRequests.tenantId,tid),inArray(partRequests.caseId,caseIds),inArray(partRequests.status,['received','reserved','ordered','needed']))):[];
-    const readyOf=(caseId:string)=>{const ready=partRows.filter(p=>p.caseId===caseId&&(p.status==='received'||p.status==='reserved'));return {count:ready.length,names:ready.map(p=>p.description).slice(0,5)};};
+    const partRows=caseIds.length?await this.db.select({caseId:partRequests.caseId,status:partRequests.status,description:partRequests.description,id:partRequests.id,version:partRequests.version,salePriceRial:partRequests.salePriceRial,unitPriceRial:partRequests.unitPriceRial}).from(partRequests).where(and(eq(partRequests.tenantId,tid),inArray(partRequests.caseId,caseIds),inArray(partRequests.status,['received','reserved','ordered','needed']))):[];
+    const readyOf=(caseId:string)=>{const ready=partRows.filter(p=>p.caseId===caseId&&(p.status==='received'||p.status==='reserved'));return {count:ready.length,names:ready.map(p=>p.description).slice(0,5), ...(own?{pickup:ready.filter(p=>p.salePriceRial!==null||p.unitPriceRial!==null).map(({id,version,description})=>({id,version,description}))}:{})};};
     const waitingOf=(caseId:string)=>partRows.filter(p=>p.caseId===caseId&&(p.status==='ordered'||p.status==='needed')).length;
     return rows.map(({t,c,v,d})=>{
       const calendar=t.calendarSnapshot?.calendar;

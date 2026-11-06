@@ -1,0 +1,225 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import {
+  parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
+  type PartPickup, type PartsWorkbench, type PartsWorkbenchAction, type PartsWorkbenchLine,
+} from '@manage/shared';
+import { AuditService } from '../audit/audit.service';
+import type { Actor } from '../auth/auth.types';
+import { assertNotFuture } from '../cases/cases.service';
+import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
+import type { EmdadOfficial } from '../daily-reports/report-rows';
+import { StockService, snapshotInfo } from '../daily-reports/stock.service';
+import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
+import { blockers, cases, emdadRequests, partRequests, tasks, vehicles } from '../db/schema';
+import { calendarAt } from '../workshop/work-calendar';
+import { PartsService } from './parts.service';
+
+type PartRow = typeof partRequests.$inferSelect;
+const RECEIVED = ['in_dealer_stock', 'received_by_dealer'];
+const ACTIVE = ['needed', 'ordered', 'rejected', 'received', 'reserved'];
+const companyRequest = (p: PartRow) => p.source === 'company' && !!p.orderRef;
+const DAY_MS = 86_400_000;
+const baseOf = (code: string | null) => code ? parseStockCode(code)?.basePartNumber ?? parseBasePartNumber(code) : null;
+
+function reportDate(value: string | undefined): Date | null {
+  const match = value?.trim().match(/^(\S+)(?:\s+(\S+))?$/);
+  return match ? parseJalali(match[1]!, match[2] ?? '00:00') : null;
+}
+
+
+@Injectable()
+export class PartsWorkbenchService {
+  constructor(
+    @Inject(DATABASE) private readonly handle: DatabaseHandle,
+    private readonly parts: PartsService,
+    private readonly stock: StockService,
+    private readonly audit: AuditService,
+  ) {}
+
+  async list(actor: Actor, includeTransit = false): Promise<PartsWorkbench> {
+    const db = this.handle.db;
+    const tenantId = actor.user.tenantId;
+    const now = new Date();
+    const [rows, links, waiting, calendar, receipts] = await Promise.all([
+      db.select({ p: partRequests, c: cases, v: vehicles }).from(partRequests)
+        .innerJoin(cases, and(eq(cases.id, partRequests.caseId), eq(cases.tenantId, tenantId), eq(cases.status, 'open')))
+        .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
+        .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.status, ACTIVE)))
+        .orderBy(asc(partRequests.createdAt), asc(partRequests.id)),
+      db.select().from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId), isNotNull(emdadRequests.partRequestId))),
+      db.select({ partId: blockers.partRequestId, taskTitle: tasks.title }).from(blockers)
+        .leftJoin(tasks, and(eq(tasks.id, blockers.taskId), eq(tasks.tenantId, tenantId)))
+        .where(and(eq(blockers.tenantId, tenantId), isNull(blockers.resolvedAt), isNotNull(blockers.partRequestId))),
+      calendarAt(db, tenantId, now.toISOString()),
+      db.select({ official: emdadRequests.official }).from(emdadRequests).where(and(
+        eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.statusCategory, RECEIVED))),
+
+    ]);
+    const leadTimes = new Map<string, { count: number; days: number }>();
+    for (const { official } of receipts) {
+      const fields = official as EmdadOfficial;
+      const code = fields.fullCodeBase ?? baseOf(fields.initialCode) ?? baseOf(fields.partCode);
+      const ordered = reportDate(fields.emdadRegisteredAt);
+      const received = reportDate(fields.receivedInWarehouseAt);
+      if (!code || !ordered || !received || received < ordered) continue;
+      const total = leadTimes.get(code) ?? { count: 0, days: 0 };
+      total.count++;
+      total.days += (received.getTime() - ordered.getTime()) / DAY_MS;
+      leadTimes.set(code, total);
+    }
+    const canReserve = actor.user.permissions.has('stock.read') && actor.user.permissions.has('stock.reserve');
+    const needs = rows.filter(({ p }) => p.status === 'needed' && p.partNumber).map(({ p }) => p.partNumber!);
+    const stock = await this.stock.exactOptions(actor, canReserve ? [...new Set(needs)] : []);
+    const byPart = new Map<string, typeof links>();
+    for (const link of links) {
+      const id = link.partRequestId!;
+      byPart.set(id, [...(byPart.get(id) ?? []), link]);
+    }
+    const blockersByPart = new Map(waiting.map(w => [w.partId, w.taskTitle]));
+    const counts = { decision: 0, ready: 0, overdueEmdad: 0 };
+    const cards = new Map<string, { card: PartsWorkbench['cards'][number]; deadline: number; started: number; late: boolean }>();
+    let inTransit = 0;
+    for (const { p, c, v } of rows) {
+      const related = (byPart.get(p.id) ?? []).filter(r => r.caseId === c.id && r.matchStatus === 'matched' && r.statusCategory !== 'cancelled');
+      const matching = related.filter(r => !p.orderRef || r.requestNo === p.orderRef || r.emdadNo === p.orderRef);
+      const official = matching.length === 1 ? matching[0] : undefined;
+      const reportedReceipt = p.source === 'company' && official && RECEIVED.includes(official.statusCategory);
+      const ready = p.status === 'received' || p.status === 'reserved';
+      const started = p.receivedAt ?? p.reservedAt ?? (reportedReceipt ? reportDate((official.official as EmdadOfficial).receivedInWarehouseAt) ?? official.lastReportAt : null);
+      const overdueHandover = !!started && workingMinutesBetween(started.toISOString(), now.toISOString(), calendar.calendar) > 240;
+      const lead = leadTimes.get(baseOf(p.partNumber) ?? '');
+      const average = lead ? Math.round(lead.days / lead.count) : null;
+      const estimated = p.orderedAt && average !== null ? new Date(p.orderedAt.getTime() + average * DAY_MS) : null;
+      const dueAt = p.etaAt ?? official?.dueAt ?? (companyRequest(p) ? estimated ?? c.officialDeadlineAt ?? c.forecastDeliveryAt : null);
+      const overdue = p.status === 'ordered' && !reportedReceipt && !!dueAt && dueAt < now;
+      const options = (stock.get(p.partNumber ?? '') ?? []).filter(item => Number(item.available) >= p.quantity);
+      const option = options.length === 1 ? options[0] : undefined;
+      const action: PartsWorkbenchLine['action'] = ready ? 'handover'
+        : reportedReceipt ? 'received'
+        : p.status === 'ordered' || matching.length > 0 || options.length > 1 ? 'follow_up'
+        : option ? 'reserve'
+        : p.source === 'external' || p.source === 'customer' || p.source === 'insurer_supplier' ? 'market' : 'emdad';
+      if (action === 'follow_up' && (companyRequest(p) || matching.length > 0) && !overdue) {
+        inTransit++;
+        if (!includeTransit) continue;
+      }
+      if (action === 'handover' || action === 'received') counts.ready++;
+      else if (action !== 'follow_up') counts.decision++;
+      if (overdue && (companyRequest(p) || matching.length > 0)) counts.overdueEmdad++;
+      const inferredPrice = option?.salePrice != null && option.currency
+        ? Math.round(Number(option.salePrice) * (option.currency === 'IRT' ? 10 : 1))
+        : null;
+      const card = cards.get(c.id) ?? {
+        card: { id: c.id, caseNumber: c.caseNumber, model: [v.brand, v.model, v.trim].filter(Boolean).join(' '),
+          plate: v.plate, color: v.color, coverage: c.coverageType as PartsWorkbench['cards'][number]['coverage'],
+          waiting: null, items: [] },
+        deadline: (c.officialDeadlineAt ?? c.forecastDeliveryAt)?.getTime() ?? Infinity,
+        started: p.createdAt.getTime(), late: false,
+      };
+      const blocking = blockersByPart.has(p.id);
+      if (blocking) card.card.waiting = blockersByPart.get(p.id) || 'تعمیر';
+      card.late ||= overdueHandover;
+      card.card.items.push({
+        id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
+        action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
+        stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
+        emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover,
+      });
+      cards.set(c.id, card);
+    }
+    return {
+      counts, inTransit,
+      cards: [...cards.values()].sort((a, b) => Number(b.late) - Number(a.late)
+        || Number(!!b.card.waiting) - Number(!!a.card.waiting) || a.deadline - b.deadline || a.started - b.started)
+        .map(({ card }) => card),
+    };
+  }
+
+  async act(actor: Actor, id: string, input: PartsWorkbenchAction) {
+    const tenantId = actor.user.tenantId;
+    return this.handle.db.transaction(async tx => {
+      if (input.action === 'emdad') {
+        const orderedAt = new Date(input.requestedAt);
+        assertNotFuture(orderedAt, 'تاریخ درخواست نمی‌تواند در آینده باشد');
+        const rows = await tx.select().from(partRequests)
+          .where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.caseId, id),
+            inArray(partRequests.id, input.parts.map(p => p.id)))).orderBy(asc(partRequests.id)).for('update');
+        if (!actor.user.permissions.has('emdad.manage')) throw forbidden();
+        if (input.etaAt && new Date(input.etaAt) < orderedAt) throw badRequest('INVALID_TIME', 'موعد نمی‌تواند قبل از ثبت درخواست باشد');
+        if (rows.length !== input.parts.length) throw notFound('نیاز قطعه در این پرونده');
+        const entries = new Map(input.parts.map(p => [p.id, p]));
+        for (const row of rows) {
+          const entry = entries.get(row.id)!;
+          await this.parts.actIn(tx, actor, row.id, { action: 'order', expectedVersion: entry.expectedVersion,
+            source: 'company', unitPriceRial: entry.companyPriceRial, salePriceRial: entry.salePriceRial,
+            orderRef: input.requestNo, etaAt: input.etaAt }, orderedAt);
+        }
+        return;
+      }
+      const p = await this.lockPart(tx, tenantId, id, input.expectedVersion);
+      if (input.action === 'market') {
+        const order = await this.parts.actIn(tx, actor, id, { action: 'order', expectedVersion: p.version, source: 'external',
+          supplier: input.supplier, unitPriceRial: input.purchasePriceRial, salePriceRial: input.salePriceRial, orderRef: input.orderRef });
+        await this.parts.actIn(tx, actor, id, { action: 'receive', expectedVersion: order.version, inspection: 'ok' });
+      } else if (input.action === 'reserve') {
+        const snap = await this.stock.active(tx, tenantId);
+        if (!snap || !snapshotInfo(snap).reservable) throw badRequest('STOCK_NOT_CONFIRMED', 'گزارش موجودی قابل رزرو نیست');
+        const options = p.partNumber ? (await this.stock.exactOptions(actor, [p.partNumber], tx, true)).get(p.partNumber) ?? [] : [];
+        if (p.status !== 'needed' || !options.some(o => o.fullStockCode === input.stock.fullStockCode
+          && o.locationAddress === input.stock.locationAddress && o.snapshotId === input.stock.snapshotId)) {
+          throw badRequest('PART_STOCK_MISMATCH', 'کد انتخاب‌شده با نیاز قطعه یا گزارش فعال همخوانی ندارد');
+        }
+        await this.stock.reserveIn(tx, actor, { ...input.stock, partRequestId: id, quantity: String(p.quantity) });
+        const checked = await this.parts.actIn(tx, actor, id, { action: 'check_stock', expectedVersion: p.version, inStock: true });
+        await this.parts.actIn(tx, actor, id, { action: 'reserve', expectedVersion: checked.version, salePriceRial: input.salePriceRial });
+      } else if (input.action === 'received') {
+        if (!actor.user.permissions.has('emdad.read')) throw forbidden();
+        const [emdad] = await tx.select().from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId),
+          eq(emdadRequests.id, input.emdadId), eq(emdadRequests.caseId, p.caseId), eq(emdadRequests.partRequestId, p.id),
+          eq(emdadRequests.matchStatus, 'matched'), inArray(emdadRequests.statusCategory, RECEIVED))).for('update');
+        if (!emdad || p.source !== 'company' || (p.orderRef && ![emdad.requestNo, emdad.emdadNo].includes(p.orderRef))) {
+          throw badRequest('EMDAD_NOT_RECEIVED', 'رسید منطبق با این قطعه در گزارش امداد ویژه وجود ندارد');
+        }
+        const ref = emdad.requestNo ?? emdad.emdadNo;
+        if (p.status !== 'ordered' && !ref) throw badRequest('EMDAD_REF_REQUIRED', 'شماره درخواست امداد لازم است');
+        const ordered = p.status === 'ordered' ? p : await this.parts.actIn(tx, actor, id, {
+          action: 'order', expectedVersion: p.version, source: 'company', orderRef: ref ?? undefined,
+          unitPriceRial: input.salePriceRial,
+        });
+        await this.parts.actIn(tx, actor, id, { action: 'receive', expectedVersion: ordered.version, inspection: 'ok',
+          salePriceRial: input.salePriceRial, receiptDocNo: ref ?? undefined });
+      } else {
+        if (p.status !== 'handed_over' || p.returnedAt) throw badRequest('PART_NOT_RETURNABLE', 'فقط قطعه تحویل‌شده را می‌توان برگرداند');
+        const now = new Date();
+        const [saved] = await tx.update(partRequests).set({ returnedAt: now, returnReason: input.reason, updatedAt: now, version: p.version + 1 })
+          .where(and(eq(partRequests.id, id), eq(partRequests.tenantId, tenantId), eq(partRequests.version, p.version))).returning();
+        if (!saved) throw versionConflict();
+        await this.audit.record(tx, actor, { entityType: 'part', entityId: id, caseId: p.caseId, action: 'part.returned',
+          reason: input.reason, after: { returnedAt: now.toISOString() }, snapshot: { version: saved.version, row: saved } });
+      }
+    });
+  }
+
+  async pickup(actor: Actor, taskId: string, input: PartPickup) {
+    const tenantId = actor.user.tenantId;
+    return this.handle.db.transaction(async tx => {
+      const p = await this.lockPart(tx, tenantId, input.partId, input.expectedVersion);
+      const [task] = await tx.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId),
+        eq(tasks.caseId, p.caseId), eq(tasks.assignedUserId, actor.user.id), inArray(tasks.status, ['pending', 'in_progress', 'blocked'])));
+      if (!task || (p.handedOverDepartmentId && p.handedOverDepartmentId !== task.departmentId)) throw forbidden();
+      const blockingTasks = await tx.select({ taskId: blockers.taskId }).from(blockers).where(and(eq(blockers.tenantId, tenantId),
+        eq(blockers.partRequestId, p.id), isNull(blockers.resolvedAt), isNotNull(blockers.taskId)));
+      if (blockingTasks.length && !blockingTasks.some(b => b.taskId === task.id)) throw forbidden();
+      await this.parts.actIn(tx, actor, p.id, { action: 'hand_over', expectedVersion: p.version,
+        departmentId: task.departmentId, recipientName: actor.user.displayName }, new Date(), true);
+    });
+  }
+
+  private async lockPart(tx: DbOrTx, tenantId: string, id: string, version: number) {
+    const [p] = await tx.select().from(partRequests).where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.id, id))).for('update');
+    if (!p) throw notFound('قطعه');
+    if (p.version !== version) throw versionConflict(p.version);
+    return p;
+  }
+}
