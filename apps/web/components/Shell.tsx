@@ -2,7 +2,9 @@
 import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useRef,useState,type ReactNode} from 'react';
-import {MODULE_LABELS,ROLE_LABELS,type ModuleKey} from '@manage/shared';
+import {MODULE_LABELS,ROLE_LABELS,type ModuleKey,type ReceivedReminder} from '@manage/shared';
+import useSWR from 'swr';
+import {fetcher} from '@/lib/api';
 import {api} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 import {visibleWorkspaces} from '@/lib/workspaces';
@@ -16,6 +18,8 @@ export function Shell({children}:{children:ReactNode}){
  useEffect(()=>{if(!open||!mobile)return;const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){setOpen(false);menu.current?.focus();}};document.addEventListener('keydown',key);return ()=>document.removeEventListener('keydown',key);},[open,mobile]);
  useEffect(()=>{document.title=`${pageTitle(pathname)} | Manage by HEDAX`;},[pathname]);
  const technicianOnly=me.roles.length===1&&me.roles[0]==='technician';
+ const {data:inbox}=useSWR<ReceivedReminder[]>('/reminders/inbox',fetcher,{refreshInterval:60_000});
+ const unseen=inbox?.filter(r=>r.status==='sent').length??0;
  const accident=pathname.startsWith('/workshop')||pathname.startsWith('/cases')||pathname.startsWith('/reports')||pathname.startsWith('/accidents')||['/daily-reports','/stock','/emdad'].includes(pathname);
  function nav(href:string,label:string,icon:IconName,show=true){if(!show)return null;const active=href==='/'?pathname==='/':href.includes('#')?false:pathname===href||(href==='/cases'&&/^\/cases\/(?!new|import)/.test(pathname));return href.includes('#')&&href.split('#')[0]===pathname?<a key={href} href={'#'+href.split('#')[1]}><AppIcon name={icon}/><span>{label}</span></a>:<Link key={href} href={href} aria-current={active?'page':undefined}><AppIcon name={icon}/><span>{label}</span></Link>;}
  async function logout(){await api('/auth/logout',{method:'POST'}).catch(()=>{});router.replace('/login');}
@@ -24,6 +28,7 @@ export function Shell({children}:{children:ReactNode}){
  <div className="brand"><Link href="/launch" className="brand-lockup" aria-label="Manage by HEDAX، انتخاب میز کار"><img src="/brand/manage-wordmark-dark.svg" alt="" width={124} height={31}/><span className="brand-by" aria-hidden="true">by HEDAX</span></Link><div className="tenant">{me.tenant.name}</div></div>{!technicianOnly&&can('case.read')&&<GlobalSearch onDone={()=>setOpen(false)}/>}
  <nav className="nav" id="main-navigation" aria-label="واحدها و میزهای کار" onClick={e=>{if((e.target as HTMLElement).closest('a'))setOpen(false);}}>
  {nav('/launch','انتخاب میز کار','grid')}{technicianOnly?nav('/workshop/technician','کارهای من','wrench'):null}
+ <Link href="/reminders" className="nav-reminders" aria-current={pathname==='/reminders'?'page':undefined}><AppIcon name="alert"/><span>تذکرها</span>{unseen>0&&<span className="nav-badge" aria-label={`${unseen} تذکر دیده‌نشده`}>{unseen.toLocaleString('fa-IR')}</span>}</Link>
  {!technicianOnly&&<>{nav('/','داشبورد','gauge',can('dashboard.read'))}
  <details className="nav-unit" key={`accident-${accident}`} open={accident||pathname==='/'}><summary><AppIcon name="car"/><span>واحد تصادفات</span></summary><div className="nav-sub">
  {nav('/workshop','برنامه و گزارش تعمیر','wrench',can('workshop.read'))}{nav('/workshop/settings','تقویم و جایگاه‌ها','calendar',can('calendar.manage')||can('workshop.manage'))}{nav(visibleWorkspaces(me).length===1?`/accidents/${visibleWorkspaces(me)[0].key}`:'/accidents',visibleWorkspaces(me).length===1?'میز کار من':'میزهای کار تصادفات','desk')}{nav('/cases','پرونده‌های تصادفی','file',can('case.read'))}{nav('/cases/new','ثبت پرونده','add',can('case.create'))}{nav('/reports','گزارش‌ها','chart',can('report.manager')||can('part.manage')||can('case.update')||can('task.manage')||can('qc.inspect'))}{nav('/daily-reports','به‌روزرسانی گزارش‌های روزانه','upload',can('daily_reports.upload')||can('daily_reports.apply')||can('daily_reports.settings'))}{nav('/stock','موجودی روزانه و رزرو','box',can('stock.read'))}{nav('/emdad','پیگیری امداد ویژه','alert',can('emdad.read'))}
@@ -37,7 +42,7 @@ export function Shell({children}:{children:ReactNode}){
  <main className="page" id="page-content" tabIndex={-1}><NotificationBar/><PageActions/>{children}</main></div></div>;
 }
 
-const PAGE_TITLES:[RegExp,string][]=[[/^\/launch$/,'انتخاب میز کار'],[/^\/$/,'داشبورد'],[/^\/workshop\/settings/,'تقویم و جایگاه‌ها'],[/^\/workshop\/technician/,'کارهای من'],[/^\/workshop/,'برنامه و گزارش تعمیر'],[/^\/accidents/,'میز کار تصادفات'],[/^\/cases\/new/,'ثبت پرونده'],[/^\/cases\/import/,'ورود خودروها از اکسل'],[/^\/cases\/[^/]+/,'پرونده'],[/^\/cases/,'پرونده‌های تصادفی'],[/^\/reports/,'گزارش‌ها'],[/^\/daily-reports/,'گزارش‌های روزانه'],[/^\/stock/,'موجودی روزانه و رزرو'],[/^\/emdad/,'پیگیری امداد ویژه'],[/^\/users/,'کارکنان'],[/^\/reference-data/,'اطلاعات پایه']];
+const PAGE_TITLES:[RegExp,string][]=[[/^\/launch$/,'انتخاب میز کار'],[/^\/$/,'داشبورد'],[/^\/workshop\/settings/,'تقویم و جایگاه‌ها'],[/^\/workshop\/technician/,'کارهای من'],[/^\/workshop/,'برنامه و گزارش تعمیر'],[/^\/accidents/,'میز کار تصادفات'],[/^\/cases\/new/,'ثبت پرونده'],[/^\/cases\/import/,'ورود خودروها از اکسل'],[/^\/cases\/[^/]+/,'پرونده'],[/^\/cases/,'پرونده‌های تصادفی'],[/^\/reports/,'گزارش‌ها'],[/^\/daily-reports/,'گزارش‌های روزانه'],[/^\/stock/,'موجودی روزانه و رزرو'],[/^\/emdad/,'پیگیری امداد ویژه'],[/^\/users/,'کارکنان'],[/^\/reference-data/,'اطلاعات پایه'],[/^\/reminders/,'تذکرها']];
 /** Browser tab title for each area, so several open tabs can be told apart. */
 export function pageTitle(pathname:string):string{
  const module=/^\/modules\/([^/]+)/.exec(pathname)?.[1];

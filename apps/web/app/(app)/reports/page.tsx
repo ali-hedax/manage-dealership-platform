@@ -24,6 +24,8 @@ import { ApiError, fetcher } from '@/lib/api';
 import { faNum, formatJalali, toPersianDigits } from '@/lib/format';
 import { DiscrepancyQueue } from '@/components/DiscrepancyQueue';
 import { ReportChart } from '@/components/ReportChart';
+import { ReminderComposer, type ReminderDefaults } from '@/components/ReminderComposer';
+import { useAuth } from '@/lib/auth';
 
 type Views = { views: ReportView[]; defaultView: ReportView | null; defaultResponsible: 'me' | null };
 const PRIORITY_TONE: Record<string, string> = { overdue: 'chip-red', today: 'chip-amber', soon: 'chip-amber', later: 'chip-blue', none: '' };
@@ -37,6 +39,20 @@ function ReportsPage() {
   const { data: meta, error: metaError } = useSWR<Views>('/reports/views', fetcher);
   const view = (params.get('view') as ReportView | null) ?? meta?.defaultView ?? null;
   const tab = params.get('tab') === 'stats' ? 'stats' : 'today';
+  const { can } = useAuth();
+  // Service manager: a reminder beside each row and finding goes to the executive role, never to the manager.
+  const [remind, setRemind] = useState<ReminderDefaults | null>(null);
+  const remindRow = (i: ReportResult['items']['rows'][number]) => {
+    const partsWork = !!i.partId || /part|discrepanc/.test(i.kind);
+    setRemind({
+      caseId: i.caseId,
+      caseLabel: i.caseNumber,
+      plate: i.plate,
+      source: 'manager_report',
+      body: `پیگیری: ${i.nextAction}`.slice(0, 300),
+      ...(partsWork ? { role: 'parts_clerk' as const } : i.responsible ? { userIds: [i.responsible.id] } : { role: 'accident_coordinator' as const }),
+    });
+  };
 
   // First visit: apply the role's default view (and "my cases" for an accident expert).
   useEffect(() => {
@@ -262,6 +278,17 @@ function ReportsPage() {
             })}
           </div>
 
+          {can('report.manager') && view === 'manager' && data.kpis.some((k) => k.value > 0) && (
+            <div className="kpi-reminders no-print" role="group" aria-label="تذکر دربارهٔ یافته‌ها">
+              <span className="xs muted">تذکر دربارهٔ یافته‌ها:</span>
+              {data.kpis.filter((k) => k.value > 0).map((k) => (
+                <button key={k.key} type="button" className="btn btn-sm" onClick={() => setRemind({ role: /part|قطعه/.test(k.key + k.label) ? 'parts_clerk' : 'accident_coordinator', source: 'manager_report', body: `${k.label}: ${faNum(k.value)} ${k.unit}؛ لطفاً امروز پیگیری کن.`.slice(0, 300) })}>
+                  تذکر · {k.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <nav className="segmented no-print" aria-label="نما">
             <button type="button" aria-pressed={tab === 'today'} onClick={() => set({ tab: null }, true)}>
               کارهای امروز ({faNum(data.items.total)})
@@ -339,7 +366,14 @@ function ReportsPage() {
                             </td>
                             <td data-label="مسئول">{i.responsible?.displayName ?? <span className="missing">تعیین نشده</span>}</td>
                             <td data-label="علت توقف">{i.stoppedBy ? toPersianDigits(i.stoppedBy) : '—'}</td>
-                            <td data-label="اقدام بعدی">{i.nextAction}</td>
+                            <td data-label="اقدام بعدی">
+                              {i.nextAction}
+                              {can('report.manager') && (
+                                <div className="no-print">
+                                  <button type="button" className="btn btn-sm" aria-label={`تذکر دربارهٔ ${i.caseNumber}`} onClick={() => remindRow(i)}>تذکر</button>
+                                </div>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -405,6 +439,7 @@ function ReportsPage() {
           </p>
         </>
       )}
+      <ReminderComposer open={!!remind} onClose={() => setRemind(null)} defaults={remind ?? undefined} />
     </div>
   );
 }

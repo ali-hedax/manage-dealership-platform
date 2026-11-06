@@ -43,20 +43,23 @@ export const PERMISSIONS = [
   'stock.issue', // record the issue from the warehouse and its reflection in the stock report
   'emdad.read', // Emdad Vijeh follow-up list and history
   'emdad.manage', // internal follow-up fields and review of case matching
+  'wage.manage', // technician wage per job, independent from the assessment labour
+  'wage.report', // paid wages against assessment labour, per technician and month (with Excel)
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-const COORDINATOR: readonly Permission[] = ['case.read','case.create','case.update','customer.pii.read','task.manage','task.approve','blocker.report','blocker.manage','assessment.manage','assessment.authorize','part.request','part.price_authorize','finance.propose','finance.payment','finance.close','case.release_authorize','qc.inspect','case.technical_close','case.deliver','dashboard.read','audit.read','reference.parts.read','reference.customers.read','stock.read','emdad.read','workshop.read'];
+const COORDINATOR: readonly Permission[] = ['case.read','case.create','case.update','customer.pii.read','task.manage','task.approve','blocker.report','blocker.manage','assessment.manage','assessment.authorize','part.request','part.price_authorize','finance.propose','finance.payment','finance.close','case.release_authorize','qc.inspect','case.technical_close','case.deliver','dashboard.read','audit.read','reference.parts.read','reference.customers.read','stock.read','emdad.read','workshop.read','wage.manage'];
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   accident_coordinator: COORDINATOR,
   accident_expert: COORDINATOR,
   accident_supervisor: COORDINATOR,
   technician: ['task.execute'],
-  service_manager: ['case.read','report.manager','dashboard.read','audit.read','workshop.read','stock.read','emdad.read'],
+  service_manager: ['case.read','report.manager','dashboard.read','audit.read','workshop.read','stock.read','emdad.read','wage.report'],
   parts_clerk: ['case.read','blocker.report','part.manage','part.quote','dashboard.read','reference.parts.read','reference.parts.manage','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage','workshop.read','daily_reports.upload'],
   cashier: ['case.read','customer.pii.read','finance.payment','finance.close','dashboard.read'],
   qc_inspector: ['case.read','blocker.report','qc.inspect','dashboard.read'],
-  system_admin: PERMISSIONS.filter(p => !['finance.approve','part.price_authorize','case.release_authorize'].includes(p)),
+  // Wages stay with accident coordinators, the service manager and the owner unless the owner grants them.
+  system_admin: PERMISSIONS.filter(p => !['finance.approve','part.price_authorize','case.release_authorize','wage.manage','wage.report'].includes(p)),
 };
 
 export type PermissionTemplates = Partial<Record<Role, Permission[]>>;

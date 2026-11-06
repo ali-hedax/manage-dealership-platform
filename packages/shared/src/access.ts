@@ -18,16 +18,17 @@ export const PERMISSION_LABELS: Record<Permission,string> = {
  'daily_reports.upload':'بارگذاری و پیش‌نمایش گزارش‌های روزانه','daily_reports.apply':'ثبت نهایی گزارش روزانه','daily_reports.settings':'تنظیم یادآور گزارش‌های روزانه',
  'stock.read':'مشاهده موجودی روزانه و رزروها','stock.reserve':'رزرو کد کامل برای نیاز قطعه','stock.release':'آزادکردن رزرو و لغو خروج','stock.issue':'ثبت خروج از انبار و انعکاس آن',
  'emdad.read':'مشاهده پیگیری امداد ویژه','emdad.manage':'پیگیری و بررسی اتصال امداد ویژه',
+ 'wage.manage':'ثبت و ویرایش اجرت تعمیرکار','wage.report':'گزارش اجرت پرداختی در برابر اجرت کارشناسی',
 };
 export const PERMISSION_GROUPS: {title:string;permissions:Permission[]}[] = [
  {title:'برنامه تعمیر و تأیید خرید',permissions:['workshop.read','workshop.manage','calendar.manage','task.execute','part.quote','part.price_authorize']},
  {title:'پرونده و مشتری',permissions:['case.read','case.create','case.update','customer.pii.read','case.import']},
- {title:'کارشناسی و تعمیر',permissions:['assessment.manage','assessment.authorize','task.manage','task.approve','blocker.report','blocker.manage']},
+ {title:'کارشناسی و تعمیر',permissions:['assessment.manage','assessment.authorize','task.manage','task.approve','blocker.report','blocker.manage','wage.manage']},
  {title:'قطعات',permissions:['part.request','part.manage','reference.parts.read','reference.parts.manage']},
  {title:'گزارش‌های روزانه، موجودی و امداد ویژه',permissions:['daily_reports.upload','daily_reports.apply','daily_reports.settings','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage']},
  {title:'مالی و صندوق',permissions:['finance.propose','finance.approve','finance.payment','finance.close']},
  {title:'کنترل کیفیت و تحویل',permissions:['qc.inspect','case.technical_close','case.deliver','case.release_authorize']},
- {title:'گزارش، اطلاعات پایه و مدیریت',permissions:['dashboard.read','report.manager','audit.read','reference.customers.read','reference.customers.manage','user.manage','settings.manage']},
+ {title:'گزارش، اطلاعات پایه و مدیریت',permissions:['dashboard.read','report.manager','wage.report','audit.read','reference.customers.read','reference.customers.manage','user.manage','settings.manage']},
 ];
 const permissionList = z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length).refine(v=>new Set(v).size===v.length,'دسترسی تکراری است');
 export const accessUpdateSchema = z.object({expectedVersion:z.number().int().positive(),expectedTemplateVersion:z.number().int().positive(),roles:z.array(z.enum(ROLES)).min(1).max(ROLES.length),allow:permissionList,deny:permissionList}).strict().refine(v=>!v.allow.some(p=>v.deny.includes(p)),'یک دسترسی نمی‌تواند هم مجاز و هم ممنوع باشد');

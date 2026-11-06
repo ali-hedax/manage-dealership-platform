@@ -640,12 +640,17 @@ export class ReportsService {
   // ----------------------------------------------------------------- events
 
   private async events(tenantId: string, q: ReportQuery, period: ReturnType<typeof periodRange>) {
-    const responsible =
-      q.responsibleUserId && q.responsibleUserId !== 'me' && q.responsibleUserId !== 'none' ? sql`and c.responsible_user_id = ${q.responsibleUserId}` : sql``;
+    const filterUser = q.responsibleUserId && q.responsibleUserId !== 'me' && q.responsibleUserId !== 'none' ? q.responsibleUserId : null;
+    // Phase 3: an event belongs to whoever was responsible when it happened (case_responsibility_periods);
+    // a case without recorded periods keeps its current responsible from admission onwards.
+    const responsible = (column: 'admitted_at' | 'actual_delivery_at') =>
+      filterUser
+        ? sql`and coalesce((select p.user_id from case_responsibility_periods p where p.case_id = c.id and p.tenant_id = c.tenant_id and p.started_at <= c.${sql.raw(column)} and (p.ended_at is null or p.ended_at > c.${sql.raw(column)}) order by p.started_at desc limit 1), case when not exists (select 1 from case_responsibility_periods p2 where p2.case_id = c.id and p2.tenant_id = c.tenant_id) then c.responsible_user_id end) = ${filterUser}`
+        : sql``;
     const stationScope=q.stationCode?sql`and exists (select 1 from tasks t where t.case_id = c.id and t.tenant_id = c.tenant_id and t.station_snapshot->>'code' = ${q.stationCode})`:sql``;
     const count = async (column: 'admitted_at' | 'actual_delivery_at', from: Date, to: Date) => {
       const res = await this.db.execute<{ n: number }>(
-        sql`select count(*)::int as n from cases c where c.tenant_id = ${tenantId} and c.${sql.raw(column)} >= ${from.toISOString()} and c.${sql.raw(column)} < ${to.toISOString()} ${responsible} ${stationScope}`,
+        sql`select count(*)::int as n from cases c where c.tenant_id = ${tenantId} and c.${sql.raw(column)} >= ${from.toISOString()} and c.${sql.raw(column)} < ${to.toISOString()} ${responsible(column)} ${stationScope}`,
       );
       return Number(((res as { rows?: { n: number }[] }).rows ?? (res as unknown as { n: number }[]))[0]?.n ?? 0);
     };

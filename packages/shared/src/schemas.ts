@@ -69,7 +69,10 @@ export const technicianAccountSchema = z.object({
 });
 export type TechnicianAccountInput = z.infer<typeof technicianAccountSchema>;
 
-export const technicianPinSchema = z.object({ pin: pinSchema });
+// A system administrator (not the owner) must give a reason: a new PIN also unlocks the account.
+export const technicianPinSchema = z.object({ pin: pinSchema, reason: z.string().trim().max(300).optional() });
+export const technicianActiveSchema = z.object({ active: z.boolean(), reason: z.string().trim().max(300).optional() });
+export type TechnicianActiveInput = z.infer<typeof technicianActiveSchema>;
 
 /** Coordinator's answer to a non-blocking alert (advance or parts amount). */
 export const alertResponseSchema = z.object({

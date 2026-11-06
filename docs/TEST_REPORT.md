@@ -1,5 +1,40 @@
 # Test report
 
+## Phase 3 role-based plan (reminders, wages, responsibility, owner controls) — 2026-11-06 — **done, not deployed**
+
+Results on PR #54 head `c38467d` (GitHub Actions run 42194752561) plus local Linux (Node 22, pnpm 10):
+
+- **CI:** documentation and API inventory, dependency audit and secret scan, Docker images and compose smoke, PostgreSQL 16 migrations `0000`→`0018` and demo seed (PostgreSQL-only suites 5/5 and 4/4) all passed. Lint, typecheck, build and tests passed: shared **21/21**, API **221 passed, 9 skipped, 0 failed** (31 of 33 suites; the two skipped suites are the PostgreSQL-only ones run in the PostgreSQL job). Main Playwright suite **42 passed**.
+- **One CI failure, fixed:** the owner Playwright suite failed on «owner gives and takes …». With support actions in the report, the owner panel grew to 437 px at a 390 px viewport, because the report table widened the `.owner-admin` grid track. Fix: `grid-template-columns:minmax(0,1fr)` on `.owner-admin`; the table scrolls inside its own frame. The test now starts from the granted state, so a CI retry on the same database no longer fails on the initial `toBeChecked`. Owner suite locally after the fix: **4 passed, 0 failed**.
+- **Local:** `pnpm -r typecheck` and `pnpm -r lint` clean; `people.e2e-spec.ts` 14/14 and `parts-workbench.e2e-spec.ts` 4/4.
+- **Screenshots** (synthetic data, preview build): [reminders](screenshots/phase3/reminders-desktop.webp) · [reminders 390](screenshots/phase3/reminders-mobile.webp) · [technician card 390](screenshots/phase3/technician-card-mobile.webp) · [monthly work 390](screenshots/phase3/my-work-mobile.webp) · [responsibility bar](screenshots/phase3/responsibility-bar-desktop.webp) · [wages and responsibility report](screenshots/phase3/people-report-desktop.webp) · [case wages panel](screenshots/phase3/case-wages-desktop.webp).
+
+Original build notes from the author:
+
+Base `feature/phase2-parts` (`a1cd8c6`), branch `feature/phase3-people`. Synthetic data only. Under AGENTS rule 5 this phase is **not done** until the six GitHub Actions checks have run on the PR and their numbers are recorded here.
+
+What ran in the build environment (no package registry access there, so `pnpm install` and therefore build, lint, Jest and Playwright could not run):
+
+- **PostgreSQL 16.x (local):** every migration `0000`→`0018` applied in journal order to an empty database (19 migrations, `0018` = 26 statements); `down/0018` dropped the four tables; re-applying `0018` succeeded; a second open responsibility period for the same case was rejected by `case_responsibility_open_uq`. The report SQL that attributes events to the responsible period was executed against that database.
+- **Documentation check:** `node scripts/check-docs.mjs` passed (API inventory regenerated with `--write`; 17 new routes).
+- **Static TypeScript pass with stub declarations:** `packages/shared` type-checks cleanly against the real Zod 4 type definitions (`noUncheckedIndexedAccess`, unused locals). API and web code were checked with any-typed stubs for NestJS, Drizzle, React, SWR and Next (unused locals/parameters, imports, shared contract use). The only remaining messages come from the stubs in files this phase did not change. This does not replace `pnpm -r typecheck`.
+
+Written and to be run by CI:
+
+- `apps/api/test/people.e2e-spec.ts` (14 tests):
+  - Reminders: one person, several people, a role; sender never a recipient; 300-character limit; seen → reply → done visible to the sender; only the recipient answers.
+  - Unseen nudge: exactly at two working hours with the lunch break skipped (Date-only fake timer); not before; once only; not for a seen reminder.
+  - Technician problem: reaches the case's accident responsible only; another technician gets 403; a technician attaches only an own job's case; no reminder reaches another dealership (422 `INVALID_RECIPIENT`, role delivery tenant-scoped).
+  - Wages: required reason and history; equal share of the trade's assessment labour; counted only after approval and removed again on reopen; totals per coverage; «تغییر کرد» after a seen change; technicians get 403 on case wages, wage history, wage report and Excel, and their own payloads carry no assessment or other wage amounts; manager report with Excel; support account 403 by default.
+  - Responsibility: periods close/open on transfer (`SAME_RESPONSIBLE`, `INVALID_RESPONSIBLE` for a technician or the support account, 403 without `case.update`); approvals attributed to each period; a pre-phase-3 case gets its computed first period and keeps it as `initial`.
+  - Owner: grant/remove «دعوت و غیرفعال کردن کارکنان» (admin 403 after removal, 200 after grant, stale version 409, non-admin target 422); support corrections need a reason; owner-only report of support actions (403 for admin, manager, coordinator, technician).
+- `apps/api/test/technician-pin.e2e-spec.ts` updated: the system administrator's PIN reset and deactivation now need a reason (new owner rule); the test asserts `SUPPORT_REASON_REQUIRED` without one and success with one.
+- Playwright `e2e/people.spec.ts` (2 tests, desktop project): reminder from the case page, technician card at 390 px («دیدم», «انجام شد», own wage, «مشکل دارم», start/finish, no horizontal scroll), not in monthly work before approval, transfer with the responsibility bar, approved wage in «کارکرد من»; manager reminder from a report row (source `manager_report`, never to the manager) and the wage report page at 390 px.
+- `e2e/system-admin.spec.ts` (owner suite): owner switch for the system administrator and its effect on `/staff/technicians`.
+- `e2e/phase3-screenshots.spec.ts` (skipped unless `SCREENSHOTS=1`): writes desktop 1440×900 and mobile 390×844 images of reminders, technician card, monthly work, responsibility bar and owner controls to `docs/screenshots/phase3/` from synthetic data. The committed images were taken from the same flow against the local preview.
+
+Not run: DAST scan (no Docker daemon or scanner key in the build environment).
+
 ## Phase 2 role-based parts workflow — 2026-11-06
 
 Base `436575f`, branch `feature/phase2-parts`. Synthetic data only.

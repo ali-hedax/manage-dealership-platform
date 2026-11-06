@@ -24,6 +24,11 @@ import { ProvenancePanel } from '@/components/ProvenancePanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
 import { Plate } from '@/components/Plate';
 import { TasksPanel } from '@/components/TasksPanel';
+import { ResponsibilityBar } from '@/components/ResponsibilityBar';
+import { CaseWagesPanel } from '@/components/CaseWagesPanel';
+import { BackLink } from '@/components/BackLink';
+import { ReminderComposer } from '@/components/ReminderComposer';
+import { Dialog } from '@/components/Dialog';
 import { Timeline } from '@/components/Timeline';
 import { api, ApiError, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -36,11 +41,14 @@ function Missing() {
 
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
+  const supportAccount = !me.isOwner && me.roles.includes('system_admin');
   const toast = useToast();
   const { data: kase, error, mutate } = useSWR<CaseDetail>(`/cases/${id}`, fetcher);
   const { mutate: mutateKey } = useSWRConfig();
   const [stageBusy, setStageBusy] = useState(false);
+  const [reminding, setReminding] = useState(false);
+  const [stageBack, setStageBack] = useState<{ stage: CaseStage; note: string } | null>(null);
 
   if (error) {
     return (
@@ -63,11 +71,16 @@ export default function CaseDetailPage() {
       (Array.isArray(key) && key[0] === '/emdad/requests/search' && key[1] === id));
   };
 
-  async function changeStage(stage: CaseStage) {
+  async function changeStage(stage: CaseStage, note?: string) {
     if (!kase || stage === kase.stage) return;
+    // A system administrator moving a case back writes a reason first (owner report).
+    if (note === undefined && supportAccount && CASE_STAGES.indexOf(stage) < CASE_STAGES.indexOf(kase.stage)) {
+      setStageBack({ stage, note: '' });
+      return;
+    }
     setStageBusy(true);
     try {
-      await api(`/cases/${kase.id}/stage`, { body: { stage, expectedVersion: kase.version } });
+      await api(`/cases/${kase.id}/stage`, { body: { stage, expectedVersion: kase.version, ...(note ? { note } : {}) } });
       toast(`مرحله به «${STAGE_LABELS[stage]}» تغییر کرد`);
     } catch (err) {
       toast(errorMessage(err), 'error');
@@ -80,6 +93,7 @@ export default function CaseDetailPage() {
   const currentTasks = kase.tasks.filter(t => ['in_progress','blocked','done'].includes(t.status));
   return (
     <div className="stack">
+      <BackLink href="/cases" label="بازگشت به پرونده‌ها" />
       <div className="case-hero">
         <div className="stack" style={{ gap: 8 }}>
           <div className="ident">
@@ -123,6 +137,9 @@ export default function CaseDetailPage() {
               ویرایش پرونده
             </Link>
           )}
+          <button className="btn" type="button" onClick={() => setReminding(true)}>
+            تذکر
+          </button>
           <button className="btn" type="button" onClick={() => window.print()}>
             چاپ
           </button>
@@ -164,6 +181,8 @@ export default function CaseDetailPage() {
         </div>
       </section>
 
+      <ResponsibilityBar kase={kase} onChange={refresh} />
+
       {kase.missingFields.length > 0 && (
         <div className="callout callout-amber row" style={{ justifyContent: 'space-between' }}>
           <span>
@@ -184,7 +203,7 @@ export default function CaseDetailPage() {
         <div className="stack span-2">
           <CaseSection id="case-assessment" title="کارشناسی و الحاقیه" note="اقلام، فایل اکسل و ارسال به قطعات" initialOpen={can('assessment.manage')||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-assessment')}><AssessmentPanel kase={kase} onChange={refresh} /></CaseSection>
           <CaseSection id="case-parts" title="قطعات و تأمین" note="نیازها، خرید و تحویل قطعه" initialOpen={(!can('assessment.manage') && can('part.manage'))||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-parts')}><PartsPanel kase={kase} onChange={refresh} /><PartsStatementPanel kase={kase} />{(can('stock.read') || can('emdad.read')) && <CaseStockPanel kase={kase} />}</CaseSection>
-          <CaseSection id="case-tasks" title="مسیر تعمیرات" note="ارجاع، شروع، پایان و تحویل جایگاه" initialOpen={(!can('assessment.manage') && !can('part.manage') && can('task.manage'))||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-tasks')}><TasksPanel kase={kase} onChange={refresh} /><ExternalWorkPanel kase={kase} onChange={refresh} /></CaseSection>
+          <CaseSection id="case-tasks" title="مسیر تعمیرات" note="ارجاع، شروع، پایان و تحویل جایگاه" initialOpen={(!can('assessment.manage') && !can('part.manage') && can('task.manage'))||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-tasks')}><TasksPanel kase={kase} onChange={refresh} /><ExternalWorkPanel kase={kase} onChange={refresh} /><CaseWagesPanel kase={kase} /></CaseSection>
           <CaseSection id="case-blockers" title="موانع و پیگیری" note={`${faNum(kase.openBlockers)} مانع باز`} initialOpen={!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&kase.openBlockers>0}><BlockersPanel kase={kase} onChange={refresh} /></CaseSection>
           <CaseSection id="case-quality" title="کنترل کیفیت و تحویل" initialOpen={(!can('assessment.manage') && !can('part.manage') && !can('finance.payment') && can('qc.inspect'))||(!(can('assessment.manage')||can('part.manage')||can('task.manage')||can('finance.payment')||can('qc.inspect'))&&({assessment:'case-assessment',awaiting_approval:'case-assessment',awaiting_parts:'case-parts',in_repair:'case-tasks',quality_control:'case-quality',ready_for_delivery:'case-quality'} as Record<string,string>)[kase.stage]==='case-quality')}><CompletionPanel kase={kase} onChange={refresh} /></CaseSection>
         </div>
@@ -274,6 +293,22 @@ export default function CaseDetailPage() {
           )}
         </div>
       </div>
+      <Dialog
+        open={!!stageBack}
+        title="برگرداندن پرونده به مرحلهٔ قبل"
+        onClose={() => setStageBack(null)}
+        footer={<><button type="button" className="btn" onClick={() => setStageBack(null)}>انصراف</button><button type="button" className="btn btn-primary" disabled={!stageBack?.note.trim()} onClick={() => { const next = stageBack; setStageBack(null); if (next) void changeStage(next.stage, next.note.trim()); }}>ثبت</button></>}
+      >
+        <label className="field">
+          <span>دلیل (برای مدیر سیستم الزامی)</span>
+          <input className="input" maxLength={500} value={stageBack?.note ?? ''} onChange={(e) => setStageBack((x) => (x ? { ...x, note: e.target.value } : x))} />
+        </label>
+      </Dialog>
+      <ReminderComposer
+        open={reminding}
+        onClose={() => setReminding(false)}
+        defaults={{ caseId: kase.id, caseLabel: kase.caseNumber, plate: v.plate, userIds: kase.responsible ? [kase.responsible.id] : [], role: kase.responsible ? undefined : 'accident_coordinator' }}
+      />
     </div>
   );
 }
