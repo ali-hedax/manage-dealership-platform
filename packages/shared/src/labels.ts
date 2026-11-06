@@ -245,6 +245,21 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'discrepancy.condition_returned': 'بازگشت نشانه ناسازگاری',
   'discrepancy.resolved': 'رفع مغایرت قطعه',
   'discrepancy.dismissed': 'رد مغایرت (اختلاف واقعی نبود)',
+  // Phase 3
+  'case.transferred': 'انتقال پرونده به مسئول دیگر',
+  'reminder.sent': 'ارسال تذکر',
+  'reminder.seen': 'دیدن تذکر',
+  'reminder.done': 'انجام تذکر',
+  'reminder.replied': 'جواب تذکر',
+  'wage.set': 'ثبت اجرت تعمیرکار',
+  'wage.changed': 'تغییر اجرت تعمیرکار',
+  'user.technician_created': 'ساخت حساب تعمیرکار',
+  'user.technician_pin_reset': 'رمز تازه و باز کردن قفل تعمیرکار',
+  'user.technician_activated': 'فعال کردن تعمیرکار',
+  'user.technician_deactivated': 'غیرفعال کردن تعمیرکار',
+  'user.invited': 'دعوت کارمند',
+  'user.staff_admin_granted': 'دادن دسترسی دعوت و غیرفعال کردن کارکنان به مدیر سیستم',
+  'user.staff_admin_revoked': 'گرفتن دسترسی دعوت و غیرفعال کردن کارکنان از مدیر سیستم',
 };
 
 // Keys produced by the API in CaseListItem.missingFields ('نیازمند تکمیل').

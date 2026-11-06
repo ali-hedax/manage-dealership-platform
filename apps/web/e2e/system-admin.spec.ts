@@ -38,3 +38,32 @@ test('owner-configured support desk exposes daily upload, all operational queues
  await page.goto('/accidents/expert');await expect(page.getByRole('heading',{name:'میز کار مسئول تصادفات',exact:true})).toBeVisible();
  await page.goto('/accidents/owner');await expect(page.getByRole('heading',{name:'این میز کار برای شما فعال نیست',exact:true})).toBeVisible();
 });
+
+test('owner gives and takes "invite and deactivate staff" of the system administrator and sees the report of support actions', async ({ page }, info) => {
+  await login(page, 'manager');
+  await page.goto('/users#owner-admin');
+  const section = page.getByTestId('owner-admin');
+  await expect(section.getByRole('heading', { name: 'مرز مالک و مدیر سیستم', exact: true })).toBeVisible();
+  const toggle = section.getByRole('switch', { name: /دعوت و غیرفعال کردن کارکنان؛ مدیر سیستم نمونه/ });
+  await expect(toggle).toBeChecked();
+  await toggle.click();
+  await expect(toggle).not.toBeChecked();
+  await expect(section).toContainText('نمی‌تواند دعوت و غیرفعال کند');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await section.screenshot({ path: info.outputPath('owner-admin-mobile.png') });
+  await page.setViewportSize({ width: 1366, height: 860 });
+
+  await login(page, 'admin');
+  expect((await page.request.get('/api/v1/staff/technicians')).status()).toBe(403);
+  expect((await page.request.get('/api/v1/access/admin-actions')).status()).toBe(403);
+  await page.goto('/users');
+  await expect(page.getByText('به بخش کارکنان دسترسی ندارید.', { exact: true })).toBeVisible();
+
+  await login(page, 'manager');
+  await page.goto('/users#owner-admin');
+  await page.getByTestId('owner-admin').getByRole('switch', { name: /مدیر سیستم نمونه/ }).click();
+  await expect(page.getByTestId('owner-admin').getByRole('switch', { name: /مدیر سیستم نمونه/ })).toBeChecked();
+  await login(page, 'admin');
+  expect((await page.request.get('/api/v1/staff/technicians')).status()).toBe(200);
+});

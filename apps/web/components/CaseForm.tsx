@@ -139,6 +139,8 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
   const router = useRouter();
   const toast = useToast();
   const { me, can } = useAuth();
+  // A system administrator who is not the owner gives a reason when correcting a recorded value.
+  const supportAccount = !me.isOwner && me.roles.includes('system_admin');
   const editing = !!existing;
   const [f, setF] = useState<FormState>(() => (existing ? fromCase(existing) : empty()));
   const [restored, setRestored] = useState(false);
@@ -486,11 +488,11 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
           hint="برآورد فعلی کارشناس با توجه به ظرفیت"
         />
         </div></details>
-        {sensitiveChanged && (
+        {(sensitiveChanged || (editing && supportAccount)) && (
           <label className="field span-all">
-            <span>دلیل تغییر مهلت رسمی یا زمان پذیرش *</span>
+            <span>{sensitiveChanged ? 'دلیل تغییر مهلت رسمی یا زمان پذیرش *' : 'دلیل اصلاح (مدیر سیستم)'}</span>
             <input className="input" name="reason" {...text('reason')} />
-            <span className="hint">در تاریخچه پرونده ثبت می‌شود</span>
+            <span className="hint">{supportAccount ? 'برای تغییر مقدار ثبت‌شده لازم است؛ تکمیل جای خالی دلیل نمی‌خواهد. در تاریخچه و گزارش مالک می‌ماند.' : 'در تاریخچه پرونده ثبت می‌شود'}</span>
           </label>
         )}
       </Section>

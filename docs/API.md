@@ -29,6 +29,10 @@ The exact request fields and enums are [shared schemas](../packages/shared/src/s
 - Parts: request, create from approved assessment, import, lifecycle actions. Import is a JSON/base64 contract defined by `importPartsSchema`, not multipart upload; preview before committing. The UI supplies a synthetic template.
 - Finance: shares, proposed advance/exception, separate approval and receipt, settlement payments. A proposer cannot approve their own request.
 - Completion: QC rounds, independent technical/financial close, handover. Service rules recheck prerequisites; changing stage cannot bypass them.
+- Reminders (phase 3, any signed-in user): `POST /reminders` (`reminderSendSchema`: `userIds` and/or `role`, optional `caseId`/`plate`, `body` ≤ 300, `urgency`), `GET /reminders/inbox` (open cards), `GET /reminders` (received and sent with each recipient's status and reply), `POST /reminders/:recipientId/respond` (`seen` / `done` / `reply`). Recipients must be active users of the same dealership (422 `INVALID_RECIPIENT`); the sender is never a recipient (422 `NO_RECIPIENTS`). A technician attaches only a case of an own job and reports a problem with `POST /workshop/my-tasks/:id/problem` (`technicianProblemSchema`), which reaches the case's accident responsible.
+- Technician wages (phase 3): `PUT /tasks/:id/wage` (`wage.manage`; `expectedVersion` 0 for a new wage; a change needs `reason`, 422 `WAGE_REASON_REQUIRED`), `GET /cases/:id/wages` and `GET /tasks/:id/wage-history` (`wage.manage` or `wage.report`), `GET /reports/wages[?month=1405-08]` and `/reports/wages/export` (Excel, `wage.report`). The technician reaches only `GET /workshop/my-work[?month=]`, `POST /workshop/my-tasks/:id/wage-seen` and the own `wage` field of `GET /workshop/my-tasks`; no assessment amount or other person's wage is returned to them.
+- Responsibility (phase 3): `GET /cases/:id/responsibility`, `POST /cases/:id/transfer` (`caseTransferSchema`, `case.update`; target must be an active accident coordinator, 422 `INVALID_RESPONSIBLE` / `SAME_RESPONSIBLE`), `GET /reports/responsibility[?month=]` (`report.manager`).
+- Owner controls (phase 3, actual owner only): `GET /access/system-admins`, `PUT /access/users/:id/staff-admin` (`staffAdminSchema`: grant or remove `user.manage` of a system administrator through the personal override), `GET /access/admin-actions[?month=]` (audit rows of non-owner system administrators). A non-owner system administrator gets 422 `SUPPORT_REASON_REQUIRED` when unlocking a technician (new PIN, activation), correcting a recorded case value, moving a case back a stage, editing a repair job or transferring a case without a reason.
 
 Updates and actions use the appropriate `expectedVersion` from the latest server response where required by their schema. On 409, refetch and show the conflict; never silently overwrite. Amounts are whole Rials; timestamps are UTC ISO strings. Convert to Jalali for display only.
 
@@ -54,7 +58,9 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 <!-- routes:start -->
 | Method | Route | Controller |
 | --- | --- | --- |
+| GET | `/api/v1/access/admin-actions` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/access/presets` | [source](../apps/api/src/auth/access.controller.ts) |
+| GET | `/api/v1/access/system-admins` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/access` | [source](../apps/api/src/auth/access.controller.ts) |
 | GET | `/api/v1/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | GET | `/api/v1/auth/invitations/email/status` | [source](../apps/api/src/auth/email-auth.controller.ts) |
@@ -70,7 +76,9 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/cases/:id/parts-statement` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/cases/:id/parts` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/cases/:id/provenance` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
+| GET | `/api/v1/cases/:id/responsibility` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/cases/:id/timeline` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| GET | `/api/v1/cases/:id/wages` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/cases/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/daily-reports/imports/:id/report` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -95,15 +103,22 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reference-data/:kind` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id/report` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
+| GET | `/api/v1/reminders/inbox` | [source](../apps/api/src/people/people.controllers.ts) |
+| GET | `/api/v1/reminders/people` | [source](../apps/api/src/people/people.controllers.ts) |
+| GET | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reports/export` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/pdf` | [source](../apps/api/src/reports/reports.controller.ts) |
+| GET | `/api/v1/reports/responsibility` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reports/views` | [source](../apps/api/src/reports/reports.controller.ts) |
+| GET | `/api/v1/reports/wages/export` | [source](../apps/api/src/people/people.controllers.ts) |
+| GET | `/api/v1/reports/wages` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reports` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | GET | `/api/v1/staff/technicians` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | GET | `/api/v1/stock/options` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/stock/reservations/export` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
+| GET | `/api/v1/tasks/:id/wage-history` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/users/assignable` | [source](../apps/api/src/reference/reference.controller.ts) |
 | GET | `/api/v1/vehicle-imports/:id/report` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | GET | `/api/v1/vehicle-imports/:id` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
@@ -112,6 +127,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/workshop/calendar/iran-holidays` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/calendar` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/my-tasks` | [source](../apps/api/src/workshop/workshop.controller.ts) |
+| GET | `/api/v1/workshop/my-work` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/workshop/overview` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/quotes` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/staff` | [source](../apps/api/src/workshop/workshop.controller.ts) |
@@ -158,6 +174,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/stage` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/tasks` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/technical-close` | [source](../apps/api/src/completion/completion.controller.ts) |
+| POST | `/api/v1/cases/:id/transfer` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/apply` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/discard` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -179,6 +196,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reference-imports/:id/apply` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
+| POST | `/api/v1/reminders/:id/respond` | [source](../apps/api/src/people/people.controllers.ts) |
+| POST | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/staff/technicians` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | POST | `/api/v1/stock/aliases` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations/:id/actions` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -189,16 +208,20 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/vehicle-imports` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | POST | `/api/v1/workshop/calendar` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/workshop/my-tasks/:id/actions` | [source](../apps/api/src/workshop/workshop.controller.ts) |
+| POST | `/api/v1/workshop/my-tasks/:id/problem` | [source](../apps/api/src/people/people.controllers.ts) |
+| POST | `/api/v1/workshop/my-tasks/:id/wage-seen` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/workshop/parts/:id/quotes` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/workshop/quotes/:id/decision` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/workshop/setup-trades` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/workshop/stations` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | PUT | `/api/v1/access/templates/:role` | [source](../apps/api/src/auth/access.controller.ts) |
+| PUT | `/api/v1/access/users/:id/staff-admin` | [source](../apps/api/src/people/people.controllers.ts) |
 | PUT | `/api/v1/access/users/:id` | [source](../apps/api/src/auth/access.controller.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
 | PUT | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/active` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/pin` | [source](../apps/api/src/auth/technicians.controller.ts) |
+| PUT | `/api/v1/tasks/:id/wage` | [source](../apps/api/src/people/people.controllers.ts) |
 <!-- routes:end -->
 
 ## Staff invitation email

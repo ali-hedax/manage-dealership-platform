@@ -127,6 +127,13 @@
       "when": 1793914219304,
       "tag": "0017_parts_workbench",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793953290462,
+      "tag": "0018_people_reminders_wages",
+      "breakpoints": true
     }
   ]
 }

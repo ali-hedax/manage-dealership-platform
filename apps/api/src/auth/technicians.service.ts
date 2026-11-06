@@ -10,6 +10,7 @@ import { sessions, users } from '../db/schema';
 import { isTechnicianOnly } from './auth.service';
 import type { Actor } from './auth.types';
 import { hashPassword } from './password';
+import { requireSupportReason } from './support-reason';
 
 export interface TechnicianAccount {
   id: string;
@@ -89,29 +90,32 @@ export class TechniciansService {
     return this.list(actor);
   }
 
-  async resetPin(actor: Actor, id: string, pin: string): Promise<TechnicianAccount[]> {
+  async resetPin(actor: Actor, id: string, pin: string, reason?: string): Promise<TechnicianAccount[]> {
     await this.db.transaction(async (tx) => {
       const user = await this.loadTechnician(tx, actor.user.tenantId, id);
+      requireSupportReason(actor, reason);
       await tx
         .update(users)
         .set({ pinHash: await hashPassword(pin), failedLoginCount: 0, lockedUntil: null, updatedAt: new Date(), version: sql`${users.version} + 1` })
         .where(eq(users.id, user.id));
       // A new PIN ends every open session of this technician.
       await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, user.id), isNull(sessions.revokedAt)));
-      await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'user.technician_pin_reset' });
+      await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'user.technician_pin_reset', reason: reason?.trim() || null });
     });
     return this.list(actor);
   }
 
-  async setActive(actor: Actor, id: string, active: boolean): Promise<TechnicianAccount[]> {
+  async setActive(actor: Actor, id: string, active: boolean, reason?: string): Promise<TechnicianAccount[]> {
     await this.db.transaction(async (tx) => {
       const user = await this.loadTechnician(tx, actor.user.tenantId, id);
+      requireSupportReason(actor, reason);
       await tx.update(users).set({ isActive: active, updatedAt: new Date(), version: sql`${users.version} + 1` }).where(eq(users.id, user.id));
       if (!active) await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, user.id), isNull(sessions.revokedAt)));
       await this.audit.record(tx, actor, {
         entityType: 'user',
         entityId: user.id,
         action: active ? 'user.technician_activated' : 'user.technician_deactivated',
+        reason: reason?.trim() || null,
       });
     });
     return this.list(actor);

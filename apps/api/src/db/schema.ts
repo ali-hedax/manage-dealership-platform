@@ -1227,3 +1227,85 @@ export const partsStatements = pgTable('parts_statements', {
   sentBy: uuid('sent_by').notNull().references(() => users.id),
   isTest: boolean('is_test').notNull().default(false),
 }, t => [uniqueIndex('parts_statement_case_version_uq').on(t.tenantId, t.caseId, t.version)]);
+
+// ------------------------------------------------------------------- phase 3
+// Reminders between desks (not a chat): one row per sent reminder and one per
+// recipient with seen / done / a one-line reply. The unseen nudge after two
+// working hours is delivered through `notifications`.
+export const reminders = pgTable('reminders', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  senderUserId: uuid('sender_user_id').notNull().references(() => users.id),
+  caseId: uuid('case_id').references(() => cases.id),
+  plate: text('plate'),
+  body: text('body').notNull(),
+  urgency: text('urgency').notNull().default('normal'),
+  // manual | manager_report | technician_problem
+  source: text('source').notNull().default('manual'),
+  // Set when the reminder was addressed to a role rather than chosen people.
+  targetRole: text('target_role'),
+  isTest: boolean('is_test').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, t => [index('reminders_tenant_sender_idx').on(t.tenantId, t.senderUserId, t.createdAt)]);
+
+export const reminderRecipients = pgTable('reminder_recipients', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  reminderId: uuid('reminder_id').notNull().references(() => reminders.id),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  // sent | seen | done
+  status: text('status').notNull().default('sent'),
+  seenAt: ts('seen_at'),
+  doneAt: ts('done_at'),
+  reply: text('reply'),
+  // Two working hours after sending, by the dealership calendar at that time.
+  remindAt: ts('remind_at').notNull(),
+  remindedAt: ts('reminded_at'),
+  version: integer('version').notNull().default(1),
+  isTest: boolean('is_test').notNull().default(false),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, t => [
+  uniqueIndex('reminder_recipients_uq').on(t.reminderId, t.userId),
+  index('reminder_recipients_user_idx').on(t.tenantId, t.userId, t.status),
+  index('reminder_recipients_due_idx').on(t.status, t.remindAt),
+]);
+
+/** The technician's wage for one job; independent from the assessment labour. History lives in the audit. */
+export const technicianWages = pgTable('technician_wages', {
+  taskId: uuid('task_id').primaryKey().references(() => tasks.id),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  caseId: uuid('case_id').notNull().references(() => cases.id),
+  amountRial: bigint('amount_rial', { mode: 'number' }).notNull(),
+  reason: text('reason'),
+  setBy: uuid('set_by').notNull().references(() => users.id),
+  setAt: ts('set_at').notNull().defaultNow(),
+  // The amount the technician last saw on the job card ("changed" label).
+  seenAmountRial: bigint('seen_amount_rial', { mode: 'number' }),
+  seenAt: ts('seen_at'),
+  version: integer('version').notNull().default(1),
+  isTest: boolean('is_test').notNull().default(false),
+}, t => [index('technician_wages_tenant_case_idx').on(t.tenantId, t.caseId)]);
+
+/**
+ * Who was responsible for a case from when to when. A case without rows has
+ * one computed period (admission → now, current responsible); the first change
+ * records that period explicitly and opens the next one. At most one open row.
+ */
+export const caseResponsibilityPeriods = pgTable('case_responsibility_periods', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  caseId: uuid('case_id').notNull().references(() => cases.id),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  startedAt: ts('started_at').notNull(),
+  endedAt: ts('ended_at'),
+  reason: text('reason'),
+  // initial | created | transfer | update
+  origin: text('origin').notNull().default('transfer'),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+}, t => [
+  index('case_responsibility_case_idx').on(t.caseId, t.startedAt),
+  index('case_responsibility_tenant_user_idx').on(t.tenantId, t.userId),
+  uniqueIndex('case_responsibility_open_uq').on(t.caseId).where(sql`${t.endedAt} is null`),
+]);

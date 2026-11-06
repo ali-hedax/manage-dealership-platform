@@ -62,14 +62,19 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       const t = list.find((x) => x.username === 'mechanic1')!;
       const first = await pinLogin('mechanic1', '1111');
       expect(first.status).toBe(200);
-      const reset = await admin.put(`/staff/technicians/${t.id}/pin`, { pin: '2222' });
+      // Phase 3: the system administrator (not the owner) unlocks only with a written reason.
+      const withoutReason = await admin.put(`/staff/technicians/${t.id}/pin`, { pin: '2222' });
+      expect(withoutReason.status).toBe(422);
+      expect(withoutReason.body.code).toBe('SUPPORT_REASON_REQUIRED');
+      const reset = await admin.put(`/staff/technicians/${t.id}/pin`, { pin: '2222', reason: 'رمز را فراموش کرده بود (آزمون)' });
       expect(reset.status).toBe(200);
       const open = await h.db.db.select().from(sessions).where(eq(sessions.userId, t.id));
       expect(open.every((s) => s.revokedAt)).toBe(true);
       expect((await pinLogin('mechanic1', '1111')).status).toBe(401);
       expect((await pinLogin('mechanic1', '2222')).status).toBe(200);
 
-      expect((await admin.put(`/staff/technicians/${t.id}/active`, { active: false })).status).toBe(200);
+      expect((await admin.put(`/staff/technicians/${t.id}/active`, { active: false })).body.code).toBe('SUPPORT_REASON_REQUIRED');
+      expect((await admin.put(`/staff/technicians/${t.id}/active`, { active: false, reason: 'پایان همکاری (آزمون)' })).status).toBe(200);
       expect((await pinLogin('mechanic1', '2222')).status).toBe(401);
     });
 

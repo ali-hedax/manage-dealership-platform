@@ -76,3 +76,56 @@ export function parseJalali(dateText: string, timeText = '00:00'): Date | null {
 export function currentJalaliYear(now: Date = new Date()): number {
   return toJalaliParts(now).jy;
 }
+
+export const JALALI_MONTH_NAMES = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'] as const;
+
+/** Tehran-local Jalali month of an instant as "1405-08" (used in month filters). */
+export function jalaliMonthKey(date: Date = new Date()): string {
+  const p = toJalaliParts(date);
+  return `${p.jy}-${pad(p.jm)}`;
+}
+
+/** "آبان ۱۴۰۵" for a month key; the key itself when it is not valid. */
+export function jalaliMonthLabel(key: string): string {
+  const range = jalaliMonthRange(key);
+  return range ? range.label : key;
+}
+
+/**
+ * UTC bounds [from, to) of a Jalali month given as "1405-08", using the fixed
+ * Tehran offset like every other conversion here. Null when the key is invalid.
+ */
+export function jalaliMonthRange(key: string): { jy: number; jm: number; from: Date; to: Date; label: string } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(toLatinDigits(key).trim());
+  if (!m) return null;
+  const jy = Number(m[1]);
+  const jm = Number(m[2]);
+  if (jm < 1 || jm > 12 || jy < 1300 || jy > 1500) return null;
+  const start = toGregorian(jy, jm, 1);
+  const next = jm === 12 ? toGregorian(jy + 1, 1, 1) : toGregorian(jy, jm + 1, 1);
+  const offset = TEHRAN_OFFSET_MINUTES * 60_000;
+  return {
+    jy,
+    jm,
+    from: new Date(Date.UTC(start.gy, start.gm - 1, start.gd) - offset),
+    to: new Date(Date.UTC(next.gy, next.gm - 1, next.gd) - offset),
+    label: `${JALALI_MONTH_NAMES[jm - 1]} ${toPersianDigits(jy)}`,
+  };
+}
+
+/** The given month and the months before it, newest first (month pickers). */
+export function recentJalaliMonths(count: number, from: Date = new Date()): string[] {
+  const p = toJalaliParts(from);
+  const out: string[] = [];
+  let jy = p.jy;
+  let jm = p.jm;
+  for (let i = 0; i < count; i++) {
+    out.push(`${jy}-${pad(jm)}`);
+    jm -= 1;
+    if (jm === 0) {
+      jm = 12;
+      jy -= 1;
+    }
+  }
+  return out;
+}

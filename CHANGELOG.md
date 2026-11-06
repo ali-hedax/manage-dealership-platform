@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased] — phase 3 of the role-based plan
+
+- Anyone, technicians included, can send a short reminder (up to 300 characters or a ready-made text) to a person, several people or a role, optionally tied to a case or plate, normal or urgent. It appears as a card on top of the recipient's desk with «دیدم», «انجام شد» and a one-line reply; the sender sees sent / seen / done and the reply. A reminder not seen within two working hours sends a notification again. It is not a chat.
+- The service manager has «تذکر» beside every report row and finding; it goes to the executive role (parts clerk, the case responsible or the accident coordinators), never to the manager.
+- The technician's job card has «مشکل دارم» with four ready-made messages to the case's accident responsible, shows «اجرت شما» with a «تغییر کرد» label when it changes, and a bottom bar with this month's work.
+- The accident coordinator records the technician's wage per job, independent from the assessment labour (optional «همان مبلغ کارشناسی»); each change needs a reason and stays in its history. «کارکرد من» lists the technician's approved jobs of a Jalali month with totals per golden card / insurance / personal. The service manager and the owner see paid wages against assessment labour per technician and month, with Excel.
+- «انتقال پرونده» hands a case to another active accident coordinator; the responsibility bar shows who was responsible from when to when, and each coordinator's statistics follow their own period.
+- The owner turns «دعوت و غیرفعال کردن کارکنان» on or off for each system administrator and alone sees the report of system-admin actions. The system administrator must give a reason for unlocking a technician, correcting a recorded value, moving a case back or transferring it.
+
 ## [Unreleased] — phase 2 of the role-based plan
 
 - The parts clerk opens a prioritized vehicle workbench with stock, Emdad, market and handover actions. The prior queues remain available.

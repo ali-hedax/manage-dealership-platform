@@ -7,6 +7,7 @@ import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
+import { requireSupportReason } from '../auth/support-reason';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { departments, externalWork, taskDependencies, tasks, workshopStations, users } from '../db/schema';
@@ -103,6 +104,8 @@ export class TasksService {
     await this.db.transaction(async (tx) => {
       const task = await this.loadForWrite(tx, tenantId, taskId, input.expectedVersion);
       caseId = task.caseId;
+      // Any change of a recorded job by a system administrator is a correction with a reason.
+      requireSupportReason(actor, input.scheduleReason);
       await this.cases.loadForWrite(tx, tenantId, task.caseId);
       if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
 

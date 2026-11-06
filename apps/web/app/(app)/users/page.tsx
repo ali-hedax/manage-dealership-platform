@@ -8,6 +8,7 @@ import {AccessPanel} from '@/components/AccessPanel';
 import {Dialog} from '@/components/Dialog';
 import {permissionsFor,PERMISSION_LABELS,type PermissionTemplates} from '@manage/shared';
 import { TechniciansPanel } from '@/components/TechniciansPanel';
+import { OwnerAdminControls } from '@/components/OwnerAdminControls';
 
 type UserRow={id:string;email:string;displayName:string;roles:Role[];isActive:boolean;invitationDelivery:string;invitationFailure:string|null;invitationExpiresAt:string|null};
 type MailCheck={status:'ready'|'not_configured'|'failed';failure?:string};
@@ -63,6 +64,7 @@ export default function UsersPage(){
       <span aria-live="polite" className="small" data-testid="mail-check">{check&&checkLabel(check)}</span>
     </div>
     <AccessPanel/>
+    <OwnerAdminControls/>
     <section id="invite-staff" className="card"><h2>افزودن کارمند و ارسال دعوت</h2>
       <form className="form" onSubmit={submit} aria-busy={busy}>
         <fieldset disabled={busy} style={{border:0,padding:0,margin:0,minInlineSize:0,display:'grid',gap:12}}>

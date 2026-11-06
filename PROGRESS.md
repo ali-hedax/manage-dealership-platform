@@ -1,5 +1,18 @@
 # PROGRESS — Manage by HEDAX
 
+## فاز ۳ طرح نقش‌محور — نوشته شد، منتظر CI — 2026-11-06
+
+شاخهٔ `feature/phase3-people` از `feature/phase2-parts` (`a1cd8c6`، PR #53) ساخته شد. چهار بخش نوشته شده است: تذکر بین کارتابل‌ها، اجرت تعمیرکار و کارکرد ماه، دوره‌های مسئول پرونده و انتقال، مرز مالک و مدیر سیستم. migration افزایشی `0018_people_reminders_wages` چهار جدول تازه دارد و روی PostgreSQL 16 از صفر، با down و اجرای دوباره، آزموده شد. [راهنمای فارسی](docs/PHASE3_PEOPLE_FA.md)، [پایگاه داده](docs/DATABASE.md)، [گزارش آزمون](docs/TEST_REPORT.md).
+
+محیط ساخت به بستهٔ npm دسترسی نداشت. build، lint، typecheck، Jest و Playwright هنوز اجرا نشده‌اند و نتیجه‌شان با CI روی PR معلوم می‌شود. عکس‌های `docs/screenshots/phase3/` هم هنوز ساخته نشده‌اند.
+
+**قدم دقیق بعد:**
+۱. PR از `feature/phase3-people` به `main` باز شود. بعد از ثبت نتیجهٔ هر شش بررسی، اگر بررسی‌ای قرمز شد، خطای همان بررسی رفع شود.
+۲. عکس‌ها با این دستور ساخته شوند: `SCREENSHOTS=1 pnpm --filter @manage/web exec playwright test phase3-screenshots --project=desktop`
+۳. تعداد آزمون‌ها در [گزارش آزمون](docs/TEST_REPORT.md) ثبت شود.
+
+ترتیب ادغام: اول #53، بعد فاز ۳. ادغام و انتشار با مالک است.
+
 ## فاز ۲ طرح نقش‌محور — 2026-11-06
 
 شاخهٔ `feature/phase2-parts` از `main` در `436575f`. میز قطعات، تحویل قیمت‌دار از دو سمت، صورت قطعات و خدمات بیرون با migration افزایشی `0017_parts_workbench` آمادهٔ بررسی هستند. [راهنمای فارسی](docs/PHASE2_PARTS_FA.md) و [نتایج آزمون](docs/TEST_REPORT.md).

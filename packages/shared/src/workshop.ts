@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { TaskWage } from './people';
 
 export const REPAIR_TRADES = ['mechanical', 'electrical', 'suspension', 'body', 'paint', 'engine_tuning'] as const;
 export type RepairTrade = typeof REPAIR_TRADES[number];
@@ -39,6 +40,8 @@ export interface WorkshopTask {
   partsReady?: { count: number; names: string[]; pickup?: { id: string; version: number; description: string }[] };
   /** Parts of this vehicle still on order (not yet arrived). */
   partsWaiting?: number;
+  /** Own job cards only: the technician's own wage (never assessment or other people's amounts). */
+  wage?: TaskWage | null;
   dayMinutes?:number|null;
   plannedWorkMinutes?:number|null;
   id:string; caseId:string; caseNumber:string; vehicleLabel:string; plate:string|null; title:string|null;

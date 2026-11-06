@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, like, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
+  CASE_STAGES,
   currentJalaliYear,
   repairDayPlan,
   maskPhone,
@@ -15,6 +16,7 @@ import {
   type CaseListQuery,
   type CaseStage,
   type CaseStatus,
+  type CaseTransferInput,
   type ChangeStageInput,
   type CoverageType,
   type CreateCaseInput,
@@ -41,6 +43,8 @@ import {
   vehicles,
 } from '../db/schema';
 import { buildSearchText, computeMissingFields, formatCaseNumber } from './case-rules';
+import { recordInitialResponsibility, recordResponsibilityChange } from './responsibility';
+import { requireSupportReason } from '../auth/support-reason';
 import {idKey,isNonUniqueAdmission} from '../vehicle-import/vehicle-sheet';
 
 type CaseRow = typeof cases.$inferSelect;
@@ -58,6 +62,8 @@ type VehicleInput = NonNullable<CreateCaseInput['vehicle']>;
 type CustomerInput = NonNullable<CreateCaseInput['customer']>;
 
 const RESPONSIBLE_ROLES: Role[] = ['accident_coordinator','accident_expert', 'accident_supervisor', 'system_admin'];
+/** "Transfer case" chooses among active accident coordinators only (not the support account). */
+const TRANSFER_ROLES: Role[] = ['accident_coordinator', 'accident_expert', 'accident_supervisor'];
 const FUTURE_TOLERANCE_MS = 10 * 60_000;
 // The UI records times to the minute; ordering checks accept that precision.
 export const MINUTE_TOLERANCE_MS = 60_000;
@@ -193,6 +199,7 @@ export class CasesService {
         .insert(cases)
         .values({ ...values, ...derived })
         .returning();
+      await recordInitialResponsibility(tx, actor, row!);
       await this.audit.record(tx, actor, {
         entityType: 'case',
         entityId: id,
@@ -264,6 +271,8 @@ export class CasesService {
         patch.forecastDeliveryAt=new Date(patch.repairPlan.endAt);
       }
       if (customerId !== current.customerId) patch.customerId = customerId;
+      // A system administrator correcting an already recorded value writes a reason (filling an empty field does not need one).
+      if ((Object.keys(patch) as (keyof CaseRow)[]).some((k) => isCorrection(current[k], patch[k]))) requireSupportReason(actor, input.reason);
       if(input.admissionNo!==undefined){patch.admissionNo=input.admissionNo;patch.admissionNoKey=input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null;}
       if (extra.admissionNo !== undefined) patch.admissionNo = extra.admissionNo;
       if (extra.admissionNoKey !== undefined) patch.admissionNoKey = extra.admissionNoKey;
@@ -275,6 +284,9 @@ export class CasesService {
         .where(and(eq(cases.id, id), eq(cases.version, current.version)))
         .returning();
       if (!updated) throw versionConflict();
+      if ('responsibleUserId' in patch) {
+        await recordResponsibilityChange(tx, actor, current, updated.responsibleUserId, updated.updatedAt, 'update', input.reason ?? null);
+      }
 
       const fields = Object.keys(patch);
       const changes = diff(pick(current, fields), pick(updated, fields));
@@ -287,6 +299,48 @@ export class CasesService {
         reason: input.reason ?? null,
         before: changes?.before ?? null,
         after: changes?.after ?? null,
+        snapshot: { version: updated.version, row: finalRow },
+      });
+    });
+    return this.detail(actor, id);
+  }
+
+  /**
+   * Hands a case to another active accident coordinator. The current period is
+   * closed and a new one opened; statistics follow each person's own period.
+   */
+  async transfer(actor: Actor, id: string, input: CaseTransferInput): Promise<CaseDetail> {
+    const tenantId = actor.user.tenantId;
+    await this.db.transaction(async (tx) => {
+      const current = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
+      if (current.responsibleUserId === input.toUserId) throw badRequest('SAME_RESPONSIBLE', 'این پرونده همین حالا با همین مسئول است');
+      const [target] = await tx
+        .select({ id: users.id, roles: users.roles })
+        .from(users)
+        .where(and(eq(users.id, input.toUserId), eq(users.tenantId, tenantId), eq(users.isActive, true)));
+      if (!target || !target.roles.some((r) => TRANSFER_ROLES.includes(r as Role))) {
+        throw badRequest('INVALID_RESPONSIBLE', 'مسئول تازه باید مسئول تصادفات فعال همین نمایندگی باشد');
+      }
+      const reason = input.reason?.trim() || null;
+      requireSupportReason(actor, reason);
+      const now = new Date();
+      const [updated] = await tx
+        .update(cases)
+        .set({ responsibleUserId: target.id, updatedAt: now, updatedBy: actor.user.id, version: current.version + 1 })
+        .where(and(eq(cases.id, id), eq(cases.version, current.version)))
+        .returning();
+      if (!updated) throw versionConflict();
+      await recordResponsibilityChange(tx, actor, current, target.id, now, 'transfer', reason);
+      const finalRow = await this.refreshDerived(tx, id);
+      await this.audit.record(tx, actor, {
+        entityType: 'case',
+        entityId: id,
+        caseId: id,
+        action: 'case.transferred',
+        reason,
+        occurredAt: now,
+        before: { responsibleUserId: current.responsibleUserId },
+        after: { responsibleUserId: target.id },
         snapshot: { version: updated.version, row: finalRow },
       });
     });
@@ -311,6 +365,8 @@ export class CasesService {
       if (input.stage === 'ready_for_delivery') {
         throw badRequest('TECHNICAL_CLOSE_REQUIRED', 'پرونده با «بستن فنی» پس از قبولی کنترل کیفیت آماده تحویل می‌شود');
       }
+      // Moving a case back to an earlier stage reopens recorded progress.
+      if (CASE_STAGES.indexOf(input.stage) < CASE_STAGES.indexOf(current.stage as CaseStage)) requireSupportReason(actor, input.note);
       const patch: Partial<CaseRow> & { stage: CaseStage } = { stage: input.stage };
       // Moving a technically closed case back into the workflow reopens it.
       if (current.technicalClosedAt) Object.assign(patch, { technicalClosedAt: null, technicalClosedBy: null, technicalCloseNote: null });
@@ -895,4 +951,12 @@ function clean(v: string | null | undefined): string | null | undefined {
 
 function pick(obj: Record<string, any>, keys: string[]): Record<string, unknown> {
   return Object.fromEntries(keys.map((k) => [k, obj[k]]));
+}
+
+/** A recorded value replaced by a different one (not an empty field being filled). */
+function isCorrection(before: unknown, after: unknown): boolean {
+  const empty = (v: unknown) => v === null || v === undefined || v === '';
+  if (empty(before)) return false;
+  const norm = (v: unknown) => (v instanceof Date ? v.toISOString() : JSON.stringify(v ?? null));
+  return norm(before) !== norm(after);
 }

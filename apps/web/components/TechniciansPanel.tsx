@@ -9,7 +9,10 @@ type Technician = { id: string; username: string; displayName: string; isActive:
 
 /** Technician accounts: username + 4-digit PIN, no email or Authenticator. */
 export function TechniciansPanel() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
+  // A system administrator who is not the owner writes a reason: a new PIN also unlocks the account.
+  const support = !me.isOwner && me.roles.includes('system_admin');
+  const [reason, setReason] = useState('');
   const { data, mutate } = useSWR<Technician[]>(can('user.manage') ? '/staff/technicians' : null, fetcher);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState('');
   const [pinFor, setPinFor] = useState<Technician | null>(null);
@@ -43,7 +46,7 @@ export function TechniciansPanel() {
   async function resetPin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const pin = new FormData(e.currentTarget).get('pin');
-    if (await run(() => api(`/staff/technicians/${pinFor!.id}/pin`, { method: 'PUT', body: { pin } }), `رمز تازهٔ ${pinFor!.displayName} ثبت شد و ورودهای قبلی او بسته شد.`)) setPinFor(null);
+    if (await run(() => api(`/staff/technicians/${pinFor!.id}/pin`, { method: 'PUT', body: { pin, ...(reason.trim() ? { reason: reason.trim() } : {}) } }), `رمز تازهٔ ${pinFor!.displayName} ثبت شد و ورودهای قبلی او بسته شد.`)) { setPinFor(null); setReason(''); }
   }
 
   return (
@@ -58,6 +61,13 @@ export function TechniciansPanel() {
         <label className="field" style={{ flex: '0 1 120px' }}>رمز ۴ رقمی<input name="pin" className="input" dir="ltr" inputMode="numeric" required pattern="[0-9۰-۹]{4}" maxLength={4} autoComplete="off" /></label>
         <button type="submit" className="btn btn-primary" disabled={busy}>افزودن تعمیرکار</button>
       </form>
+      {support && (
+        <label className="field" style={{ marginBlockStart: 12 }}>
+          <span>دلیل رمز تازه، باز کردن قفل یا فعال/غیرفعال کردن (برای مدیر سیستم الزامی)</span>
+          <input className="input" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثلاً رمز را فراموش کرده بود" />
+          <span className="hint">در گزارش «اقدامات مدیر سیستم» برای مالک دیده می‌شود.</span>
+        </label>
+      )}
       {pinFor && (
         <form onSubmit={resetPin} className="callout" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12, marginBlockStart: 16 }}>
           <label className="field" style={{ flex: '0 1 160px' }}>رمز تازهٔ {pinFor.displayName}<input name="pin" className="input" dir="ltr" inputMode="numeric" required pattern="[0-9۰-۹]{4}" maxLength={4} autoComplete="off" autoFocus /></label>
@@ -77,7 +87,7 @@ export function TechniciansPanel() {
                 <td>{t.lastLoginAt ? formatJalali(t.lastLoginAt, { time: true }) : '—'}</td>
                 <td style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setPinFor(t)}>رمز تازه</button>
-                  <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void run(() => api(`/staff/technicians/${t.id}/active`, { method: 'PUT', body: { active: !t.isActive } }), t.isActive ? `${t.displayName} غیرفعال شد.` : `${t.displayName} فعال شد.`)}>
+                  <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void run(() => api(`/staff/technicians/${t.id}/active`, { method: 'PUT', body: { active: !t.isActive, ...(reason.trim() ? { reason: reason.trim() } : {}) } }), t.isActive ? `${t.displayName} غیرفعال شد.` : `${t.displayName} فعال شد.`)}>
                     {t.isActive ? 'غیرفعال کردن' : 'فعال کردن'}
                   </button>
                 </td>

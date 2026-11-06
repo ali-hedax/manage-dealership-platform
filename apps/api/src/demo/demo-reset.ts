@@ -22,6 +22,13 @@ export async function purgeTestTenants(db: Database): Promise<number> {
       await tx.execute(sql`delete from idempotency_keys where tenant_id = ${id}`);
       await tx.execute(sql`delete from change_log where tenant_id = ${id}`);
       await tx.execute(sql`delete from audit_events where tenant_id = ${id}`);
+      // Phase 3 rows reference cases, tasks and users; delete them first.
+      await tx.execute(sql`delete from reminder_recipients where tenant_id = ${id}`);
+      await tx.execute(sql`delete from reminders where tenant_id = ${id}`);
+      await tx.execute(sql`delete from technician_wages where tenant_id = ${id}`);
+      await tx.execute(sql`delete from case_responsibility_periods where tenant_id = ${id}`);
+      await tx.execute(sql`delete from notifications where tenant_id = ${id}`);
+      await tx.execute(sql`delete from case_alert_responses where tenant_id = ${id}`);
       await tx.execute(sql`delete from parts_statements where tenant_id = ${id}`);
       await tx.execute(sql`delete from external_work where tenant_id = ${id}`);
       await tx.execute(sql`delete from external_contractors where tenant_id = ${id}`);
