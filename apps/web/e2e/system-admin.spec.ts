@@ -45,7 +45,12 @@ test('owner gives and takes "invite and deactivate staff" of the system administ
   const section = page.getByTestId('owner-admin');
   await expect(section.getByRole('heading', { name: 'مرز مالک و مدیر سیستم', exact: true })).toBeVisible();
   const toggle = section.getByRole('switch', { name: /دعوت و غیرفعال کردن کارکنان؛ مدیر سیستم نمونه/ });
-  await expect(toggle).toBeChecked();
+  // A CI retry reuses the same database, so start from the granted state either way.
+  await expect(toggle).toBeVisible();
+  if (!(await toggle.isChecked())) {
+    await toggle.click();
+    await expect(toggle).toBeChecked();
+  }
   await toggle.click();
   await expect(toggle).not.toBeChecked();
   await expect(section).toContainText('نمی‌تواند دعوت و غیرفعال کند');

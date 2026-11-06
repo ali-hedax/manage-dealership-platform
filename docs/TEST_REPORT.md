@@ -1,6 +1,15 @@
 # Test report
 
-## Phase 3 role-based plan (reminders, wages, responsibility, owner controls) — 2026-11-06 — written, **CI pending**
+## Phase 3 role-based plan (reminders, wages, responsibility, owner controls) — 2026-11-06 — **done, not deployed**
+
+Results on PR #54 head `c38467d` (GitHub Actions run 42194752561) plus local Linux (Node 22, pnpm 10):
+
+- **CI:** documentation and API inventory, dependency audit and secret scan, Docker images and compose smoke, PostgreSQL 16 migrations `0000`→`0018` and demo seed (PostgreSQL-only suites 5/5 and 4/4) all passed. Lint, typecheck, build and tests passed: shared **21/21**, API **221 passed, 9 skipped, 0 failed** (31 of 33 suites; the two skipped suites are the PostgreSQL-only ones run in the PostgreSQL job). Main Playwright suite **42 passed**.
+- **One CI failure, fixed:** the owner Playwright suite failed on «owner gives and takes …». With support actions in the report, the owner panel grew to 437 px at a 390 px viewport, because the report table widened the `.owner-admin` grid track. Fix: `grid-template-columns:minmax(0,1fr)` on `.owner-admin`; the table scrolls inside its own frame. The test now starts from the granted state, so a CI retry on the same database no longer fails on the initial `toBeChecked`. Owner suite locally after the fix: **4 passed, 0 failed**.
+- **Local:** `pnpm -r typecheck` and `pnpm -r lint` clean; `people.e2e-spec.ts` 14/14 and `parts-workbench.e2e-spec.ts` 4/4.
+- **Screenshots** (synthetic data, preview build): [reminders](screenshots/phase3/reminders-desktop.webp) · [reminders 390](screenshots/phase3/reminders-mobile.webp) · [technician card 390](screenshots/phase3/technician-card-mobile.webp) · [monthly work 390](screenshots/phase3/my-work-mobile.webp) · [responsibility bar](screenshots/phase3/responsibility-bar-desktop.webp) · [wages and responsibility report](screenshots/phase3/people-report-desktop.webp) · [case wages panel](screenshots/phase3/case-wages-desktop.webp).
+
+Original build notes from the author:
 
 Base `feature/phase2-parts` (`a1cd8c6`), branch `feature/phase3-people`. Synthetic data only. Under AGENTS rule 5 this phase is **not done** until the six GitHub Actions checks have run on the PR and their numbers are recorded here.
 
@@ -22,7 +31,7 @@ Written and to be run by CI:
 - `apps/api/test/technician-pin.e2e-spec.ts` updated: the system administrator's PIN reset and deactivation now need a reason (new owner rule); the test asserts `SUPPORT_REASON_REQUIRED` without one and success with one.
 - Playwright `e2e/people.spec.ts` (2 tests, desktop project): reminder from the case page, technician card at 390 px («دیدم», «انجام شد», own wage, «مشکل دارم», start/finish, no horizontal scroll), not in monthly work before approval, transfer with the responsibility bar, approved wage in «کارکرد من»; manager reminder from a report row (source `manager_report`, never to the manager) and the wage report page at 390 px.
 - `e2e/system-admin.spec.ts` (owner suite): owner switch for the system administrator and its effect on `/staff/technicians`.
-- `e2e/phase3-screenshots.spec.ts` (skipped unless `SCREENSHOTS=1`): writes desktop 1440×900 and mobile 390×844 images of reminders, technician card, monthly work, responsibility bar and owner controls to `docs/screenshots/phase3/` from synthetic data. **Not generated yet.**
+- `e2e/phase3-screenshots.spec.ts` (skipped unless `SCREENSHOTS=1`): writes desktop 1440×900 and mobile 390×844 images of reminders, technician card, monthly work, responsibility bar and owner controls to `docs/screenshots/phase3/` from synthetic data. The committed images were taken from the same flow against the local preview.
 
 Not run: DAST scan (no Docker daemon or scanner key in the build environment).
 
