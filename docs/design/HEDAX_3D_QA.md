@@ -14,7 +14,7 @@ Environment: Linux container, Node 22.23, pnpm 10.34.6, Playwright 1.64 with Chr
 | `pnpm test:e2e`, main config | **43 passed**, 9 skipped (opt-in screenshot/evidence specs), 0 failed |
 | `pnpm test:e2e`, daily/owner config | **4 passed**, 0 failed |
 | `node scripts/check-docs.mjs` | pass |
-| GitHub Actions on the PR | not run from this session (see handover) |
+| GitHub Actions on PR #62 (run 42357733293, head `b79375a`) | **all six jobs passed** |
 
 The e2e suites cover login, case creation and updates, assessment, parts and finance, QC and delivery, technician station, staff and permissions, reminders, reports, workspaces, PWA and logout. All of them ran on the Signature theme.
 
@@ -67,5 +67,4 @@ These are local headless measurements with small samples. They should be repeate
 ## Not done or open
 
 - Live research browsing, real-device testing (Edge on Windows, iOS Safari, Android), and a screen-reader pass (NVDA/VoiceOver).
-- The CI run on GitHub.
 - An owner visual review of the dark-only direction.
