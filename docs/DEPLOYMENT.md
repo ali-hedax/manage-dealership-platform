@@ -2,7 +2,14 @@
 
 **Production domain (2026-11-05):** production answers at `https://managebyhedax.ir` through the ArvanCloud proxy. The origin certificate expires **2027-02-03 08:08:19 UTC** and nothing renews it. See [Production domain and certificate](#production-domain-and-certificate).
 
-**Latest release (2026-11-07, afternoon):** the owner approved the staff page redesign `ee86d5c` (PR #58). It was installed with the exact images from CI run 42347592707.
+**Latest release (2026-11-07, 11:20 Tehran):** the owner approved technician unit and bay `5cf9c72` (PR #60). It was installed with the exact images from CI run 42351838139.
+- No migration; the database still has 19 migrations. `.env` was unchanged.
+- The switch took about 9 seconds.
+- Pre-install backup `operational/20261107T074828Z` and final backup `operational/20261107T075121Z` were both restored separately and matched live. An encrypted off-server copy was saved.
+- The previous images (`ee86d5c`) are kept under the rollback tag `rollback-bay-20261107`.
+- See the [release record](RELEASE_BAY_20261107.md).
+
+**Earlier release (2026-11-07, 10:29 Tehran):** the owner approved the staff page redesign `ee86d5c` (PR #58). It was installed with the exact images from CI run 42347592707.
 - No migration; the database still has 19 migrations. `.env` was unchanged.
 - The switch took about 8 seconds.
 - Pre-install backup `operational/20261107T065755Z` and final backup `operational/20261107T070041Z` were both restored separately and matched live. An encrypted off-server copy was saved.
