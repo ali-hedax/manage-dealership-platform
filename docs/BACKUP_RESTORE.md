@@ -1,6 +1,12 @@
 # Backup and restore
 
-**Latest release (2026-11-07):** integrated main `be3dd66` with three migrations.
+**Latest release (2026-11-07, afternoon):** staff page `ee86d5c`, no migration.
+- The pre-install backup `operational/20261107T065755Z` was restored into a scratch database, and all 50 table fingerprints matched live.
+- The final backup `operational/20261107T070041Z` was restored, and all fingerprints matched. Both scratch databases were removed.
+- Encrypted off-server copy: `F:\Manage Backups\staff-recovery-final-ee86d5c-20261107.dpapi`, decryption verified. It is on drive F because C had no free space.
+- See the [release record](RELEASE_STAFF_20261107.md).
+
+**Earlier release (2026-11-07, morning):** integrated main `be3dd66` with three migrations.
 - The pre-install backup `operational/20261107T051752Z` was restored into a scratch database. Migrations `0016`–`0018` were rehearsed there, and all 42 existing tables stayed equal.
 - The frozen install backup is `operational/20261107T053406Z`. Restore it if data is damaged.
 - The final backup `operational/20261107T053603Z` was restored, and all fingerprints matched. The scratch databases were removed.
@@ -49,6 +55,8 @@ Record date, dump file, row counts and result in the table below. The `audit_eve
 
 | Date | Environment | Dump | Rows (cases / audit) | Result |
 | --- | --- | --- | --- | --- |
+| 2026-11-07 | Isolated copy of Manage Production | operational/20261107T065755Z | 18 / 54175; 50 tables, 19 migrations | Pre-install backup for `ee86d5c` (no migration); all fingerprints matched live. |
+| 2026-11-07 | Isolated copy of Manage Production | operational/20261107T070041Z | 18 / 54175; 50 tables, 19 migrations | Final staff-page backup restored; both scratch DBs removed, encrypted off-server recovery verified. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T051752Z | 18 / 54173; 42 tables fingerprinted | Migrations 0016–0018 rehearsed; all existing rows equal, new tables empty. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T053603Z | Full table/migration fingerprints (50 tables, 19 migrations) matched live | Final integration backup restored; both scratch DBs removed, encrypted off-server recovery verified. |
 | 2026-11-05 | Isolated copy of Manage Production | operational/20261105T044951Z | Full table/migration fingerprints recorded privately and matched | Final short-label backup restored; three scratch DBs removed, encrypted off-server recovery verified. |

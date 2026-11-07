@@ -2,7 +2,14 @@
 
 **Production domain (2026-11-05):** production answers at `https://managebyhedax.ir` through the ArvanCloud proxy. The origin certificate expires **2027-02-03 08:08:19 UTC** and nothing renews it. See [Production domain and certificate](#production-domain-and-certificate).
 
-**Latest release (2026-11-07):** the owner approved integrated main `be3dd66`, which contains phases 1–3, the new look and staff access recovery. It was installed with the exact images from CI run 42206001421.
+**Latest release (2026-11-07, afternoon):** the owner approved the staff page redesign `ee86d5c` (PR #58). It was installed with the exact images from CI run 42347592707.
+- No migration; the database still has 19 migrations. `.env` was unchanged.
+- The switch took about 8 seconds.
+- Pre-install backup `operational/20261107T065755Z` and final backup `operational/20261107T070041Z` were both restored separately and matched live. An encrypted off-server copy was saved.
+- The previous images (`be3dd66`) are kept under the rollback tag `rollback-staff-20261107`.
+- See the [release record](RELEASE_STAFF_20261107.md).
+
+**Earlier release (2026-11-07, morning):** the owner approved integrated main `be3dd66`, which contains phases 1–3, the new look and staff access recovery. It was installed with the exact images from CI run 42206001421.
 - Migrations `0016`–`0018` were rehearsed on a restored backup and then applied, with all 42 existing tables proven unchanged. The database now has 19 migrations.
 - The switch took 43 seconds. `.env` was unchanged.
 - Final backup `operational/20261107T053603Z` was restored and verified. An encrypted off-server copy was saved.

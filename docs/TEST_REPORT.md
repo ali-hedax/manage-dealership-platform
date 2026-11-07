@@ -23,6 +23,22 @@ Owner feedback after the 2026-11-07 release: technicians had no clear place, the
 - **Owner suite:** 4/4, with «اختیارات مدیر سیستم» replacing «مرز مالک و مدیر سیستم».
 - **Typecheck and lint:** clean for all packages.
 - **Email:** no code defect. The cause is unchanged since 2026-11-01: the server cannot reach foreign mail services, and `SMTP_*` is empty on the server. Documented in [STAFF_FA](STAFF_FA.md); the page now leads with the private invitation link and states the reason in one line.
+## Production release of the staff page `ee86d5c` — 2026-11-07 — **released**
+
+Owner-approved release of PR #58, with no migration. [Release record](RELEASE_STAFF_20261107.md).
+
+- **CI:** [run 42347592707](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42347592707) on `ee86d5c` passed all six jobs.
+- **Artifact:** the ZIP SHA256 matched the GitHub digest, the inner archive matched `preview-images.sha256`, and the source file named the target commit. The running image IDs equal the artifact's IDs.
+- **Live checks:**
+  - health `ok` and PostgreSQL accepting connections
+  - `/login` and `/manifest.webmanifest` returned 200
+  - `/api/v1/dashboard` and `/api/v1/auth/me` returned 401 without a session
+  - the migration journal was unchanged at 19 rows
+  - no error lines in the API log
+- **Read-only probe with the owner's identity:** passed on the restored copy and on Production (cases, related Emdad, assessments, workshop, technician list, automatic technician username).
+- **Backups:** both restored separately, with all 50 table fingerprints matching live.
+- **Not done here:** browser review in the owner's real session (no browser tool in this session).
+
 ## Production release of integrated main `be3dd66` — 2026-11-07 — **released**
 
 Owner-approved release of phases 1–3, the navy and gold interface and staff access recovery. [Release record](RELEASE_INTEGRATION_20261107.md).
