@@ -19,6 +19,8 @@ Owner-approved release of PR #60, with no migration. [Release record](RELEASE_BA
 
 ## HEDAX Signature visual layer — 2026-11-07 — local green, **CI green**
 
+**Review round 2:** dashboard welcome band flattened when the instrument follows it (CSS only, Signature theme). Re-run: lint, typecheck, build, docs check pass; Playwright main 43 passed, daily 4 passed; evidence 5/5 (0 overflow, 0 contrast failures, no motion under reduced motion). CI to re-run on the PR.
+
 GitHub Actions run [42357733293](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42357733293) on PR #62, head `b79375a`: all six jobs succeeded (documentation and API inventory; dependency audit and secret scan; lint, typecheck, build, unit and integration tests; migrations and demo seed on PostgreSQL 16; Docker images and compose smoke test; Playwright end-to-end).
 
 Branch `feature/hedax-signature-3d-manage` from `main` `5cf9c72`. Visual-only change (theme layer, icons, dashboard instrument, pointer light). No API, schema or permission change. Synthetic data only. Full record: [design QA](design/HEDAX_3D_QA.md).

@@ -1,18 +1,18 @@
 {
   "ui": "default",
-  "generatedAt": "2026-11-07T08:24:07.699Z",
+  "generatedAt": "2026-11-07T09:27:16.386Z",
   "loginContrast": [],
   "overflow": [],
   "contrast": {},
   "metrics": {
     "dashboard": {
-      "loadMs": 1051,
-      "lcpMs": 448,
+      "loadMs": 916,
+      "lcpMs": 340,
       "cls": 0.0003,
       "longTasks": 0,
       "jsBytes": 1233152,
-      "cssBytes": 91615,
-      "heapMB": 8.6,
+      "cssBytes": 92055,
+      "heapMB": 8.7,
       "frames": {
         "frames": 61,
         "worstMs": 17,
@@ -20,26 +20,26 @@
       }
     },
     "case-list": {
-      "loadMs": 982,
-      "lcpMs": 284,
-      "cls": 0.0346,
+      "loadMs": 910,
+      "lcpMs": 276,
+      "cls": 0.0326,
       "longTasks": 0,
       "jsBytes": 1233152,
-      "cssBytes": 91615,
+      "cssBytes": 92055,
       "heapMB": 8.6,
       "frames": {
-        "frames": 61,
+        "frames": 60,
         "worstMs": 17,
         "over20ms": 0
       }
     },
     "login": {
-      "loadMs": 785,
-      "lcpMs": 304,
+      "loadMs": 753,
+      "lcpMs": 280,
       "cls": 0.0009,
       "longTasks": 0,
       "jsBytes": 1065041,
-      "cssBytes": 91615,
+      "cssBytes": 92055,
       "heapMB": 6.1,
       "frames": {
         "frames": 60,

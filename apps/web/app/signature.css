@@ -336,6 +336,19 @@ html[data-ui='signature'] .entry-welcome::before {
 }
 html[data-ui='signature'] .entry-welcome h1 { color: #f6f1e7; }
 html[data-ui='signature'] .entry-welcome p { color: #c4c0b8; }
+/* Dashboard: the instrument below is the hero, so the welcome band becomes a flat
+   page heading instead of a second heavy plate (one focal surface per view). */
+html[data-ui='signature'] .entry-welcome:has(+ .sx-instrument) {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+  padding: 4px 0 0;
+}
+html[data-ui='signature'] .entry-welcome:has(+ .sx-instrument)::before { content: none; }
+html[data-ui='signature'] .entry-welcome:has(+ .sx-instrument) h1 { font-size: clamp(24px, 2.4vw, 34px); margin-block: 6px 4px; }
+html[data-ui='signature'] .entry-welcome:has(+ .sx-instrument) .entry-line { margin-block-end: 10px; }
 html[data-ui='signature'] .entry-line { background: linear-gradient(90deg, var(--sx-champagne-hi), var(--sx-champagne-deep)); box-shadow: 0 0 14px rgba(216, 187, 127, .5); }
 
 /* ------------------------------------------- 9. dashboard: stage rail & readouts */

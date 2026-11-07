@@ -64,6 +64,14 @@ These are local headless measurements with small samples. They should be repeate
 5. LCP regression from the fade, as described above.
 6. The contrast scanner initially skipped plates and gradient buttons. Plates are now scanned, and the buttons got a solid `background-color` fallback.
 
+## Review round 2 — 2026-11-07
+
+Reviewed the dashboard, sign-in, case list and detail, and parts workbench against the design brief after PR #62 was opened. No reviewer comments yet; CI run 42358401074 green on `d890f2c`.
+
+- **Changed:** dashboard only. The welcome band and the operations instrument were two stacked heavy plates; the band is now a flat page heading when the instrument follows it (CSS `:has()`, Signature theme only). Same title, timestamp and buttons; about 85 px less vertical space before the operational figures; one focal surface per view.
+- **Unchanged on purpose:** sign-in, case list and detail, parts workbench. They are coherent and readable, and further changes would add risk without a clear benefit.
+- **Re-run after the change:** lint, typecheck, build, docs check pass; Playwright 43 passed + 4 passed; evidence 5/5, 0 overflow, 0 contrast failures, 0 animations under reduced motion; dashboard: no long tasks, worst frame 17 ms, CSS +0.4 KB.
+
 ## Not done or open
 
 - Live research browsing, real-device testing (Edge on Windows, iOS Safari, Android), and a screen-reader pass (NVDA/VoiceOver).
