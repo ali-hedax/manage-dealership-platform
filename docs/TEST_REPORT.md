@@ -1,6 +1,16 @@
 # Test report
 
 
+## HEDAX Signature visual layer — 2026-11-07 — local green, **CI pending**
+
+Branch `feature/hedax-signature-3d-manage` from `main` `5cf9c72`. Visual-only change (theme layer, icons, dashboard instrument, pointer light). No API, schema or permission change. Synthetic data only. Full record: [design QA](design/HEDAX_3D_QA.md).
+
+- `pnpm -r lint`, `pnpm -r typecheck`, `pnpm build`, `node scripts/check-docs.mjs`: pass.
+- `pnpm test` (with `NODE_OPTIONS=--max-old-space-size=4096`, as for `main` in this container): API 223 passed, 9 skipped (PostgreSQL-only), 0 failed; shared suite passed.
+- `pnpm test:e2e` on the Signature theme (now the default): main config 43 passed, 9 skipped (opt-in screenshot/evidence specs); daily/owner config 4 passed.
+- `e2e/signature-evidence.spec.ts` (opt-in, 5/5): 0 horizontal overflow on 23 screens at 360/390/768/1024/1440/1920 px; 0 WCAG AA text-contrast failures (classic mode keeps the existing dashboard grey); 0 animations under reduced motion and none running after a page settles; print stays light; first Tab reaches the skip link with a visible ring; `?ui=classic` matches `main` pixel for pixel apart from timestamps.
+- Performance (same build, headless Chromium): no long tasks, no frame over 20 ms, CLS equal or lower; LCP about +25 ms on a cold sign-in and about +50 ms on the dashboard; JS +7.5 KB, CSS +29 KB uncompressed. A fade that delayed LCP was found and replaced with transform-only motion.
+- Not run: GitHub Actions on the PR, real devices (Windows Edge, iOS Safari, Android), screen reader, live design research.
 
 ## Technician unit and bay on creation — 2026-11-07 — local green
 

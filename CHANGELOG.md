@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] — HEDAX Signature visual layer
+
+- New default look: dark mineral ground, graphite plates with machined edges, a champagne key light and restrained blue. The navigation rail sits above the workspace and the active destination is lit. Opened case sections rise as an inspector, and dialogs enter as a separate layer. Desk cards respond to the pointer.
+- The dashboard opens with an operations view: the share of active cases within their deadline, plus overdue, blocked, due-within-48-hours and ready-for-delivery figures. Each figure links to the existing filtered case list.
+- Redrawn engineered icon set. The sign-in screen has a showroom plinth and a one-time light sweep.
+- The previous interface stays available: add `?ui=classic` to any address (remembered per browser) or build with `NEXT_PUBLIC_UI_THEME=classic`. Print keeps the light layout. Reduced-motion settings remove all motion.
+
+
 
 
 ## 2026-11-07 — جایگاه تعمیرکار هنگام ساختن حساب

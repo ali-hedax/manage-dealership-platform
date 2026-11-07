@@ -260,15 +260,19 @@ html[data-ui='signature'] .page-actions .app-icon { color: var(--sx-champagne); 
 /* ------------------------------------------------- 7. spatial workspace */
 /* The workspace is a stage: content settles forward into place on each route. */
 html[data-ui='signature'] .main { perspective: 1800px; perspective-origin: 50% 0; }
-html[data-ui='signature'] .page > :is(.stack,.page-head,section,div,form,header,nav) {
+/* The first block (page heading) is painted still, so the main heading is the
+   fast, stable largest paint; the blocks after it settle in behind it. */
+html[data-ui='signature'] .page > :is(.stack,.page-head,section,div,form,header,nav) > :nth-child(n+2),
+html[data-ui='signature'] .page > :is(section,form,nav):nth-child(n+3) {
   animation: sx-settle var(--sx-route) var(--sx-ease) both;
 }
-html[data-ui='signature'] .page > :nth-child(2) { animation-delay: 30ms; }
-html[data-ui='signature'] .page > :nth-child(3) { animation-delay: 60ms; }
-html[data-ui='signature'] .page > :nth-child(n+4) { animation-delay: 90ms; }
+html[data-ui='signature'] .page > * > :nth-child(3) { animation-delay: 30ms; }
+html[data-ui='signature'] .page > * > :nth-child(n+4) { animation-delay: 60ms; }
+/* Transform only: content is visible from the first frame (no fade), so the
+   largest contentful paint is never held back by the motion. */
 @keyframes sx-settle {
-  from { opacity: 0; transform: translate3d(0, 10px, 0) rotateX(1.5deg); }
-  to { opacity: 1; transform: none; }
+  from { transform: translate3d(0, 10px, 0) rotateX(1.5deg); }
+  to { transform: none; }
 }
 
 /* Depth-sensitive surfaces: lift toward the viewer and catch the key light under the pointer.
@@ -557,7 +561,6 @@ html[data-ui='signature'] .entry-login-body {
   border-radius: 22px;
   box-shadow: var(--sx-z4);
   padding: clamp(24px, 3vw, 40px);
-  animation: sx-settle 420ms var(--sx-ease) both;
 }
 html[data-ui='signature'] .entry-login-body h1 { color: #f6f1e7; }
 html[data-ui='signature'] .login-tabs { background: #0c0f13; border: 1px solid #222831; box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6); }
