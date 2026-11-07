@@ -1,7 +1,7 @@
 # Test report
 
 
-## Staff page cleanup (tabs, technicians by name + PIN) — 2026-11-07 — local green, CI on the PR
+## Staff page cleanup (tabs, technicians by name + PIN) — 2026-11-07 — **done**: local green, CI 6/6 green on PR #58
 
 Owner feedback after the 2026-11-07 release: technicians had no clear place, the page mixed invitation, access and owner/system-admin controls, and email invitations never went out.
 
@@ -10,6 +10,32 @@ Owner feedback after the 2026-11-07 release: technicians had no clear place, the
 - **Owner suite:** 4/4, with «اختیارات مدیر سیستم» replacing «مرز مالک و مدیر سیستم».
 - **Typecheck and lint:** clean for all packages.
 - **Email:** no code defect. The cause is unchanged since 2026-11-01: the server cannot reach foreign mail services, and `SMTP_*` is empty on the server. Documented in [STAFF_FA](STAFF_FA.md); the page now leads with the private invitation link and states the reason in one line.
+## Production release of integrated main `be3dd66` — 2026-11-07 — **released**
+
+Owner-approved release of phases 1–3, the navy and gold interface and staff access recovery. [Release record](RELEASE_INTEGRATION_20261107.md).
+
+- **CI:** [run 42206001421](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42206001421) on `be3dd66` passed all six jobs:
+  - lint, typecheck, build, unit and integration tests
+  - end-to-end (Playwright, Chromium)
+  - migrations and demo seed on PostgreSQL 16
+  - Docker images and compose smoke test
+  - documentation links and API inventory
+  - dependency audit and secret scan
+- **Migration rehearsal on a restored production backup:** `0016`, `0017` and `0018` ran with the exact CI image.
+  - All 42 existing tables stayed row-for-row equal. Only the new columns were excluded from the comparison.
+  - New columns were at their default or null.
+  - The 8 new tables were empty.
+  - Migration rows: the 16 old rows were unchanged, and the 3 new hashes equal the committed SQL.
+  - The same comparison passed on production during the install.
+- **Read-only checks with the owner's identity** passed on the restored copy and on production: cases, Emdad, assessment parser, workshop calendar, TOTP, one owner, system administrator at 44 effective permissions.
+- **Live checks:**
+  - PostgreSQL ready; health `ok`.
+  - `/login` and `/manifest.webmanifest` return 200.
+  - Unauthenticated `/api/v1/dashboard` and `/api/v1/auth/me` return 401.
+  - The technician-login and reminder routes are registered.
+  - In headless Edge, the login page shows the «کارکنان» and «تعمیرکار» tabs at 1280 and 390 px. The technician panel opens and the page has no horizontal overflow. No form was submitted.
+- **Final backup:** `operational/20261107T053603Z` restored into a scratch database. Every fingerprint matched; both scratch databases removed.
+- **Not done in this session:** a browser walk-through inside the owner's real session. No browser tool was available.
 
 ## Phase 3 role-based plan (reminders, wages, responsibility, owner controls) — 2026-11-06 — **done, not deployed**
 

@@ -9,7 +9,7 @@
 - **اختیارات مدیر سیستم:** جای «مرز مالک و مدیر سیستم» را گرفت، با یک سؤال ساده. گزارش اقدامات جمع شد.
 - **میان‌برهای بالای صفحه:** به «افزودن کارمند» و «افزودن تعمیرکار» تغییر کردند.
 
-## [Unreleased] — phase 3 of the role-based plan
+## [2026-11-07] — phase 3 of the role-based plan (released to production, `be3dd66`)
 
 - Anyone, technicians included, can send a short reminder (up to 300 characters or a ready-made text) to a person, several people or a role, optionally tied to a case or plate, normal or urgent. It appears as a card on top of the recipient's desk with «دیدم», «انجام شد» and a one-line reply; the sender sees sent / seen / done and the reply. A reminder not seen within two working hours sends a notification again. It is not a chat.
 - The service manager has «تذکر» beside every report row and finding; it goes to the executive role (parts clerk, the case responsible or the accident coordinators), never to the manager.
@@ -18,14 +18,14 @@
 - «انتقال پرونده» hands a case to another active accident coordinator; the responsibility bar shows who was responsible from when to when, and each coordinator's statistics follow their own period.
 - The owner turns «دعوت و غیرفعال کردن کارکنان» on or off for each system administrator and alone sees the report of system-admin actions. The system administrator must give a reason for unlocking a technician, correcting a recorded value, moving a case back or transferring it.
 
-## [Unreleased] — phase 2 of the role-based plan
+## [2026-11-07] — phase 2 of the role-based plan (released to production, `be3dd66`)
 
 - The parts clerk opens a prioritized vehicle workbench with stock, Emdad, market and handover actions. The prior queues remain available.
 - The parts clerk or assigned technician can record a priced handover. The accident coordinator sees long waits.
 - Confirmed consumption produces a versioned parts statement with Persian PDF and Excel exports.
 - External work follows the repair plan, contractor coordination and coordinator approval, with missed promises in both workbenches.
 
-## [Unreleased] — phase 1 of the role-based plan, 2026-11-05
+## [2026-11-07] — phase 1 of the role-based plan, built 2026-11-05 (released to production, `be3dd66`)
 
 - Technicians sign in with a username and a 4-digit PIN (no email or Authenticator) and see only their own work. Owner and system administrator create technicians, set a new PIN and deactivate them under «کارکنان». Five wrong PINs lock the account for 15 minutes.
 - Money never blocks a part purchase. The finance state is still recorded and shown as a warning.
@@ -33,7 +33,7 @@
 - Parts are priced freely. A recorded payer approval is needed only when golden card or insurance pays and the outside price is above the assessment-approved price.
 - The technician card shows «قطعه آماده است؛ از انبار بگیرید» with the part names, and how many parts are still on the way.
 
-## [Unreleased] — navy and gold interface, 2026-11-05
+## [2026-11-07] — navy and gold interface, built 2026-11-05 (released to production, `be3dd66`)
 
 - The login, sidebar, dashboard and workspace selection use a navy-and-gold palette with clearer focus states and larger touch targets.
 - The login screen separates staff sign-in from technician sign-in. Staff keep their existing sign-in, recovery and phone-install flows. The technician tab accepts a four-digit PIN, including pasted Persian or English digits, and displays an availability message until the separate server endpoint is enabled.
@@ -56,7 +56,7 @@ Application `79f6585` published after all six CI checks and restored-copy migrat
 - Dashboard: duplicate desk card removed (the «ورود به میز کار» button remains); each «نیازمند اقدام» row ends in an arrow instead of a repeated «مشاهده».
 - Case page: for overview roles (e.g. service manager) the section matching the current stage opens automatically, and «موانع» opens when blockers are open.
 
-## [Unreleased] — staff access recovery, 2026-11-05
+## [2026-11-07] — staff access recovery, built 2026-11-05 (released to production, `be3dd66`)
 
 - The owner can make a private one-hour recovery link for a colleague who lost the password or Authenticator. The colleague sets a new password and reconnects Authenticator, and old sessions end. The owner account cannot use this path. Not yet on the server.
 

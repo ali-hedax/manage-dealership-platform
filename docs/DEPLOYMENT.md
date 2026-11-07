@@ -2,7 +2,14 @@
 
 **Production domain (2026-11-05):** production answers at `https://managebyhedax.ir` through the ArvanCloud proxy. The origin certificate expires **2027-02-03 08:08:19 UTC** and nothing renews it. See [Production domain and certificate](#production-domain-and-certificate).
 
-**Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
+**Latest release (2026-11-07):** the owner approved integrated main `be3dd66`, which contains phases 1–3, the new look and staff access recovery. It was installed with the exact images from CI run 42206001421.
+- Migrations `0016`–`0018` were rehearsed on a restored backup and then applied, with all 42 existing tables proven unchanged. The database now has 19 migrations.
+- The switch took 43 seconds. `.env` was unchanged.
+- Final backup `operational/20261107T053603Z` was restored and verified. An encrypted off-server copy was saved.
+- See the [release record](RELEASE_INTEGRATION_20261107.md).
+- Rollback images: tag `pre-integration-20261107` on both `manage-api` and `manage-web`.
+
+**Previous release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
 
 **Current state:** the dedicated Manage host is Production with real data. Owner-approved online mobile installation and complete support desk `9e82246` were installed on 2026-11-04 using tested CI images, verified restores and the operational wrapper; no new production migration or seed was needed. See the [current release record](RELEASE_PWA_20261104.md) and [real-start boundary](REAL_START_FA.md). The Preview instructions below are historical; do not run its reset/deploy script on Production. Source and DNS remain unchanged.
 
@@ -112,6 +119,8 @@ Rollback data: `/home/manage/backups/domain-switch-20261105T090723Z` and `/home/
 
 | Date | Environment | Commit | Operator | Migrations | Result |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-07 | Manage Production | be3dd66 | Owner-approved release | 0016, 0017, 0018 (19 total) | Healthy. Exact CI images; rehearsed on a restored backup, all existing rows preserved; 43-second switch; final restore and encrypted recovery verified. [Record](RELEASE_INTEGRATION_20261107.md) |
+| 2026-11-05 | Manage Production | 79f6585 | Owner-approved release | 0015 (16 total) | Healthy. Exact CI images; 46-second switch. [Record](RELEASE_DISPATCH_DAYS_20261105.md) |
 | 2026-11-04 | Manage Production | 9e82246 | Owner-approved release | No new migration (15 retained) | Healthy; source/image IDs, environment/data preservation, restored final backup and owner browser checked. [Record](RELEASE_PWA_20261104.md) |
 | 2026-11-04 | Manage Production | 880b121 | Owner-approved release | 0014 (15 total) | Healthy; source/image IDs, restored backups, preserved auth/data and owner browser verified. [Record](RELEASE_ACCIDENT_20261104.md) |
 | 2026-11-01 | Isolated Preview | 58ad08c | Previous approved rollout | Through 0005_personal_auth | Healthy; owner later confirmed personal login. [Full record](PREVIEW_DEPLOYMENT_20261101.md) |
