@@ -49,3 +49,24 @@ it('only relates matching technical codes; a full supply option cannot silently 
   expect(emdadMatchesNeed(o,'00999999')).toBe(false);
   expect(emdadMatchesNeed({...o,initialCode:'00999999'},'00123456')).toBe(false);
 });
+
+
+it('keeps sparse part columns across printed continuation pages and recognizes equivalent labour by code', () => {
+  const part1 = line();
+  const part2 = sparse([[0,'نهايي'],[5,'3,000'],[9,'3,000'],[16,'1'],[19,'1405/08/09'],[25,'قطعه دوم ساختگی'],[38,'00000999']]);
+  const equivalentHeader = sparse([[0,'وضعیت'],[7,'شرح'],[34,'کد']]);
+  const equivalent = sparse([[0,'نهايي'],[7,'تعویض قطعه ساختگی'],[34,'TEST-EQ-01']]);
+  const r = parse([['قطعات'],header,part1,
+    sparse([[0,'1405/08/14'],[6,':زمان چاپ'],[10,'لیست قطعات و اجرتهای دستور کار']]),
+    sparse([[0,'5'],[1,'از'],[2,'2'],[3,':صفحه'],[29,'41072925'],[34,':شماره دستور کار']]),
+    sparse([[35,':توضیحات کارشناس امدادخودرو']]),part2,
+    ['اجرت های معادل'],equivalentHeader,equivalent,
+    sparse([[0,'1405/08/14'],[6,':زمان چاپ']]),
+    sparse([[0,'5'],[1,'از'],[2,'3'],[3,':صفحه']]),
+    sparse([[35,':توضیحات کارشناس امدادخودرو']]),
+    sparse([[0,'رد'],[7,'عملیات مردود'],[34,'TEST-EQ-02']])]);
+  expect(r.errors).toEqual([]);
+  expect(r.rows).toHaveLength(2);
+  expect(r.rows[1]).toMatchObject({partNumber:'00000999',quantity:1,unitPriceRial:3000});
+  expect(r.skipped.filter(x => x.reason.includes('اجرت معادل') && x.reason.includes('کد TEST-EQ'))).toHaveLength(2);
+});
