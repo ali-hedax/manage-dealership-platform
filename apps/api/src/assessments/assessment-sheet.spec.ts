@@ -68,5 +68,6 @@ it('keeps sparse part columns across printed continuation pages and recognizes e
   expect(r.errors).toEqual([]);
   expect(r.rows).toHaveLength(2);
   expect(r.rows[1]).toMatchObject({partNumber:'00000999',quantity:1,unitPriceRial:3000});
+  expect(r.rows[1]?.evidence).toContain('1405/08/09');
   expect(r.skipped.filter(x => x.reason.includes('اجرت معادل') && x.reason.includes('کد TEST-EQ'))).toHaveLength(2);
 });
