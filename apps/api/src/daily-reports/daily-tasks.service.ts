@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
-import { DAILY_REPORT_KINDS, DAILY_REPORT_KIND_LABELS, permissionsFor, type DailyReportKind, type DailyTaskState, type Role } from '@manage/shared';
+import { DAILY_REPORT_KINDS, DAILY_REPORT_KIND_LABELS, isWorkingDay, permissionsFor, type DailyReportKind, type DailyTaskState, type Role } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
@@ -8,6 +8,7 @@ import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { dailyReportProfiles, dailyTasks, notifications, tenants, users } from '../db/schema';
 import { tehranAt, tehranDate } from './daily-time';
+import { calendarAt } from '../workshop/work-calendar';
 
 export const DEFAULT_REMINDER = '11:00';
 
@@ -53,6 +54,8 @@ export class DailyTasksService implements OnApplicationBootstrap, OnApplicationS
     let created = 0;
     let notified = 0;
     for (const t of await this.db.select({ id: tenants.id }).from(tenants)) {
+      // Friday and recorded holidays have no daily reports: no task, no reminder.
+      if (!(await this.isWorkday(t.id, localDate, now))) continue;
       const profiles = await this.profiles(this.db, t.id);
       for (const kind of DAILY_REPORT_KINDS) {
         const p = profiles.get(kind);
@@ -96,6 +99,12 @@ export class DailyTasksService implements OnApplicationBootstrap, OnApplicationS
     return { created, notified };
   }
 
+  /** The dealership's work calendar decides whether daily files are expected today. */
+  async isWorkday(tenantId: string, localDate: string, now = new Date()): Promise<boolean> {
+    const revision = await calendarAt(this.db, tenantId, now.toISOString());
+    return isWorkingDay(localDate, revision.calendar);
+  }
+
   /** The configured person, or everyone active who may upload the daily files. */
   private async recipients(tenantId: string, configured: string | null): Promise<string[]> {
     const [tenant] = await this.db.select({ templates: tenants.permissionTemplates }).from(tenants).where(eq(tenants.id, tenantId));
@@ -109,12 +118,13 @@ export class DailyTasksService implements OnApplicationBootstrap, OnApplicationS
     const localDate = tehranDate(now);
     const rows = await this.db.select().from(dailyTasks).where(and(eq(dailyTasks.tenantId, tenantId), eq(dailyTasks.localDate, localDate)));
     const profiles = await this.profiles(this.db, tenantId);
+    const workday = await this.isWorkday(tenantId, localDate, now);
     return DAILY_REPORT_KINDS.map((kind) => {
       const r = rows.find((x) => x.kind === kind);
       // A new reminder time applies to today until the reminder has gone out.
       const dueAt = r && (r.status === 'done' || r.notifiedAt) ? r.dueAt : tehranAt(localDate, profiles.get(kind)?.reminderTime ?? DEFAULT_REMINDER);
       const status = (r?.status ?? 'pending') as DailyTaskState['status'];
-      return { kind, localDate, dueAt: dueAt.toISOString(), status, late: status === 'pending' && now >= dueAt, completedAt: r?.completedAt?.toISOString() ?? null, unchangedDeclared: r?.unchangedDeclared ?? false };
+      return { kind, localDate, dueAt: dueAt.toISOString(), status, late: workday && status === 'pending' && now >= dueAt, completedAt: r?.completedAt?.toISOString() ?? null, unchangedDeclared: r?.unchangedDeclared ?? false };
     });
   }
 

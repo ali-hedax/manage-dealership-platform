@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addWorkingMinutes, workingMinutesBetween, DEFAULT_WORK_CALENDAR, calendarSchema, unionElapsedMinutes } from '../workshop';
+import { isWorkingDay, addWorkingMinutes, workingMinutesBetween, DEFAULT_WORK_CALENDAR, calendarSchema, unionElapsedMinutes } from '../workshop';
 import { permissionsFor } from '../permissions';
 test('eight working hours across Wednesday evening and Thursday morning',()=>{
   const start='2026-11-04T15:30:00+03:30';
@@ -29,4 +29,11 @@ test('roles separate parts, customer coordination, reporting and own execution',
   const p=permissionsFor(['parts_clerk']);assert(p.has('part.quote'));assert(p.has('part.manage'));assert(!p.has('part.price_authorize'));
   const m=permissionsFor(['service_manager']);assert(m.has('report.manager'));assert(!m.has('task.manage'));assert(!m.has('case.create'));
   assert.deepEqual([...permissionsFor(['technician'])],['task.execute']);
+});
+
+test('isWorkingDay: Friday and recorded holidays are closed', () => {
+  assert.equal(isWorkingDay('2026-12-04', DEFAULT_WORK_CALENDAR), false); // Friday
+  assert.equal(isWorkingDay('2026-12-03', DEFAULT_WORK_CALENDAR), true); // Thursday half day
+  assert.equal(isWorkingDay('2026-12-05', DEFAULT_WORK_CALENDAR), true); // Saturday
+  assert.equal(isWorkingDay('2026-12-05', { ...DEFAULT_WORK_CALENDAR, holidays: [{ date: '2026-12-05', title: 'تعطیلی', official: true }] }), false);
 });

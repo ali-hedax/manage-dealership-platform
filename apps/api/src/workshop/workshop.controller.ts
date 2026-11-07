@@ -20,6 +20,7 @@ export class WorkshopController {
   @Patch('stations/:id') @RequirePermissions('workshop.manage') updateStation(@CurrentActor() a:Actor,@IdParam() id:string,@Body(new ZodPipe(stationSchema)) b:z.infer<typeof stationSchema>){return this.workshop.saveStation(a,b,id);}
   @Post('setup-trades') @RequirePermissions('workshop.manage') setup(@CurrentActor() a:Actor){return this.workshop.setupTrades(a);}
   @Get('staff') @RequirePermissions('task.manage') staff(@CurrentActor() a:Actor){return this.workshop.staff(a);}
+  @Get('plan-suggestion') @RequirePermissions('task.manage') planSuggestion(@CurrentActor() a:Actor,@Query(new ZodPipe(z.object({caseId:z.uuid()}))) q:{caseId:string}){return this.workshop.planSuggestion(a,q.caseId);}
   @Get('overview') @RequirePermissions('workshop.read') overview(@CurrentActor() a:Actor){return this.workshop.overview(a);}
   @Get('my-tasks') @RequirePermissions('task.execute') mine(@CurrentActor() a:Actor){return this.workshop.taskList(a,true);}
   @Post('my-tasks/:id/actions') @RequirePermissions('task.execute') act(@CurrentActor() a:Actor,@IdParam() id:string,@Body(new ZodPipe(taskActionSchema)) b:z.infer<typeof taskActionSchema>){return this.tasks.executeOwn(a,id,b);}

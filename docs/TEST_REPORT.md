@@ -1,5 +1,10 @@
 # Test report
 
+## Smart planning suggestions — 2026-11-07 — **branch `feature/smart-planning`, not released**
+
+- **Changed:** daily-report tasks/reminders skip non-working days of the work calendar; `GET /workshop/plan-suggestion?caseId=` (permission `task.manage`); parts workbench `advice` line. No migration.
+- **Ran locally:** `pnpm lint`, `typecheck` (shared, api, web) clean. `packages/shared` tests pass (new `isWorkingDay` test). API suites `daily-reports` 25/25 (new Friday test), `workshop` 11/11 (new plan-suggestion test), `parts-workbench` 4/4, `parts-finance` 12/12, `people` 14/14, `assessment-dispatch`, `system-admin-access`, `technician-pin`, `iran-holidays` all pass. The full API run in one process was killed for memory in the sandbox; CI runs it in full. E2E (Playwright) not run here.
+
 ## Production release of technician unit and bay `5cf9c72` — 2026-11-07 — **released**
 
 Owner-approved release of PR #60, with no migration. [Release record](RELEASE_BAY_20261107.md).

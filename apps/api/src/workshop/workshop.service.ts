@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import { REPAIR_TRADES, REPAIR_TRADE_LABELS, unionElapsedMinutes, unionWorkingMinutes, workingDayMinutes, workingMinutesBetween, type PartQuote, type WorkshopOverview, type WorkshopStation, type WorkshopTask, type saveCalendarSchema, type stationSchema, type quoteSchema, type quoteDecisionSchema } from '@manage/shared';
+import { REPAIR_TRADES, REPAIR_TRADE_LABELS, unionElapsedMinutes, unionWorkingMinutes, workingDayMinutes, workingMinutesBetween, type PartQuote, type PlanSuggestion, type RepairTrade, type WorkshopOverview, type WorkshopStation, type WorkshopTask, type saveCalendarSchema, type stationSchema, type quoteSchema, type quoteDecisionSchema } from '@manage/shared';
 import type { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -14,6 +14,11 @@ import { CasesService } from '../cases/cases.service';
 export {calendarAt} from './work-calendar';
 import {calendarAt} from './work-calendar';
 const iso=(d:Date|null)=>d?.toISOString()??null;
+// Starting values until Manage has three finished jobs of a unit to learn from (working days).
+const DEFAULT_DAYS:Record<RepairTrade,number>={body:2,paint:2,suspension:1,mechanical:1,electrical:0.5,engine_tuning:0.5};
+const TRADE_ORDER:Record<RepairTrade,number>={body:1,paint:2,suspension:3,mechanical:3,electrical:3,engine_tuning:4};
+const median=(xs:number[])=>{const v=[...xs].sort((a,b)=>a-b),m=Math.floor(v.length/2);return v.length%2?v[m]!:(v[m-1]!+v[m]!)/2;};
+const quarter=(d:number)=>Math.max(0.25,Math.round(d*4)/4);
 @Injectable()
 export class WorkshopService {
   constructor(@Inject(DATABASE) private readonly handle:DatabaseHandle,private readonly audit:AuditService,private readonly cases:CasesService){}
@@ -139,6 +144,39 @@ export class WorkshopService {
       const [row]=await tx.update(partQuotes).set({status:input.decision,source:input.source,reference:input.reference,approver:input.approver,note:input.note,decidedAt:new Date(),decidedBy:actor.user.id,version:q.version+1}).where(and(eq(partQuotes.id,id),eq(partQuotes.tenantId,actor.user.tenantId))).returning();
       await this.audit.record(tx,actor,{entityType:'part_quote',entityId:id,caseId:q.caseId,action:'part_quote.'+input.decision,before:{status:q.status},after:{decision:input.decision,source:input.source,reference:input.reference,approver:input.approver,note:input.note,officialRecorded:input.officialRecorded??false},snapshot:{version:row.version,row}});
     });return this.quotes(actor);
+  }
+  /**
+   * Repair-plan suggestion for a case: days per unit learned from the
+   * dealership's own finished jobs (same model first), the station that frees
+   * up first, and the usual unit order. Advisory only; the expert decides.
+   */
+  async planSuggestion(actor:Actor,caseId:string):Promise<PlanSuggestion[]> {
+    const tenantId=actor.user.tenantId,now=new Date();
+    const [row]=await this.db.select({c:cases,v:vehicles}).from(cases).innerJoin(vehicles,and(eq(vehicles.id,cases.vehicleId),eq(vehicles.tenantId,tenantId))).where(and(eq(cases.id,caseId),eq(cases.tenantId,tenantId)));
+    if(!row)throw notFound('پرونده');
+    const {calendar}=await calendarAt(this.db,tenantId,now.toISOString());
+    const dayMinutes=workingDayMinutes(calendar);
+    const [deps,stations,history,open]=await Promise.all([
+      this.db.select().from(departments).where(and(eq(departments.tenantId,tenantId),eq(departments.isActive,true))).orderBy(asc(departments.sortOrder)),
+      this.db.select().from(workshopStations).where(and(eq(workshopStations.tenantId,tenantId),eq(workshopStations.isActive,true))),
+      this.db.select({departmentId:tasks.departmentId,start:tasks.actualStartAt,end:tasks.actualEndAt,model:vehicles.model}).from(tasks)
+        .innerJoin(cases,and(eq(cases.id,tasks.caseId),eq(cases.tenantId,tenantId))).innerJoin(vehicles,and(eq(vehicles.id,cases.vehicleId),eq(vehicles.tenantId,tenantId)))
+        .where(and(eq(tasks.tenantId,tenantId),eq(tasks.status,'approved'),eq(tasks.isTest,row.c.isTest))).orderBy(desc(tasks.approvedAt)).limit(500),
+      this.db.select({stationId:tasks.stationId,caseId:tasks.caseId,end:tasks.plannedEndAt}).from(tasks).where(and(eq(tasks.tenantId,tenantId),inArray(tasks.status,['pending','in_progress','done']))),
+    ]);
+    const days=(h:typeof history[number])=>h.start&&h.end&&dayMinutes?workingMinutesBetween(h.start.toISOString(),h.end.toISOString(),calendar)/dayMinutes:null;
+    return deps.map(d=>{
+      const own=stations.filter(s=>s.departmentId===d.id);
+      const trade=own[0]?.trade as RepairTrade|undefined;
+      const all=history.filter(h=>h.departmentId===d.id).map(h=>({model:h.model,days:days(h)})).filter((x):x is {model:string|null;days:number}=>x.days!==null&&x.days>0);
+      const same=all.filter(x=>row.v.model&&x.model===row.v.model);
+      const [basis,samples]=same.length>=3?['same_model' as const,same]:all.length>=3?['history' as const,all]:['default' as const,[]];
+      const suggestedDays=quarter(samples.length?median(samples.map(x=>x.days)):trade?DEFAULT_DAYS[trade]:1);
+      const load=own.map(s=>{const q=open.filter(t=>t.stationId===s.id);const last=Math.max(0,...q.map(t=>t.end?.getTime()??0));
+        return {id:s.id,code:s.code,name:s.name,freeFrom:last>now.getTime()?new Date(last).toISOString():null,queuedCars:new Set(q.map(t=>t.caseId)).size};});
+      const best=[...load].sort((a,b)=>(a.freeFrom?Date.parse(a.freeFrom):0)-(b.freeFrom?Date.parse(b.freeFrom):0)||a.queuedCars-b.queuedCars)[0];
+      return {departmentId:d.id,departmentName:d.name,suggestedDays,basis,samples:samples.length,stations:load,recommendedStationId:best?.id??null,order:trade?TRADE_ORDER[trade]:3};
+    }).sort((a,b)=>a.order-b.order);
   }
   async overview(actor:Actor):Promise<WorkshopOverview> {
     const taskRows=await this.taskList(actor),bs=await this.db.select().from(blockers).where(eq(blockers.tenantId,actor.user.tenantId));
