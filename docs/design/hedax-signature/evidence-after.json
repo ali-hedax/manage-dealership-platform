@@ -1,0 +1,66 @@
+{
+  "ui": "default",
+  "generatedAt": "2026-11-07T08:11:07.004Z",
+  "loginContrast": [],
+  "overflow": [],
+  "contrast": {},
+  "metrics": {
+    "dashboard": {
+      "loadMs": 1063,
+      "lcpMs": 272,
+      "cls": 0.0001,
+      "longTasks": 0,
+      "jsBytes": 1233152,
+      "cssBytes": 91658,
+      "heapMB": 8.7,
+      "frames": {
+        "frames": 61,
+        "worstMs": 17,
+        "over20ms": 0
+      }
+    },
+    "case-list": {
+      "loadMs": 1014,
+      "lcpMs": 452,
+      "cls": 0.0001,
+      "longTasks": 1,
+      "jsBytes": 1233152,
+      "cssBytes": 91658,
+      "heapMB": 8.6,
+      "frames": {
+        "frames": 60,
+        "worstMs": 17,
+        "over20ms": 0
+      }
+    },
+    "login": {
+      "loadMs": 823,
+      "lcpMs": 160,
+      "cls": 0.0008,
+      "longTasks": 0,
+      "jsBytes": 1065041,
+      "cssBytes": 91658,
+      "heapMB": 6.2,
+      "frames": {
+        "frames": 60,
+        "worstMs": 17,
+        "over20ms": 0
+      }
+    }
+  },
+  "checks": {
+    "animations_no-preference": 3,
+    "runningAfterSettle_no-preference": 0,
+    "animations_reduce": 0,
+    "runningAfterSettle_reduce": 0,
+    "printPanelBackground": "rgb(255, 255, 255)",
+    "printBodyColor": "rgb(18, 26, 42)",
+    "firstFocus": "رفتن به محتوای صفحه",
+    "secondFocusRing": true,
+    "classicAttr": "classic",
+    "classicInstrumentVisible": false,
+    "classicRemembered": "classic",
+    "signatureAttr": "signature",
+    "signatureInstrumentVisible": true
+  }
+}

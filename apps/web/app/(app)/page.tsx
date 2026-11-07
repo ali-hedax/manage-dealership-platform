@@ -12,6 +12,7 @@ import {
 import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { WorkspaceLauncher } from '@/components/WorkspaceLauncher';
+import { OperationsInstrument } from '@/components/OperationsInstrument';
 import { faNum, formatJalali } from '@/lib/format';
 
 interface Attention {
@@ -80,6 +81,8 @@ export default function DashboardPage() {
           )}
         </div>
       </header>
+
+      <OperationsInstrument data={data} />
 
       <nav className="pipeline" aria-label="مراحل پرونده‌ها">
         {pipelineStages.map((s) => {
