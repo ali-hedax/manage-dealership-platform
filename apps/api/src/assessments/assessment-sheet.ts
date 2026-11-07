@@ -81,12 +81,14 @@ export function parseAssessmentSheet(data: Uint8Array, currency: 'rial' | 'toman
       const amount = cell('amount') ? numeric(cell('amount')) : null;
       const price = section === 'labour' ? 0 : cell('price') ? numeric(cell('price')) : amount === null ? 0 : amount / quantity;
       const multiplier = currency === 'toman' ? 10 : 1;
+      // Preserve the per-item Jalali source date in audit evidence (part: T, labour: P).
+      const sourceDate = toLatinDigits(values[section === 'replace' ? 19 : 15] ?? '').trim();
       const candidate = {
         sheet: sheet.name, row: rowNo, action: section === 'labour' ? 'repair' as const : 'replace' as const, description,
         partNumber: section === 'replace' ? toLatinDigits(code).trim() || null : null,
         quantity, unitPriceRial: price * multiplier,
         labourRial: section === 'labour' ? (amount ?? NaN) * multiplier : 0,
-        evidence: `اکسل، برگه ${sheet.name}، ردیف ${rowNo}${section === 'labour' && code ? `، کد اجرت ${toLatinDigits(code)}` : ''}`,
+        evidence: `اکسل، برگه ${sheet.name}، ردیف ${rowNo}${sourceDate ? `، تاریخ ${sourceDate}` : ''}${section === 'labour' && code ? `، کد اجرت ${toLatinDigits(code)}` : ''}`,
       };
       const validated = assessmentItemSchema.safeParse({ ...candidate, expectedVersion: 1 });
       if (!validated.success || (amount !== null && (!Number.isFinite(amount) || (section === 'replace' && Math.abs(quantity * price - amount) > 0.01)))) {
