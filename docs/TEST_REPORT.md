@@ -1,6 +1,25 @@
 # Test report
 
-## Smart planning suggestions — 2026-11-07 — **branch `feature/smart-planning`, not released**
+## Production release of smart planning suggestions `813fcc4` — 2026-11-07 — **released**
+
+Owner-approved release of PR #63, with no migration. [Release record](RELEASE_SMART_20261107.md).
+
+- **CI:** [run 42364994572](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42364994572) on `813fcc4` passed all six jobs.
+- **Artifact:** the ZIP SHA256 matched the GitHub digest, the inner archive matched `preview-images.sha256`, and the source file named the target commit. The running image IDs equal the artifact's IDs.
+- **Live checks:**
+  - health `ok` and PostgreSQL accepting connections
+  - `/login` and `/manifest.webmanifest` returned 200
+  - `/api/v1/dashboard` and `/api/v1/auth/me` returned 401 without a session; `/users` redirected to login
+  - the migration journal was unchanged at 19 rows
+  - no error lines in the API log
+- **Read-only probe with the owner's identity:** passed on the restored copy and on Production. Besides the earlier checks it covered:
+  - the plan suggestion for one case (8 units, all on the default basis)
+  - the work calendar (Friday is not a working day, Saturday is, a recorded holiday is not)
+  - the parts workbench, with the `advice` field on all 15 open lines
+- **Backups:** both restored separately, with all 50 table fingerprints matching live.
+- **Not done here:** browser review in the owner's real session (no browser tool in this session).
+
+## Smart planning suggestions — 2026-11-07 — **merged in PR #63, released the same day**
 
 - **Changed:** daily-report tasks/reminders skip non-working days of the work calendar; `GET /workshop/plan-suggestion?caseId=` (permission `task.manage`); parts workbench `advice` line. No migration.
 - **Ran locally:** `pnpm lint`, `typecheck` (shared, api, web) clean. `packages/shared` tests pass (new `isWorkingDay` test). API suites `daily-reports` 25/25 (new Friday test), `workshop` 11/11 (new plan-suggestion test), `parts-workbench` 4/4, `parts-finance` 12/12, `people` 14/14, `assessment-dispatch`, `system-admin-access`, `technician-pin`, `iran-holidays` all pass. The full API run in one process was killed for memory in the sandbox; CI runs it in full. E2E (Playwright) not run here.
