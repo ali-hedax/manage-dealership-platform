@@ -32,6 +32,8 @@ export interface PartsWorkbenchLine {
   blocking: boolean;
   overdue: boolean;
   overdueHandover: boolean;
+  /** Manage's next-step advice for the parts person, if any. */
+  advice?: string | null;
 }
 export interface PartsWorkbench {
   counts: { decision: number; ready: number; overdueEmdad: number };

@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import {
   parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
   type PartPickup, type PartsWorkbench, type PartsWorkbenchAction, type PartsWorkbenchLine,
+  workingDayMinutes,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -41,7 +42,7 @@ export class PartsWorkbenchService {
     const db = this.handle.db;
     const tenantId = actor.user.tenantId;
     const now = new Date();
-    const [rows, links, waiting, calendar, receipts] = await Promise.all([
+    const [rows, links, waiting, calendar, receipts, upcoming] = await Promise.all([
       db.select({ p: partRequests, c: cases, v: vehicles }).from(partRequests)
         .innerJoin(cases, and(eq(cases.id, partRequests.caseId), eq(cases.tenantId, tenantId), eq(cases.status, 'open')))
         .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
@@ -54,6 +55,8 @@ export class PartsWorkbenchService {
       calendarAt(db, tenantId, now.toISOString()),
       db.select({ official: emdadRequests.official }).from(emdadRequests).where(and(
         eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.statusCategory, RECEIVED))),
+      db.select({ caseId: tasks.caseId, start: tasks.plannedStartAt }).from(tasks)
+        .where(and(eq(tasks.tenantId, tenantId), eq(tasks.status, 'pending'), isNotNull(tasks.plannedStartAt))),
 
     ]);
     const leadTimes = new Map<string, { count: number; days: number }>();
@@ -68,6 +71,11 @@ export class PartsWorkbenchService {
       total.days += (received.getTime() - ordered.getTime()) / DAY_MS;
       leadTimes.set(code, total);
     }
+    // When each car's next unit is planned to start: the date a missing part is really needed by.
+    const needBy = new Map<string, Date>();
+    for (const t of upcoming) if (t.start && (!needBy.has(t.caseId) || t.start < needBy.get(t.caseId)!)) needBy.set(t.caseId, t.start);
+    const dayMinutes = workingDayMinutes(calendar.calendar);
+    const workDaysUntil = (at: Date) => (dayMinutes ? workingMinutesBetween(now.toISOString(), at.toISOString(), calendar.calendar) / dayMinutes : 0);
     const canReserve = actor.user.permissions.has('stock.read') && actor.user.permissions.has('stock.reserve');
     const needs = rows.filter(({ p }) => p.status === 'needed' && p.partNumber).map(({ p }) => p.partNumber!);
     const stock = await this.stock.exactOptions(actor, canReserve ? [...new Set(needs)] : []);
@@ -118,13 +126,21 @@ export class PartsWorkbenchService {
         started: p.createdAt.getTime(), late: false,
       };
       const blocking = blockersByPart.has(p.id);
+      const need = needBy.get(c.id);
+      const left = need ? Math.max(0, Math.floor(workDaysUntil(need))) : null;
+      const advice = blocking && (action === 'emdad' || action === 'market') ? 'تعمیر همین حالا منتظر این قطعه است؛ امروز تعیین تکلیف کنید.'
+        : action === 'emdad' && average !== null && left !== null && average > left ? `امداد ویژه معمولاً ${average} روز طول می‌کشد ولی واحد بعدی ${left === 0 ? 'امروز' : `${left} روز کاری دیگر`} شروع می‌شود؛ خرید از بازار را بررسی کنید.`
+        : action === 'emdad' && left !== null ? `واحد بعدی ${left === 0 ? 'امروز' : `${left} روز کاری دیگر`} به این قطعه نیاز دارد.`
+        : overdue ? 'از موعد رسیدن گذشته؛ امروز با شرکت یا فروشنده پیگیری کنید.'
+        : overdueHandover ? 'قطعه آماده است؛ به واحد اطلاع دهید که تحویل بگیرد.'
+        : null;
       if (blocking) card.card.waiting = blockersByPart.get(p.id) || 'تعمیر';
       card.late ||= overdueHandover;
       card.card.items.push({
         id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
         action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
-        emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover,
+        emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
       cards.set(c.id, card);
     }

@@ -64,6 +64,19 @@ function intervals(day:number,calendar:WorkCalendar) {
   if(calendar.holidays.some(h=>h.date===b.key)) return [];
   return [...calendar.week[b.weekday]!].sort((a,b)=>a.start-b.start).map(s=>[b.midnight+s.start*60_000,b.midnight+s.end*60_000] as const);
 }
+/** True when the Tehran day (YYYY-MM-DD) has working hours and is not a recorded holiday (e.g. Friday). */
+export function isWorkingDay(dateKey:string,calendar:WorkCalendar):boolean {
+  if(calendar.holidays.some(h=>h.date===dateKey)) return false;
+  const weekday=new Date(dateKey+'T12:00:00Z').getUTCDay();
+  return (calendar.week[weekday]?.length??0)>0;
+}
+/** Manage's planning suggestion for one repair unit; the accident expert decides. */
+export interface PlanSuggestion {
+  departmentId:string; departmentName:string;
+  suggestedDays:number; basis:'same_model'|'history'|'default'; samples:number;
+  stations:{id:string;code:string;name:string;freeFrom:string|null;queuedCars:number}[];
+  recommendedStationId:string|null; order:number;
+}
 export function addWorkingMinutes(start:string,minutes:number,calendar:WorkCalendar):string {
   let cursor=Date.parse(start),remaining=minutes*60_000;
   if(!Number.isFinite(cursor)||!Number.isFinite(minutes)||minutes<=0||minutes>1e6) throw new Error('INVALID_WORK_DURATION');

@@ -97,6 +97,7 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
         <p className="muted small">{faNum(item.quantity)} عدد{item.partNumber && <> · کد فنی <bdi>{item.partNumber}</bdi></>}</p>
         {item.stock && <span className="chip chip-green">موجودی آزاد {faNum(Number(item.stock.available))}</span>}
         {item.overdueHandover && <span className="chip chip-red">بیش از ۴ ساعت کاری در انتظار تحویل</span>}
+        {item.advice && <p className="small callout callout-blue" role="note">💡 {item.advice.replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]!)}</p>}
         {item.overdue && <span className="chip chip-red">موعد گذشته</span>}
         {item.emdadAverageDays !== null && action === 'emdad' && <span className="chip chip-amber">معمولاً {faNum(item.emdadAverageDays)} روزه می‌رسد</span>}
       </div>

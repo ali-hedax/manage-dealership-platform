@@ -444,6 +444,17 @@ describe('11:00 Tehran tasks and reminders', () => {
     expect((await expert.get('/notifications')).body.items).toHaveLength(0);
   });
 
+  it('creates no task and sends no reminder on Friday (dealership closed)', async () => {
+    const svc = h.app.get(DailyTasksService);
+    // 2026-12-04 is a Friday; 12:00 Tehran = 08:30Z, after the 11:00 reminder time.
+    await svc.tick(new Date('2026-12-04T08:30:00Z'));
+    expect(await h.db.db.select().from(dailyTasks).where(eq(dailyTasks.localDate, '2026-12-04'))).toHaveLength(0);
+    expect((await h.db.db.select().from(notifications)).some((n) => n.dedupeKey?.endsWith(':2026-12-04'))).toBe(false);
+    const tenantId = (await h.db.db.select().from(tenants))[0]!.id;
+    const today = await svc.today(tenantId, new Date('2026-12-04T08:30:00Z'));
+    expect(today.every((t) => !t.late)).toBe(true);
+  });
+
   it('keeps a reminder due when nobody can receive it, applies a new time to today and survives a restart', async () => {
     const svc = h.app.get(DailyTasksService);
     const staff = await h.db.db.select({ id: users.id, isActive: users.isActive }).from(users);

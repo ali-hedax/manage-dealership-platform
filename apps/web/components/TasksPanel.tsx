@@ -12,6 +12,7 @@ import {
   PART_STATUS_LABELS,
   type Department,
   type WorkshopStation,
+  type PlanSuggestion,
   type Part,
   type Task,
   type TaskAction,
@@ -315,6 +316,7 @@ function AddTask({ kase, onDone, initial }: { kase: CaseDetail; onDone: () => vo
   const [departmentId, setDepartmentId] = useState(initial?.department.id ?? '');
   const {data:stations}=useSWR<WorkshopStation[]>('/workshop/stations',fetcher);
   const {data:staff}=useSWR<{id:string;displayName:string}[]>('/workshop/staff',fetcher);
+  const {data:plan}=useSWR<PlanSuggestion[]>(initial?null:`/workshop/plan-suggestion?caseId=${kase.id}`,fetcher);
   const [stationId,setStationId]=useState(initial?.stationId??''),[assignedUserId,setAssignedUserId]=useState(initial?.assignedUserId??''),[durationMinutes,setDurationMinutes]=useState(''),[durationDays,setDurationDays]=useState(''),[scheduleReason,setScheduleReason]=useState('');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [technicianName, setTechnicianName] = useState(initial?.technicianName ?? '');
@@ -382,6 +384,13 @@ function AddTask({ kase, onDone, initial }: { kase: CaseDetail; onDone: () => vo
       <label className="field"><span>جایگاه دارای کد</span><select className="input" name="stationId" value={stationId} onChange={e=>{setStationId(e.target.value);const s=stations?.find(s=>s.id===e.target.value);if(s){setAssignedUserId(s.responsibleUserId??'');setDepartmentId(s.departmentId);}}}><option value="">انتخاب جایگاه</option>{stations?.filter(s=>s.isActive&&(!departmentId||s.departmentId===departmentId)).map(s=><option value={s.id} key={s.id}>{s.code} · {s.name}</option>)}</select></label>
       <label className="field"><span>حساب تعمیرکار</span><select className="input" name="assignedUserId" value={assignedUserId} onChange={e=>{setAssignedUserId(e.target.value);setTechnicianName(staff?.find(u=>u.id===e.target.value)?.displayName??'');}}><option value="">ثبت توسط مسئول / بدون حساب تعمیرکار</option>{staff?.map(u=><option value={u.id} key={u.id}>{u.displayName}</option>)}</select></label>
       {kase.repairPlan&&<p className="callout callout-blue">برنامه کل پرونده: {faNum(kase.repairPlan.days)} روز کاری؛ پایان {formatJalali(kase.forecastDeliveryAt,{time:true})}</p>}
+      {(()=>{const p=plan?.find(x=>x.departmentId===departmentId);if(!p)return null;const st=p.stations.find(x=>x.id===p.recommendedStationId);
+        const why=p.basis==='same_model'?`میانگین ${faNum(p.samples)} کار قبلی همین مدل`:p.basis==='history'?`میانگین ${faNum(p.samples)} کار قبلی این واحد`:'مقدار پایه؛ با ثبت کارهای واقعی دقیق‌تر می‌شود';
+        return <div className="callout callout-blue" role="note"><strong>پیشنهاد منیج: {faNum(p.suggestedDays)} روز کاری</strong> <span className="small">({why})</span>
+          {st&&<div className="small">جایگاه {st.code} · {st.name} — {st.freeFrom?`آزاد از ${formatJalali(st.freeFrom,{time:true})}`:'همین حالا آزاد'}{st.queuedCars?` · ${faNum(st.queuedCars)} خودرو در صف`:''}</div>}
+          {p.stations.filter(x=>x.id!==st?.id&&x.freeFrom).map(x=><div className="small muted" key={x.id}>جایگاه {x.code}: مشغول تا {formatJalali(x.freeFrom!,{time:true})}</div>)}
+          <button type="button" className="btn btn-sm" onClick={()=>{setDurationDays(String(p.suggestedDays));setDurationMinutes('');setPlannedStartAt(null);setPlannedEndAt(null);if(st){setStationId(st.id);const s=stations?.find(x=>x.id===st.id);if(s)setAssignedUserId(s.responsibleUserId??'');}}}>استفاده از پیشنهاد</button></div>;})()}
+      {!departmentId&&plan&&plan.length>0&&<p className="small muted">ترتیب معمول واحدها: {plan.map(p=>p.departmentName).join(' ← ')}</p>}
       <label className="field"><span>سهم این جایگاه (روز کاری)</span><input aria-label="سهم این جایگاه (روز کاری)" name="durationDays" className="input" type="number" min={0.25} max={180} step={0.25} value={durationDays} onChange={e=>{setDurationDays(e.target.value);setDurationMinutes('');setPlannedStartAt(null);setPlannedEndAt(null);}}/><span className="small muted">پایان خودکار محاسبه می‌شود. شروع خالی: پس از پیش‌نیازها یا از زمان پذیرش؛ برای کار هم‌زمان، پیش‌نیاز تعیین نکنید.</span></label>
       <details className="compact-disclosure"><summary>تنظیم زمان دقیق یا سابقه قبلی</summary><div className="stack"><label className="field"><span>مدت کار به دقیقه کاری</span><input name="durationMinutes" className="input" type="number" min={1} max={100000} value={durationMinutes} onChange={e=>{setDurationMinutes(e.target.value);setDurationDays('');}}/></label>
       <JalaliInput label="شروع برنامه‌ای" value={plannedStartAt} onChange={setPlannedStartAt} withTime />

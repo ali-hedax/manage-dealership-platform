@@ -31,6 +31,17 @@ it('defines coded stations with tenant-scoped staff and no duplicate code',async
  expect((await admin.post('/workshop/stations',body)).body.code).toBe('STATION_CODE_EXISTS');
  expect((await admin.post('/workshop/stations',{...body,code:'TEST-X',responsibleUserId:newId()})).body.code).toBe('INVALID_ASSIGNEE');
 });
+it('suggests days per unit and the station that frees up first; technicians cannot read it',async()=>{
+ expect((await tech.get(`/workshop/plan-suggestion?caseId=${caseId}`)).status).toBe(403);
+ const before=await c.get(`/workshop/plan-suggestion?caseId=${caseId}`);expect(before.status).toBe(200);
+ const body=before.body.find((x:{departmentId:string})=>x.departmentId===departmentId);
+ expect(body).toMatchObject({basis:'default',suggestedDays:2,recommendedStationId:stationId});
+ expect(body.stations[0]).toMatchObject({id:stationId,freeFrom:null,queuedCars:0});
+ const end=new Date(Date.now()+3*86_400_000).toISOString();
+ const t=await c.post(`/cases/${caseId}/tasks`,{departmentId,stationId,title:'اشغال جایگاه',plannedStartAt:new Date().toISOString(),plannedEndAt:end});expect(t.status).toBe(201);
+ const after=(await c.get(`/workshop/plan-suggestion?caseId=${caseId}`)).body.find((x:{departmentId:string})=>x.departmentId===departmentId);
+ expect(after.stations[0].queuedCars).toBe(1);expect(Date.parse(after.stations[0].freeFrom)).toBeGreaterThan(Date.now());
+});
 it('assigned technician can start/finish only own task, and cannot view a case or approve delivery',async()=>{
  const r=await c.post(`/cases/${caseId}/tasks`,{departmentId,stationId,assignedUserId:techId,title:'صافکاری آزمون',plannedStartAt:'2026-11-04T15:30:00+03:30',durationMinutes:480});expect(r.status).toBe(201);taskId=r.body.id;
  expect(r.body.baselineEndAt).toBe(new Date('2026-11-05T13:00:00+03:30').toISOString());
