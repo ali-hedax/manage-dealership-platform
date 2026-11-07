@@ -1,12 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, isNull, like, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
-import { nextTechnicianUsername, type TechnicianAccountInput } from '@manage/shared';
+import { nextTechnicianUsername, REPAIR_TRADE_LABELS, type RepairTrade, type TechnicianAccountInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type Tx } from '../db/database';
-import { sessions, users } from '../db/schema';
+import { departments, sessions, users, workshopStations } from '../db/schema';
 import { isTechnicianOnly } from './auth.service';
 import type { Actor } from './auth.types';
 import { hashPassword } from './password';
@@ -20,6 +20,8 @@ export interface TechnicianAccount {
   hasPin: boolean;
   locked: boolean;
   lastLoginAt: string | null;
+  /** The bay this technician is responsible for, if any. */
+  station: { code: string; name: string; trade: RepairTrade } | null;
 }
 
 /**
@@ -45,8 +47,15 @@ export class TechniciansService {
       .where(and(eq(users.tenantId, actor.user.tenantId), isNull(users.email)))
       .orderBy(asc(users.displayName));
     const now = Date.now();
-    return rows
-      .filter((u) => isTechnicianOnly(u.roles, u.isOwner))
+    const technicians = rows.filter((u) => isTechnicianOnly(u.roles, u.isOwner));
+    const bays = technicians.length
+      ? await this.db
+          .select({ userId: workshopStations.responsibleUserId, code: workshopStations.code, name: workshopStations.name, trade: workshopStations.trade })
+          .from(workshopStations)
+          .where(and(eq(workshopStations.tenantId, actor.user.tenantId), inArray(workshopStations.responsibleUserId, technicians.map((u) => u.id))))
+          .orderBy(asc(workshopStations.code))
+      : [];
+    return technicians
       .map((u) => ({
         id: u.id,
         username: u.username,
@@ -55,6 +64,7 @@ export class TechniciansService {
         hasPin: !!u.pinHash,
         locked: !!u.lockedUntil && u.lockedUntil.getTime() > now,
         lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+        station: ((bay) => (bay ? { code: bay.code, name: bay.name, trade: bay.trade as RepairTrade } : null))(bays.find((b) => b.userId === u.id)),
       }));
   }
 
@@ -89,10 +99,46 @@ export class TechniciansService {
         entityType: 'user',
         entityId: id,
         action: 'user.technician_created',
-        after: { username, displayName: input.displayName, roles: ['technician'] },
+        after: { username, displayName: input.displayName, roles: ['technician'], ...(input.stationCode ? { stationCode: input.stationCode, trade: input.trade } : {}) },
       });
+      if (input.trade && input.stationCode) await this.assignBay(tx, actor, id, input.trade, input.stationCode);
     });
     return this.list(actor);
+  }
+
+  /**
+   * Makes the technician responsible for bay `code` of `trade`: an existing free
+   * bay of the same unit is linked, a new code creates the bay (and the unit if
+   * it was never set up). A bay held by another active colleague is refused.
+   */
+  private async assignBay(tx: Tx, actor: Actor, technicianId: string, trade: RepairTrade, code: string) {
+    const tenantId = actor.user.tenantId;
+    const [existing] = await tx.select().from(workshopStations).where(and(eq(workshopStations.tenantId, tenantId), eq(workshopStations.code, code))).for('update');
+    if (existing) {
+      if (existing.trade !== trade)
+        throw badRequest('STATION_TRADE_MISMATCH', `جایگاه ${code} برای ${REPAIR_TRADE_LABELS[existing.trade as RepairTrade] ?? existing.trade} تعریف شده است؛ واحد درست را انتخاب کنید یا کد دیگری بدهید`);
+      if (existing.responsibleUserId) {
+        const [holder] = await tx.select({ displayName: users.displayName, isActive: users.isActive }).from(users).where(eq(users.id, existing.responsibleUserId));
+        if (holder?.isActive) throw conflict('STATION_TAKEN', `جایگاه ${code} به ${holder.displayName} سپرده شده است`);
+      }
+      const [row] = await tx
+        .update(workshopStations)
+        .set({ responsibleUserId: technicianId, isActive: true, version: existing.version + 1, updatedAt: new Date() })
+        .where(eq(workshopStations.id, existing.id))
+        .returning();
+      await this.audit.record(tx, actor, { entityType: 'workshop_station', entityId: existing.id, action: 'workshop_station.updated', before: existing, after: { responsibleUserId: technicianId, isActive: true }, snapshot: { version: row!.version, row } });
+      return;
+    }
+    let [department] = await tx.select().from(departments).where(and(eq(departments.tenantId, tenantId), eq(departments.code, trade)));
+    if (!department) {
+      const departmentId = newId();
+      [department] = await tx.insert(departments).values({ id: departmentId, tenantId, code: trade, name: REPAIR_TRADE_LABELS[trade] }).returning();
+      await this.audit.record(tx, actor, { entityType: 'reference', entityId: departmentId, action: 'department.created', after: { code: trade, name: department!.name }, snapshot: { version: 1, row: department } });
+    }
+    const stationId = newId();
+    const fields = { departmentId: department!.id, code, name: `${REPAIR_TRADE_LABELS[trade]} ${code}`, trade, responsibleUserId: technicianId, isActive: true };
+    const [row] = await tx.insert(workshopStations).values({ ...fields, id: stationId, tenantId, isTest: actor.user.isTestTenant }).returning();
+    await this.audit.record(tx, actor, { entityType: 'workshop_station', entityId: stationId, action: 'workshop_station.created', after: fields, snapshot: { version: 1, row } });
   }
 
   async resetPin(actor: Actor, id: string, pin: string, reason?: string): Promise<TechnicianAccount[]> {

@@ -67,7 +67,7 @@ test('owner sees why email failed and can check the connection without sending',
   await expect(page.getByRole('button',{name:'ساخت لینک خصوصی برای همکار آزمون'})).toBeEnabled();
 });
 
-test('technicians get their own tab: a name and a 4-digit PIN are enough, and the technician signs in with them',async({page},testInfo)=>{
+test('technicians get their own tab: name, unit, bay code and a 4-digit PIN, and the technician signs in with them',async({page},testInfo)=>{
   await login(page,'admin');
   await page.goto('/users');
   await page.getByRole('tab',{name:/تعمیرکارها/}).click();
@@ -76,6 +76,8 @@ test('technicians get their own tab: a name and a 4-digit PIN are enough, and th
   await expect(panel.getByRole('heading',{name:'تعمیرکارها',exact:true})).toBeVisible();
   await expect(panel.getByLabel('ایمیل')).toHaveCount(0);
   await panel.getByLabel('نام تعمیرکار',{exact:true}).fill('صافکار تصویری آزمون');
+  await panel.getByRole('combobox',{name:'واحد',exact:true}).selectOption({label:'صافکاری'});
+  await panel.getByLabel('کد جایگاه',{exact:true}).fill('B-77');
   await panel.getByLabel('رمز ۴ رقمی',{exact:true}).fill('۴۸۱۵');
   const username=(await panel.locator('.technician-username bdi').textContent())!.trim();
   expect(username).toMatch(/^tech\d{2,}$/);
@@ -84,7 +86,10 @@ test('technicians get their own tab: a name and a 4-digit PIN are enough, and th
   await expect(created).toContainText('صافکار تصویری آزمون ساخته شد');
   await expect(created).toContainText(username);
   await expect(created).toContainText('۴۸۱۵');
-  await expect(panel.getByRole('row',{name:/صافکار تصویری آزمون/})).toContainText('فعال');
+  await expect(created).toContainText('صافکاری · B-77');
+  const row=panel.getByRole('row',{name:/صافکار تصویری آزمون/});
+  await expect(row).toContainText('فعال');
+  await expect(row).toContainText('صافکاری · B-77');
   await page.screenshot({path:testInfo.outputPath('technicians-desktop.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);

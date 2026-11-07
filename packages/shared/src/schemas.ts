@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { REPAIR_TRADES } from './workshop';
 import {
   ASSESSMENT_ITEM_ACTIONS,
   ASSESSMENT_KINDS,
@@ -67,7 +68,10 @@ export const technicianAccountSchema = z.object({
   // Optional: without it the API picks the next free tech01, tech02, …
   username: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9._-]{2,31}$/, 'نام کاربری با حرف انگلیسی شروع شود و ۳ تا ۳۲ حرف، عدد، نقطه یا خط تیره باشد').optional(),
   pin: pinSchema,
-});
+  // The technician's unit (صافکاری، نقاشی، …) and bay code; Manage creates the bay if it is new.
+  trade: z.enum(REPAIR_TRADES).optional(),
+  stationCode: z.string().trim().min(1, 'کد جایگاه را وارد کنید').max(32).optional(),
+}).refine((v) => !v.trade === !v.stationCode, { message: 'واحد و کد جایگاه را با هم وارد کنید', path: ['stationCode'] });
 /** Next free automatic technician username (tech01, tech02, …) given the usernames in use. */
 export function nextTechnicianUsername(taken: Iterable<string>): string {
   const used = new Set(taken);
