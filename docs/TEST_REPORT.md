@@ -1,5 +1,21 @@
 # Test report
 
+## Production release of technician unit and bay `5cf9c72` — 2026-11-07 — **released**
+
+Owner-approved release of PR #60, with no migration. [Release record](RELEASE_BAY_20261107.md).
+
+- **CI:** [run 42351838139](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42351838139) on `5cf9c72` passed all six jobs.
+- **Artifact:** the ZIP SHA256 matched the GitHub digest, the inner archive matched `preview-images.sha256`, and the source file named the target commit. The running image IDs equal the artifact's IDs.
+- **Live checks:**
+  - health `ok` and PostgreSQL accepting connections
+  - `/login` and `/manifest.webmanifest` returned 200
+  - `/api/v1/dashboard` and `/api/v1/auth/me` returned 401 without a session
+  - the migration journal was unchanged at 19 rows
+  - no error lines in the API log
+- **Read-only probe with the owner's identity:** passed on the restored copy and on Production. It covered cases, related Emdad, assessments, workshop, the technician list with its bay field, and the in-memory rule that unit and bay code go together.
+- **Backups:** both restored separately, with all 50 table fingerprints matching live.
+- **Not done here:** browser review in the owner's real session (no browser tool in this session).
+
 
 
 ## Technician unit and bay on creation — 2026-11-07 — local green
