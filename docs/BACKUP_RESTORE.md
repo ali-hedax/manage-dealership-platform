@@ -3,7 +3,7 @@
 **Latest release (2026-11-07, 16:34 Tehran):** smart planning suggestions `813fcc4`, no migration.
 - The pre-install backup `operational/20261107T130255Z` was restored into a scratch database, and all 50 table fingerprints matched live.
 - The final backup `operational/20261107T130547Z` was restored, and all fingerprints matched. Both scratch databases were removed.
-- Encrypted off-server copy: `F:Manage Backupssmart-recovery-final-813fcc4-20261107.dpapi`, decryption verified.
+- Encrypted off-server copy: `F:\Manage Backups\smart-recovery-final-813fcc4-20261107.dpapi`, decryption verified.
 - See the [release record](RELEASE_SMART_20261107.md).
 
 **Earlier release (2026-11-07, 11:20 Tehran):** technician unit and bay `5cf9c72`, no migration.
