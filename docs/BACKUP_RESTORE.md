@@ -1,6 +1,12 @@
 # Backup and restore
 
-**Latest release (2026-11-07, 11:20 Tehran):** technician unit and bay `5cf9c72`, no migration.
+**Latest release (2026-11-07, 16:34 Tehran):** smart planning suggestions `813fcc4`, no migration.
+- The pre-install backup `operational/20261107T130255Z` was restored into a scratch database, and all 50 table fingerprints matched live.
+- The final backup `operational/20261107T130547Z` was restored, and all fingerprints matched. Both scratch databases were removed.
+- Encrypted off-server copy: `F:\Manage Backups\smart-recovery-final-813fcc4-20261107.dpapi`, decryption verified.
+- See the [release record](RELEASE_SMART_20261107.md).
+
+**Earlier release (2026-11-07, 11:20 Tehran):** technician unit and bay `5cf9c72`, no migration.
 - The pre-install backup `operational/20261107T074828Z` was restored into a scratch database, and all 50 table fingerprints matched live.
 - The final backup `operational/20261107T075121Z` was restored, and all fingerprints matched. Both scratch databases were removed.
 - Encrypted off-server copy: `F:\Manage Backups\bay-recovery-final-5cf9c72-20261107.dpapi`, decryption verified. It is on drive F because C had no free space.
@@ -61,6 +67,8 @@ Record date, dump file, row counts and result in the table below. The `audit_eve
 
 | Date | Environment | Dump | Rows (cases / audit) | Result |
 | --- | --- | --- | --- | --- |
+| 2026-11-07 | Isolated copy of Manage Production | operational/20261107T130255Z | 18 / 54211; 50 tables, 19 migrations | Pre-install backup for `813fcc4` (no migration); all fingerprints matched live. |
+| 2026-11-07 | Isolated copy of Manage Production | operational/20261107T130547Z | 18 / 54211; 50 tables, 19 migrations | Final smart-planning release backup restored; both scratch DBs removed, encrypted off-server recovery verified. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T074828Z | 18 / 54175; 50 tables, 19 migrations | Pre-install backup for `5cf9c72` (no migration); all fingerprints matched live. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T075121Z | 18 / 54175; 50 tables, 19 migrations | Final bay release backup restored; both scratch DBs removed, encrypted off-server recovery verified. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T065755Z | 18 / 54175; 50 tables, 19 migrations | Pre-install backup for `ee86d5c` (no migration); all fingerprints matched live. |
