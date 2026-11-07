@@ -129,6 +129,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/workshop/my-tasks` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/my-work` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/workshop/overview` | [source](../apps/api/src/workshop/workshop.controller.ts) |
+| GET | `/api/v1/workshop/plan-suggestion` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/quotes` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/staff` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/stations` | [source](../apps/api/src/workshop/workshop.controller.ts) |
