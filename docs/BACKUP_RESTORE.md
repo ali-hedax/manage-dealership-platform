@@ -1,6 +1,13 @@
 # Backup and restore
 
-**Latest release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
+**Latest release (2026-11-07):** integrated main `be3dd66` with three migrations.
+- The pre-install backup `operational/20261107T051752Z` was restored into a scratch database. Migrations `0016`–`0018` were rehearsed there, and all 42 existing tables stayed equal.
+- The frozen install backup is `operational/20261107T053406Z`. Restore it if data is damaged.
+- The final backup `operational/20261107T053603Z` was restored, and all fingerprints matched. The scratch databases were removed.
+- Encrypted off-server copy: `Documents/Manage Backups/integration-recovery-final-be3dd66-20261107.dpapi` (decryption verified).
+- See the [release record](RELEASE_INTEGRATION_20261107.md).
+
+**Previous release (2026-11-05):** owner-authorized entry/workbench `ad54f15` is installed with exact verified CI images, restored backups, preserved data/auth/access and no new migration/seed. Forty-second switch. Final backup `operational/20261105T054714Z`, encrypted off-server recovery verified. Direct Google holiday fetch currently times out on the host; the local Iran ICS-file path is available. See [release evidence](RELEASE_ENTRY_20261105.md). Earlier deployment entries below are history.
 
 **Current status:** backup/restore has been exercised on Manage Production. The latest final restore passed for `operational/20261105T044951Z`, including published short-label source/settings, current operational data and the preserved personal staff-administration denial. CurrentUser DPAPI off-server recovery was decrypted/checksummed in memory. See the [release record](RELEASE_SHORT_LABEL_20261105.md). The generic examples below must use the operational wrapper on the current host.
 
@@ -42,6 +49,8 @@ Record date, dump file, row counts and result in the table below. The `audit_eve
 
 | Date | Environment | Dump | Rows (cases / audit) | Result |
 | --- | --- | --- | --- | --- |
+| 2026-11-07 | Isolated copy of Manage Production | operational/20261107T051752Z | 18 / 54173; 42 tables fingerprinted | Migrations 0016–0018 rehearsed; all existing rows equal, new tables empty. |
+| 2026-11-07 | Isolated copy of Manage Production | operational/20261107T053603Z | Full table/migration fingerprints (50 tables, 19 migrations) matched live | Final integration backup restored; both scratch DBs removed, encrypted off-server recovery verified. |
 | 2026-11-05 | Isolated copy of Manage Production | operational/20261105T044951Z | Full table/migration fingerprints recorded privately and matched | Final short-label backup restored; three scratch DBs removed, encrypted off-server recovery verified. |
 | 2026-11-04 | Isolated copy of Manage Production | operational/20261104T151335Z | Full table/migration fingerprints recorded privately and matched | Restored final compact-assessment backup; both scratch DBs removed; encrypted off-server recovery verified. |
 | 2026-11-04 | Isolated copy of Manage Production | operational/20261104T062953Z | Counts/fingerprints recorded privately and matched | Full operational/account comparison passed; scratch DB removed, encrypted off-server recovery verified. |
