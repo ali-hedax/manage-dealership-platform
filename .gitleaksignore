@@ -5,3 +5,7 @@
 # Public RFC 6238 Appendix B test vector (ASCII 12345678901234567890,
 # encoded as base32), never used as an application credential.
 491588b980751ebfa64aa17d5601c74c88a087e2:apps/api/test/personal-auth.e2e-spec.ts:generic-api-key:26
+# Rollback image tags (manage-api / manage-web : pre-integration-20261107) in the
+# 2026-11-07 release record, reworded in c682adf. Image tags, not secrets.
+ce5f8de2ab1fe19eb5a635398c2d8a0b1e7ccb49:docs/DEPLOYMENT.md:generic-api-key:10
+ce5f8de2ab1fe19eb5a635398c2d8a0b1e7ccb49:docs/RELEASE_INTEGRATION_20261107.md:generic-api-key:30
