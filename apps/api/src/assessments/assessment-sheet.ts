@@ -48,11 +48,15 @@ export function parseAssessmentSheet(data: Uint8Array, currency: 'rial' | 'toman
         if (values.some(v => v.includes('ریال')) && currency !== 'rial') error(sheet.name, rowNo, 'عنوان ستون ریال است؛ واحد مبلغ را ریال انتخاب کنید');
         continue;
       }
+      // A printed continuation page repeats report metadata instead of table headers.
+      // Keep the active columns across these page breaks; do not treat metadata as rows.
+      if (nonempty.some(v => /(?:زمان چاپ|شماره دستور کار|شماره رخداد|شماره شاسی|شماره خودرو|تاریخ دریافت دستور کار|شرح خودرو|نام و نام خانوادگی کارشناس|شماره کارت تعمیراتی|توضیحات کارشناس|مدت زمان تعمیرات|فرانشیز|کیلومتر|نوع دستور کار|لیست قطعات و اجرت|سقف خسارت|مبلغ اجرت خسارتی|جمع مبلغ قطعه و اجرت)/.test(v)) ||
+          (values[3]?.includes('صفحه') && values[1]?.includes('از'))) continue;
       if (!columns || !section) continue;
       const cell = (k: keyof Columns) => columns![k] >= 0 ? values[columns![k]] ?? '' : '';
       const description = cell('description'), code = cell('code');
       if (section === 'excluded') {
-        if (description && code && ['نهایی','رد'].includes(key(cell('status')))) result.skipped.push({sheet:sheet.name,row:rowNo,reason:'اجرت معادل؛ مبلغ مستقل ندارد و نیازمند بررسی دستی است'});
+        if (description && code && ['نهایی','رد'].includes(key(cell('status')))) result.skipped.push({sheet:sheet.name,row:rowNo,reason:`اجرت معادل ${description} (کد ${toLatinDigits(code)})؛ وضعیت ${cell('status')}؛ مبلغ مستقل ندارد و برای جلوگیری از محاسبه دوباره به جمع اضافه نمی‌شود`});
         continue;
       }
       if (nonempty.some(v => /^(جمع|مجموع|لیستقطعات|توضیحات|امضا)/.test(key(v)))) { columns = null; continue; }
