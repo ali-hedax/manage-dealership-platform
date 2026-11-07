@@ -1,6 +1,19 @@
 # Test report
 
 
+
+## Technician unit and bay on creation — 2026-11-07 — local green
+
+- **Owner request:** a technician is added with name, unit (صافکاری، نقاشی، …), bay code and PIN.
+- **API:** `technician-pin.e2e-spec.ts` **7/7**. New case:
+  - a new code creates bay «صافکاری B-91» with the technician as responsible;
+  - the same code for a second technician is refused with 409 `STATION_TAKEN`;
+  - a code of another unit is refused with 422 `STATION_TRADE_MISMATCH`;
+  - a refused request creates no account;
+  - a unit without a code is a 400.
+- **Browser:** `staff.spec.ts` **5/5**. The technicians tab selects «صافکاری» and code B-77, shows «جایگاه: صافکاری · B-77» with the credentials and in the table row, and the technician signs in.
+- **Typecheck and lint:** clean. No migration: bays use the existing `workshop_stations` table.
+
 ## Staff page cleanup (tabs, technicians by name + PIN) — 2026-11-07 — **done**: local green, CI 6/6 green on PR #58
 
 Owner feedback after the 2026-11-07 release: technicians had no clear place, the page mixed invitation, access and owner/system-admin controls, and email invitations never went out.

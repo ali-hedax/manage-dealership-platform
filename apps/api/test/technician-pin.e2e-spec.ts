@@ -87,6 +87,27 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       expect((await pinLogin('tech01', '1357')).status).toBe(200);
     });
 
+    it('puts the technician on a bay of his unit: a new code creates the bay, a held or other-unit bay is refused', async () => {
+      const created = await admin.post('/staff/technicians', { displayName: 'صافکار جایگاه‌دار', pin: '1122', trade: 'body', stationCode: 'B-91' });
+      expect(created.status).toBe(201);
+      const tech = (created.body as { displayName: string; id: string; station: unknown }[]).find((t) => t.displayName === 'صافکار جایگاه‌دار')!;
+      expect(tech.station).toEqual({ code: 'B-91', name: 'صافکاری B-91', trade: 'body' });
+      const stations: { code: string; trade: string; responsibleUserId: string | null }[] = (await admin.get('/workshop/stations')).body;
+      expect(stations.find((s) => s.code === 'B-91')).toEqual(expect.objectContaining({ trade: 'body', responsibleUserId: tech.id }));
+
+      const taken = await admin.post('/staff/technicians', { displayName: 'صافکار دوم', pin: '3344', trade: 'body', stationCode: 'B-91' });
+      expect(taken.status).toBe(409);
+      expect(taken.body.code).toBe('STATION_TAKEN');
+      const wrongUnit = await admin.post('/staff/technicians', { displayName: 'نقاش اشتباهی', pin: '5566', trade: 'paint', stationCode: 'B-91' });
+      expect(wrongUnit.status).toBe(422);
+      expect(wrongUnit.body.code).toBe('STATION_TRADE_MISMATCH');
+      // Nothing half-made: the refused technicians were not created.
+      const names = ((await admin.get('/staff/technicians')).body as { displayName: string }[]).map((t) => t.displayName);
+      expect(names).not.toContain('صافکار دوم');
+      expect(names).not.toContain('نقاش اشتباهی');
+      expect((await admin.post('/staff/technicians', { displayName: 'بی‌جایگاه', pin: '7788', trade: 'body' })).status).toBe(400);
+    });
+
     it('needs user.manage to manage technician accounts and refuses duplicate usernames', async () => {
       const qc = await h.login('qc');
       expect((await qc.post('/staff/technicians', { displayName: 'x آزمون', username: 'tech9', pin: '1234' })).status).toBe(403);
