@@ -64,9 +64,18 @@ export type TechnicianLoginInput = z.infer<typeof technicianLoginSchema>;
 /** Owner/system admin creates a technician account (no email). */
 export const technicianAccountSchema = z.object({
   displayName: z.string().trim().min(2).max(120),
-  username: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9._-]{2,31}$/, 'نام کاربری با حرف انگلیسی شروع شود و ۳ تا ۳۲ حرف، عدد، نقطه یا خط تیره باشد'),
+  // Optional: without it the API picks the next free tech01, tech02, …
+  username: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9._-]{2,31}$/, 'نام کاربری با حرف انگلیسی شروع شود و ۳ تا ۳۲ حرف، عدد، نقطه یا خط تیره باشد').optional(),
   pin: pinSchema,
 });
+/** Next free automatic technician username (tech01, tech02, …) given the usernames in use. */
+export function nextTechnicianUsername(taken: Iterable<string>): string {
+  const used = new Set(taken);
+  for (let n = 1; ; n++) {
+    const candidate = `tech${String(n).padStart(2, '0')}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}
 export type TechnicianAccountInput = z.infer<typeof technicianAccountSchema>;
 
 // A system administrator (not the owner) must give a reason: a new PIN also unlocks the account.

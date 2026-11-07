@@ -163,7 +163,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
           className="input ltr-input"
           name="username"
           value={username}
-          placeholder="safkar2"
+          placeholder="tech01"
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}

@@ -1,31 +1,38 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
+import { nextTechnicianUsername } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { formatJalali } from '@/lib/format';
+import { formatJalali, toPersianDigits } from '@/lib/format';
 
 type Technician = { id: string; username: string; displayName: string; isActive: boolean; hasPin: boolean; locked: boolean; lastLoginAt: string | null };
+type Pending = { tech: Technician; kind: 'pin' | 'active' };
+const PIN = '[0-9۰-۹]{4}';
+const toLatinDigits = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 
-/** Technician accounts: username + 4-digit PIN, no email or Authenticator. */
+/** Technician accounts: a name and a 4-digit PIN; Manage picks the username (tech01, tech02, …). */
 export function TechniciansPanel() {
   const { can, me } = useAuth();
   // A system administrator who is not the owner writes a reason: a new PIN also unlocks the account.
   const support = !me.isOwner && me.roles.includes('system_admin');
-  const [reason, setReason] = useState('');
   const { data, mutate } = useSWR<Technician[]>(can('user.manage') ? '/staff/technicians' : null, fetcher);
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState('');
-  const [pinFor, setPinFor] = useState<Technician | null>(null);
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [created, setCreated] = useState<{ name: string; username: string; pin: string } | null>(null), [message, setMessage] = useState('');
+  const [name, setName] = useState(''), [pin, setPin] = useState(''), [username, setUsername] = useState(''), [editUsername, setEditUsername] = useState(false);
+  const [pending, setPending] = useState<Pending | null>(null);
   if (!can('user.manage')) return null;
+  const suggested = nextTechnicianUsername((data ?? []).map((t) => t.username));
+  const chosenUsername = (editUsername ? username.trim().toLowerCase() : '') || suggested;
 
-  async function run(fn: () => Promise<unknown>, ok: string) {
+  async function run(fn: () => Promise<unknown>) {
     setBusy(true);
     setError('');
     setMessage('');
+    setCreated(null);
     try {
       await fn();
       await mutate();
-      setMessage(ok);
       return true;
     } catch (e) {
       setError(errorMessage(e));
@@ -36,64 +43,114 @@ export function TechniciansPanel() {
   }
   async function create(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget, fd = new FormData(form);
-    const done = await run(
-      () => api('/staff/technicians', { body: { displayName: fd.get('displayName'), username: fd.get('username'), pin: fd.get('pin') } }),
-      'تعمیرکار ساخته شد. نام کاربری و رمز را حضوری به خودش بدهید.',
-    );
-    if (done) form.reset();
+    const account = { displayName: name.trim(), username: chosenUsername, pin: toLatinDigits(pin) };
+    if (await run(() => api('/staff/technicians', { body: account }))) {
+      setCreated({ name: account.displayName, username: account.username, pin: account.pin });
+      setName('');
+      setPin('');
+      setUsername('');
+      setEditUsername(false);
+    }
   }
-  async function resetPin(e: FormEvent<HTMLFormElement>) {
+  async function confirm(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const pin = new FormData(e.currentTarget).get('pin');
-    if (await run(() => api(`/staff/technicians/${pinFor!.id}/pin`, { method: 'PUT', body: { pin, ...(reason.trim() ? { reason: reason.trim() } : {}) } }), `رمز تازهٔ ${pinFor!.displayName} ثبت شد و ورودهای قبلی او بسته شد.`)) { setPinFor(null); setReason(''); }
+    if (!pending) return;
+    const fd = new FormData(e.currentTarget), reason = String(fd.get('reason') ?? '').trim(), t = pending.tech;
+    const extra = reason ? { reason } : {};
+    const ok =
+      pending.kind === 'pin'
+        ? await run(() => api(`/staff/technicians/${t.id}/pin`, { method: 'PUT', body: { pin: toLatinDigits(String(fd.get('pin') ?? '')), ...extra } }))
+        : await run(() => api(`/staff/technicians/${t.id}/active`, { method: 'PUT', body: { active: !t.isActive, ...extra } }));
+    if (ok) {
+      setMessage(pending.kind === 'pin' ? `رمز تازهٔ ${t.displayName} ثبت شد و ورودهای قبلی او بسته شد.` : t.isActive ? `${t.displayName} غیرفعال شد.` : `${t.displayName} فعال شد.`);
+      setPending(null);
+    }
+  }
+  // The owner deactivates or re-activates in one tap; a system administrator first writes a reason.
+  function toggleActive(t: Technician) {
+    if (support) setPending({ tech: t, kind: 'active' });
+    else void run(() => api(`/staff/technicians/${t.id}/active`, { method: 'PUT', body: { active: !t.isActive } })).then((ok) => ok && setMessage(t.isActive ? `${t.displayName} غیرفعال شد.` : `${t.displayName} فعال شد.`));
   }
 
   return (
-    <section className="card" style={{ marginBlockStart: 24 }} aria-labelledby="technicians-title">
-      <h2 id="technicians-title">تعمیرکاران</h2>
-      <p className="muted small">تعمیرکار ایمیل و Authenticator ندارد؛ با نام کاربری و رمز ۴ رقمی وارد می‌شود و فقط کارتابل خودش را می‌بیند. با ۵ بار رمز اشتباه، ۱۵ دقیقه قفل می‌شود.</p>
+    <section className="card technicians" aria-labelledby="technicians-title">
+      <h2 id="technicians-title">تعمیرکارها</h2>
+      <p className="muted small">تعمیرکار ایمیل لازم ندارد. نام و یک رمز ۴ رقمی بدهید؛ منیج نام کاربری را می‌سازد. تعمیرکار با همین دو در زبانهٔ «تعمیرکار» صفحهٔ ورود وارد می‌شود و فقط کارهای خودش را می‌بیند.</p>
+
+      <form onSubmit={create} className="technician-form">
+        <label className="field">
+          <span>نام تعمیرکار</span>
+          <input name="displayName" className="input" required minLength={2} maxLength={120} placeholder="مثلاً رضا حسینی" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>رمز ۴ رقمی</span>
+          <input name="pin" className="input ltr-input" inputMode="numeric" required pattern={PIN} maxLength={4} autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} />
+        </label>
+        <div className="field">
+          <span>نام کاربری</span>
+          {editUsername ? (
+            <input name="username" aria-label="نام کاربری" className="input ltr-input" pattern="[A-Za-z][A-Za-z0-9._\-]{2,31}" title="با حرف انگلیسی شروع شود؛ ۳ تا ۳۲ حرف یا عدد" placeholder={suggested} value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+          ) : (
+            <span className="technician-username">
+              <bdi dir="ltr">{suggested}</bdi>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditUsername(true)}>تغییر</button>
+            </span>
+          )}
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'در حال ساخت…' : 'افزودن تعمیرکار'}</button>
+      </form>
+
+      {created && (
+        <div role="status" className="callout technician-created">
+          <strong>{created.name} ساخته شد.</strong> این دو را حضوری به خودش بدهید:
+          <span className="technician-credentials">
+            <span>نام کاربری: <bdi dir="ltr">{created.username}</bdi></span>
+            <span>رمز: <bdi dir="ltr">{toPersianDigits(created.pin)}</bdi></span>
+          </span>
+        </div>
+      )}
       {message && <p role="status" className="callout">{message}</p>}
       {error && <p role="alert" className="callout callout-red">{error}</p>}
-      <form onSubmit={create} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
-        <label className="field" style={{ flex: '1 1 200px' }}>نام تعمیرکار<input name="displayName" className="input" required minLength={2} maxLength={120} placeholder="مثلاً رضا حسینی" /></label>
-        <label className="field" style={{ flex: '1 1 160px' }}>نام کاربری<input name="username" className="input" dir="ltr" required pattern="[A-Za-z][A-Za-z0-9._\-]{2,31}" title="با حرف انگلیسی شروع شود؛ ۳ تا ۳۲ حرف یا عدد" placeholder="safkar2" /></label>
-        <label className="field" style={{ flex: '0 1 120px' }}>رمز ۴ رقمی<input name="pin" className="input" dir="ltr" inputMode="numeric" required pattern="[0-9۰-۹]{4}" maxLength={4} autoComplete="off" /></label>
-        <button type="submit" className="btn btn-primary" disabled={busy}>افزودن تعمیرکار</button>
-      </form>
-      {support && (
-        <label className="field" style={{ marginBlockStart: 12 }}>
-          <span>دلیل رمز تازه، باز کردن قفل یا فعال/غیرفعال کردن (برای مدیر سیستم الزامی)</span>
-          <input className="input" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثلاً رمز را فراموش کرده بود" />
-          <span className="hint">در گزارش «اقدامات مدیر سیستم» برای مالک دیده می‌شود.</span>
-        </label>
-      )}
-      {pinFor && (
-        <form onSubmit={resetPin} className="callout" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12, marginBlockStart: 16 }}>
-          <label className="field" style={{ flex: '0 1 160px' }}>رمز تازهٔ {pinFor.displayName}<input name="pin" className="input" dir="ltr" inputMode="numeric" required pattern="[0-9۰-۹]{4}" maxLength={4} autoComplete="off" autoFocus /></label>
-          <button type="submit" className="btn btn-primary" disabled={busy}>ثبت رمز تازه</button>
-          <button type="button" className="btn" onClick={() => setPinFor(null)}>انصراف</button>
+
+      {pending && (
+        <form onSubmit={confirm} className="callout technician-confirm">
+          <strong>{pending.kind === 'pin' ? `رمز تازه برای ${pending.tech.displayName}` : `${pending.tech.isActive ? 'غیرفعال کردن' : 'فعال کردن'} ${pending.tech.displayName}`}</strong>
+          {pending.kind === 'pin' && (
+            <label className="field">
+              <span>رمز تازهٔ ۴ رقمی</span>
+              <input name="pin" className="input ltr-input" inputMode="numeric" required pattern={PIN} maxLength={4} autoComplete="off" autoFocus />
+            </label>
+          )}
+          {support && (
+            <label className="field">
+              <span>دلیل (در گزارش مالک دیده می‌شود)</span>
+              <input name="reason" className="input" required maxLength={300} placeholder="مثلاً رمز را فراموش کرده بود" autoFocus={pending.kind === 'active'} />
+            </label>
+          )}
+          <span className="technician-confirm-actions">
+            <button type="submit" className="btn btn-primary" disabled={busy}>{pending.kind === 'pin' ? 'ثبت رمز تازه' : 'تأیید'}</button>
+            <button type="button" className="btn" onClick={() => setPending(null)}>انصراف</button>
+          </span>
         </form>
       )}
-      <div className="table-scroll" style={{ marginBlockStart: 16 }}>
+
+      <div className="table-scroll">
         <table className="table">
           <thead><tr><th scope="col">نام</th><th scope="col">نام کاربری</th><th scope="col">وضعیت</th><th scope="col">آخرین ورود</th><th scope="col">اقدام</th></tr></thead>
           <tbody>
             {data?.map((t) => (
               <tr key={t.id}>
                 <th scope="row">{t.displayName}</th>
-                <td dir="ltr" style={{ textAlign: 'right' }}>{t.username}</td>
-                <td>{!t.isActive ? 'غیرفعال' : t.locked ? 'قفل موقت' : !t.hasPin ? 'بدون رمز' : 'فعال'}</td>
+                <td><bdi dir="ltr">{t.username}</bdi></td>
+                <td><span className={`chip ${!t.isActive ? '' : t.locked ? 'chip-red' : !t.hasPin ? 'chip-amber' : 'chip-green'}`}>{!t.isActive ? 'غیرفعال' : t.locked ? 'قفل موقت' : !t.hasPin ? 'بدون رمز' : 'فعال'}</span></td>
                 <td>{t.lastLoginAt ? formatJalali(t.lastLoginAt, { time: true }) : '—'}</td>
-                <td style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setPinFor(t)}>رمز تازه</button>
-                  <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void run(() => api(`/staff/technicians/${t.id}/active`, { method: 'PUT', body: { active: !t.isActive, ...(reason.trim() ? { reason: reason.trim() } : {}) } }), t.isActive ? `${t.displayName} غیرفعال شد.` : `${t.displayName} فعال شد.`)}>
-                    {t.isActive ? 'غیرفعال کردن' : 'فعال کردن'}
-                  </button>
+                <td className="technician-actions">
+                  <button type="button" className="btn btn-sm" disabled={busy} aria-label={`رمز تازه برای ${t.displayName}`} onClick={() => setPending({ tech: t, kind: 'pin' })}>رمز تازه</button>
+                  <button type="button" className="btn btn-sm" disabled={busy} onClick={() => toggleActive(t)}>{t.isActive ? 'غیرفعال کردن' : 'فعال کردن'}</button>
                 </td>
               </tr>
             ))}
-            {data && data.length === 0 && <tr><td colSpan={5} className="muted">هنوز تعمیرکاری با رمز ۴ رقمی ساخته نشده است.</td></tr>}
+            {data && data.length === 0 && <tr><td colSpan={5} className="muted">هنوز تعمیرکاری ساخته نشده است.</td></tr>}
           </tbody>
         </table>
       </div>

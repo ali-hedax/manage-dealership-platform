@@ -37,8 +37,8 @@ export function OwnerAdminControls() {
 
   return (
     <section id="owner-admin" className="card owner-admin" aria-labelledby="owner-admin-title" data-testid="owner-admin">
-      <h2 id="owner-admin-title">مرز مالک و مدیر سیستم</h2>
-      <p className="muted small">دسترسی «دعوت و غیرفعال کردن کارکنان» هر مدیر سیستم را اینجا بدهید یا بگیرید؛ تغییر از درخواست بعدی او اعمال می‌شود. هر باز کردن محدودیت یا اصلاح ثبت توسط مدیر سیستم دلیل الزامی دارد و در گزارش زیر دیده می‌شود.</p>
+      <h2 id="owner-admin-title">اختیارات مدیر سیستم</h2>
+      <p className="muted small">آیا مدیر سیستم بتواند کارکنان و تعمیرکارها را اضافه یا غیرفعال کند؟</p>
       {error && <p role="alert" className="callout callout-red">{errorMessage(error)}</p>}
       {!data && !error && <p role="status" className="muted">در حال دریافت…</p>}
       {data && !data.admins.length && <p className="muted">حساب مدیر سیستم دیگری در این نمایندگی نیست.</p>}
@@ -57,9 +57,10 @@ export function OwnerAdminControls() {
         ))}
       </ul>
 
-      <div className="owner-admin-report">
+      <details className="owner-admin-report">
+        <summary>گزارش اقدامات مدیر سیستم</summary>
+        <p className="muted small">هر باز کردن محدودیت یا اصلاح ثبت توسط مدیر سیستم با دلیلش اینجا دیده می‌شود.</p>
         <div className="row">
-          <h3>اقدامات مدیر سیستم</h3>
           <label className="field">
             <span className="sr-only">ماه</span>
             <select className="input" value={month || data?.month || ''} onChange={(e) => setMonth(e.target.value)} aria-label="ماه گزارش اقدامات">
@@ -86,7 +87,7 @@ export function OwnerAdminControls() {
             </table>
           </div>
         )}
-      </div>
+      </details>
     </section>
   );
 }

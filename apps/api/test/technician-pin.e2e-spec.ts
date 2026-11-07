@@ -78,6 +78,15 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       expect((await pinLogin('mechanic1', '2222')).status).toBe(401);
     });
 
+    it('picks tech01, tech02, … when only a name and PIN are given', async () => {
+      const first = await admin.post('/staff/technicians', { displayName: 'صافکار بی‌نام‌کاربری', pin: '1357' });
+      expect(first.status).toBe(201);
+      expect(first.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'tech01', displayName: 'صافکار بی‌نام‌کاربری' })]));
+      const second = await admin.post('/staff/technicians', { displayName: 'نقاش بی‌نام‌کاربری', pin: '2468' });
+      expect(second.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'tech02', displayName: 'نقاش بی‌نام‌کاربری' })]));
+      expect((await pinLogin('tech01', '1357')).status).toBe(200);
+    });
+
     it('needs user.manage to manage technician accounts and refuses duplicate usernames', async () => {
       const qc = await h.login('qc');
       expect((await qc.post('/staff/technicians', { displayName: 'x آزمون', username: 'tech9', pin: '1234' })).status).toBe(403);
