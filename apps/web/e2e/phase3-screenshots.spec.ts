@@ -87,6 +87,7 @@ test('phase 3 screenshots', async ({ page }, info) => {
     ],
   } }));
   await page.goto('/users#owner-admin');
+  await page.getByTestId('owner-admin').getByText('گزارش اقدامات مدیر سیستم', { exact: true }).click();
   await page.getByTestId('owner-admin').scrollIntoViewIfNeeded();
   await expect(page.getByTestId('owner-admin')).toContainText('رمز را فراموش کرده بود');
   for (const [label, size] of Object.entries(SIZES)) {

@@ -1,5 +1,14 @@
 # Changelog
 
+
+## 2026-11-07 — صفحهٔ کارکنان ساده شد
+
+- **سه زبانه:** «کارکنان»، «تعمیرکارها» و «دسترسی‌ها» (فقط مالک)، به‌جای یک صفحهٔ بلند.
+- **تعمیرکارها:** فقط نام و رمز ۴ رقمی. نام کاربری خودکار ساخته می‌شود (`tech01`، …) و بعد از ساختن، نام کاربری و رمز برای تحویل حضوری نشان داده می‌شود.
+- **افزودن کارمند:** فرم پشت یک دکمه رفت. نقش «تعمیرکار» از سمت‌های کارمند ایمیلی حذف شد. وقتی ارسال ایمیل ممکن نیست، دکمهٔ اصلی «ساخت لینک دعوت خصوصی» است و یک خط علت را می‌گوید.
+- **اختیارات مدیر سیستم:** جای «مرز مالک و مدیر سیستم» را گرفت، با یک سؤال ساده. گزارش اقدامات جمع شد.
+- **میان‌برهای بالای صفحه:** به «افزودن کارمند» و «افزودن تعمیرکار» تغییر کردند.
+
 ## [Unreleased] — phase 3 of the role-based plan
 
 - Anyone, technicians included, can send a short reminder (up to 300 characters or a ready-made text) to a person, several people or a role, optionally tied to a case or plate, normal or urgent. It appears as a card on top of the recipient's desk with «دیدم», «انجام شد» and a one-line reply; the sender sees sent / seen / done and the reply. A reminder not seen within two working hours sends a notification again. It is not a chat.

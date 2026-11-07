@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, like, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
-import type { TechnicianAccountInput } from '@manage/shared';
+import { nextTechnicianUsername, type TechnicianAccountInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
@@ -61,16 +61,21 @@ export class TechniciansService {
   async create(actor: Actor, input: TechnicianAccountInput): Promise<TechnicianAccount[]> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
+      const username =
+        input.username ??
+        nextTechnicianUsername(
+          (await tx.select({ username: users.username }).from(users).where(and(eq(users.tenantId, tenantId), like(users.username, 'tech%')))).map((r) => r.username),
+        );
       const [taken] = await tx
         .select({ id: users.id })
         .from(users)
-        .where(and(eq(users.tenantId, tenantId), eq(users.username, input.username)));
+        .where(and(eq(users.tenantId, tenantId), eq(users.username, username)));
       if (taken) throw conflict('USERNAME_TAKEN', 'این نام کاربری قبلاً استفاده شده است');
       const id = newId();
       await tx.insert(users).values({
         id,
         tenantId,
-        username: input.username,
+        username,
         displayName: input.displayName,
         // Never used: technicians sign in with their PIN only.
         passwordHash: await hashPassword(randomBytes(24).toString('base64url')),
@@ -84,7 +89,7 @@ export class TechniciansService {
         entityType: 'user',
         entityId: id,
         action: 'user.technician_created',
-        after: { username: input.username, displayName: input.displayName, roles: ['technician'] },
+        after: { username, displayName: input.displayName, roles: ['technician'] },
       });
     });
     return this.list(actor);

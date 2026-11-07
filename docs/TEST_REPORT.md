@@ -1,5 +1,16 @@
 # Test report
 
+
+## Staff page cleanup (tabs, technicians by name + PIN) — 2026-11-07 — local green, CI on the PR
+
+Owner feedback after the 2026-11-07 release: technicians had no clear place, the page mixed invitation, access and owner/system-admin controls, and email invitations never went out.
+
+- **API:** `technician-pin.e2e-spec.ts` **6/6**. New case: technicians created with a name and PIN only get `tech01`, then `tech02`, and sign in with them.
+- **Browser (local Linux Chromium, desktop project):** **17 passed, 0 failed** across `staff`, `personal-auth`, `workspaces` and `entry-refresh`. New case: the «تعمیرکارها» tab creates a technician from a name and a Persian-digit PIN, shows the generated username and PIN, has no email field, fits 390 px without horizontal scroll, and the technician signs in through the login page's technician tab.
+- **Owner suite:** 4/4, with «اختیارات مدیر سیستم» replacing «مرز مالک و مدیر سیستم».
+- **Typecheck and lint:** clean for all packages.
+- **Email:** no code defect. The cause is unchanged since 2026-11-01: the server cannot reach foreign mail services, and `SMTP_*` is empty on the server. Documented in [STAFF_FA](STAFF_FA.md); the page now leads with the private invitation link and states the reason in one line.
+
 ## Phase 3 role-based plan (reminders, wages, responsibility, owner controls) — 2026-11-06 — **done, not deployed**
 
 Results on PR #54 head `c38467d` (GitHub Actions run 42194752561) plus local Linux (Node 22, pnpm 10):
