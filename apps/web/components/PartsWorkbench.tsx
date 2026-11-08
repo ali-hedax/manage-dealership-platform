@@ -88,6 +88,12 @@ function Summary({ label, value }: { label: string; value: number }) {
 function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Workbench['cards'][number]; refresh: () => void }) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [eta, setEta] = useState<string | null>(null);
+  const [noticeSent, setNoticeSent] = useState(false);
+  async function notify() {
+    setError(''); setBusy(true);
+    try { await api(`/reminders/parts-ready/${item.id}`, { body: {} }); setNoticeSent(true); }
+    catch(e) { setError(errorMessage(e)); } finally { setBusy(false); }
+  }
   const [requestedAt, setRequestedAt] = useState<string | null>(new Date().toISOString());
   const action = item.action;
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -132,6 +138,13 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
         ? <Link className="btn" href={item.emdadRef ? `/emdad?q=${encodeURIComponent(item.emdadRef)}` : `/cases/${card.id}#case-parts`}>پیگیری</Link>
         : <button className="btn btn-primary" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>{actions[action]}</button>}
     </div>
+    {action === 'handover' && <div className="row">
+      <button type="button" className="btn" disabled={busy || noticeSent} onClick={() => void notify()}>
+        {noticeSent ? 'اعلان به جایگاه ارسال شد' : 'اعلام آماده‌تحویل به جایگاه و سرپرست'}
+      </button>
+      <span className="small muted">دریافت قطعه توسط تعمیرکار در کارت کار خودش ثبت می‌شود.</span>
+    </div>}
+    {error && !open && <p role="alert" className="callout callout-red">{error}</p>}
     {open && <form className="stack" onSubmit={submit}>
       {action === 'emdad' && <>
         <fieldset className="stack"><legend>اقلام همین درخواست</legend>
