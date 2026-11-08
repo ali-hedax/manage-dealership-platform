@@ -42,7 +42,8 @@ test('Manage creates a group plan but requires an independent decision for each 
     await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(payload)});
   });
   page.on('request', request => {
-    if (request.method() === 'POST' && /\\/api\\/v1\\/(?:parts|workshop\\/parts)/.test(request.url())) writes.push(request.url());
+    const endpoint = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && (endpoint.startsWith('/api/v1/parts/') || endpoint.startsWith('/api/v1/workshop/parts/'))) writes.push(request.url());
   });
   await page.goto('/accidents/parts');
   const planButton = page.getByRole('button', {name: 'برنامه‌ریزی همهٔ قطعات این خودرو با منیج'});
