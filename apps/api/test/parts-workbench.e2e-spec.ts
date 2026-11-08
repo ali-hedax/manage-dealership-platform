@@ -173,3 +173,32 @@ test('routes external work through the same plan and approval and surfaces its l
   const statement = (await coordinator.get(`/cases/${c.id}/parts-statement`)).body as PartsStatement;
   expect(statement.live.external[0]).toMatchObject({ id, priceRial: 1500 });
 });
+
+test('parts clerk records the verified payer response to their own market quote', async () => {
+  const created = await coordinator.post('/cases', { admittedAt: daysAgo(2), coverageType: 'insurance',
+    insurerName: 'بیمه آزمون', customer: { fullName: 'مشتری تست قیمت' },
+    vehicle: { model: 'تارا', vin: `TESTVIN${randomUUID().replaceAll('-', '').slice(0, 10)}` } });
+  expect(created.status).toBe(201);
+  const p = await need(created.body.id, '77775555', 'external');
+  const quoted = await parts.post(`/workshop/parts/${p.id}/quotes`, {
+    expectedVersion: p.version, unitPriceRial: 4_000_000, supplier: 'فروشنده آزمون',
+    validUntil: new Date(Date.now() + 2 * 86400000).toISOString(),
+  });
+  expect(quoted.status).toBe(201);
+  const pending = quoted.body.find((q: { partId: string; status: string }) => q.partId === p.id && q.status === 'pending');
+  expect(pending).toBeDefined();
+  const missingOfficial = await parts.post(`/workshop/quotes/${pending.id}/decision`, {
+    expectedVersion: pending.version, decision: 'approved', source: 'insurer',
+    officialRecorded: false, reference: 'TEST-APPROVAL', approver: 'کارشناس تست', note: 'آزمون',
+  });
+  expect(missingOfficial.status).toBe(400);
+  const approved = await parts.post(`/workshop/quotes/${pending.id}/decision`, {
+    expectedVersion: pending.version, decision: 'approved', source: 'insurer',
+    officialRecorded: true, reference: 'TEST-APPROVAL', approver: 'کارشناس تست', note: 'مجوز رسمی آزمون ثبت است',
+  });
+  expect(approved.status).toBe(201);
+  const history = (await parts.get(`/workshop/quotes?caseId=${created.body.id}`)).body;
+  expect(history).toEqual(expect.arrayContaining([expect.objectContaining({
+    id: pending.id, status: 'approved', reference: 'TEST-APPROVAL',
+  })]));
+});
