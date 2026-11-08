@@ -183,13 +183,14 @@ function VehicleParts({ card, refresh }: {card: Workbench['cards'][number]; refr
       </div>}
       {card.items.map(line => <PartLine key={`${line.id}:${line.version}:${line.action}`} item={line} card={card} refresh={refresh}
         preparation={preparation?.partId === line.id ? preparation : null}
-        accepted={!!accepted[line.id] && line.action === 'emdad'} />)}
+        accepted={!!accepted[line.id] && line.action === 'emdad'}
+        onManualChange={route => changePlan(line.id, route)} />)}
       </div>
     </details>
   </div>;
 }
 
-function PartLine({ item, card, refresh, preparation, accepted }: { item: PartsWorkbenchLine; card: Workbench['cards'][number]; refresh: () => void; preparation: Preparation | null; accepted: boolean }) {
+function PartLine({ item, card, refresh, preparation, accepted, onManualChange }: { item: PartsWorkbenchLine; card: Workbench['cards'][number]; refresh: () => void; preparation: Preparation | null; accepted: boolean; onManualChange: (route: ManageSupplyRoute) => void }) {
   const [choice, setChoice] = useState<'reserve' | 'market' | 'emdad' | null>(null);
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [eta, setEta] = useState<string | null>(null);
@@ -209,6 +210,7 @@ function PartLine({ item, card, refresh, preparation, accepted }: { item: PartsW
 
   function choose(next: 'reserve' | 'market' | 'emdad', fromManage = false) {
     setChoice(next); setOpen(true); setQuoteOnly(fromManage && next === 'market'); setError('');
+    if (!fromManage) onManualChange(next);
   }
 
   async function notify() {
