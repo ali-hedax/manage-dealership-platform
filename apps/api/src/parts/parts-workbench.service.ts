@@ -12,7 +12,7 @@ import { badRequest, forbidden, notFound, versionConflict } from '../common/erro
 import type { EmdadOfficial } from '../daily-reports/report-rows';
 import { StockService, snapshotInfo } from '../daily-reports/stock.service';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { blockers, cases, emdadRequests, partRequests, tasks, vehicles } from '../db/schema';
+import { blockers, cases, departments, emdadRequests, partRequests, tasks, vehicles } from '../db/schema';
 import { calendarAt } from '../workshop/work-calendar';
 import { PartsService } from './parts.service';
 
@@ -42,7 +42,7 @@ export class PartsWorkbenchService {
     const db = this.handle.db;
     const tenantId = actor.user.tenantId;
     const now = new Date();
-    const [rows, links, waiting, calendar, receipts, upcoming] = await Promise.all([
+    const [rows, links, waiting, calendar, receipts, upcoming, activeTasks, departmentsList] = await Promise.all([
       db.select({ p: partRequests, c: cases, v: vehicles }).from(partRequests)
         .innerJoin(cases, and(eq(cases.id, partRequests.caseId), eq(cases.tenantId, tenantId), eq(cases.status, 'open')))
         .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
@@ -57,6 +57,8 @@ export class PartsWorkbenchService {
         eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.statusCategory, RECEIVED))),
       db.select({ caseId: tasks.caseId, start: tasks.plannedStartAt }).from(tasks)
         .where(and(eq(tasks.tenantId, tenantId), eq(tasks.status, 'pending'), isNotNull(tasks.plannedStartAt))),
+      db.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), inArray(tasks.status, ['pending', 'in_progress', 'blocked']))),
+      db.select().from(departments).where(eq(departments.tenantId, tenantId)),
 
     ]);
     const leadTimes = new Map<string, { count: number; days: number }>();
@@ -86,6 +88,9 @@ export class PartsWorkbenchService {
       byPart.set(id, [...(byPart.get(id) ?? []), link]);
     }
     const blockersByPart = new Map(waiting.map(w => [w.partId, w.taskTitle]));
+    const departmentNames = new Map(departmentsList.map(d => [d.id, d.name]));
+    const tasksByCase = new Map<string, typeof activeTasks>();
+    for (const task of activeTasks) tasksByCase.set(task.caseId, [...(tasksByCase.get(task.caseId) ?? []), task]);
     const counts = { decision: 0, ready: 0, overdueEmdad: 0 };
     const cards = new Map<string, { card: PartsWorkbench['cards'][number]; deadline: number; started: number; late: boolean }>();
     let inTransit = 0;
@@ -107,9 +112,8 @@ export class PartsWorkbenchService {
       const option = options.length === 1 ? options[0] : undefined;
       const action: PartsWorkbenchLine['action'] = ready ? 'handover'
         : reportedReceipt ? 'received'
-        : p.status === 'ordered' || matching.length > 0 || options.length > 1 ? 'follow_up'
-        : option ? 'reserve'
-        : p.source === 'external' || p.source === 'customer' || p.source === 'insurer_supplier' ? 'market' : 'emdad';
+        : p.status === 'ordered' || matching.length > 0 || p.status !== 'needed' ? 'follow_up'
+        : 'emdad'; // Needed items offer user-selected stock, market and company choices.
       if (action === 'follow_up' && (companyRequest(p) || matching.length > 0) && !overdue) {
         inTransit++;
         if (!includeTransit) continue;
@@ -143,11 +147,15 @@ export class PartsWorkbenchService {
       }
       if (blocking) card.card.waiting = blockersByPart.get(p.id) || 'تعمیر';
       card.late ||= overdueHandover;
+      const linkedTasks = (tasksByCase.get(c.id) ?? []).filter(t => waiting.some(w => w.partId === p.id && w.taskId === t.id));
+      const destinationTasks = linkedTasks.length ? linkedTasks : tasksByCase.get(c.id) ?? [];
       card.card.items.push({
         id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
         action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
         companyPriceRial: inferredPrice,
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
+        stockOptions: options.map(o => ({ snapshotId: o.snapshotId, fullStockCode: o.fullStockCode, locationAddress: o.locationAddress, available: o.available })),
+        destinations: destinationTasks.map(t => ({ taskId: t.id, label: [t.stationSnapshot?.name || t.stationSnapshot?.code || departmentNames.get(t.departmentId) || 'جایگاه تعیین نشده', t.technicianName].filter(Boolean).join(' · ') })),
         emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
       cards.set(c.id, card);
