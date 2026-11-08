@@ -27,6 +27,8 @@ export interface PartsWorkbenchLine {
   suggestedPriceRial: number | null;
   companyPriceRial: number | null;
   stock: { snapshotId: string; fullStockCode: string; locationAddress: string; available: string } | null;
+  stockOptions: { snapshotId: string; fullStockCode: string; locationAddress: string; available: string }[];
+  destinations: { taskId: string; label: string }[];
   emdadId: string | null;
   emdadRef: string | null;
   emdadAverageDays: number | null;
