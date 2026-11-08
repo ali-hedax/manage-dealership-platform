@@ -136,16 +136,17 @@ function VehicleParts({ card, refresh }: {card: Workbench['cards'][number]; refr
     setMessage(`مسیر «${item.description}» انتخاب شد؛ فرم آن در پایین آماده است و هنوز هیچ سفارش یا خریدی ثبت نشده.`);
   }
   const reviewedCount = pending.filter(item => accepted[item.id]).length;
-  return <details className="compact-disclosure" style={{margin:'0 12px 12px'}} open={planOpen ? true : undefined}>
-    <summary>قطعات و نیازها · {faNum(card.items.length)} قلم · {faNum(pending.length)} قلم منتظر تصمیم</summary>
-    <div className="panel-body stack">
+  return <div className="stack" style={{margin:'0 12px 12px'}}>
+    {pending.length > 0 && <div className="row" style={{justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
+      <button type="button" className="btn" onClick={generatePlan}>
+        <AppIcon name="sparkles"/> برنامه‌ریزی همهٔ قطعات این خودرو با منیج
+      </button>
+      {planOpen && <span className="chip">{faNum(reviewedCount)} از {faNum(pending.length)} پیشنهاد در فرم آماده شده</span>}
+    </div>}
+    <details className="compact-disclosure" open={planOpen ? true : undefined}>
+      <summary>قطعات و نیازها · {faNum(card.items.length)} قلم · {faNum(pending.length)} قلم منتظر تصمیم</summary>
+      <div className="panel-body stack">
       {pending.length > 0 && <div className="stack">
-        <div className="row" style={{justifyContent:'space-between', flexWrap:'wrap', gap:8}}>
-          <button type="button" className="btn" onClick={generatePlan}>
-            <AppIcon name="sparkles"/> برنامه‌ریزی همهٔ قطعات این خودرو با منیج
-          </button>
-          {planOpen && <span className="chip">{faNum(reviewedCount)} از {faNum(pending.length)} پیشنهاد در فرم آماده شده</span>}
-        </div>
         {planOpen && <section className="panel panel-body stack" aria-label="برنامه گروهی پیشنهادی منیج">
           <strong>برنامهٔ پیشنهادی منیج ـ تصمیم مستقل برای هر قطعه</strong>
           <p className="small muted">پیشنهادها از موجودی، زمان تعمیر و سوابق همین پرونده تهیه شده‌اند. می‌توانید مسیر هر قلم را تغییر دهید. تأیید یک قلم به معنی تأیید بقیه نیست.</p>
@@ -183,8 +184,9 @@ function VehicleParts({ card, refresh }: {card: Workbench['cards'][number]; refr
       {card.items.map(line => <PartLine key={`${line.id}:${line.version}:${line.action}`} item={line} card={card} refresh={refresh}
         preparation={preparation?.partId === line.id ? preparation : null}
         accepted={!!accepted[line.id] && line.action === 'emdad'} />)}
-    </div>
-  </details>;
+      </div>
+    </details>
+  </div>;
 }
 
 function PartLine({ item, card, refresh, preparation, accepted }: { item: PartsWorkbenchLine; card: Workbench['cards'][number]; refresh: () => void; preparation: Preparation | null; accepted: boolean }) {
