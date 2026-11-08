@@ -33,7 +33,7 @@ const expired=(u:UserRow)=>!!u.invitationExpiresAt&&new Date(u.invitationExpires
 
 export default function UsersPage(){
   const {can,me}=useAuth();const allowed=can('user.manage');
-  const [tab,setTab]=useState<Tab>('technicians');
+  const [tab,setTab]=useState<Tab>('staff');
   const {data,error:listError,mutate,isLoading}=useSWR<UserRow[]>(allowed?'/auth/invitations':null,fetcher);
   const {data:technicians}=useSWR<unknown[]>(allowed?'/staff/technicians':null,fetcher);
   const {data:presets}=useSWR<{templates:PermissionTemplates;assignableRoles?:Role[]}>(allowed?'/access/presets':null,fetcher);
@@ -81,7 +81,7 @@ export default function UsersPage(){
   const staff=data??[];
   const tabs:{id:Tab;label:string;count?:number}[]=[{id:'technicians',label:'ورود ساده کارکنان',count:technicians?.length},{id:'staff',label:'حساب‌های ایمیلی',count:data?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
 
-  return <><div className="page-head"><h1>مدیریت کارکنان</h1><p className="muted small">برای ورود روزانه و ساخت حساب جدید، «ورود ساده کارکنان» را انتخاب کنید. حساب‌های ایمیلی قبلی جدا نگهداری می‌شوند.</p></div>
+  return <><div className="page-head"><h1>کارکنان</h1><p className="muted small">برای ورود روزانه و ساخت حساب جدید، «ورود ساده کارکنان» را انتخاب کنید. حساب‌های ایمیلی قبلی جدا نگهداری می‌شوند.</p></div>
     <div className="staff-tabs" role="tablist" aria-label="بخش‌های کارکنان">
       {tabs.map(t=><button key={t.id} type="button" role="tab" id={`staff-tab-${t.id}`} aria-selected={tab===t.id} aria-controls={`staff-panel-${t.id}`} onClick={()=>choose(t.id)}>{t.label}{t.count!==undefined&&<span className="staff-tab-count">{t.count.toLocaleString('fa-IR')}</span>}</button>)}
     </div>
@@ -91,7 +91,7 @@ export default function UsersPage(){
         <p className="muted">حساب‌های ایمیلی قدیمی و حساب‌های مدیریتی؛ برای کارکنان عادی جدید از زبانه «ورود ساده کارکنان» استفاده کنید.</p>
         {!formOpen&&<button type="button" className="btn btn-primary" onClick={()=>{setFormOpen(true);setError('');setMessage('');setPrivateLink('');}}>افزودن کارمند</button>}
       </div>
-      {mail?.configured===false&&<p className="callout callout-amber" role="status">ارسال دعوت ایمیلی در دسترس نیست. برای کارمند جدید از «ورود ساده کارکنان» استفاده کنید؛ برای حساب ایمیلی ضروری، لینک دعوت خصوصی بسازید.</p>}
+      {mail?.configured===false&&<p className="callout callout-amber" role="status">ارسال خودکار ایمیل فعلاً ممکن نیست؛ سرور منیج به سرویس‌های ایمیل خارجی مثل Gmail دسترسی ندارد. لینک دعوت بسازید و در پیام‌رسان برای همکار بفرستید.</p>}
       {mailError&&<p role="alert" className="callout callout-red">وضعیت ارسال ایمیل دریافت نشد. صفحه را تازه کنید.</p>}
 
       {formOpen&&<section id="invite-staff" className="card" aria-labelledby="invite-title"><h2 id="invite-title">افزودن کارمند</h2>
