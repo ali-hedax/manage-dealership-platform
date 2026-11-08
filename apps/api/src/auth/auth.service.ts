@@ -1,13 +1,13 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
-import { MODULES, permissionsFor, type LoginInput, type Me, type Role, type TechnicianLoginInput } from '@manage/shared';
+import { isPinEligible, MODULES, permissionsFor, PIN_DENIED_PERMISSIONS, type LoginInput, type Me, type Role, type TechnicianLoginInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { AppError } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type Tx } from '../db/database';
-import { sessions, tenants, users } from '../db/schema';
+import { sessions, tenants, trustedDevices, users } from '../db/schema';
 import type { AuthUser } from './auth.types';
 import { hashPassword, verifyPassword } from './password';
 
@@ -20,9 +20,8 @@ const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 const invalidCredentials = () =>
   new AppError(HttpStatus.UNAUTHORIZED, 'INVALID_CREDENTIALS', 'نام کاربری یا رمز عبور نادرست است');
 
-/** A PIN account may hold only the technician role: its PIN opens nothing else. */
-export const isTechnicianOnly = (roles: readonly string[], isOwner = false) =>
-  !isOwner && roles.length > 0 && roles.every((r) => r === 'technician');
+/** A PIN account may hold only ordinary staff roles (PIN_LOGIN_ROLES): never the owner or an administrator. */
+export const isTechnicianOnly = isPinEligible;
 
 @Injectable()
 export class AuthService {
@@ -130,7 +129,8 @@ export class AuthService {
   async technicianLogin(
     input: TechnicianLoginInput,
     meta: { ip?: string; userAgent?: string; requestId?: string },
-  ): Promise<{ token: string; expiresAt: Date }> {
+    deviceToken?: string,
+  ): Promise<{ token: string; expiresAt: Date; deviceToken?: string }> {
     const wrong = () => new AppError(HttpStatus.UNAUTHORIZED, 'INVALID_CREDENTIALS', 'نام کاربری یا رمز اشتباه است.');
     const conditions = [eq(users.username, input.username.toLowerCase())];
     if (input.tenantCode) conditions.push(eq(tenants.code, input.tenantCode.toLowerCase()));
@@ -142,7 +142,17 @@ export class AuthService {
       .limit(2);
     if (candidates.length > 1) throw new AppError(HttpStatus.BAD_REQUEST, 'TENANT_REQUIRED', 'کد نمایندگی را وارد کنید');
     const found = candidates[0];
-    if (!found || !found.user.pinHash || !isTechnicianOnly(found.user.roles, found.user.isOwner)) {
+    const eligible = !!found && !!found.user.pinHash && !!found.user.devicePasswordHash && isTechnicianOnly(found.user.roles, found.user.isOwner);
+    // A device registered for this account lets the PIN alone sign in; any other device also needs the device password.
+    const [device] = eligible && deviceToken
+      ? await this.db.select({ id: trustedDevices.id }).from(trustedDevices)
+          .where(and(eq(trustedDevices.userId, found!.user.id), eq(trustedDevices.tenantId, found!.tenant.id), eq(trustedDevices.tokenHash, sha256(deviceToken)), isNull(trustedDevices.revokedAt)))
+          .limit(1)
+      : [];
+    if (!device && !input.devicePassword) {
+      throw new AppError(HttpStatus.UNAUTHORIZED, 'DEVICE_NOT_REGISTERED', 'این دستگاه هنوز ثبت نشده است؛ رمز ثبت دستگاه را هم وارد کنید.');
+    }
+    if (!found || !eligible) {
       await verifyPassword(input.pin, await this.dummyHash);
       this.logger.warn({ username: input.username, ip: meta.ip }, 'technician login failed: no PIN account');
       throw wrong();
@@ -152,7 +162,7 @@ export class AuthService {
     if (user.lockedUntil && user.lockedUntil > now) {
       throw new AppError(HttpStatus.LOCKED, 'ACCOUNT_LOCKED', 'چند بار اشتباه وارد شد؛ ۱۵ دقیقه دیگر دوباره امتحان کنید.');
     }
-    const ok = await verifyPassword(input.pin, user.pinHash!);
+    const ok = (await verifyPassword(input.pin, user.pinHash!)) && (!!device || (await verifyPassword(input.devicePassword!, user.devicePasswordHash!)));
     if (!ok || !user.isActive) {
       const failed = user.failedLoginCount + 1;
       const lock = failed >= MAX_FAILED_LOGINS;
@@ -167,7 +177,16 @@ export class AuthService {
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(now.getTime() + this.cfg.SESSION_TTL_HOURS * 3_600_000);
     const sessionId = newId();
+    const newDeviceToken = device ? undefined : (deviceToken ?? randomBytes(32).toString('base64url'));
     await this.db.transaction(async (tx) => {
+      const actor = { user: this.toAuthUser(user, tenant, sessionId), requestId: meta.requestId, ip: meta.ip };
+      if (device) {
+        await tx.update(trustedDevices).set({ lastUsedAt: now }).where(eq(trustedDevices.id, device.id));
+      } else {
+        const deviceId = newId();
+        await tx.insert(trustedDevices).values({ id: deviceId, tenantId: tenant.id, userId: user.id, tokenHash: sha256(newDeviceToken!), userAgent: meta.userAgent?.slice(0, 300) ?? null });
+        await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'auth.device_registered', after: { deviceId } });
+      }
       await tx.insert(sessions).values({
         id: sessionId,
         userId: user.id,
@@ -179,13 +198,9 @@ export class AuthService {
         userAgent: meta.userAgent?.slice(0, 300) ?? null,
       });
       await tx.update(users).set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: now }).where(eq(users.id, user.id));
-      await this.audit.record(
-        tx,
-        { user: this.toAuthUser(user, tenant, sessionId), requestId: meta.requestId, ip: meta.ip },
-        { entityType: 'user', entityId: user.id, action: 'auth.pin_login' },
-      );
+      await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'auth.pin_login' });
     });
-    return { token, expiresAt };
+    return { token, expiresAt, deviceToken: newDeviceToken };
   }
 
   async logout(token: string | undefined): Promise<void> {
@@ -224,8 +239,11 @@ export class AuthService {
         })
         .where(eq(sessions.id, row.session.id));
     }
+    const authUser = this.toAuthUser(row.user, row.tenant, row.session.id);
+    // A PIN never opens administrative permissions, whatever templates or overrides say.
+    if (pinSession) for (const p of PIN_DENIED_PERMISSIONS) authUser.permissions.delete(p);
     return {
-      ...this.toAuthUser(row.user, row.tenant, row.session.id),
+      ...authUser,
       verifiedWithTotp: row.session.verifiedWithTotp,
       authMethod: pinSession ? 'pin' : row.session.verifiedWithTotp ? 'totp' : 'password',
     };

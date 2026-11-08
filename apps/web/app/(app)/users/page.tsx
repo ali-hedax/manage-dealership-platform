@@ -79,7 +79,7 @@ export default function UsersPage(){
   if(!allowed)return <p>به بخش کارکنان دسترسی ندارید.</p>;
   const ready=mail?.configured===true;
   const staff=data??[];
-  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'staff',label:'کارکنان',count:data?.length},{id:'technicians',label:'تعمیرکارها',count:technicians?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
+  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'staff',label:'کارکنان',count:data?.length},{id:'technicians',label:'ورود ساده (PIN)',count:technicians?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
 
   return <><div className="page-head"><h1>کارکنان</h1></div>
     <div className="staff-tabs" role="tablist" aria-label="بخش‌های کارکنان">

@@ -5,7 +5,7 @@ import { loginSchema, technicianLoginSchema, type LoginInput, type Me, type Tech
 import { APP_CONFIG, type AppConfig } from '../config';
 import { ZodPipe } from '../common/zod.pipe';
 import { AuthService } from './auth.service';
-import { SESSION_COOKIE, type AuthedRequest } from './auth.types';
+import { DEVICE_COOKIE, SESSION_COOKIE, type AuthedRequest } from './auth.types';
 import { Public } from './decorators';
 
 @Controller('auth')
@@ -51,11 +51,14 @@ export class AuthController {
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<Me> {
-    const { token, expiresAt } = await this.auth.technicianLogin(body, {
-      ip: req.ip,
-      userAgent: req.headers['user-agent'],
-      requestId: req.id,
-    });
+    const { token, expiresAt, deviceToken } = await this.auth.technicianLogin(
+      body,
+      { ip: req.ip, userAgent: req.headers['user-agent'], requestId: req.id },
+      req.cookies?.[DEVICE_COOKIE],
+    );
+    if (deviceToken) {
+      res.cookie(DEVICE_COOKIE, deviceToken, { httpOnly: true, sameSite: 'lax', secure: this.cfg.COOKIE_SECURE, path: '/', maxAge: 400 * 24 * 3_600_000 });
+    }
     res.cookie(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: 'lax',

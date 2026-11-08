@@ -79,3 +79,11 @@ export function permissionsFor(roles: readonly Role[], templates: PermissionTemp
 export function hasPermission(roles: readonly Role[], permission: Permission): boolean {
   return permissionsFor(roles).has(permission);
 }
+
+/** Roles that may sign in with username + 4-digit PIN on a trusted device. Never the owner or an administrator. */
+export const PIN_LOGIN_ROLES = ['technician', 'parts_clerk', 'qc_inspector'] as const satisfies readonly Role[];
+export type PinLoginRole = (typeof PIN_LOGIN_ROLES)[number];
+export const isPinEligible = (roles: readonly string[], isOwner = false) =>
+  !isOwner && roles.length > 0 && roles.every((r) => (PIN_LOGIN_ROLES as readonly string[]).includes(r));
+/** Never available in a PIN session, whatever templates or overrides say. */
+export const PIN_DENIED_PERMISSIONS: readonly Permission[] = ['user.manage', 'settings.manage', 'audit.read', 'finance.approve', 'case.release_authorize', 'part.price_authorize', 'daily_reports.settings', 'wage.manage', 'wage.report'];

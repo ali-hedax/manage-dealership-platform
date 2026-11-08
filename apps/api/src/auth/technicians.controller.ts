@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Put } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { technicianAccountSchema, technicianActiveSchema, technicianPinSchema, type TechnicianAccountInput, type TechnicianActiveInput, type TechnicianPinInput } from '@manage/shared';
+import { technicianAccountSchema, technicianActiveSchema, technicianPinSchema, technicianSignOutSchema, type TechnicianAccountInput, type TechnicianActiveInput, type TechnicianPinInput } from '@manage/shared';
 import { IdParam } from '../common/params';
 import { ZodPipe } from '../common/zod.pipe';
 import type { Actor } from './auth.types';
@@ -23,7 +23,12 @@ export class TechniciansController {
 
   @RequirePermissions('user.manage') @Put(':id/pin') @Throttle({ default: { limit: 20, ttl: 60_000 } })
   resetPin(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(technicianPinSchema)) body: TechnicianPinInput) {
-    return this.technicians.resetPin(actor, id, body.pin, body.reason);
+    return this.technicians.resetPin(actor, id, body, body.reason);
+  }
+
+  @RequirePermissions('user.manage') @Post(':id/sign-out')
+  signOut(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(technicianSignOutSchema)) body: { reason?: string }) {
+    return this.technicians.signOutEverywhere(actor, id, body.reason);
   }
 
   @RequirePermissions('user.manage') @Put(':id/active')

@@ -1,12 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
+import type { TechnicianPinInput } from '@manage/shared';
 import { randomBytes } from 'node:crypto';
 import { nextTechnicianUsername, REPAIR_TRADE_LABELS, type RepairTrade, type TechnicianAccountInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type Tx } from '../db/database';
-import { departments, sessions, users, workshopStations } from '../db/schema';
+import { departments, sessions, trustedDevices, users, workshopStations } from '../db/schema';
 import { isTechnicianOnly } from './auth.service';
 import type { Actor } from './auth.types';
 import { hashPassword } from './password';
@@ -17,7 +18,12 @@ export interface TechnicianAccount {
   username: string;
   displayName: string;
   isActive: boolean;
+  roles: string[];
+  hasEmail: boolean;
   hasPin: boolean;
+  /** PIN sign-in works only once a device password exists (it registers new devices). */
+  hasDevicePassword: boolean;
+  trustedDevices: number;
   locked: boolean;
   lastLoginAt: string | null;
   /** The bay this technician is responsible for, if any. */
@@ -44,7 +50,7 @@ export class TechniciansService {
     const rows = await this.db
       .select()
       .from(users)
-      .where(and(eq(users.tenantId, actor.user.tenantId), isNull(users.email)))
+      .where(eq(users.tenantId, actor.user.tenantId))
       .orderBy(asc(users.displayName));
     const now = Date.now();
     const technicians = rows.filter((u) => isTechnicianOnly(u.roles, u.isOwner));
@@ -55,13 +61,23 @@ export class TechniciansService {
           .where(and(eq(workshopStations.tenantId, actor.user.tenantId), inArray(workshopStations.responsibleUserId, technicians.map((u) => u.id))))
           .orderBy(asc(workshopStations.code))
       : [];
+    const devices = technicians.length
+      ? await this.db
+          .select({ userId: trustedDevices.userId })
+          .from(trustedDevices)
+          .where(and(eq(trustedDevices.tenantId, actor.user.tenantId), isNull(trustedDevices.revokedAt), inArray(trustedDevices.userId, technicians.map((u) => u.id))))
+      : [];
     return technicians
       .map((u) => ({
         id: u.id,
         username: u.username,
         displayName: u.displayName,
         isActive: u.isActive,
+        roles: u.roles,
+        hasEmail: !!u.email,
         hasPin: !!u.pinHash,
+        hasDevicePassword: !!u.devicePasswordHash,
+        trustedDevices: devices.filter((d) => d.userId === u.id).length,
         locked: !!u.lockedUntil && u.lockedUntil.getTime() > now,
         lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
         station: ((bay) => (bay ? { code: bay.code, name: bay.name, trade: bay.trade as RepairTrade } : null))(bays.find((b) => b.userId === u.id)),
@@ -90,7 +106,8 @@ export class TechniciansService {
         // Never used: technicians sign in with their PIN only.
         passwordHash: await hashPassword(randomBytes(24).toString('base64url')),
         pinHash: await hashPassword(input.pin),
-        roles: ['technician'],
+        devicePasswordHash: await hashPassword(input.devicePassword),
+        roles: [input.role],
         isActive: true,
         activatedAt: new Date(),
         isTest: actor.user.isTestTenant,
@@ -99,7 +116,7 @@ export class TechniciansService {
         entityType: 'user',
         entityId: id,
         action: 'user.technician_created',
-        after: { username, displayName: input.displayName, roles: ['technician'], ...(input.stationCode ? { stationCode: input.stationCode, trade: input.trade } : {}) },
+        after: { username, displayName: input.displayName, roles: [input.role], ...(input.stationCode ? { stationCode: input.stationCode, trade: input.trade } : {}) },
       });
       if (input.trade && input.stationCode) await this.assignBay(tx, actor, id, input.trade, input.stationCode);
     });
@@ -141,19 +158,42 @@ export class TechniciansService {
     await this.audit.record(tx, actor, { entityType: 'workshop_station', entityId: stationId, action: 'workshop_station.created', after: fields, snapshot: { version: 1, row } });
   }
 
-  async resetPin(actor: Actor, id: string, pin: string, reason?: string): Promise<TechnicianAccount[]> {
+  /** Sets the PIN and/or the device password; also enables PIN sign-in on an existing eligible account. */
+  async resetPin(actor: Actor, id: string, input: Pick<TechnicianPinInput, 'pin' | 'devicePassword'>, reason?: string): Promise<TechnicianAccount[]> {
     await this.db.transaction(async (tx) => {
       const user = await this.loadTechnician(tx, actor.user.tenantId, id);
       requireSupportReason(actor, reason);
+      if (!input.pin && !user.pinHash) throw badRequest('PIN_REQUIRED', 'رمز ۴ رقمی را هم وارد کنید');
+      if (!input.devicePassword && !user.devicePasswordHash) throw badRequest('DEVICE_PASSWORD_REQUIRED', 'رمز ثبت دستگاه را هم وارد کنید');
       await tx
         .update(users)
-        .set({ pinHash: await hashPassword(pin), failedLoginCount: 0, lockedUntil: null, updatedAt: new Date(), version: sql`${users.version} + 1` })
+        .set({
+          ...(input.pin ? { pinHash: await hashPassword(input.pin) } : {}),
+          ...(input.devicePassword ? { devicePasswordHash: await hashPassword(input.devicePassword) } : {}),
+          failedLoginCount: 0, lockedUntil: null, updatedAt: new Date(), version: sql`${users.version} + 1`,
+        })
         .where(eq(users.id, user.id));
-      // A new PIN ends every open session of this technician.
-      await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, user.id), isNull(sessions.revokedAt)));
-      await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'user.technician_pin_reset', reason: reason?.trim() || null });
+      // A new PIN ends every open session; a new device password also forgets every registered device.
+      await this.endSessions(tx, user.id, !!input.devicePassword);
+      await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'user.technician_pin_reset', reason: reason?.trim() || null, after: { pin: !!input.pin, devicePassword: !!input.devicePassword } });
     });
     return this.list(actor);
+  }
+
+  /** Forced sign-out: ends all sessions and forgets every registered device of the account. */
+  async signOutEverywhere(actor: Actor, id: string, reason?: string): Promise<TechnicianAccount[]> {
+    await this.db.transaction(async (tx) => {
+      const user = await this.loadTechnician(tx, actor.user.tenantId, id);
+      requireSupportReason(actor, reason);
+      await this.endSessions(tx, user.id, true);
+      await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'user.technician_signed_out', reason: reason?.trim() || null });
+    });
+    return this.list(actor);
+  }
+
+  private async endSessions(tx: Tx, userId: string, devices: boolean) {
+    await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+    if (devices) await tx.update(trustedDevices).set({ revokedAt: new Date() }).where(and(eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt)));
   }
 
   async setActive(actor: Actor, id: string, active: boolean, reason?: string): Promise<TechnicianAccount[]> {
@@ -161,7 +201,7 @@ export class TechniciansService {
       const user = await this.loadTechnician(tx, actor.user.tenantId, id);
       requireSupportReason(actor, reason);
       await tx.update(users).set({ isActive: active, updatedAt: new Date(), version: sql`${users.version} + 1` }).where(eq(users.id, user.id));
-      if (!active) await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, user.id), isNull(sessions.revokedAt)));
+      if (!active) await this.endSessions(tx, user.id, true);
       await this.audit.record(tx, actor, {
         entityType: 'user',
         entityId: user.id,
@@ -175,8 +215,8 @@ export class TechniciansService {
   private async loadTechnician(tx: Tx, tenantId: string, id: string) {
     const [user] = await tx.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
     if (!user) throw notFound('تعمیرکار');
-    if (user.email || !isTechnicianOnly(user.roles, user.isOwner)) {
-      throw badRequest('NOT_TECHNICIAN_ACCOUNT', 'رمز ۴ رقمی فقط برای حساب تعمیرکار بدون ایمیل است');
+    if (!isTechnicianOnly(user.roles, user.isOwner)) {
+      throw badRequest('NOT_TECHNICIAN_ACCOUNT', 'ورود با رمز ۴ رقمی برای مالک، مدیران و نقش‌های مدیریتی ممکن نیست');
     }
     return user;
   }

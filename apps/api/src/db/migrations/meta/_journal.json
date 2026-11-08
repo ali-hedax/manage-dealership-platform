@@ -134,6 +134,13 @@
       "when": 1793953290462,
       "tag": "0018_people_reminders_wages",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794119548766,
+      "tag": "0019_staff_pin_devices",
+      "breakpoints": true
     }
   ]
 }
