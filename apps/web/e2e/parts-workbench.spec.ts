@@ -17,3 +17,11 @@ test('parts workbench opens by default and keeps legacy queues usable at 390px',
   await expect(page.getByTestId('daily-status')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+test('Manage grouped planning is available without auto-ordering or unwanted form expansion', async ({ page }) => {
+  await login(page, 'parts');
+  await page.goto('/accidents/parts');
+  await expect(page.getByRole('heading', { name: /امروز .* کار با شماست/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /پیگیری امداد ویژه/ }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'برنامه‌ریزی همهٔ قطعات این خودرو با منیج' }).first()).toBeHidden();
+});

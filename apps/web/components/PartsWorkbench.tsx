@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import { COVERAGE_LABELS, toLatinDigits, toPersianDigits, type PartsWorkbench as Workbench, type PartsWorkbenchLine } from '@manage/shared';
+import { COVERAGE_LABELS, toLatinDigits, toPersianDigits, type PartsWorkbench as Workbench, type PartsWorkbenchLine, type ManageSupplyRoute } from '@manage/shared';
 import { useAuth } from '@/lib/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { faNum, parseRials } from '@/lib/format';
@@ -13,7 +13,7 @@ import { PartsOperationNotices, ExternalWorkPanel } from './PartsOperations';
 import { QuotePanel } from './WorkshopQuotes';
 import { AppIcon } from './AppIcon';
 
-const actions = { reserve: 'آماده تحویل', market: 'خریدم', emdad: 'ثبت امداد ویژه', received: 'آماده تحویل', handover: 'تحویل دادم', follow_up: 'پیگیری' };
+const SUPPLY_LABELS: Record<ManageSupplyRoute, string> = { reserve: 'استفاده از موجودی', market: 'استعلام خرید بازار', emdad: 'بررسی امداد ویژه' };
 
 export function PartsWorkbench() {
   const { can } = useAuth();
@@ -54,7 +54,11 @@ export function PartsWorkbench() {
       {shown.map(card => <article key={card.id} className="panel parts-workbench-card">
         <div className="panel-head">
           <div className="row"><Plate value={card.plate ?? ''}/><Link href={`/cases/${card.id}#case-parts`}><strong>{card.model || card.caseNumber}{card.color && ` · ${card.color}`}</strong></Link><span className="chip">{COVERAGE_LABELS[card.coverage]}</span></div>
-          {card.waiting && <span className="chip chip-red">{card.waiting} منتظر قطعه است</span>}
+          <div className="row" style={{gap: 6, flexWrap: 'wrap'}}>
+            {card.waiting && <span className="chip chip-red">{card.waiting} منتظر قطعه است</span>}
+            {card.items.some(i => i.action === 'emdad') && <span className="chip chip-amber">{faNum(card.items.filter(i => i.action === 'emdad').length)} قلم منتظر تصمیم</span>}
+            {card.items.some(i => ['handover','received'].includes(i.action)) && <span className="chip chip-green">{faNum(card.items.filter(i => ['handover','received'].includes(i.action)).length)} قلم آمادهٔ اقدام</span>}
+          </div>
         </div>
         <div className="row small" style={{ flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
           <span>پذیرش: <bdi>{card.admissionNo ? toPersianDigits(card.admissionNo) : 'ثبت نشده'}</bdi></span>
@@ -71,12 +75,7 @@ export function PartsWorkbench() {
             <Link href={`/cases/${card.id}`}>نمایش پرونده کامل</Link>
           </div>
         </details>
-        <details className="compact-disclosure" style={{ margin: '0 12px 12px' }}>
-          <summary>قطعات و نیازها · {faNum(card.items.length)} قلم</summary>
-          <div className="panel-body stack">
-            {card.items.map(line => <PartLine key={`${line.id}:${line.version}:${line.action}`} item={line} card={card} refresh={() => void mutate()}/>)}
-          </div>
-        </details>
+        <VehicleParts card={card} refresh={() => void mutate()}/>
       </article>)}
       {data.inTransit > 0 && <div className="callout row">
         <span>{faNum(data.inTransit)} قطعهٔ دیگر در امداد ویژه در راه‌اند و دیر نکرده‌اند.</span>
@@ -91,7 +90,104 @@ function Summary({ label, value }: { label: string; value: number }) {
   return <div className="panel panel-body"><span className="muted small">{label}</span><strong>{faNum(value)}</strong></div>;
 }
 
-function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Workbench['cards'][number]; refresh: () => void }) {
+type Preparation = { partId: string; route: ManageSupplyRoute; sequence: number };
+function VehicleParts({ card, refresh }: {card: Workbench['cards'][number]; refresh: () => void }) {
+  const pending = card.items.filter(item => item.action === 'emdad');
+  const [planOpen, setPlanOpen] = useState(false);
+  const [plan, setPlan] = useState<Record<string, ManageSupplyRoute>>({});
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
+  const [preparation, setPreparation] = useState<Preparation | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  function generatePlan() {
+    const suggestions: Record<string, ManageSupplyRoute> = {};
+    for (const item of pending) suggestions[item.id] = item.manageAdvice.route ?? 'market';
+    setPlan(suggestions); setAccepted({}); setPreparation(null);
+    setError(''); setMessage(''); setPlanOpen(true);
+  }
+  function changePlan(id: string, route: ManageSupplyRoute) {
+    setPlan(prev => ({...prev, [id]: route}));
+    setAccepted(prev => ({...prev, [id]: false}));
+    setPreparation(null);
+  }
+  async function approve(item: PartsWorkbenchLine) {
+    const route = plan[item.id] ?? item.manageAdvice.route ?? 'market';
+    const single = route === 'reserve' && item.stockOptions.length === 1 && Number.isSafeInteger(item.suggestedPriceRial) &&
+      item.suggestedPriceRial !== null && item.suggestedPriceRial >= 0;
+    setError(''); setMessage('');
+    if (single) {
+      const location = item.stockOptions[0]!;
+      setBusyId(item.id);
+      try {
+        await api(`/parts/workbench/${item.id}/actions`, {body: {
+          action: 'reserve', expectedVersion: item.version, salePriceRial: item.suggestedPriceRial,
+          stock: { snapshotId: location.snapshotId, fullStockCode: location.fullStockCode,
+            locationAddress: location.locationAddress, confirm: true },
+        }});
+        setMessage(`رزرو «${item.description}» ثبت شد. موجودی دوباره روی سرور کنترل شد.`);
+        refresh();
+      } catch (err) { setError(errorMessage(err)); refresh(); }
+      finally { setBusyId(null); }
+      return;
+    }
+    setAccepted(prev => ({...prev, [item.id]: true}));
+    setPreparation(prev => ({partId: item.id, route, sequence: (prev?.sequence ?? 0) + 1}));
+    setMessage(`مسیر «${item.description}» انتخاب شد؛ فرم آن در پایین آماده است و هنوز هیچ سفارش یا خریدی ثبت نشده.`);
+  }
+  const reviewedCount = pending.filter(item => accepted[item.id]).length;
+  return <details className="compact-disclosure" style={{margin:'0 12px 12px'}} open={planOpen ? true : undefined}>
+    <summary>قطعات و نیازها · {faNum(card.items.length)} قلم · {faNum(pending.length)} قلم منتظر تصمیم</summary>
+    <div className="panel-body stack">
+      {pending.length > 0 && <div className="stack">
+        <div className="row" style={{justifyContent:'space-between', flexWrap:'wrap', gap:8}}>
+          <button type="button" className="btn" onClick={generatePlan}>
+            <AppIcon name="sparkles"/> برنامه‌ریزی همهٔ قطعات این خودرو با منیج
+          </button>
+          {planOpen && <span className="chip">{faNum(reviewedCount)} از {faNum(pending.length)} پیشنهاد در فرم آماده شده</span>}
+        </div>
+        {planOpen && <section className="panel panel-body stack" aria-label="برنامه گروهی پیشنهادی منیج">
+          <strong>برنامهٔ پیشنهادی منیج ـ تصمیم مستقل برای هر قطعه</strong>
+          <p className="small muted">پیشنهادها از موجودی، زمان تعمیر و سوابق همین پرونده تهیه شده‌اند. می‌توانید مسیر هر قلم را تغییر دهید. تأیید یک قلم به معنی تأیید بقیه نیست.</p>
+          {pending.map(item => {
+            const route = plan[item.id] ?? item.manageAdvice.route ?? 'market';
+            const readyToReserve = route === 'reserve' && item.stockOptions.length === 1 &&
+              item.suggestedPriceRial !== null && Number.isSafeInteger(item.suggestedPriceRial) && item.suggestedPriceRial >= 0;
+            return <div key={item.id} className="stack" style={{padding:'8px 0', borderBottom:'1px solid var(--silver)'}}>
+              <div className="row" style={{justifyContent:'space-between', flexWrap:'wrap'}}>
+                <strong>{item.description} · {faNum(item.quantity)} عدد</strong>
+                {accepted[item.id] && <span className="chip chip-green"><AppIcon name="check"/> پیشنهاد پذیرفته شد؛ ثبت نشده</span>}
+              </div>
+              <p className="small muted">{item.manageAdvice.headline} · {item.manageAdvice.why[0]}</p>
+              <div className="row" style={{gap:8, flexWrap:'wrap'}}>
+                <label className="field">روش انتخابی
+                  <select className="input" aria-label={`روش تأمین ${item.description}`} value={route}
+                    onChange={e => changePlan(item.id, e.target.value as ManageSupplyRoute)}>
+                    <option value="reserve" disabled={!item.stockOptions.length}>استفاده از موجودی</option>
+                    <option value="market">استعلام خرید بازار</option>
+                    <option value="emdad">بررسی امداد ویژه</option>
+                  </select>
+                </label>
+                <button type="button" className="btn btn-primary" disabled={busyId !== null}
+                  onClick={() => void approve(item)}>
+                  <AppIcon name="check"/> {busyId === item.id ? 'در حال ثبت رزرو…' : readyToReserve ? 'تأیید و رزرو این قطعه' : 'تأیید و آماده‌کردن فرم این قطعه'}
+                </button>
+              </div>
+            </div>;
+          })}
+          {message && <p role="status" className="callout">{message}</p>}
+          {error && <p role="alert" className="callout callout-red">{error}</p>}
+          <p className="small muted">فقط رزرو تک‌گزینه‌ای با قیمت مشخص، پس از زدن «تأیید و رزرو»، مستقیم ثبت می‌شود. برای قیمت بازار و امداد ویژه، ابتدا باید اطلاعات واقعی و مجوزهای لازم در فرم هر قطعه تکمیل شوند. اجرای خودکار گروهی وجود ندارد.</p>
+        </section>}
+      </div>}
+      {card.items.map(line => <PartLine key={`${line.id}:${line.version}:${line.action}`} item={line} card={card} refresh={refresh}
+        preparation={preparation?.partId === line.id ? preparation : null}
+        accepted={!!accepted[line.id] && line.action === 'emdad'} />)}
+    </div>
+  </details>;
+}
+
+function PartLine({ item, card, refresh, preparation, accepted }: { item: PartsWorkbenchLine; card: Workbench['cards'][number]; refresh: () => void; preparation: Preparation | null; accepted: boolean }) {
   const [choice, setChoice] = useState<'reserve' | 'market' | 'emdad' | null>(null);
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [eta, setEta] = useState<string | null>(null);
@@ -101,6 +197,11 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
   const [noticeSent, setNoticeSent] = useState(false);
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [targetTask, setTargetTask] = useState(item.destinations.length === 1 ? item.destinations[0]!.taskId : '');
+  useEffect(() => {
+    if (!preparation || item.action !== 'emdad') return;
+    setChoice(preparation.route); setOpen(true); setAdvisorOpen(false);
+    setQuoteOnly(preparation.route === 'market'); setError('');
+  }, [preparation, item.action]);
   const action = item.action === 'emdad' ? choice : item.action;
   const showForm = open && !!action && action !== 'follow_up';
 
@@ -165,6 +266,7 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
     <div className="parts-workbench-line-main">
       <div>
         <strong>{item.description}</strong>
+        {accepted && <span className="chip chip-green"><AppIcon name="check"/> پیشنهاد منیج پذیرفته شد · هنوز ثبت نشده</span>}
         <p className="muted small">{faNum(item.quantity)} عدد{item.partNumber && <> · کد فنی <bdi>{item.partNumber}</bdi></>}</p>
         <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
           {item.stockOptions.length > 0 && <span className="chip chip-green">موجودی قابل رزرو {faNum(item.stockOptions.reduce((n, o) => n + Number(o.available), 0))}</span>}
@@ -206,9 +308,9 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
       <button type="button" className={`btn ${action === 'reserve' && open ? 'btn-primary' : ''}`} disabled={!item.stockOptions.length || busy}
         onClick={() => choose('reserve')} aria-pressed={action === 'reserve' && open}><AppIcon name="box" /> استفاده از موجودی</button>
       <button type="button" className={`btn ${action === 'market' && open ? 'btn-primary' : ''}`} disabled={busy}
-        onClick={() => choose('market')} aria-pressed={action === 'market' && open}><AppIcon name="money" /> خرید بازار</button>
+        onClick={() => choose('market')} aria-pressed={action === 'market' && open}><AppIcon name="shopping-cart" /> خرید بازار</button>
       <button type="button" className={`btn ${action === 'emdad' && open ? 'btn-primary' : ''}`} disabled={busy}
-        onClick={() => choose('emdad')} aria-pressed={action === 'emdad' && open}><AppIcon name="file" /> ثبت امداد ویژه</button>
+        onClick={() => choose('emdad')} aria-pressed={action === 'emdad' && open}><AppIcon name="truck" /> ثبت امداد ویژه</button>
     </div>}
     {ready && <div className="stack">
       <div className="row">

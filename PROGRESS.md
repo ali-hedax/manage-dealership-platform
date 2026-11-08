@@ -1,3 +1,10 @@
+## 2026-11-08 — Grouped Manage planning, independent per-part authorization (PR #70)
+- Added per-vehicle Manage Advisor supply plan preview: calculates route per needed part and allows each selection to be changed before action.
+- Every part's decision remains independent. Single exact stock option with known sale price can be reserved explicitly on the second action; all other paths prepare their per-part form and require further entry/approval.
+- Badges show counts of parts awaiting decision and ready for pickup, plus transient (not persisted) status of accepted assistant route.
+- Distinct sidebar/workbench icons: Emdad truck, market cart, reminders bell.
+- CI and browser tests must be re-run on the latest head before merge or deploy. Main and Production untouched.
+
 ## 2026-11-08 — Manage Advisor, independent of Source (PR #70)
 
 - Corrected request: assistant is for Manage only. Renamed per-part suggestion panel to «دستیار منیج»; it uses deterministic supply rules (stock, deadlines, lead history, eligibility caveats) without external AI.

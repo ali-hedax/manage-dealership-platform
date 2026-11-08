@@ -28,7 +28,7 @@ export function Shell({children}:{children:ReactNode}){
  <div className="brand"><Link href="/launch" className="brand-lockup" aria-label="Manage by HEDAX، انتخاب میز کار"><img src="/brand/manage-wordmark-dark.svg" alt="" width={124} height={31}/><span className="brand-by" aria-hidden="true">by HEDAX</span></Link><div className="tenant">{me.tenant.name}</div></div>{!technicianOnly&&can('case.read')&&<GlobalSearch onDone={()=>setOpen(false)}/>}
  <nav className="nav" id="main-navigation" aria-label="واحدها و میزهای کار" onClick={e=>{if((e.target as HTMLElement).closest('a'))setOpen(false);}}>
  {nav('/launch','انتخاب میز کار','grid')}{technicianOnly?nav('/workshop/technician','کارهای من','wrench'):null}
- <Link href="/reminders" className="nav-reminders" aria-current={pathname==='/reminders'?'page':undefined}><AppIcon name="alert"/><span>تذکرها</span>{unseen>0&&<span className="nav-badge" aria-label={`${unseen} تذکر دیده‌نشده`}>{unseen.toLocaleString('fa-IR')}</span>}</Link>
+ <Link href="/reminders" className="nav-reminders" aria-current={pathname==='/reminders'?'page':undefined}><AppIcon name="bell"/><span>تذکرها</span>{unseen>0&&<span className="nav-badge" aria-label={`${unseen} تذکر دیده‌نشده`}>{unseen.toLocaleString('fa-IR')}</span>}</Link>
  {!technicianOnly&&<>{nav('/','داشبورد','gauge',can('dashboard.read'))}
  <details className="nav-unit" key={`accident-${accident}`} open={accident||pathname==='/'}><summary><AppIcon name="car"/><span>واحد تصادفات</span></summary><div className="nav-sub">
  <p className="nav-caption">میزهای کار و پرونده‌ها</p>
@@ -36,7 +36,7 @@ export function Shell({children}:{children:ReactNode}){
  {nav('/cases','پرونده‌های تصادفی','file',can('case.read'))}{nav('/cases/new','ثبت پرونده','add',can('case.create'))}
  <p className="nav-caption">کارگاه و قطعات</p>
  {nav('/workshop','برنامه و گزارش تعمیر','wrench',can('workshop.read'))}
- {nav('/stock','موجودی و رزرو قطعات','box',can('stock.read'))}{nav('/emdad','پیگیری امداد ویژه','alert',can('emdad.read'))}
+ {nav('/stock','موجودی و رزرو قطعات','box',can('stock.read'))}{nav('/emdad','پیگیری امداد ویژه','truck',can('emdad.read'))}
  <p className="nav-caption">گزارش‌ها و تنظیمات کارگاه</p>
  {nav('/reports','گزارش‌های مدیریتی','chart',can('report.manager')||can('part.manage')||can('case.update')||can('task.manage')||can('qc.inspect'))}
  {nav('/daily-reports','ورود گزارش‌های روزانه','upload',can('daily_reports.upload')||can('daily_reports.apply')||can('daily_reports.settings'))}
