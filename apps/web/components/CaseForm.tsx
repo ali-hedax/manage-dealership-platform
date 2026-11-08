@@ -295,9 +295,10 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
           brand: s.brand === 'ایران‌خودرو' ? c.vehicle.brand || s.brand : s.brand,
           model: s.model || c.vehicle.model || '', trim: s.trim || c.vehicle.trim || '',
           modelYear: s.modelYear || (c.vehicle.modelYear ? String(c.vehicle.modelYear) : ''), color: s.color || c.vehicle.color || '',
-          fullName: s.fullName || c.customer?.fullName || '', phone: s.phone || (c.customer?.phoneMasked ? '' : c.customer?.phone) || '' }));
-        setHistorySource(c.caseNumber); toast('مشخصات در خانه‌های خالی قرار گرفت؛ مالک و تلفن فعلی را بررسی کنید');
-      }} />{historySource && <p className="callout callout-blue small" role="status">مشخصات از پرونده <bdi>{historySource}</bdi> تکمیل شد. مالک و تلفن را بررسی کنید؛ اطلاعات مراجعهٔ جدید را در ادامه بنویسید.</p>}</div></details>}
+          fullName: s.fullName || c.customer?.fullName || '', phone: s.phone || (c.customer?.phoneMasked ? '' : c.customer?.phone) || '',
+          odometerKm: s.odometerKm || (c.odometerKm == null ? '' : String(c.odometerKm)) }));
+        setHistorySource(c.caseNumber); toast('مشخصات و کیلومتر آخرین پذیرش در خانه‌های خالی قرار گرفت؛ کیلومتر فعلی، مالک و تلفن را بررسی کنید');
+      }} />{historySource && <p className="callout callout-blue small" role="status">مشخصات از پرونده <bdi>{historySource}</bdi> تکمیل شد. کیلومتر فعلی، مالک و تلفن را بررسی کنید؛ اطلاعات مراجعهٔ جدید را در ادامه بنویسید.</p>}</div></details>}
       {can('reference.customers.read')&&<details className="compact-disclosure panel"><summary>جست‌وجو در سوابق اطلاعات پایه</summary><div className="panel-body"><ReferenceLookup kind="customers" initialQuery={existing?.vehicle.vin||existing?.vehicle.chassisRef||''} onSelect={r=>{setF(s=>({...s,fullName:s.fullName||r.data.fullName||'',phone:s.phone||r.data.phone||'',vin:s.vin||r.data.vin||'',plate:s.plate||r.data.plate||'',model:s.model||r.data.model||'',trim:s.trim||r.data.trim||''}));toast('اطلاعات سابقه فقط در خانه‌های خالی قرار گرفت؛ مالک و شماره پذیرش فعلی را تأیید کنید');}}/></div></details>}
       <Section title="خودرو" note="پلاک یا VIN برای شناسایی کافی است">
         <label className="field">
