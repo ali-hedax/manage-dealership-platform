@@ -24,7 +24,7 @@ import { APP_CONFIG, type AppConfig } from '../config';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle } from '../db/database';
-import { cases, departments, notifications, reminderRecipients, reminders, tasks, users, vehicles, partRequests, blockers } from '../db/schema';
+import { cases, departments, notifications, reminderRecipients, reminders, tasks, users, vehicles, partRequests, blockers, workshopStations } from '../db/schema';
 import { calendarAt } from '../workshop/work-calendar';
 
 /** Roles that receive a technician's "I have a problem" when the case has no responsible. */
@@ -130,7 +130,7 @@ export class RemindersService implements OnApplicationBootstrap, OnApplicationSh
 
 
   /** Explicit call from the parts desk; the recipient must belong to this exact case. */
-  async partsReady(actor: Actor, partId: string): Promise<{ id: string; recipients: number }> {
+  async partsReady(actor: Actor, partId: string, taskId: string): Promise<{ id: string; recipients: number }> {
     if (!actor.user.permissions.has('part.manage')) throw forbidden();
     const tenantId = actor.user.tenantId;
     const [part] = await this.db.select({ p: partRequests, c: cases, plate: vehicles.plate })
@@ -150,15 +150,19 @@ export class RemindersService implements OnApplicationBootstrap, OnApplicationSh
         eq(users.tenantId, tenantId), eq(users.isActive, true))),
     ]);
     const matching = jobs.filter(j => waiting.some(b => b.taskId === j.id));
-    // If no blocker exists, use the earliest planned active station, never another vehicle.
-    const destinations = matching.length ? matching : jobs.length ? [jobs[0]!] : [];
-    const recipients = new Set(destinations.map(j => j.assignedUserId).filter((id): id is string => !!id));
-    if (part.c.responsibleUserId) recipients.add(part.c.responsibleUserId);
-    for (const u of staff) if (u.roles.includes('accident_supervisor')) recipients.add(u.id);
+    const available = matching.length ? matching : jobs;
+    // Human-selected task must be active, part of the same case and (if blocked) a linked target.
+    const selected = available.find(j => j.id === taskId);
+    if (!selected) throw badRequest('PART_TARGET_INVALID', 'جایگاه انتخاب‌شده به این قطعه و پرونده تعلق ندارد');
+    const [station] = selected.stationId ? await this.db.select({ responsibleUserId: workshopStations.responsibleUserId })
+      .from(workshopStations).where(and(eq(workshopStations.id, selected.stationId), eq(workshopStations.tenantId, tenantId))) : [];
+    const recipients = new Set([selected.assignedUserId, station?.responsibleUserId, part.c.responsibleUserId]
+      .filter((id): id is string => !!id));
+    // Include accident supervisors and other parts clerks for internal visibility.
+    for (const u of staff) if (u.roles.some(role => ['accident_supervisor','parts_clerk'].includes(role))) recipients.add(u.id);
     const allowed = new Set(staff.map(u => u.id));
     recipients.delete(actor.user.id);
-    const destination = destinations.map(j => j.stationSnapshot?.code || j.technicianCode || j.title || 'واحد تعمیر').join('، ');
-    if (!destinations.length) throw badRequest('NO_TARGET_STATION', 'جایگاه یا فعالیت تعمیر برای این خودرو تعیین نشده است؛ ابتدا برنامه تعمیر را تکمیل کنید');
+    const destination = selected.stationSnapshot?.name || selected.stationSnapshot?.code || selected.title || 'واحد تعمیر';
     return this.create(actor, {
       recipients: [...recipients].filter(id => allowed.has(id)),
       body: `قطعه «${part.p.description}» برای خودرو ${part.c.caseNumber} آماده تحویل است؛ جایگاه ${destination}. لطفاً از انبار دریافت و ثبت کنید.`,
