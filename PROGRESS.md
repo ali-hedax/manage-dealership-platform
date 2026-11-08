@@ -1,3 +1,14 @@
+
+## 2026-11-08 — Parts desk UX and ready-for-pickup PR #70 (branch only)
+
+- Search parts-workbench cards by plate, admission, case number, VIN/chassis, car model and matched emergency references; collapsible vehicle details.
+- Show case admission and verified matched emergency IDs (not arbitrary daily report rows); reorganize navigation.
+- Read unambiguous company unit price from active stock snapshot even for zero-stock lines; allow staff to override missing/changed company price; never guess conflicting prices.
+- Add explicit parts-ready internal reminder action for the same-case technician(s), case responsible and accident supervisor. Existing technician pickup audit continues to record receiving actor and timestamp. If no station exists, block notification; department-specific supervisor mapping is not present.
+- Prefill empty mileage from latest vehicle history; require human check of current odometer; add new-case link after saving. No carryover of prior case identity.
+- CI on latest head pending at authoring time. No local test, merge or deployment; main and real records untouched.
+- Next: review CI, run browser/e2e tests for notification, emergency order and case creation; address failures before merge; get owner approval for production.
+
 # PROGRESS — Manage by HEDAX
 
 ## ورود ساده کارکنان — آماده، منتشر نشده — 2026-11-08
