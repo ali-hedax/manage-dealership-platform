@@ -78,7 +78,8 @@ export class PartsWorkbenchService {
     const workDaysUntil = (at: Date) => (dayMinutes ? workingMinutesBetween(now.toISOString(), at.toISOString(), calendar.calendar) / dayMinutes : 0);
     const canReserve = actor.user.permissions.has('stock.read') && actor.user.permissions.has('stock.reserve');
     const needs = rows.filter(({ p }) => p.status === 'needed' && p.partNumber).map(({ p }) => p.partNumber!);
-    const stock = await this.stock.exactOptions(actor, canReserve ? [...new Set(needs)] : []);
+    // Price lookup is read-only and may include zero-stock rows. Reservation still requires stock.reserve.
+    const stock = await this.stock.exactOptions(actor, actor.user.permissions.has('stock.read') ? [...new Set(needs)] : [], db, true);
     const byPart = new Map<string, typeof links>();
     for (const link of links) {
       const id = link.partRequestId!;
@@ -101,7 +102,8 @@ export class PartsWorkbenchService {
       const estimated = p.orderedAt && average !== null ? new Date(p.orderedAt.getTime() + average * DAY_MS) : null;
       const dueAt = p.etaAt ?? official?.dueAt ?? (companyRequest(p) ? estimated ?? c.officialDeadlineAt ?? c.forecastDeliveryAt : null);
       const overdue = p.status === 'ordered' && !reportedReceipt && !!dueAt && dueAt < now;
-      const options = (stock.get(p.partNumber ?? '') ?? []).filter(item => Number(item.available) >= p.quantity);
+      const allOptions = stock.get(p.partNumber ?? '') ?? [];
+      const options = canReserve ? allOptions.filter(item => Number(item.available) >= p.quantity) : [];
       const option = options.length === 1 ? options[0] : undefined;
       const action: PartsWorkbenchLine['action'] = ready ? 'handover'
         : reportedReceipt ? 'received'
@@ -115,9 +117,10 @@ export class PartsWorkbenchService {
       if (action === 'handover' || action === 'received') counts.ready++;
       else if (action !== 'follow_up') counts.decision++;
       if (overdue && (companyRequest(p) || matching.length > 0)) counts.overdueEmdad++;
-      const inferredPrice = option?.salePrice != null && option.currency
-        ? Math.round(Number(option.salePrice) * (option.currency === 'IRT' ? 10 : 1))
-        : null;
+      const prices = [...new Set(allOptions.filter(o => o.salePrice !== null && o.currency)
+        .map(o => Math.round(Number(o.salePrice) * (o.currency === 'IRT' ? 10 : 1))))];
+      // Multiple different prices are ambiguous: never silently choose a company price.
+      const inferredPrice = prices.length === 1 && Number.isSafeInteger(prices[0]) ? prices[0]! : null;
       const card = cards.get(c.id) ?? {
         card: { id: c.id, caseNumber: c.caseNumber, model: [v.brand, v.model, v.trim].filter(Boolean).join(' '),
           plate: v.plate, color: v.color, coverage: c.coverageType as PartsWorkbench['cards'][number]['coverage'],
@@ -143,6 +146,7 @@ export class PartsWorkbenchService {
       card.card.items.push({
         id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
         action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
+        companyPriceRial: inferredPrice,
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
         emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
