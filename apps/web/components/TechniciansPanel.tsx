@@ -90,7 +90,7 @@ export function TechniciansPanel() {
 
   return (
     <section className="card technicians" aria-labelledby="technicians-title">
-      <h2 id="technicians-title">ساخت و مدیریت ورود ساده</h2>
+      <h2 id="technicians-title">ورود ساده کارکنان</h2>
       <p className="muted small">برای کارمند جدید، نام و نقش را انتخاب کنید و دو رمز تعیین کنید. کارمند بار اول روی گوشی خود رمز ثبت دستگاه را وارد می‌کند؛ دفعات بعد فقط نام کاربری و PIN چهاررقمی لازم است. برای کارمند قبلی مثل صبوری، از فهرست پایین «فعال‌سازی ورود ساده» را بزنید؛ حساب تکراری نسازید. ورود مالک و مدیر سیستم همچنان دومرحله‌ای است.</p>
 
       <form onSubmit={create} className="technician-form">
