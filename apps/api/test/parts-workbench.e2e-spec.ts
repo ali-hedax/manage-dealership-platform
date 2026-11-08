@@ -73,7 +73,7 @@ test('suggests exact stock, prevents double booking, and permits pickup only by 
   const c1 = await kase(), c2 = await kase();
   const p1 = await need(c1.id, stockCode), p2 = await need(c2.id, stockCode);
   const before = await line(p1);
-  expect(before).toMatchObject({ action: 'reserve', suggestedPriceRial: 1550000, stock: { snapshotId, fullStockCode: stockCode } });
+  expect(before).toMatchObject({ action: 'emdad', suggestedPriceRial: 1550000, stockOptions: [expect.objectContaining({ snapshotId, fullStockCode: stockCode })] });
   const stock = { snapshotId, fullStockCode: stockCode, locationAddress: '', confirm: true };
   const reserve = (p: Part) => workAction(p.id, { action: 'reserve', expectedVersion: p.version, salePriceRial: 1550000, stock });
   expect((await reserve(p1)).status).toBe(201);
@@ -82,7 +82,10 @@ test('suggests exact stock, prevents double booking, and permits pickup only by 
   const task = await coordinator.post(`/cases/${c1.id}/tasks`, { departmentId, assignedUserId: techId });
   expect(task.status).toBe(201);
   const ready = await line(p1);
-  expect(ready).toMatchObject({ action: 'handover' });
+  expect(ready).toMatchObject({ action: 'handover', destinations: [expect.objectContaining({ taskId: task.body.id })] });
+  expect((await parts.post(`/reminders/parts-ready/${p1.id}`, { taskId: randomUUID() })).status).toBe(400);
+  expect((await parts.post(`/reminders/parts-ready/${p1.id}`, { taskId: task.body.id })).status).toBe(201);
+  expect(((await technician.get('/reminders/inbox')).body as { body: string }[]).some(r => r.body.includes(p1.description))).toBe(true);
   expect((await technician.get('/parts/workbench')).status).toBe(403);
   const other = await h.loginAs('test-other-technician', ['technician']);
   const body = { partId: p1.id, expectedVersion: ready!.version };
@@ -96,7 +99,7 @@ test('batches Emdad with separate prices, suggests matched receipts and keeps ma
   const c = await kase();
   const p1 = await need(c.id, '88887777'), p2 = await need(c.id, '88889999');
   const p3 = await need(c.id, '11113333', 'external');
-  expect(await line(p3)).toMatchObject({ action: 'market' });
+  expect(await line(p3)).toMatchObject({ action: 'emdad' });
   expect((await workAction(p3.id, { action: 'market', expectedVersion: p3.version, supplier: 'فروشنده آزمون', purchasePriceRial: 3000 })).status).toBe(201);
   const req = await workAction(c.id, { action: 'emdad', requestNo: 'TEST-EMDAD-3', requestedAt: daysAgo(3),
     parts: [{ id: p1.id, expectedVersion: p1.version, companyPriceRial: 2500 },
