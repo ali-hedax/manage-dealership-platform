@@ -25,6 +25,7 @@ export interface PartsWorkbenchLine {
   version: number;
   action: 'reserve' | 'market' | 'emdad' | 'received' | 'handover' | 'follow_up';
   suggestedPriceRial: number | null;
+  companyPriceRial: number | null;
   stock: { snapshotId: string; fullStockCode: string; locationAddress: string; available: string } | null;
   emdadId: string | null;
   emdadRef: string | null;
