@@ -90,12 +90,12 @@ export function TechniciansPanel() {
 
   return (
     <section className="card technicians" aria-labelledby="technicians-title">
-      <h2 id="technicians-title">ورود ساده کارکنان</h2>
-      <p className="muted small">کارکنان عادی (تعمیرکار، قطعات، کنترل کیفیت) ایمیل و Authenticator لازم ندارند. روی دستگاه ثبت‌شده با نام کاربری و رمز ۴ رقمی وارد می‌شوند؛ دستگاه تازه یک بار «رمز ثبت دستگاه» (دست‌کم ۸ نویسه با حرف و عدد) هم می‌خواهد. مالک و مدیر سیستم همیشه با ایمیل و Authenticator وارد می‌شوند. برای کارمند فعلی، در جدول زیر «فعال‌سازی ورود ساده» را بزنید؛ حساب تازه لازم نیست.</p>
+      <h2 id="technicians-title">ساخت و مدیریت ورود ساده</h2>
+      <p className="muted small">برای کارمند جدید، نام و نقش را انتخاب کنید و دو رمز تعیین کنید. کارمند بار اول روی گوشی خود رمز ثبت دستگاه را وارد می‌کند؛ دفعات بعد فقط نام کاربری و PIN چهاررقمی لازم است. برای کارمند قبلی مثل صبوری، از فهرست پایین «فعال‌سازی ورود ساده» را بزنید؛ حساب تکراری نسازید. ورود مالک و مدیر سیستم همچنان دومرحله‌ای است.</p>
 
       <form onSubmit={create} className="technician-form">
         <label className="field">
-          <span>نام تعمیرکار</span>
+          <span>نام و نام خانوادگی کارمند</span>
           <input name="displayName" className="input" required minLength={2} maxLength={120} placeholder="مثلاً رضا حسینی" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
@@ -119,11 +119,11 @@ export function TechniciansPanel() {
         </label>
         </>}
         <label className="field">
-          <span>رمز ۴ رقمی</span>
+          <span>رمز ورود روزانه (۴ رقم)</span>
           <input name="pin" className="input ltr-input" inputMode="numeric" required pattern={PIN} maxLength={4} autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} />
         </label>
         <label className="field">
-          <span>رمز ثبت دستگاه</span>
+          <span>رمز ثبت دستگاه (فقط اولین ورود)</span>
           <input name="devicePassword" className="input ltr-input" required pattern={DEVICE_PASSWORD} title="دست‌کم ۸ نویسه، با حرف انگلیسی و عدد" autoComplete="new-password" value={devicePassword} onChange={(e) => setDevicePassword(e.target.value)} />
         </label>
         <div className="field">
@@ -142,10 +142,10 @@ export function TechniciansPanel() {
 
       {created && (
         <div role="status" className="callout technician-created">
-          <strong>{created.name} ساخته شد.</strong> این دو را حضوری به خودش بدهید:
+          <strong>حساب {created.name} ساخته شد.</strong> اطلاعات زیر را فقط به خود کارمند تحویل دهید؛ رمز ثبت دستگاه برای اولین ورود روی هر دستگاه جدید لازم است:
           <span className="technician-credentials">
             <span>نام کاربری: <bdi dir="ltr">{created.username}</bdi></span>
-            <span>رمز: <bdi dir="ltr">{toPersianDigits(created.pin)}</bdi></span>
+            <span>PIN چهاررقمی: <bdi dir="ltr">{toPersianDigits(created.pin)}</bdi></span>
             <span>رمز ثبت دستگاه: <bdi dir="ltr">{created.devicePassword}</bdi></span>
             <span>جایگاه / نقش: <bdi>{created.bay}</bdi></span>
           </span>
