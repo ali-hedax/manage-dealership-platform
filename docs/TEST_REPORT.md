@@ -1,5 +1,11 @@
 # Test report
 
+## Multi-page assessment import — 2026-11-08 — **PR #65**
+
+- **Changed:** column mapping survives repeated printed page headers; every item keeps its own date, unit, page and row; rejected / correction-request rows and equivalent labor are shown separately with their status and kept in the import evidence, never as active items or amounts; parts, labor and total are compared with the printed totals and a mismatch blocks the import. No migration.
+- **CI:** [run 42449812954](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42449812954) on `92fa614` passed all six jobs (lint/typecheck/build/unit+integration, migrations + seed on PostgreSQL 16, Docker build + compose smoke, Playwright, audit + secret scan, docs links).
+- **Owner's real workbook (local only, never committed):** `assessment-sheet` suite 16/16, with the opt-in real-file test running (not skipped): 5 pages, several item dates, parts 59 final + 7 rejected, labor 1 final, equivalent labor 80 final + 6 rejected, no correction or unknown statuses, no errors or warnings. Parts 2,698,562,228, labor 871,500,000 and total 3,570,062,228 rial equal the totals printed in the file.
+
 ## Production release of smart planning suggestions `813fcc4` — 2026-11-07 — **released**
 
 Owner-approved release of PR #63, with no migration. [Release record](RELEASE_SMART_20261107.md).

@@ -120,6 +120,34 @@ describe('assessment Excel import', () => {
     expect((await expert.post(`/assessments/${a.id}/import`,{fileBase64,currency:'rial',expectedVersion:a.version,dryRun:false})).body.code).toBe('ASSESSMENT_IMPORT_INVALID');
     expect((await expert.get(`/cases/${c.id}/assessments`)).body[0].items).toHaveLength(0);
   });
+  it('imports a synthetic multi-page report once: final parts and main labour only, rejected and equivalent lines kept as record', async () => {
+    const c = await newCase();
+    const a = (await expert.post(`/cases/${c.id}/assessments`,{kind:'initial',assessorName:'کارشناس آزمون'})).body as Assessment;
+    const at = (entries:[number,string][]) => { const r = Array<string>(40).fill(''); for (const [i,v] of entries) r[i]=v; return r; };
+    const page = (n:number) => [at([[0,'1405/08/14'],[6,':زمان چاپ']]), at([[0,'2'],[1,'از'],[2,String(n)],[3,':صفحه'],[12,'TESTVIN0001'],[22,':شماره شاسی']]), at([[35,':توضیحات کارشناس امدادخودرو']])];
+    const part = (status:string,code:string,date:string) => at([[0,status],[5,'1,000'],[9,'1,000'],[11,'عدد'],[16,'1'],[19,date],[25,`قطعه ساختگی ${code}`],[38,code]]);
+    const fileBase64 = Buffer.from(writeSheet('آزمون',[...page(1),['اجرت'],at([[0,'وضعیت'],[6,'مبلغ'],[21,'شرح اجرت'],[37,'کد']]),at([[0,'نهايي'],[6,'5,000'],[21,'اجرت خسارتی ساختگی'],[37,'TEST-LAB']]),at([[6,'5,000']]),
+      ['قطعات'],at([[0,'وضعیت'],[5,'مبلغ'],[9,'فی'],[11,'واحد'],[16,'تعداد'],[19,'تاریخ'],[25,'شرح'],[38,'کد']]),part('نهايي','00100','1405/07/08'),part('رد','00200','1405/07/08'),
+      ...page(2),part('نهايي','00300','1405/07/21'),at([[5,'2,000']]),['اجرت های معادل'],at([[0,'وضعیت'],[7,'شرح'],[34,'کد']]),at([[0,'نهايي'],[7,'معادل ساختگی'],[34,'TEST-EQ1']]),at([[0,'رد'],[7,'معادل ردشده'],[34,'TEST-EQ2']]),
+      at([[0,'5,000'],[22,':مبلغ اجرت خسارتی تعیین شده توسط کارشناس']]),at([[0,'7,000'],[22,':جمع مبلغ قطعه و اجرت بدون احتساب مالیات']])])).toString('base64');
+    const body = {fileBase64,currency:'rial',expectedVersion:a.version,dryRun:true};
+    const preview = (await expert.post(`/assessments/${a.id}/import`,body)).body as import('@manage/shared').AssessmentImportPreview;
+    expect(preview.errors).toEqual([]); expect(preview.rows.map(r=>[r.partNumber,r.page,r.date])).toEqual([[null,1,null],['00100',1,'1405/07/08'],['00300',2,'1405/07/21']]);
+    expect(preview.setAside.map(r=>r.code)).toEqual(['00200']); expect(preview.equivalents.map(e=>[e.code,e.status])).toEqual([['TEST-EQ1','final'],['TEST-EQ2','rejected']]);
+    expect(preview.summary).toMatchObject({pages:2,partsRial:2000,labourRial:5000,totalRial:7000,declared:{partsRial:2000,labourRial:5000,totalRial:7000}});
+    expect((await expert.get(`/cases/${c.id}/assessments`)).body[0].items).toHaveLength(0);
+    expect((await expert.post(`/assessments/${a.id}/import`,{...body,dryRun:false})).body.applied).toBe(true);
+    let saved = (await expert.get(`/cases/${c.id}/assessments`)).body[0] as Assessment;
+    expect(saved.items.map(i=>i.description).sort()).toEqual(['اجرت خسارتی ساختگی','قطعه ساختگی 00100','قطعه ساختگی 00300']);
+    expect(saved.items.find(i=>i.action==='repair')?.labourRial).toBe(5000);
+    // The same file again adds nothing.
+    const again = await expert.post(`/assessments/${a.id}/import`,{...body,expectedVersion:saved.version,dryRun:false});
+    expect(again.body.rows.every((r:{outcome:string})=>r.outcome==='unchanged')).toBe(true);
+    saved = (await expert.get(`/cases/${c.id}/assessments`)).body[0] as Assessment;
+    expect(saved.items).toHaveLength(3);
+    const timeline = JSON.stringify((await expert.get(`/cases/${c.id}/timeline`)).body);
+    expect(timeline).toContain('assessment.items_imported');
+  });
 });
 
 describe('initial assessment', () => {
