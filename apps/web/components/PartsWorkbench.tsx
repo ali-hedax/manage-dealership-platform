@@ -137,8 +137,8 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
         <fieldset className="stack"><legend>اقلام همین درخواست</legend>
           {card.items.filter(p => p.action === 'emdad').map(p => <div key={p.id} className="stack">
             <label><input type="checkbox" name="included" value={p.id} defaultChecked={p.id === item.id} required={p.id === item.id}/> {p.description}</label>
-            <label className="field">قیمت واحد شرکت (ریال)<input className="input" name={`purchase-${p.id}`} inputMode="numeric" required={p.id === item.id}/></label>
-            <label className="field">قیمت فروش (ریال)، در صورت تفاوت<input className="input" name={`sale-${p.id}`} inputMode="numeric"/></label>
+            <label className="field">قیمت واحد شرکت (ریال)<input className="input" name={`purchase-${p.id}`} inputMode="numeric" defaultValue={p.companyPriceRial ?? ''} required={p.id === item.id}/><span className="hint">{p.companyPriceRial === null ? 'در موجودی قیمت یکتا پیدا نشد؛ قیمت شرکت را دستی وارد و بررسی کنید.' : 'برگرفته از گزارش موجودی؛ در صورت نیاز قابل اصلاح است.'}</span></label>
+            <label className="field">قیمت فروش بازار (ریال)، فقط در صورت تفاوت<input className="input" name={`sale-${p.id}`} inputMode="numeric"/></label>
           </div>)}
         </fieldset>
         <label className="field">شماره درخواست<input className="input" name="reference" maxLength={64} required /></label>
