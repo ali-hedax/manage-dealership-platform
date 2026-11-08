@@ -136,7 +136,7 @@ export class PartsWorkbenchService {
       const blocking = blockersByPart.has(p.id);
       const need = needBy.get(c.id);
       const left = need ? Math.max(0, Math.floor(workDaysUntil(need))) : null;
-      const advice = blocking && (action === 'emdad' || action === 'market') ? 'تعمیر همین حالا منتظر این قطعه است؛ امروز تعیین تکلیف کنید.'
+      const advice = blocking && action === 'emdad' ? 'تعمیر همین حالا منتظر این قطعه است؛ امروز تعیین تکلیف کنید.'
         : action === 'emdad' && average !== null && left !== null && average > left ? `امداد ویژه معمولاً ${average} روز طول می‌کشد ولی واحد بعدی ${left === 0 ? 'امروز' : `${left} روز کاری دیگر`} شروع می‌شود؛ خرید از بازار را بررسی کنید.`
         : action === 'emdad' && left !== null ? `واحد بعدی ${left === 0 ? 'امروز' : `${left} روز کاری دیگر`} به این قطعه نیاز دارد.`
         : overdue ? 'از موعد رسیدن گذشته؛ امروز با شرکت یا فروشنده پیگیری کنید.'
