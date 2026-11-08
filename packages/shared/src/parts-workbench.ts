@@ -45,6 +45,10 @@ export interface PartsWorkbench {
     color: string | null;
     coverage: CoverageType;
     caseNumber: string;
+    admissionNo: string | null;
+    vin: string | null;
+    chassisRef: string | null;
+    emdadRefs: string[];
     waiting: string | null;
     items: PartsWorkbenchLine[];
   }[];
