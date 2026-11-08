@@ -181,6 +181,16 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
             {ready ? 'ثبت تحویل' : item.action === 'received' ? 'ثبت رسیدن قطعه' : 'اقدام'}
           </button> : null}
     </div>
+    {item.action === 'emdad' && <details className="compact-disclosure" style={{ marginTop: 8 }}>
+      <summary><AppIcon name="alert" /> پیشنهاد منفی و بررسی ریسک مسیر تأمین {item.negativeRecommendations.length ? `· ${faNum(item.negativeRecommendations.length)} نکته` : ''}</summary>
+      {item.preferredRoute && <p className="callout small">پیشنهاد اولیه بر اساس داده‌های فعلی: {item.preferredRoute === 'reserve' ? 'استفاده از موجودی' : item.preferredRoute === 'market' ? 'خرید بازار' : 'امداد ویژه'}؛ تصمیم نهایی با مسئول قطعات است.</p>}
+      {item.negativeRecommendations.length ? <ul className="stack small">
+        {item.negativeRecommendations.map((tip, index) => <li key={index}>
+          <strong>{tip.route === 'reserve' ? 'موجودی' : tip.route === 'market' ? 'خرید بازار' : 'امداد ویژه'}:</strong> {tip.reason}
+        </li>)}
+      </ul> : <p className="small muted">طبق اطلاعات موجود هشدار مشخصی پیدا نشد؛ این به معنی تأیید قطعی قیمت، موجودی یا قابلیت امداد ویژه نیست.</p>}
+      <p className="small muted">این توصیه‌ها صرفاً بررسی عملیاتی هستند و مجوز خرید، بیمه یا امداد ویژه صادر نمی‌کنند.</p>
+    </details>}
     {item.action === 'emdad' && <div className="row" style={{ gap: 8, flexWrap: 'wrap' }} role="group" aria-label={`انتخاب روش تأمین ${item.description}`}>
       <button type="button" className={`btn ${action === 'reserve' && open ? 'btn-primary' : ''}`} disabled={!item.stockOptions.length || busy}
         onClick={() => choose('reserve')} aria-pressed={action === 'reserve' && open}><AppIcon name="box" /> استفاده از موجودی</button>
