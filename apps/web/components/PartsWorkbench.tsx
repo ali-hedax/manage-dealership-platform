@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import { COVERAGE_LABELS, type PartsWorkbench as Workbench, type PartsWorkbenchLine } from '@manage/shared';
+import { COVERAGE_LABELS, toLatinDigits, type PartsWorkbench as Workbench, type PartsWorkbenchLine } from '@manage/shared';
 import { useAuth } from '@/lib/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { faNum, parseRials } from '@/lib/format';
@@ -16,10 +16,15 @@ const actions = { reserve: 'آماده تحویل', market: 'خریدم', emdad:
 export function PartsWorkbench() {
   const { can } = useAuth();
   const [transit, setTransit] = useState(false);
+  const [query, setQuery] = useState('');
   const { data, error, mutate } = useSWR<Workbench>(`/parts/workbench?transit=${transit ? '1' : '0'}`, fetcher, { refreshInterval: 30_000 });
   const { data: jobs } = useSWR<import('@manage/shared').ExternalWork[]>('/parts/external-work', fetcher, { refreshInterval: 30_000 });
   const externalCount = jobs?.filter(j => j.status !== 'approved' && j.status !== 'done').length ?? 0;
   const total = data ? data.cards.reduce((n, card) => n + card.items.length, 0) + externalCount : 0;
+  const normalize = (value: string | null | undefined) => toLatinDigits(value ?? '').toLowerCase().replace(/[\s\u200c\-_/]/g, '');
+  const needle = normalize(query);
+  const shown = data?.cards.filter(card => !needle || [card.plate, card.model, card.color, card.caseNumber,
+    card.admissionNo, card.vin, card.chassisRef, ...card.emdadRefs].some(value => normalize(value).includes(needle))) ?? [];
   return <div className="stack parts-workbench">
     <header className="parts-workbench-header">
       <div><h1>{data ? `امروز ${faNum(total)} کار با شماست.` : 'کارهای من'}</h1><p className="muted">کارهای قطعات به ترتیب فوریت</p></div>
@@ -34,13 +39,35 @@ export function PartsWorkbench() {
         <Summary label="رسیده، هنوز تحویل نشده" value={data.counts.ready} />
         <Summary label="امداد ویژهٔ دیرکرده" value={data.counts.overdueEmdad} />
       </div>
-      <h2>کارهای من</h2>
+      <div className="stack"><h2>کارهای من</h2>
+        <label className="field">جست‌وجوی خودرو در کارهای من
+          <input className="input" type="search" value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="پلاک، شماره پذیرش، شاسی، مدل، پرونده یا امداد ویژه" aria-label="جست‌وجوی کارهای قطعات" />
+        </label>
+        {needle && <p className="muted small" role="status">{faNum(shown.length)} خودرو از {faNum(data.cards.length)} خودرو پیدا شد.</p>}
+      </div>
       {data.cards.length === 0 && <p className="callout">کار قطعه‌ای در این صف نیست.</p>}
-      {data.cards.map(card => <article key={card.id} className="panel parts-workbench-card">
+      {needle && shown.length === 0 && <p className="callout">خودرویی مطابق جست‌وجو در کارهای فعلی پیدا نشد.</p>}
+      {shown.map(card => <article key={card.id} className="panel parts-workbench-card">
         <div className="panel-head">
           <div className="row"><Plate value={card.plate ?? ''}/><Link href={`/cases/${card.id}#case-parts`}><strong>{card.model || card.caseNumber}{card.color && ` · ${card.color}`}</strong></Link><span className="chip">{COVERAGE_LABELS[card.coverage]}</span></div>
           {card.waiting && <span className="chip chip-red">{card.waiting} منتظر قطعه است</span>}
         </div>
+        <div className="row small" style={{ flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
+          <span>پذیرش: <bdi>{card.admissionNo ? faNum(card.admissionNo) : 'ثبت نشده'}</bdi></span>
+          <span>پرونده: <bdi>{faNum(card.caseNumber)}</bdi></span>
+          <span>{card.model || 'مدل نامشخص'}</span>
+          {card.emdadRefs.length > 0 && <span className="chip chip-amber">امداد ویژه: <bdi>{card.emdadRefs.map(faNum).join('، ')}</bdi></span>}
+        </div>
+        <details className="compact-disclosure" style={{ margin: '0 16px 8px' }}>
+          <summary>مشخصات بیشتر خودرو</summary>
+          <div className="stack small">
+            <div>شاسی (VIN): <bdi>{card.vin || card.chassisRef || 'ثبت نشده'}</bdi></div>
+            {card.vin && card.chassisRef && card.vin !== card.chassisRef && <div>شناسه شاسی: <bdi>{card.chassisRef}</bdi></div>}
+            <div>رنگ: {card.color || 'ثبت نشده'} · پوشش: {COVERAGE_LABELS[card.coverage]}</div>
+            <Link href={`/cases/${card.id}`}>نمایش پرونده کامل</Link>
+          </div>
+        </details>
         <div className="panel-body stack">
           {card.items.map(line => <PartLine key={`${line.id}:${line.version}:${line.action}`} item={line} card={card} refresh={() => void mutate()}/>)}
         </div>
