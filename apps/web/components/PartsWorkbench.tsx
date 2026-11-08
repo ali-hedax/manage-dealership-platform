@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import { COVERAGE_LABELS, toLatinDigits, type PartsWorkbench as Workbench, type PartsWorkbenchLine } from '@manage/shared';
+import { COVERAGE_LABELS, toLatinDigits, toPersianDigits, type PartsWorkbench as Workbench, type PartsWorkbenchLine } from '@manage/shared';
 import { useAuth } from '@/lib/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { faNum, parseRials } from '@/lib/format';
@@ -54,10 +54,10 @@ export function PartsWorkbench() {
           {card.waiting && <span className="chip chip-red">{card.waiting} منتظر قطعه است</span>}
         </div>
         <div className="row small" style={{ flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
-          <span>پذیرش: <bdi>{card.admissionNo ? faNum(card.admissionNo) : 'ثبت نشده'}</bdi></span>
-          <span>پرونده: <bdi>{faNum(card.caseNumber)}</bdi></span>
+          <span>پذیرش: <bdi>{card.admissionNo ? toPersianDigits(card.admissionNo) : 'ثبت نشده'}</bdi></span>
+          <span>پرونده: <bdi>{toPersianDigits(card.caseNumber)}</bdi></span>
           <span>{card.model || 'مدل نامشخص'}</span>
-          {card.emdadRefs.length > 0 && <span className="chip chip-amber">امداد ویژه: <bdi>{card.emdadRefs.map(faNum).join('، ')}</bdi></span>}
+          {card.emdadRefs.length > 0 && <span className="chip chip-amber">امداد ویژه: <bdi>{card.emdadRefs.map(toPersianDigits).join('، ')}</bdi></span>}
         </div>
         <details className="compact-disclosure" style={{ margin: '0 16px 8px' }}>
           <summary>مشخصات بیشتر خودرو</summary>
