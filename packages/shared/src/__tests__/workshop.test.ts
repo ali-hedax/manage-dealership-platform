@@ -26,7 +26,7 @@ test('overlapping blockers count once per vehicle',()=>{
 test('roles separate parts, customer coordination, reporting and own execution',()=>{
   const c=permissionsFor(['accident_coordinator']);assert(c.has('part.request'));assert(c.has('part.price_authorize'));assert(c.has('finance.payment'));assert(!c.has('part.manage'));assert(!c.has('stock.issue'));assert(!c.has('stock.reserve'));
   assert.deepEqual(permissionsFor(['accident_expert']),permissionsFor(['accident_supervisor']));
-  const p=permissionsFor(['parts_clerk']);assert(p.has('part.quote'));assert(p.has('part.manage'));assert(!p.has('part.price_authorize'));
+  const p=permissionsFor(['parts_clerk']);assert(p.has('part.quote'));assert(p.has('part.manage'));assert(p.has('part.price_authorize'));
   const m=permissionsFor(['service_manager']);assert(m.has('report.manager'));assert(!m.has('task.manage'));assert(!m.has('case.create'));
   assert.deepEqual([...permissionsFor(['technician'])],['task.execute']);
 });

@@ -17,3 +17,47 @@ test('parts workbench opens by default and keeps legacy queues usable at 390px',
   await expect(page.getByTestId('daily-status')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+test('Manage creates a group plan but requires an independent decision for each part', async ({ page }) => {
+  await login(page, 'parts');
+  const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const part = (n: number, description: string) => ({
+    id: uuid(n), description, partNumber: `TEST-${n}`, quantity: 1, version: 1, action: 'emdad',
+    suggestedPriceRial: null, companyPriceRial: null, stock: null, stockOptions: [], destinations: [],
+    emdadId: null, emdadRef: null, emdadAverageDays: null, blocking: false, overdue: false,
+    overdueHandover: false, advice: null, negativeRecommendations: [], preferredRoute: 'market',
+    manageAdvice: {
+      route: 'market', confidence: 'low', headline: 'پیشنهاد منیج: استعلام خرید بازار',
+      why: ['برای این قطعه موجودی کافی ثبت نشده است.'], required: ['استعلام واقعی بازار'],
+    },
+  });
+  const payload = {
+    counts: {decision: 2, ready: 0, overdueEmdad: 0}, inTransit: 0,
+    cards: [{id: uuid(100), plate: null, model: 'دنا', color: 'سفید', coverage: 'personal',
+      caseNumber: 'MG-TEST', admissionNo: '12345', vin: null, chassisRef: null,
+      emdadRefs: [], waiting: null, items: [part(1,'چراغ جلو'),part(2,'گلگیر جلو')]}],
+  };
+  const writes: string[] = [];
+  await page.route('**/api/v1/parts/workbench?**', async route => {
+    await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(payload)});
+  });
+  page.on('request', request => {
+    const endpoint = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && (endpoint.startsWith('/api/v1/parts/') || endpoint.startsWith('/api/v1/workshop/parts/'))) writes.push(request.url());
+  });
+  await page.goto('/accidents/parts');
+  const planButton = page.getByRole('button', {name: 'برنامه‌ریزی همهٔ قطعات این خودرو با منیج'});
+  await expect(planButton).toBeVisible();
+  await planButton.click();
+  const region = page.getByRole('region', {name: 'برنامه گروهی پیشنهادی منیج'});
+  await expect(region).toBeVisible();
+  await expect(region.getByText('چراغ جلو', {exact: false})).toBeVisible();
+  await expect(region.getByText('گلگیر جلو', {exact: false})).toBeVisible();
+  await region.getByRole('combobox', {name: 'روش تأمین گلگیر جلو'}).selectOption('emdad');
+  await expect(region.getByRole('combobox', {name: 'روش تأمین چراغ جلو'})).toHaveValue('market');
+  await expect(region.getByRole('combobox', {name: 'روش تأمین گلگیر جلو'})).toHaveValue('emdad');
+  await expect.poll(() => writes.length).toBe(0);
+  await region.getByRole('button', {name: 'تأیید و آماده‌کردن فرم این قطعه'}).first().click();
+  await expect(region.getByText('پیشنهاد پذیرفته شد؛ ثبت نشده')).toHaveCount(1);
+  await expect.poll(() => writes.length).toBe(0);
+});

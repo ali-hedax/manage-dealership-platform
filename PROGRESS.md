@@ -1,3 +1,39 @@
+## 2026-11-08 — Grouped Manage planning, independent per-part authorization (PR #70)
+- Added per-vehicle Manage Advisor supply plan preview: calculates route per needed part and allows each selection to be changed before action.
+- Every part's decision remains independent. Single exact stock option with known sale price can be reserved explicitly on the second action; all other paths prepare their per-part form and require further entry/approval.
+- Badges show counts of parts awaiting decision and ready for pickup, plus transient (not persisted) status of accepted assistant route.
+- Distinct sidebar/workbench icons: Emdad truck, market cart, reminders bell.
+- CI and browser tests must be re-run on the latest head before merge or deploy. Main and Production untouched.
+
+## 2026-11-08 — Manage Advisor, independent of Source (PR #70)
+
+- Corrected request: assistant is for Manage only. Renamed per-part suggestion panel to «دستیار منیج»; it uses deterministic supply rules (stock, deadlines, lead history, eligibility caveats) without external AI.
+- Clicking an actionable suggestion selects a supply route and prepares its form; a separate explicit submit remains, with official approvals and missing vendor/reference fields enforced.
+- Accident coordinator advisor shows urgency on assigned case queue; case-level assistant reuses the historical station-duration/availability endpoint and prefills the task form on selection.
+- Added isolated deterministic-rule unit tests and docs/MANAGE_ADVISOR.md for safe optional future AI integration.
+- All changes remain on PR #70; no merge, deployment or actual data modifications.
+- Next: CI, API integration and browser validation for the latest SHA; owner review before merge/release.
+
+
+## 2026-11-08 — Additional supply-source and station ownership refinements (PR #70)
+
+- Parts workbench now shows collapsible vehicle parts; each needed part has an explicit choice: reserve from exact available stock location, buy from market, or submit emergency/company order. Stock availability is informative and does not force a supply source.
+- Market purchasing distinguishes quote proposal from recorded purchase; the existing official-payer and finance gates remain server-side.
+- Parts clerk can view and record an actual quoted-price response, including to their own proposal, with required payer source/reference and audit. Financial advance-payment approval remains separate, and PIN session high-trust permission restrictions remain intact.
+- Every part lists possible repair destinations. The staff member chooses an exact active task/station; the server validates it belongs to the case (and if blockers exist, to the blocked task) before notifying assigned technician, station responsible, case responsible, accident supervisor and other parts staff. The receipt is still recorded only on physical pickup/handover.
+- Added API tests for station isolation and quoted-price self-registration (with official reference required).
+- Latest CI result must be checked before merge: prior run found and fixed one TypeScript narrowing error; no direct local build or Production deploy performed.
+
+## 2026-11-08 — Parts desk UX and ready-for-pickup PR #70 (branch only)
+
+- Search parts-workbench cards by plate, admission, case number, VIN/chassis, car model and matched emergency references; collapsible vehicle details.
+- Show case admission and verified matched emergency IDs (not arbitrary daily report rows); reorganize navigation.
+- Read unambiguous company unit price from active stock snapshot even for zero-stock lines; allow staff to override missing/changed company price; never guess conflicting prices.
+- Add explicit parts-ready internal reminder action for the same-case technician(s), case responsible and accident supervisor. Existing technician pickup audit continues to record receiving actor and timestamp. If no station exists, block notification; department-specific supervisor mapping is not present.
+- Prefill empty mileage from latest vehicle history; require human check of current odometer; add new-case link after saving. No carryover of prior case identity.
+- CI on latest head pending at authoring time. No local test, merge or deployment; main and real records untouched.
+- Next: review CI, run browser/e2e tests for notification, emergency order and case creation; address failures before merge; get owner approval for production.
+
 # PROGRESS — Manage by HEDAX
 
 ## ورود ساده کارکنان — آماده، منتشر نشده — 2026-11-08

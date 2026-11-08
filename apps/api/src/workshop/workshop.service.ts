@@ -136,7 +136,8 @@ export class WorkshopService {
       if(q.status!=='pending')throw badRequest('QUOTE_NOT_PENDING','این پیشنهاد منتظر پاسخ نیست');
       const kase=await this.cases.loadForWrite(tx,actor.user.tenantId,q.caseId);
       if(!['needed','rejected'].includes(part.status))throw badRequest('QUOTE_NOT_ALLOWED','قطعه قبلاً وارد مرحله خرید شده است');
-      if(q.createdBy===actor.user.id&&!actor.user.isOwner)throw forbidden('ثبت‌کننده قیمت نمی‌تواند تأیید همان پیشنهاد را ثبت کند');
+      // Internal parts desk may record an external payer's decision on its own quote; the official payer reference remains mandatory.
+      if(q.createdBy===actor.user.id&&!actor.user.isOwner&&!actor.user.roles.includes('parts_clerk'))throw forbidden('ثبت‌کننده قیمت نمی‌تواند تأیید همان پیشنهاد را ثبت کند');
       const source=kase.coverageType==='golden_card'?'golden_card':kase.coverageType==='insurance'?'insurer':kase.coverageType==='personal'?'customer':null;
       if(source&&source!==input.source)throw badRequest('QUOTE_WRONG_SOURCE','مرجع تأیید با پوشش پرونده هماهنگ نیست');
       if(input.decision==='approved'&&input.source!=='customer'&&!input.officialRecorded)throw badRequest('OFFICIAL_APPROVAL_REQUIRED','مجوز کارت طلایی یا بیمه باید در سامانه رسمی ثبت شده باشد؛ شماره ثبت و تأیید ثبت رسمی را وارد کنید');

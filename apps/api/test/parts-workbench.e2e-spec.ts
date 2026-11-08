@@ -73,16 +73,19 @@ test('suggests exact stock, prevents double booking, and permits pickup only by 
   const c1 = await kase(), c2 = await kase();
   const p1 = await need(c1.id, stockCode), p2 = await need(c2.id, stockCode);
   const before = await line(p1);
-  expect(before).toMatchObject({ action: 'reserve', suggestedPriceRial: 1550000, stock: { snapshotId, fullStockCode: stockCode } });
+  expect(before).toMatchObject({ action: 'emdad', suggestedPriceRial: 1550000, stockOptions: [expect.objectContaining({ snapshotId, fullStockCode: stockCode })], negativeRecommendations: expect.any(Array) });
   const stock = { snapshotId, fullStockCode: stockCode, locationAddress: '', confirm: true };
   const reserve = (p: Part) => workAction(p.id, { action: 'reserve', expectedVersion: p.version, salePriceRial: 1550000, stock });
   expect((await reserve(p1)).status).toBe(201);
   expect((await reserve(p2)).status).toBe(409);
-  expect(await line(p2)).toMatchObject({ action: 'emdad', stock: null });
+  expect(await line(p2)).toMatchObject({ action: 'emdad', stock: null, negativeRecommendations: expect.arrayContaining([expect.objectContaining({ route: 'reserve' })]) });
   const task = await coordinator.post(`/cases/${c1.id}/tasks`, { departmentId, assignedUserId: techId });
   expect(task.status).toBe(201);
   const ready = await line(p1);
-  expect(ready).toMatchObject({ action: 'handover' });
+  expect(ready).toMatchObject({ action: 'handover', destinations: [expect.objectContaining({ taskId: task.body.id })] });
+  expect((await parts.post(`/reminders/parts-ready/${p1.id}`, { taskId: randomUUID() })).status).toBe(422);
+  expect((await parts.post(`/reminders/parts-ready/${p1.id}`, { taskId: task.body.id })).status).toBe(201);
+  expect(((await technician.get('/reminders/inbox')).body as { body: string }[]).some(r => r.body.includes(p1.description))).toBe(true);
   expect((await technician.get('/parts/workbench')).status).toBe(403);
   const other = await h.loginAs('test-other-technician', ['technician']);
   const body = { partId: p1.id, expectedVersion: ready!.version };
@@ -96,7 +99,7 @@ test('batches Emdad with separate prices, suggests matched receipts and keeps ma
   const c = await kase();
   const p1 = await need(c.id, '88887777'), p2 = await need(c.id, '88889999');
   const p3 = await need(c.id, '11113333', 'external');
-  expect(await line(p3)).toMatchObject({ action: 'market' });
+  expect(await line(p3)).toMatchObject({ action: 'emdad' });
   expect((await workAction(p3.id, { action: 'market', expectedVersion: p3.version, supplier: 'فروشنده آزمون', purchasePriceRial: 3000 })).status).toBe(201);
   const req = await workAction(c.id, { action: 'emdad', requestNo: 'TEST-EMDAD-3', requestedAt: daysAgo(3),
     parts: [{ id: p1.id, expectedVersion: p1.version, companyPriceRial: 2500 },
@@ -169,4 +172,33 @@ test('routes external work through the same plan and approval and surfaces its l
   expect((await taskAction(id, 3, 'approve')).status).toBe(201);
   const statement = (await coordinator.get(`/cases/${c.id}/parts-statement`)).body as PartsStatement;
   expect(statement.live.external[0]).toMatchObject({ id, priceRial: 1500 });
+});
+
+test('parts clerk records the verified payer response to their own market quote', async () => {
+  const created = await coordinator.post('/cases', { admittedAt: daysAgo(2), coverageType: 'insurance',
+    insurerName: 'بیمه آزمون', customer: { fullName: 'مشتری تست قیمت' },
+    vehicle: { model: 'تارا', vin: `TESTVIN${randomUUID().replaceAll('-', '').slice(0, 10)}` } });
+  expect(created.status).toBe(201);
+  const p = await need(created.body.id, '77775555', 'external');
+  const quoted = await parts.post(`/workshop/parts/${p.id}/quotes`, {
+    expectedVersion: p.version, unitPriceRial: 4_000_000, supplier: 'فروشنده آزمون',
+    validUntil: new Date(Date.now() + 2 * 86400000).toISOString(),
+  });
+  expect(quoted.status).toBe(201);
+  const pending = quoted.body.find((q: { partId: string; status: string }) => q.partId === p.id && q.status === 'pending');
+  expect(pending).toBeDefined();
+  const missingOfficial = await parts.post(`/workshop/quotes/${pending.id}/decision`, {
+    expectedVersion: pending.version, decision: 'approved', source: 'insurer',
+    officialRecorded: false, reference: 'TEST-APPROVAL', approver: 'کارشناس تست', note: 'آزمون',
+  });
+  expect(missingOfficial.status).toBe(422);
+  const approved = await parts.post(`/workshop/quotes/${pending.id}/decision`, {
+    expectedVersion: pending.version, decision: 'approved', source: 'insurer',
+    officialRecorded: true, reference: 'TEST-APPROVAL', approver: 'کارشناس تست', note: 'مجوز رسمی آزمون ثبت است',
+  });
+  expect(approved.status).toBe(201);
+  const history = (await parts.get(`/workshop/quotes?caseId=${created.body.id}`)).body;
+  expect(history).toEqual(expect.arrayContaining([expect.objectContaining({
+    id: pending.id, status: 'approved', reference: 'TEST-APPROVAL',
+  })]));
 });

@@ -24,6 +24,7 @@ import { useToast } from '@/lib/toast';
 import { TaskStatusChip } from './Chips';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
+import { AppIcon } from './AppIcon';
 
 const ACTION_LABELS: Record<TaskAction, string> = {
   start: 'شروع',
@@ -42,6 +43,9 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   const { can } = useAuth();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [advisorPicked, setAdvisorPicked] = useState<PlanSuggestion | null>(null);
+  const { data: managePlans, error: managePlanError } = useSWR<PlanSuggestion[]>(advisorOpen && can('task.manage') ? `/workshop/plan-suggestion?caseId=${kase.id}` : null, fetcher);
   const [editing, setEditing] = useState<Task | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [at, setAt] = useState<string | null>(null);
@@ -135,15 +139,30 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
             </Link>
           )}
         </h2>
-        {manage && editable && (
-          <button className="btn btn-sm" type="button" onClick={() => setAdding(!adding)}>
+        {manage && editable && <div className="row">
+          <button className="btn btn-sm" type="button" aria-expanded={advisorOpen} onClick={() => setAdvisorOpen(v => !v)}><AppIcon name="sparkles" /> دستیار منیج</button>
+          <button className="btn btn-sm" type="button" onClick={() => { setAdvisorPicked(null); setAdding(!adding); }}>
             {adding ? 'بستن فرم' : 'افزودن فعالیت'}
           </button>
-        )}
+        </div>}
       </div>
 
       {kase.repairPlan&&plannedMinutes!==null&&<p className="panel-body callout callout-blue">برنامه کل: {faNum(kase.repairPlan.days)} روز کاری · زمان تخصیص‌یافته بدون دوباره‌شمردن هم‌پوشانی: {faNum(plannedMinutes/kase.repairPlan.dayMinutes)} روز · {plannedMinutes>kase.repairPlan.durationMinutes?'عبور از بودجه زمانی: '+faNum((plannedMinutes-kase.repairPlan.durationMinutes)/kase.repairPlan.dayMinutes)+' روز':'زمان باقی‌مانده برای برنامه‌ریزی: '+faNum((kase.repairPlan.durationMinutes-plannedMinutes)/kase.repairPlan.dayMinutes)+' روز'}</p>}
-      {adding && <AddTask kase={kase} onDone={() => (setAdding(false), onChange())} />}
+      {advisorOpen && manage && editable && <div className="panel-body stack" role="region" aria-label="راهنمای برنامه‌ریزی منیج">
+        <strong><AppIcon name="sparkles" /> پیشنهادهای دستیار منیج برای برنامهٔ تعمیر</strong>
+        <p className="small muted">بر اساس سوابق تعمیر، صف جایگاه‌ها و وضعیت فعلی پرونده؛ این نسخه از قواعد داخلی استفاده می‌کند، نه اتصال به AI.</p>
+        {kase.blockers.some(b => !b.resolvedAt) && <p className="callout small">مانع باز وجود دارد؛ ابتدا علت توقف و قطعات وابسته را بررسی کنید.</p>}
+        {kase.tasks.some(t => ['pending','in_progress'].includes(t.status) && !t.assignedUserId) && <p className="callout small">یک یا چند فعالیت هنوز تعمیرکار مشخص ندارند؛ پیش از شروع به تخصیص توجه کنید.</p>}
+        {kase.officialDeadlineAt && Date.parse(kase.officialDeadlineAt) < Date.now() && <p className="callout small">مهلت رسمی پرونده گذشته است؛ اولویت‌بندی و هماهنگی با مشتری را بررسی کنید.</p>}
+        {managePlanError && <p role="alert">دریافت پیشنهاد جایگاه ناموفق بود.</p>}
+        {!managePlans && !managePlanError && <p className="small muted">در حال بررسی ظرفیت و سوابق…</p>}
+        {managePlans?.map(p => { const st = p.stations.find(s => s.id === p.recommendedStationId); const already = kase.tasks.some(t => t.department.id === p.departmentId && t.status !== 'approved'); return <div key={p.departmentId} className="row" style={{ justifyContent:'space-between', flexWrap:'wrap' }}>
+          <div className="small"><strong>{p.departmentName} · {faNum(p.suggestedDays)} روز کاری</strong><div className="muted">{st ? `جایگاه ${st.code} · ${st.name} · ${faNum(st.queuedCars)} خودرو در صف` : 'جایگاه آزادِ تأییدشده در پیشنهاد موجود نیست'} · {p.basis === 'default' ? 'برآورد پایه' : `سابقه ${faNum(p.samples)} کار`}{already ? ' · این واحد از قبل در برنامه وجود دارد' : ''}</div></div>
+          <button type="button" className="btn btn-sm" disabled={already || !st} onClick={() => { setAdvisorPicked(p); setAdding(true); setEditing(null); }}>آماده‌کردن برنامه</button>
+        </div>; })}
+        <p className="small muted">استفاده از پیشنهاد فقط فرم فعالیت را تکمیل می‌کند؛ ثبت، بررسی پیش‌نیازها و تعیین مسئول با تأیید کارشناس است.</p>
+      </div>}
+      {adding && <AddTask key={advisorPicked?.departmentId ?? 'manual'} kase={kase} suggested={advisorPicked ?? undefined} onDone={() => { setAdding(false); setAdvisorPicked(null); onChange(); }} />}
       {editing && <AddTask key={editing.id} kase={kase} initial={editing} onDone={() => {setEditing(null);onChange();}} />}
       <ol className="repair-route" aria-label="مسیر برنامه‌ریزی‌شده تعمیر">
         {kase.tasks.map(t=><li key={t.id} data-status={t.status}><strong>{t.stationCode || t.department.name}</strong><span>{t.dependsOn.length ? `پس از تأیید ${t.dependsOn.map(id=>byId.get(id)?.stationCode||byId.get(id)?.department.name).join('، ')}` : 'مستقل / قابل اجرای هم‌زمان'}</span></li>)}
@@ -310,14 +329,14 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
   );
 }
 
-function AddTask({ kase, onDone, initial }: { kase: CaseDetail; onDone: () => void; initial?: Task }) {
+function AddTask({ kase, onDone, initial, suggested }: { kase: CaseDetail; onDone: () => void; initial?: Task; suggested?: PlanSuggestion }) {
   const toast = useToast();
   const { data: departments } = useSWR<Department[]>('/departments', fetcher);
-  const [departmentId, setDepartmentId] = useState(initial?.department.id ?? '');
+  const [departmentId, setDepartmentId] = useState(initial?.department.id ?? suggested?.departmentId ?? '');
   const {data:stations}=useSWR<WorkshopStation[]>('/workshop/stations',fetcher);
   const {data:staff}=useSWR<{id:string;displayName:string}[]>('/workshop/staff',fetcher);
   const {data:plan}=useSWR<PlanSuggestion[]>(initial?null:`/workshop/plan-suggestion?caseId=${kase.id}`,fetcher);
-  const [stationId,setStationId]=useState(initial?.stationId??''),[assignedUserId,setAssignedUserId]=useState(initial?.assignedUserId??''),[durationMinutes,setDurationMinutes]=useState(''),[durationDays,setDurationDays]=useState(''),[scheduleReason,setScheduleReason]=useState('');
+  const [stationId,setStationId]=useState(initial?.stationId??suggested?.recommendedStationId??''),[assignedUserId,setAssignedUserId]=useState(initial?.assignedUserId??''),[durationMinutes,setDurationMinutes]=useState(''),[durationDays,setDurationDays]=useState(suggested ? String(suggested.suggestedDays) : ''),[scheduleReason,setScheduleReason]=useState('');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [technicianName, setTechnicianName] = useState(initial?.technicianName ?? '');
   const [technicianCode, setTechnicianCode] = useState(initial?.technicianCode ?? '');

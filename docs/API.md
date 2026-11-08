@@ -198,6 +198,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reminders/:id/respond` | [source](../apps/api/src/people/people.controllers.ts) |
+| POST | `/api/v1/reminders/parts-ready/:id` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/staff/technicians/:id/sign-out` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | POST | `/api/v1/staff/technicians` | [source](../apps/api/src/auth/technicians.controller.ts) |

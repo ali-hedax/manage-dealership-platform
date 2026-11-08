@@ -115,6 +115,7 @@ export default function CaseDetailPage() {
           </div>
         </div>
         <div className="row no-print">
+          {can('case.create') && <Link className="btn btn-primary" href="/cases/new">ثبت پرونده بعدی</Link>}
           {can('case.update') && active && (
             <select
               className="input"

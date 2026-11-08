@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { reserveSchema } from './daily-reports';
 import type { CoverageType } from './enums';
+import type { ManageAdvice } from './manage-advisor';
 
 const version = z.number().int().positive();
 const price = z.number().int().min(0).max(1_000_000_000_000);
@@ -25,11 +26,17 @@ export interface PartsWorkbenchLine {
   version: number;
   action: 'reserve' | 'market' | 'emdad' | 'received' | 'handover' | 'follow_up';
   suggestedPriceRial: number | null;
+  companyPriceRial: number | null;
   stock: { snapshotId: string; fullStockCode: string; locationAddress: string; available: string } | null;
+  stockOptions: { snapshotId: string; fullStockCode: string; locationAddress: string; available: string }[];
+  destinations: { taskId: string; departmentId: string; label: string }[];
   emdadId: string | null;
   emdadRef: string | null;
   emdadAverageDays: number | null;
   blocking: boolean;
+  negativeRecommendations: { route: 'reserve' | 'market' | 'emdad'; reason: string }[];
+  preferredRoute: 'reserve' | 'market' | 'emdad' | null;
+  manageAdvice: ManageAdvice;
   overdue: boolean;
   overdueHandover: boolean;
   /** Manage's next-step advice for the parts person, if any. */
@@ -45,6 +52,10 @@ export interface PartsWorkbench {
     color: string | null;
     coverage: CoverageType;
     caseNumber: string;
+    admissionNo: string | null;
+    vin: string | null;
+    chassisRef: string | null;
+    emdadRefs: string[];
     waiting: string | null;
     items: PartsWorkbenchLine[];
   }[];

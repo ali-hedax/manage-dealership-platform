@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import {
-  parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
+  manageSupplyAdvice, parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
   type PartPickup, type PartsWorkbench, type PartsWorkbenchAction, type PartsWorkbenchLine,
   workingDayMinutes,
 } from '@manage/shared';
@@ -12,7 +12,7 @@ import { badRequest, forbidden, notFound, versionConflict } from '../common/erro
 import type { EmdadOfficial } from '../daily-reports/report-rows';
 import { StockService, snapshotInfo } from '../daily-reports/stock.service';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { blockers, cases, emdadRequests, partRequests, tasks, vehicles } from '../db/schema';
+import { blockers, cases, departments, emdadRequests, partRequests, tasks, vehicles } from '../db/schema';
 import { calendarAt } from '../workshop/work-calendar';
 import { PartsService } from './parts.service';
 
@@ -42,14 +42,14 @@ export class PartsWorkbenchService {
     const db = this.handle.db;
     const tenantId = actor.user.tenantId;
     const now = new Date();
-    const [rows, links, waiting, calendar, receipts, upcoming] = await Promise.all([
+    const [rows, links, waiting, calendar, receipts, upcoming, activeTasks, departmentsList] = await Promise.all([
       db.select({ p: partRequests, c: cases, v: vehicles }).from(partRequests)
         .innerJoin(cases, and(eq(cases.id, partRequests.caseId), eq(cases.tenantId, tenantId), eq(cases.status, 'open')))
         .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
         .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.status, ACTIVE)))
         .orderBy(asc(partRequests.createdAt), asc(partRequests.id)),
       db.select().from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId), isNotNull(emdadRequests.partRequestId))),
-      db.select({ partId: blockers.partRequestId, taskTitle: tasks.title }).from(blockers)
+      db.select({ partId: blockers.partRequestId, taskId: blockers.taskId, taskTitle: tasks.title }).from(blockers)
         .leftJoin(tasks, and(eq(tasks.id, blockers.taskId), eq(tasks.tenantId, tenantId)))
         .where(and(eq(blockers.tenantId, tenantId), isNull(blockers.resolvedAt), isNotNull(blockers.partRequestId))),
       calendarAt(db, tenantId, now.toISOString()),
@@ -57,6 +57,8 @@ export class PartsWorkbenchService {
         eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.statusCategory, RECEIVED))),
       db.select({ caseId: tasks.caseId, start: tasks.plannedStartAt }).from(tasks)
         .where(and(eq(tasks.tenantId, tenantId), eq(tasks.status, 'pending'), isNotNull(tasks.plannedStartAt))),
+      db.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), inArray(tasks.status, ['pending', 'in_progress', 'blocked']))),
+      db.select().from(departments).where(eq(departments.tenantId, tenantId)),
 
     ]);
     const leadTimes = new Map<string, { count: number; days: number }>();
@@ -78,13 +80,17 @@ export class PartsWorkbenchService {
     const workDaysUntil = (at: Date) => (dayMinutes ? workingMinutesBetween(now.toISOString(), at.toISOString(), calendar.calendar) / dayMinutes : 0);
     const canReserve = actor.user.permissions.has('stock.read') && actor.user.permissions.has('stock.reserve');
     const needs = rows.filter(({ p }) => p.status === 'needed' && p.partNumber).map(({ p }) => p.partNumber!);
-    const stock = await this.stock.exactOptions(actor, canReserve ? [...new Set(needs)] : []);
+    // Price lookup is read-only and may include zero-stock rows. Reservation still requires stock.reserve.
+    const stock = await this.stock.exactOptions(actor, actor.user.permissions.has('stock.read') ? [...new Set(needs)] : [], db, true);
     const byPart = new Map<string, typeof links>();
     for (const link of links) {
       const id = link.partRequestId!;
       byPart.set(id, [...(byPart.get(id) ?? []), link]);
     }
     const blockersByPart = new Map(waiting.map(w => [w.partId, w.taskTitle]));
+    const departmentNames = new Map(departmentsList.map(d => [d.id, d.name]));
+    const tasksByCase = new Map<string, typeof activeTasks>();
+    for (const task of activeTasks) tasksByCase.set(task.caseId, [...(tasksByCase.get(task.caseId) ?? []), task]);
     const counts = { decision: 0, ready: 0, overdueEmdad: 0 };
     const cards = new Map<string, { card: PartsWorkbench['cards'][number]; deadline: number; started: number; late: boolean }>();
     let inTransit = 0;
@@ -101,13 +107,13 @@ export class PartsWorkbenchService {
       const estimated = p.orderedAt && average !== null ? new Date(p.orderedAt.getTime() + average * DAY_MS) : null;
       const dueAt = p.etaAt ?? official?.dueAt ?? (companyRequest(p) ? estimated ?? c.officialDeadlineAt ?? c.forecastDeliveryAt : null);
       const overdue = p.status === 'ordered' && !reportedReceipt && !!dueAt && dueAt < now;
-      const options = (stock.get(p.partNumber ?? '') ?? []).filter(item => Number(item.available) >= p.quantity);
+      const allOptions = stock.get(p.partNumber ?? '') ?? [];
+      const options = canReserve ? allOptions.filter(item => Number(item.available) >= p.quantity) : [];
       const option = options.length === 1 ? options[0] : undefined;
       const action: PartsWorkbenchLine['action'] = ready ? 'handover'
         : reportedReceipt ? 'received'
-        : p.status === 'ordered' || matching.length > 0 || options.length > 1 ? 'follow_up'
-        : option ? 'reserve'
-        : p.source === 'external' || p.source === 'customer' || p.source === 'insurer_supplier' ? 'market' : 'emdad';
+        : p.status === 'ordered' || matching.length > 0 || p.status !== 'needed' ? 'follow_up'
+        : 'emdad'; // Needed items offer user-selected stock, market and company choices.
       if (action === 'follow_up' && (companyRequest(p) || matching.length > 0) && !overdue) {
         inTransit++;
         if (!includeTransit) continue;
@@ -115,31 +121,66 @@ export class PartsWorkbenchService {
       if (action === 'handover' || action === 'received') counts.ready++;
       else if (action !== 'follow_up') counts.decision++;
       if (overdue && (companyRequest(p) || matching.length > 0)) counts.overdueEmdad++;
-      const inferredPrice = option?.salePrice != null && option.currency
-        ? Math.round(Number(option.salePrice) * (option.currency === 'IRT' ? 10 : 1))
-        : null;
+      const prices = [...new Set(allOptions.filter(o => o.salePrice !== null && o.currency)
+        .map(o => Math.round(Number(o.salePrice) * (o.currency === 'IRT' ? 10 : 1))))];
+      // Multiple different prices are ambiguous: never silently choose a company price.
+      const inferredPrice = prices.length === 1 && Number.isSafeInteger(prices[0]) ? prices[0]! : null;
       const card = cards.get(c.id) ?? {
         card: { id: c.id, caseNumber: c.caseNumber, model: [v.brand, v.model, v.trim].filter(Boolean).join(' '),
           plate: v.plate, color: v.color, coverage: c.coverageType as PartsWorkbench['cards'][number]['coverage'],
-          waiting: null, items: [] },
+          admissionNo: c.admissionNo, vin: v.vin, chassisRef: v.chassisRef,
+          emdadRefs: [], waiting: null, items: [] },
         deadline: (c.officialDeadlineAt ?? c.forecastDeliveryAt)?.getTime() ?? Infinity,
         started: p.createdAt.getTime(), late: false,
       };
       const blocking = blockersByPart.has(p.id);
       const need = needBy.get(c.id);
       const left = need ? Math.max(0, Math.floor(workDaysUntil(need))) : null;
-      const advice = blocking && (action === 'emdad' || action === 'market') ? 'تعمیر همین حالا منتظر این قطعه است؛ امروز تعیین تکلیف کنید.'
+      const advice = blocking && action === 'emdad' ? 'تعمیر همین حالا منتظر این قطعه است؛ امروز تعیین تکلیف کنید.'
         : action === 'emdad' && average !== null && left !== null && average > left ? `امداد ویژه معمولاً ${average} روز طول می‌کشد ولی واحد بعدی ${left === 0 ? 'امروز' : `${left} روز کاری دیگر`} شروع می‌شود؛ خرید از بازار را بررسی کنید.`
         : action === 'emdad' && left !== null ? `واحد بعدی ${left === 0 ? 'امروز' : `${left} روز کاری دیگر`} به این قطعه نیاز دارد.`
         : overdue ? 'از موعد رسیدن گذشته؛ امروز با شرکت یا فروشنده پیگیری کنید.'
         : overdueHandover ? 'قطعه آماده است؛ به واحد اطلاع دهید که تحویل بگیرد.'
         : null;
+      if (official) for (const ref of [official.emdadNo, official.requestNo]) {
+        if (ref && !card.card.emdadRefs.includes(ref)) card.card.emdadRefs.push(ref);
+      }
       if (blocking) card.card.waiting = blockersByPart.get(p.id) || 'تعمیر';
       card.late ||= overdueHandover;
+      const linkedTasks = (tasksByCase.get(c.id) ?? []).filter(t => waiting.some(w => w.partId === p.id && w.taskId === t.id));
+      const destinationTasks = linkedTasks.length ? linkedTasks : tasksByCase.get(c.id) ?? [];
+      const negativeRecommendations: PartsWorkbenchLine['negativeRecommendations'] = [];
+      if (!p.partNumber) negativeRecommendations.push({ route: 'reserve', reason: 'کد فنی قطعه ثبت نشده؛ امکان تطبیق قابل اعتماد با موجودی وجود ندارد.' });
+      else if (!options.length) negativeRecommendations.push({ route: 'reserve', reason: 'در گزارش موجودی فعال، مقدار قابل رزرو کافی برای تعداد درخواستی پیدا نشد.' });
+      if (prices.length > 1) negativeRecommendations.push({ route: 'emdad', reason: 'چند قیمت متفاوت در گزارش موجودی ثبت شده است؛ پیش از ثبت درخواست قیمت شرکت را بررسی کنید.' });
+      else if (inferredPrice === null) negativeRecommendations.push({ route: 'emdad', reason: 'قیمت شرکت در گزارش موجودی قابل تعیین نیست؛ قبل از درخواست آن را دستی تأیید کنید.' });
+      if (average !== null && left !== null && average > left) negativeRecommendations.push({
+        route: 'emdad', reason: `زمان معمول امداد ویژه (${average} روز) از فرصت برنامه تعمیر (${left} روز کاری) بیشتر است؛ تحویل به‌موقع را بررسی کنید.`,
+      });
+      if (blocking && !options.length) negativeRecommendations.push({
+        route: 'emdad', reason: 'واحد تعمیر همین حالا منتظر قطعه است؛ مسیر تأمین سریع‌تر را بررسی کنید.',
+      });
+      if (!destinationTasks.length) negativeRecommendations.push({
+        route: 'market', reason: 'جایگاه دریافت‌کننده در برنامه تعمیر مشخص نیست؛ قبل از تحویل مقصد را تعیین کنید.',
+      });
+      const preferredRoute: PartsWorkbenchLine['preferredRoute'] =
+        options.length && blocking ? 'reserve' :
+        options.length && average !== null && left !== null && average > left ? 'reserve' : null;
+      const manageAdvice = manageSupplyAdvice({
+        partCode: p.partNumber, quantity: p.quantity,
+        available: options.reduce((sum, o) => sum + Math.max(0, Number(o.available)), 0),
+        companyPriceRial: inferredPrice, salePriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
+        coverage: c.coverageType, leadDays: average, workingDaysLeft: left,
+        blocking, hasDestination: destinationTasks.length > 0,
+      });
       card.card.items.push({
         id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
         action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
+        companyPriceRial: inferredPrice,
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
+        stockOptions: options.map(o => ({ snapshotId: o.snapshotId, fullStockCode: o.fullStockCode, locationAddress: o.locationAddress, available: o.available })),
+        destinations: destinationTasks.map(t => ({ taskId: t.id, departmentId: t.departmentId, label: [t.stationSnapshot?.name || t.stationSnapshot?.code || departmentNames.get(t.departmentId) || 'جایگاه تعیین نشده', t.technicianName].filter(Boolean).join(' · ') })),
+        negativeRecommendations, preferredRoute, manageAdvice,
         emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
       cards.set(c.id, card);

@@ -18,7 +18,7 @@ import {
   type TechnicianProblemInput,
   type WageSetInput,
 } from '@manage/shared';
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
 import { CasesService } from '../cases/cases.service';
@@ -54,6 +54,10 @@ export class RemindersController {
   send(@CurrentActor() actor: Actor, @Body(new ZodPipe(reminderSendSchema)) body: ReminderSendInput) {
     return this.reminders.send(actor, body);
   }
+
+  @Post('parts-ready/:id')
+  @RequirePermissions('part.manage')
+  partsReady(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(z.object({ taskId: z.uuid() }))) body: { taskId: string }) { return this.reminders.partsReady(actor, id, body.taskId); }
 
   @Post(':id/respond')
   respond(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(reminderRespondSchema)) body: ReminderRespondInput) {
