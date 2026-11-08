@@ -79,16 +79,16 @@ export default function UsersPage(){
   if(!allowed)return <p>به بخش کارکنان دسترسی ندارید.</p>;
   const ready=mail?.configured===true;
   const staff=data??[];
-  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'staff',label:'کارکنان',count:data?.length},{id:'technicians',label:'ورود ساده (PIN)',count:technicians?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
+  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'technicians',label:'ورود ساده کارکنان',count:technicians?.length},{id:'staff',label:'حساب‌های ایمیلی',count:data?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
 
-  return <><div className="page-head"><h1>کارکنان</h1></div>
+  return <><div className="page-head"><h1>کارکنان</h1><p className="muted small">برای ورود روزانه و ساخت حساب جدید، «ورود ساده کارکنان» را انتخاب کنید. حساب‌های ایمیلی قبلی جدا نگهداری می‌شوند.</p></div>
     <div className="staff-tabs" role="tablist" aria-label="بخش‌های کارکنان">
       {tabs.map(t=><button key={t.id} type="button" role="tab" id={`staff-tab-${t.id}`} aria-selected={tab===t.id} aria-controls={`staff-panel-${t.id}`} onClick={()=>choose(t.id)}>{t.label}{t.count!==undefined&&<span className="staff-tab-count">{t.count.toLocaleString('fa-IR')}</span>}</button>)}
     </div>
 
     {tab==='staff'&&<div role="tabpanel" id="staff-panel-staff" aria-labelledby="staff-tab-staff" className="staff-panel">
       <div className="staff-panel-head">
-        <p className="muted">همکارانی که با ایمیل، رمز شخصی و Google Authenticator وارد می‌شوند.</p>
+        <p className="muted">حساب‌های ایمیلی قدیمی و حساب‌های مدیریتی؛ برای کارکنان عادی جدید از زبانه «ورود ساده کارکنان» استفاده کنید.</p>
         {!formOpen&&<button type="button" className="btn btn-primary" onClick={()=>{setFormOpen(true);setError('');setMessage('');setPrivateLink('');}}>افزودن کارمند</button>}
       </div>
       {mail?.configured===false&&<p className="callout callout-amber" role="status">ارسال خودکار ایمیل فعلاً ممکن نیست؛ سرور منیج به سرویس‌های ایمیل خارجی مثل Gmail دسترسی ندارد. لینک دعوت بسازید و در پیام‌رسان برای همکار بفرستید.</p>}
