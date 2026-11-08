@@ -80,6 +80,12 @@
 .compact-disclosure>div:not(.panel-body),.compact-disclosure>ul { margin-inline:16px; }
 .assessment-import-entry { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 20px; }
 .import-preview-table { max-block-size:360px; overflow:auto; }
+/* Assessment import preview: wider dialog for the item tables; totals checked against the printed report. */
+dialog.dialog:has([data-testid="assessment-import"]) { width:min(980px, calc(100vw - 32px)); }
+.import-summary { grid-template-columns:140px minmax(0,1fr); padding:12px 14px; border:1px solid var(--silver); border-inline-start:3px solid var(--gold); border-radius:var(--radius-m); background:var(--surface); }
+.import-total-ok { color:var(--green); }
+.import-total-bad { color:var(--red); font-weight:700; }
+@media(max-width:560px) { .import-summary { grid-template-columns:1fr; } .import-summary dd { margin-block-end:6px; } }
 .intake-history { background:var(--surface); border:1px solid var(--silver); border-inline-start:3px solid var(--blue); border-radius:var(--radius-m); }
 .intake-history>summary { cursor:pointer; display:flex; gap:12px; align-items:center; flex-wrap:wrap; min-block-size:56px; padding:16px 20px; }
 .history-choice { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding-block:14px; border-block-start:1px solid var(--silver); }

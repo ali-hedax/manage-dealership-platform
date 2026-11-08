@@ -321,10 +321,40 @@ export interface TimelineEvent {
   summary: Record<string, unknown> | null;
 }
 
+/** Row status as written in the official assessment export (column «وضعیت»). */
+export type AssessmentImportStatus = 'final' | 'rejected' | 'correction' | 'unknown' | 'blank';
+interface AssessmentImportOrigin {
+  sheet: string;
+  /** Excel row number in the sheet. */
+  row: number;
+  /** Printed page from the «صفحه x از y» header, when the export has one. */
+  page: number | null;
+}
+export interface AssessmentImportCounts { final: number; rejected: number; correction: number; unknown: number }
 export interface AssessmentImportPreview {
-  rows: { sheet: string; row: number; action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string; outcome?: 'new' | 'unchanged' | 'updated' }[];
-  errors: { sheet: string; row: number; message: string }[];
-  skipped: { sheet: string; row: number; reason: string }[];
+  /** Final rows that can be added to the draft (parts and main labour). */
+  rows: (AssessmentImportOrigin & { action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string; date: string | null; unit: string | null; outcome?: 'new' | 'unchanged' | 'updated' })[];
+  errors: (AssessmentImportOrigin & { message: string })[];
+  warnings: (AssessmentImportOrigin & { message: string })[];
+  /** Section titles and sheets without a table: informational notes only. */
+  skipped: (AssessmentImportOrigin & { reason: string })[];
+  /** Parts and main labour that are rejected or awaiting correction: shown, never added or dispatched. */
+  setAside: (AssessmentImportOrigin & { kind: 'part' | 'labour'; status: AssessmentImportStatus; statusText: string; description: string; code: string | null; quantity: number | null; amountRial: number | null; date: string | null; reason: string })[];
+  /** Equivalent labour lines: listed with status; no amount is invented and nothing is added to the totals. */
+  equivalents: (AssessmentImportOrigin & { status: AssessmentImportStatus; statusText: string; description: string; code: string | null; date: string | null; amountRial: number | null })[];
+  summary: {
+    sheets: number;
+    pages: number | null;
+    dates: string[];
+    parts: AssessmentImportCounts;
+    labour: AssessmentImportCounts;
+    equivalents: AssessmentImportCounts;
+    partsRial: number;
+    labourRial: number;
+    totalRial: number;
+    /** Totals printed in the file, when present, already checked against the rows. */
+    declared: { partsRial: number | null; labourRial: number | null; totalRial: number | null };
+  };
   applied: boolean;
 }
 

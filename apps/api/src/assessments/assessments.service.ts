@@ -167,7 +167,7 @@ export class AssessmentsService {
       const changes:{row:AssessmentImportPreview['rows'][number];existing:ItemRow|null}[]=[];
       for(const row of result.rows){
         const matches=previous.filter(p=>assessmentPartKey(p)===assessmentPartKey(row));
-        if(matches.length>1){result.errors.push({sheet:row.sheet,row:row.row,message:'چند قلم قبلی با این کد وجود دارد؛ ابتدا کارشناسی را اصلاح کنید'});continue;}
+        if(matches.length>1){result.errors.push({sheet:row.sheet,row:row.row,page:row.page,message:'چند قلم قبلی با این کد وجود دارد؛ ابتدا کارشناسی را اصلاح کنید'});continue;}
         const old=matches[0]??null;
         const unchanged=old&&['description','partNumber','quantity','unitPriceRial','labourRial'].every(k=>old[k as keyof ItemRow]===row[k as keyof typeof row]);
         row.outcome=unchanged?'unchanged':old?'updated':'new';
@@ -184,7 +184,9 @@ export class AssessmentsService {
       }
       if(changes.length){
         const saved=await this.touch(tx,a);
-        await this.audit.record(tx,actor,{entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.items_imported',before:{items:changes.flatMap(c=>c.existing?[c.existing]:[])},after:{currency:input.currency,items:written,unchanged:result.rows.filter(r=>r.outcome==='unchanged').length,skipped:result.skipped.length},snapshot:{version:saved.version,row:saved}});
+        await this.audit.record(tx,actor,{entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.items_imported',before:{items:changes.flatMap(c=>c.existing?[c.existing]:[])},after:{currency:input.currency,items:written,unchanged:result.rows.filter(r=>r.outcome==='unchanged').length,skipped:result.skipped.length,
+          // Kept for the record only: rejected/correction rows and equivalent labour never become items or totals.
+          summary:result.summary,setAside:result.setAside,equivalents:result.equivalents},snapshot:{version:saved.version,row:saved}});
       }
       result.applied = true;
     });
