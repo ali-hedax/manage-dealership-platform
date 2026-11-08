@@ -73,12 +73,12 @@ test('suggests exact stock, prevents double booking, and permits pickup only by 
   const c1 = await kase(), c2 = await kase();
   const p1 = await need(c1.id, stockCode), p2 = await need(c2.id, stockCode);
   const before = await line(p1);
-  expect(before).toMatchObject({ action: 'emdad', suggestedPriceRial: 1550000, stockOptions: [expect.objectContaining({ snapshotId, fullStockCode: stockCode })] });
+  expect(before).toMatchObject({ action: 'emdad', suggestedPriceRial: 1550000, stockOptions: [expect.objectContaining({ snapshotId, fullStockCode: stockCode })], negativeRecommendations: expect.any(Array) });
   const stock = { snapshotId, fullStockCode: stockCode, locationAddress: '', confirm: true };
   const reserve = (p: Part) => workAction(p.id, { action: 'reserve', expectedVersion: p.version, salePriceRial: 1550000, stock });
   expect((await reserve(p1)).status).toBe(201);
   expect((await reserve(p2)).status).toBe(409);
-  expect(await line(p2)).toMatchObject({ action: 'emdad', stock: null });
+  expect(await line(p2)).toMatchObject({ action: 'emdad', stock: null, negativeRecommendations: expect.arrayContaining([expect.objectContaining({ route: 'reserve' })]) });
   const task = await coordinator.post(`/cases/${c1.id}/tasks`, { departmentId, assignedUserId: techId });
   expect(task.status).toBe(201);
   const ready = await line(p1);
