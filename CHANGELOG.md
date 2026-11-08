@@ -1,3 +1,12 @@
+
+## 2026-11-08 — Additional supply-source and station ownership refinements (PR #70)
+
+- Parts workbench now shows collapsible vehicle parts; each needed part has an explicit choice: reserve from exact available stock location, buy from market, or submit emergency/company order. Stock availability is informative and does not force a supply source.
+- Market purchasing distinguishes quote proposal from recorded purchase; the existing official-payer and finance gates remain server-side.
+- Parts clerk can view and record an actual quoted-price response, including to their own proposal, with required payer source/reference and audit. Financial advance-payment approval remains separate, and PIN session high-trust permission restrictions remain intact.
+- Every part lists possible repair destinations. The staff member chooses an exact active task/station; the server validates it belongs to the case (and if blockers exist, to the blocked task) before notifying assigned technician, station responsible, case responsible, accident supervisor and other parts staff. The receipt is still recorded only on physical pickup/handover.
+- Added API tests for station isolation and quoted-price self-registration (with official reference required).
+- Latest CI result must be checked before merge: prior run found and fixed one TypeScript narrowing error; no direct local build or Production deploy performed.
 # Changelog
 
 ## 2026-11-08 — ورود ساده کارکنان
