@@ -10,6 +10,8 @@ import { faNum, parseRials } from '@/lib/format';
 import { Plate } from './Plate';
 import { JalaliInput } from './JalaliInput';
 import { PartsOperationNotices, ExternalWorkPanel } from './PartsOperations';
+import { QuotePanel } from './WorkshopQuotes';
+import { AppIcon } from './AppIcon';
 
 const actions = { reserve: 'آماده تحویل', market: 'خریدم', emdad: 'ثبت امداد ویژه', received: 'آماده تحویل', handover: 'تحویل دادم', follow_up: 'پیگیری' };
 
@@ -47,6 +49,7 @@ export function PartsWorkbench() {
         {needle && <p className="muted small" role="status">{faNum(shown.length)} خودرو از {faNum(data.cards.length)} خودرو پیدا شد.</p>}
       </div>
       {data.cards.length === 0 && <p className="callout">کار قطعه‌ای در این صف نیست.</p>}
+      <details className="compact-disclosure panel"><summary>قیمت‌های پیشنهادی و تأییدهای قطعات</summary><QuotePanel /></details>
       {needle && shown.length === 0 && <p className="callout">خودرویی مطابق جست‌وجو در کارهای فعلی پیدا نشد.</p>}
       {shown.map(card => <article key={card.id} className="panel parts-workbench-card">
         <div className="panel-head">
@@ -68,9 +71,12 @@ export function PartsWorkbench() {
             <Link href={`/cases/${card.id}`}>نمایش پرونده کامل</Link>
           </div>
         </details>
-        <div className="panel-body stack">
-          {card.items.map(line => <PartLine key={`${line.id}:${line.version}:${line.action}`} item={line} card={card} refresh={() => void mutate()}/>)}
-        </div>
+        <details className="compact-disclosure" style={{ margin: '0 12px 12px' }}>
+          <summary>قطعات و نیازها · {faNum(card.items.length)} قلم</summary>
+          <div className="panel-body stack">
+            {card.items.map(line => <PartLine key={`${line.id}:${line.version}:${line.action}`} item={line} card={card} refresh={() => void mutate()}/>)}
+          </div>
+        </details>
       </article>)}
       {data.inTransit > 0 && <div className="callout row">
         <span>{faNum(data.inTransit)} قطعهٔ دیگر در امداد ویژه در راه‌اند و دیر نکرده‌اند.</span>
@@ -86,87 +92,157 @@ function Summary({ label, value }: { label: string; value: number }) {
 }
 
 function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Workbench['cards'][number]; refresh: () => void }) {
+  const [choice, setChoice] = useState<'reserve' | 'market' | 'emdad' | null>(null);
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [eta, setEta] = useState<string | null>(null);
-  const [noticeSent, setNoticeSent] = useState(false);
-  async function notify() {
-    setError(''); setBusy(true);
-    try { await api(`/reminders/parts-ready/${item.id}`, { body: {} }); setNoticeSent(true); }
-    catch(e) { setError(errorMessage(e)); } finally { setBusy(false); }
-  }
   const [requestedAt, setRequestedAt] = useState<string | null>(new Date().toISOString());
-  const action = item.action;
+  const [validUntil, setValidUntil] = useState<string | null>(null);
+  const [quoteOnly, setQuoteOnly] = useState(false);
+  const [noticeSent, setNoticeSent] = useState(false);
+  const [targetTask, setTargetTask] = useState(item.destinations.length === 1 ? item.destinations[0]!.taskId : '');
+  const action = item.action === 'emdad' ? choice : item.action;
+  const showForm = open && !!action && action !== 'follow_up';
+
+  function choose(next: 'reserve' | 'market' | 'emdad') {
+    setChoice(next); setOpen(true); setQuoteOnly(false); setError('');
+  }
+
+  async function notify() {
+    if (!targetTask) { setError('لطفاً جایگاه مقصد قطعه را انتخاب کنید.'); return; }
+    setError(''); setBusy(true);
+    try {
+      await api(`/reminders/parts-ready/${item.id}`, { body: { taskId: targetTask } });
+      setNoticeSent(true);
+    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!action || action === 'follow_up') return;
     const data = new FormData(event.currentTarget);
-    const salePriceRial = parseRials(data.get('salePrice'));
+    const salePriceRial = data.get('salePrice') ? parseRials(data.get('salePrice')) : undefined;
     const expectedVersion = item.version;
     const endpoint = `/parts/workbench/${action === 'emdad' ? card.id : item.id}/actions`;
-    setError('');setBusy(true);
+    setError(''); setBusy(true);
     try {
       if (action === 'handover') {
-        await api(`/parts/${item.id}/actions`, { body: { action: 'hand_over', expectedVersion, salePriceRial, recipientName: data.get('recipient') } });
-      } else if (action === 'reserve' && item.stock) {
-        const { snapshotId, fullStockCode, locationAddress } = item.stock;
+        await api(`/parts/${item.id}/actions`, { body: { action: 'hand_over', expectedVersion, salePriceRial, recipientName: data.get('recipient'), departmentId: undefined } });
+      } else if (action === 'reserve') {
+        const selected = item.stockOptions.find(o => `${o.snapshotId}|${o.fullStockCode}|${o.locationAddress}` === data.get('stock'));
+        if (!selected) throw new Error('موجودی و محل صحیح را انتخاب کنید.');
+        const { snapshotId, fullStockCode, locationAddress } = selected;
         await api(endpoint, { body: { action, expectedVersion, salePriceRial, stock: { snapshotId, fullStockCode, locationAddress, confirm: true } } });
       } else if (action === 'received') {
         await api(endpoint, { body: { action, expectedVersion, emdadId: item.emdadId, salePriceRial } });
       } else if (action === 'market') {
-        await api(endpoint, { body: { action, expectedVersion, salePriceRial, purchasePriceRial: parseRials(data.get('purchasePrice')), supplier: data.get('supplier'), orderRef: data.get('reference') || undefined } });
+        if (quoteOnly) {
+          if (!validUntil) throw new Error('تاریخ اعتبار قیمت را ثبت کنید.');
+          await api(`/workshop/parts/${item.id}/quotes`, { body: {
+            expectedVersion, unitPriceRial: parseRials(data.get('purchasePrice')),
+            supplier: data.get('supplier'), validUntil, note: data.get('note') || undefined,
+          } });
+        } else {
+          await api(endpoint, { body: { action, expectedVersion, salePriceRial,
+            purchasePriceRial: parseRials(data.get('purchasePrice')), supplier: data.get('supplier'),
+            orderRef: data.get('reference') || undefined } });
+        }
       } else if (action === 'emdad') {
-        const selected = new Set(data.getAll('included'));
         await api(endpoint, { body: { action, requestNo: data.get('reference'), requestedAt, etaAt: eta ?? undefined,
-          parts: card.items.filter(p => selected.has(p.id)).map(p => ({ id: p.id, expectedVersion: p.version,
-            companyPriceRial: parseRials(data.get(`purchase-${p.id}`)), salePriceRial: parseRials(data.get(`sale-${p.id}`)) })) } });
+          parts: [{ id: item.id, expectedVersion: item.version,
+            companyPriceRial: parseRials(data.get('companyPrice')),
+            ...(data.get('marketPrice') ? { salePriceRial: parseRials(data.get('marketPrice')) } : {}) }] } });
       }
-      setOpen(false);refresh();
+      setOpen(false); setChoice(null); refresh();
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  const priceRequired = action === 'reserve' || action === 'received' || action === 'handover';
+
+  const ready = item.action === 'handover';
+  const awaiting = item.action === 'follow_up';
   return <div className="parts-workbench-line">
     <div className="parts-workbench-line-main">
       <div>
         <strong>{item.description}</strong>
         <p className="muted small">{faNum(item.quantity)} عدد{item.partNumber && <> · کد فنی <bdi>{item.partNumber}</bdi></>}</p>
-        {item.stock && <span className="chip chip-green">موجودی آزاد {faNum(Number(item.stock.available))}</span>}
-        {item.overdueHandover && <span className="chip chip-red">بیش از ۴ ساعت کاری در انتظار تحویل</span>}
-        {item.advice && <p className="small callout callout-blue" role="note">💡 {item.advice.replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]!)}</p>}
-        {item.overdue && <span className="chip chip-red">موعد گذشته</span>}
-        {item.emdadAverageDays !== null && action === 'emdad' && <span className="chip chip-amber">معمولاً {faNum(item.emdadAverageDays)} روزه می‌رسد</span>}
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+          {item.stockOptions.length > 0 && <span className="chip chip-green">موجودی قابل رزرو {faNum(item.stockOptions.reduce((n, o) => n + Number(o.available), 0))}</span>}
+          {item.destinations.map(d => <span className="chip" key={d.taskId}><AppIcon name="desk" /> {d.label}</span>)}
+          {!item.destinations.length && <span className="chip chip-amber">جایگاه مرتبط هنوز مشخص نشده</span>}
+          {item.overdueHandover && <span className="chip chip-red">بیش از ۴ ساعت کاری منتظر تحویل</span>}
+          {item.overdue && <span className="chip chip-red">موعد گذشته</span>}
+        </div>
+        {item.advice && <details className="compact-disclosure"><summary>راهنمای تأمین</summary><p className="small muted">{item.advice}</p></details>}
       </div>
-      {action === 'follow_up'
-        ? <Link className="btn" href={item.emdadRef ? `/emdad?q=${encodeURIComponent(item.emdadRef)}` : `/cases/${card.id}#case-parts`}>پیگیری</Link>
-        : <button className="btn btn-primary" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>{actions[action]}</button>}
+      {awaiting
+        ? <Link className="btn" href={item.emdadRef ? `/emdad?q=${encodeURIComponent(item.emdadRef)}` : `/cases/${card.id}#case-parts`}>پیگیری سفارش</Link>
+        : item.action !== 'emdad'
+          ? <button className="btn" type="button" aria-expanded={open} onClick={() => { setOpen(!open); setError(''); }}>
+            {ready ? 'ثبت تحویل' : item.action === 'received' ? 'ثبت رسیدن قطعه' : 'اقدام'}
+          </button> : null}
     </div>
-    {action === 'handover' && <div className="row">
-      <button type="button" className="btn" disabled={busy || noticeSent} onClick={() => void notify()}>
-        {noticeSent ? 'اعلان به جایگاه ارسال شد' : 'اعلام آماده‌تحویل به جایگاه و سرپرست'}
-      </button>
-      <span className="small muted">دریافت قطعه توسط تعمیرکار در کارت کار خودش ثبت می‌شود.</span>
+    {item.action === 'emdad' && <div className="row" style={{ gap: 8, flexWrap: 'wrap' }} role="group" aria-label={`انتخاب روش تأمین ${item.description}`}>
+      <button type="button" className={`btn ${action === 'reserve' && open ? 'btn-primary' : ''}`} disabled={!item.stockOptions.length || busy}
+        onClick={() => choose('reserve')} aria-pressed={action === 'reserve' && open}><AppIcon name="box" /> استفاده از موجودی</button>
+      <button type="button" className={`btn ${action === 'market' && open ? 'btn-primary' : ''}`} disabled={busy}
+        onClick={() => choose('market')} aria-pressed={action === 'market' && open}><AppIcon name="money" /> خرید بازار</button>
+      <button type="button" className={`btn ${action === 'emdad' && open ? 'btn-primary' : ''}`} disabled={busy}
+        onClick={() => choose('emdad')} aria-pressed={action === 'emdad' && open}><AppIcon name="file" /> ثبت امداد ویژه</button>
     </div>}
-    {error && !open && <p role="alert" className="callout callout-red">{error}</p>}
-    {open && <form className="stack" onSubmit={submit}>
+    {ready && <div className="stack">
+      <div className="row">
+        <label className="field">جایگاه مقصد
+          <select className="input" value={targetTask} onChange={e => { setTargetTask(e.target.value); setNoticeSent(false); }}>
+            <option value="">انتخاب جایگاه</option>
+            {item.destinations.map(d => <option key={d.taskId} value={d.taskId}>{d.label}</option>)}
+          </select>
+        </label>
+        <button type="button" className="btn" disabled={busy || noticeSent || !targetTask} onClick={() => void notify()}>
+          <AppIcon name="upload" /> {noticeSent ? 'اعلان ارسال شد' : 'اعلام آماده تحویل'}
+        </button>
+      </div>
+      <p className="small muted">اعلان برای جایگاه منتخب، مسئول آن، واحد قطعات و تصادفات ثبت می‌شود؛ دریافت واقعی جداگانه ثبت می‌شود.</p>
+    </div>}
+    {error && !showForm && <p role="alert" className="callout callout-red">{error}</p>}
+    {showForm && <form className="stack" onSubmit={submit}>
+      {action === 'reserve' && <label className="field">محل برداشت قطعه
+        <select className="input" name="stock" required defaultValue={item.stockOptions.length === 1 ? `${item.stockOptions[0]!.snapshotId}|${item.stockOptions[0]!.fullStockCode}|${item.stockOptions[0]!.locationAddress}` : ''}>
+          <option value="">انتخاب موجودی</option>
+          {item.stockOptions.map(o => <option key={`${o.fullStockCode}:${o.locationAddress}`} value={`${o.snapshotId}|${o.fullStockCode}|${o.locationAddress}`}>
+            {o.fullStockCode} · {o.locationAddress} · {faNum(Number(o.available))} عدد
+          </option>)}
+        </select>
+      </label>}
       {action === 'emdad' && <>
-        <fieldset className="stack"><legend>اقلام همین درخواست</legend>
-          {card.items.filter(p => p.action === 'emdad').map(p => <div key={p.id} className="stack">
-            <label><input type="checkbox" name="included" value={p.id} defaultChecked={p.id === item.id} required={p.id === item.id}/> {p.description}</label>
-            <label className="field">قیمت واحد شرکت (ریال)<input className="input" name={`purchase-${p.id}`} inputMode="numeric" defaultValue={p.companyPriceRial ?? ''} required={p.id === item.id}/><span className="hint">{p.companyPriceRial === null ? 'در موجودی قیمت یکتا پیدا نشد؛ قیمت شرکت را دستی وارد و بررسی کنید.' : 'برگرفته از گزارش موجودی؛ در صورت نیاز قابل اصلاح است.'}</span></label>
-            <label className="field">قیمت فروش بازار (ریال)، فقط در صورت تفاوت<input className="input" name={`sale-${p.id}`} inputMode="numeric"/></label>
-          </div>)}
-        </fieldset>
-        <label className="field">شماره درخواست<input className="input" name="reference" maxLength={64} required /></label>
-        <JalaliInput label="تاریخ درخواست" value={requestedAt} onChange={setRequestedAt} withTime required />
-        <JalaliInput label="موعد پیش‌بینی رسیدن" value={eta} onChange={setEta} withTime />
+        <label className="field">قیمت واحد شرکت (ریال)
+          <input className="input" name="companyPrice" inputMode="numeric" defaultValue={item.companyPriceRial ?? ''} required/>
+          <span className="hint">{item.companyPriceRial === null ? 'قیمت در موجودی پیدا نشد یا متفاوت است؛ دستی ثبت کنید.' : 'از موجودی خوانده شده؛ قابل اصلاح است.'}</span>
+        </label>
+        <label className="field">قیمت فروش بازار (ریال)، فقط در صورت تفاوت<input className="input" name="marketPrice" inputMode="numeric" /></label>
+        <label className="field">شماره درخواست امداد<input className="input" name="reference" maxLength={64} required/></label>
+        <JalaliInput label="تاریخ درخواست" value={requestedAt} onChange={setRequestedAt} withTime required/>
+        <JalaliInput label="موعد پیش‌بینی رسیدن" value={eta} onChange={setEta} withTime/>
       </>}
-      {action === 'market' && <label className="field">قیمت واحد خرید (ریال)<input className="input" name="purchasePrice" inputMode="numeric" required /></label>}
       {action === 'market' && <>
-        <label className="field">فروشنده<input className="input" name="supplier" maxLength={120} required /></label>
-        <label className="field">شماره فاکتور خرید<input className="input" name="reference" maxLength={64} /></label>
+        <div className="row" role="group" aria-label="روش اقدام خرید">
+          <button type="button" className={`btn ${quoteOnly ? 'btn-primary' : ''}`} onClick={() => setQuoteOnly(true)}>ثبت قیمت پیشنهادی</button>
+          <button type="button" className={`btn ${!quoteOnly ? 'btn-primary' : ''}`} onClick={() => setQuoteOnly(false)}>ثبت خرید انجام‌شده</button>
+        </div>
+        <label className="field">قیمت واحد خرید (ریال)<input className="input" name="purchasePrice" inputMode="numeric" required/></label>
+        <label className="field">فروشنده<input className="input" name="supplier" maxLength={120} required/></label>
+        {quoteOnly ? <>
+          <JalaliInput label="اعتبار قیمت پیشنهادی" value={validUntil} onChange={setValidUntil} withTime required/>
+          <label className="field">توضیحات قیمت<input className="input" name="note" maxLength={1000}/></label>
+          <p className="small muted">ثبت قیمت پیشنهادی به‌معنای خرید یا تأیید رسمی نیست. تأیید واقعی از بخش قیمت‌ها قابل ثبت است.</p>
+        </> : <label className="field">شماره فاکتور خرید<input className="input" name="reference" maxLength={64}/></label>}
       </>}
-      {action === 'handover' && <label className="field">تحویل‌گیرنده<input className="input" name="recipient" maxLength={120} required /></label>}
-      {action !== 'emdad' && <label className="field">قیمت واحد فروش (ریال)<input className="input" name="salePrice" inputMode="numeric" required={priceRequired} defaultValue={item.suggestedPriceRial ?? ''} /></label>}
+      {action === 'handover' && <label className="field">نام تحویل‌گیرنده<input className="input" name="recipient" maxLength={120} required/></label>}
+      {action !== 'emdad' && !(action === 'market' && quoteOnly) && <label className="field">قیمت واحد فروش (ریال)
+        <input className="input" name="salePrice" inputMode="numeric" required={action === 'reserve' || action === 'received' || action === 'handover'} defaultValue={item.suggestedPriceRial ?? ''}/>
+      </label>}
       {error && <p className="callout callout-red" role="alert">{error}</p>}
-      <div className="row"><button className="btn btn-primary" disabled={busy || (action === 'emdad' && !requestedAt)}>{busy ? 'در حال ثبت…' : 'ثبت'}</button><button type="button" className="btn" onClick={() => setOpen(false)}>بستن</button></div>
+      <div className="row">
+        <button className="btn btn-primary" disabled={busy || (action === 'emdad' && !requestedAt) || (action === 'market' && quoteOnly && !validUntil)}>{busy ? 'در حال ثبت…' : quoteOnly && action === 'market' ? 'ثبت قیمت پیشنهادی' : 'ثبت'}</button>
+        <button className="btn" type="button" onClick={() => { setOpen(false); setChoice(null); }}>بستن</button>
+      </div>
     </form>}
   </div>;
 }
