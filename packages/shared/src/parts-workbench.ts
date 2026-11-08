@@ -33,6 +33,8 @@ export interface PartsWorkbenchLine {
   emdadRef: string | null;
   emdadAverageDays: number | null;
   blocking: boolean;
+  negativeRecommendations: { route: 'reserve' | 'market' | 'emdad'; reason: string }[];
+  preferredRoute: 'reserve' | 'market' | 'emdad' | null;
   overdue: boolean;
   overdueHandover: boolean;
   /** Manage's next-step advice for the parts person, if any. */
