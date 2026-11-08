@@ -153,7 +153,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
     } catch (err) {
       if (err instanceof ApiError && err.code === 'DEVICE_NOT_REGISTERED') {
         setNeedsDevice(true);
-        setError('این دستگاه هنوز ثبت نشده است؛ رمز ثبت دستگاه را از مسئول بگیرید و وارد کنید.');
+        setError('برای اولین ورود روی این دستگاه، رمز ثبت دستگاه را از مدیر سامانه بگیرید.');
         setBusy(false);
         return;
       }
@@ -170,7 +170,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
           className="input ltr-input"
           name="username"
           value={username}
-          placeholder="tech01"
+          placeholder="نام کاربری اختصاصی"
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
@@ -221,27 +221,27 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
       </fieldset>
       {needsDevice && (
         <label className="field">
-          <span>رمز ثبت دستگاه (فقط بار اول روی این دستگاه)</span>
+          <span>رمز ثبت دستگاه (فقط اولین ورود)</span>
           <input className="input ltr-input" type="password" name="devicePassword" autoComplete="current-password" value={devicePassword} onChange={event => setDevicePassword(event.target.value)} required />
         </label>
       )}
       {error && <div className="callout callout-red" role="alert">{error}</div>}
       <button className="btn btn-primary" type="submit" disabled={busy}>
-        {busy ? 'در حال ورود…' : 'ورود به کارتابل'}
+        {busy ? 'در حال ورود…' : 'ورود به منیج'}
       </button>
-      <p className="login-help muted small">رمز را فراموش کرده‌اید؟ به مسئول تصادفات بگویید تا تازه‌اش کند.</p>
+      <p className="login-help muted small">رمز یا نام کاربری را ندارید؟ از مدیر سامانه بخواهید آن را تنظیم کند.</p>
     </form>
   );
 }
 
 const loginModes = [
-  { id: 'staff', label: 'کارکنان' },
-  { id: 'technician', label: 'تعمیرکار و کارکنان' },
+  { id: 'staff', label: 'مالک و مدیر سیستم' },
+  { id: 'technician', label: 'ورود روزانه کارکنان' },
 ] as const;
 
 function LoginPanels() {
   const params = useSearchParams();
-  const [mode, setMode] = useState(params.get('mode') === 'technician' ? 'technician' : 'staff');
+  const [mode, setMode] = useState(params.get('mode') === 'staff' ? 'staff' : 'technician');
   const [busy, setBusy] = useState(false);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -264,7 +264,7 @@ function LoginPanels() {
     <div className="entry-login-body">
       <header className="entry-login-heading">
         <h1>خوش آمدید</h1>
-        <p className="muted">برای شروع کار امروز وارد شوید.</p>
+        <p className="muted">کارکنان با نام کاربری و رمز ۴ رقمی وارد می‌شوند. ورود مالک و مدیر سیستم جداست.</p>
       </header>
       <div className="login-tabs" role="tablist" aria-label="نوع ورود">
         {loginModes.map(({ id, label }, index) => (
