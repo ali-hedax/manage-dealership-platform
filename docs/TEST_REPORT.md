@@ -1,6 +1,16 @@
 # Test report
 
-## Multi-page assessment import — 2026-11-08 — **PR #65**
+## Production release of multi-page assessment import `765df4a` — 2026-11-08 — **released**
+
+Owner-approved release of PR #65, with no migration. [Release record](RELEASE_ASSESSMENT_20261108.md).
+
+- **CI:** [run 42450958663](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42450958663) on `765df4a` passed all six jobs. The ZIP SHA256 matched the GitHub digest; the running image IDs equal the artifact's IDs.
+- **Owner's workbook in the released image:** parsed with no network and without storing the file on the server. Same result as locally (5 pages, 8 dates, 59 + 7 parts, 1 labor, 80 + 6 equivalent labor, totals equal to the printed totals). Nothing was imported.
+- **Live checks:** health `ok`; `/login` and manifest 200; dashboard and `auth/me` 401 without a session; migration journal unchanged at 19; no API error lines; owner-identity read-only probe passed (1 owner, 11 technicians with bays, permissions unchanged).
+- **Backups:** pre-install `20261108T061010Z` and final `20261108T061306Z` restored separately, all 50 table fingerprints matching live.
+- **Not done here:** browser review in the owner's real session.
+
+## Multi-page assessment import — 2026-11-08 — **merged in PR #65, released the same day**
 
 - **Changed:** column mapping survives repeated printed page headers; every item keeps its own date, unit, page and row; rejected / correction-request rows and equivalent labor are shown separately with their status and kept in the import evidence, never as active items or amounts; parts, labor and total are compared with the printed totals and a mismatch blocks the import. No migration.
 - **CI:** [run 42449812954](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42449812954) on `92fa614` passed all six jobs (lint/typecheck/build/unit+integration, migrations + seed on PostgreSQL 16, Docker build + compose smoke, Playwright, audit + secret scan, docs links).
