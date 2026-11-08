@@ -83,7 +83,7 @@ test('suggests exact stock, prevents double booking, and permits pickup only by 
   expect(task.status).toBe(201);
   const ready = await line(p1);
   expect(ready).toMatchObject({ action: 'handover', destinations: [expect.objectContaining({ taskId: task.body.id })] });
-  expect((await parts.post(`/reminders/parts-ready/${p1.id}`, { taskId: randomUUID() })).status).toBe(400);
+  expect((await parts.post(`/reminders/parts-ready/${p1.id}`, { taskId: randomUUID() })).status).toBe(422);
   expect((await parts.post(`/reminders/parts-ready/${p1.id}`, { taskId: task.body.id })).status).toBe(201);
   expect(((await technician.get('/reminders/inbox')).body as { body: string }[]).some(r => r.body.includes(p1.description))).toBe(true);
   expect((await technician.get('/parts/workbench')).status).toBe(403);
@@ -191,7 +191,7 @@ test('parts clerk records the verified payer response to their own market quote'
     expectedVersion: pending.version, decision: 'approved', source: 'insurer',
     officialRecorded: false, reference: 'TEST-APPROVAL', approver: 'کارشناس تست', note: 'آزمون',
   });
-  expect(missingOfficial.status).toBe(400);
+  expect(missingOfficial.status).toBe(422);
   const approved = await parts.post(`/workshop/quotes/${pending.id}/decision`, {
     expectedVersion: pending.version, decision: 'approved', source: 'insurer',
     officialRecorded: true, reference: 'TEST-APPROVAL', approver: 'کارشناس تست', note: 'مجوز رسمی آزمون ثبت است',
