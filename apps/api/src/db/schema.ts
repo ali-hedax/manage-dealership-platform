@@ -75,6 +75,8 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     /** Technician-only accounts: scrypt hash of the 4-digit PIN (username + PIN sign-in). */
     pinHash: text('pin_hash'),
+    /** PIN accounts: scrypt hash of the stronger password that registers a new trusted device. */
+    devicePasswordHash: text('device_password_hash'),
     roles: text('roles').array().notNull(),
     isOwner: boolean('is_owner').notNull().default(false),
     permissionOverrides: jsonb('permission_overrides').$type<import('@manage/shared').PermissionOverrides>().notNull().default({allow:[],deny:[]}),
@@ -112,6 +114,22 @@ export const sessions = pgTable(
     userAgent: text('user_agent'),
   },
   (t) => [index('sessions_user_idx').on(t.userId)],
+);
+
+/** Devices on which a PIN account may sign in with the PIN alone (registered with the device password). */
+export const trustedDevices = pgTable(
+  'trusted_devices',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    tokenHash: text('token_hash').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    lastUsedAt: ts('last_used_at').notNull().defaultNow(),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [index('trusted_devices_user_idx').on(t.userId), index('trusted_devices_token_idx').on(t.tokenHash)],
 );
 
 // Codes and invitation/reset tokens are stored only as keyed hashes.

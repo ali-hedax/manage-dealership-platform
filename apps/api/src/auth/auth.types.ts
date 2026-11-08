@@ -27,3 +27,5 @@ export interface Actor {
 export type AuthedRequest = Request & { id?: string; user?: AuthUser };
 
 export const SESSION_COOKIE = 'manage_session';
+/** Long-lived random token marking a device registered for PIN sign-in (see trusted_devices). */
+export const DEVICE_COOKIE = 'manage_device';

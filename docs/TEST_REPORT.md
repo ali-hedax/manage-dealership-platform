@@ -1,5 +1,11 @@
 # Test report
 
+## Simple staff sign-in (PIN on trusted device) — 2026-11-08 — branch `feature/staff-pin-login`
+
+- **Changed:** ordinary staff (technician, parts clerk, QC) sign in with username + 4-digit PIN on a registered device; a new device also needs the device password (≥ 8, letters + digits). Owner creates them with name, username, PIN, device password and role; can reset PIN/device password, deactivate and force sign-out from all devices; an existing eligible account gets a PIN without a new account. Migration 0019 (additive).
+- **Security:** PIN and device password are scrypt-hashed, device token stored as SHA-256; 5 wrong attempts lock 15 min; PIN sessions never carry user.manage, settings.manage, audit.read, finance.approve, release/price authorization, wage or reminder-settings permissions; owner, system admin and coordinator roles are refused; password login stays closed in Authenticator mode.
+- **Ran locally:** `pnpm lint`, `pnpm typecheck` clean; `technician-pin.e2e-spec.ts` 9/9 (new: device registration and forced sign-out, PIN for an existing account without duplicate and admin permissions stripped) and `people.e2e-spec.ts` 14/14. Other suites and Playwright run in CI only (owner asked for critical tests only).
+
 ## Multi-page assessment import — 2026-11-08 — **PR #65**
 
 - **Changed:** column mapping survives repeated printed page headers; every item keeps its own date, unit, page and row; rejected / correction-request rows and equivalent labor are shown separately with their status and kept in the import evidence, never as active items or amounts; parts, labor and total are compared with the printed totals and a mismatch blocks the import. No migration.

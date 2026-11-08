@@ -70,18 +70,19 @@ test('owner sees why email failed and can check the connection without sending',
 test('technicians get their own tab: name, unit, bay code and a 4-digit PIN, and the technician signs in with them',async({page},testInfo)=>{
   await login(page,'admin');
   await page.goto('/users');
-  await page.getByRole('tab',{name:/تعمیرکارها/}).click();
+  await page.getByRole('tab',{name:/ورود ساده/}).click();
   await expect(page).toHaveURL(/\/users#technicians$/);
   const panel=page.getByRole('tabpanel');
-  await expect(panel.getByRole('heading',{name:'تعمیرکارها',exact:true})).toBeVisible();
+  await expect(panel.getByRole('heading',{name:'ورود ساده کارکنان',exact:true})).toBeVisible();
   await expect(panel.getByLabel('ایمیل')).toHaveCount(0);
   await panel.getByLabel('نام تعمیرکار',{exact:true}).fill('صافکار تصویری آزمون');
   await panel.getByRole('combobox',{name:'واحد',exact:true}).selectOption({label:'صافکاری'});
   await panel.getByLabel('کد جایگاه',{exact:true}).fill('B-77');
   await panel.getByLabel('رمز ۴ رقمی',{exact:true}).fill('۴۸۱۵');
+  await panel.getByLabel('رمز ثبت دستگاه',{exact:true}).fill('Device2026e2e');
   const username=(await panel.locator('.technician-username bdi').textContent())!.trim();
   expect(username).toMatch(/^tech\d{2,}$/);
-  await panel.getByRole('button',{name:'افزودن تعمیرکار',exact:true}).click();
+  await panel.getByRole('button',{name:'افزودن کارمند',exact:true}).click();
   const created=panel.locator('.technician-created');
   await expect(created).toContainText('صافکار تصویری آزمون ساخته شد');
   await expect(created).toContainText(username);
@@ -97,10 +98,13 @@ test('technicians get their own tab: name, unit, bay code and a 4-digit PIN, and
 
   await page.context().clearCookies();
   await page.goto('/login');
-  await page.getByRole('tab',{name:'تعمیرکار',exact:true}).click();
+  await page.getByRole('tab',{name:'تعمیرکار و کارکنان',exact:true}).click();
   const form=page.locator('#login-panel-technician');
   await form.getByLabel('نام کاربری',{exact:true}).fill(username);
   for(const [i,d] of ['4','8','1','5'].entries())await form.getByLabel(`رقم ${['۱','۲','۳','۴'][i]} رمز`,{exact:true}).fill(d);
+  await form.getByRole('button',{name:/ورود/}).click();
+  // First time on this device: the device password registers it.
+  await form.getByLabel(/رمز ثبت دستگاه/).fill('Device2026e2e');
   await form.getByRole('button',{name:/ورود/}).click();
   await expect(page).toHaveURL(/\/workshop\/technician$/);
 });

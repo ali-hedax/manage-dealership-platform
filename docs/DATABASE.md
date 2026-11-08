@@ -117,3 +117,10 @@ Phase 3, additive only: four new tables; no existing column is changed, renamed 
 - Demo reset (`purgeTestTenants`) deletes these rows, plus `notifications` and `case_alert_responses`, before cases, tasks and users of synthetic tenants.
 
 Verified locally on PostgreSQL 16: all migrations `0000`→`0018` on an empty database, the down script and a re-apply, and the one-open-period index. Rollback: the previous application ignores the new tables; `down/0018_people_reminders_wages.down.sql` is for disposable databases only — export reminders, wages and periods before an owner-authorized rollback.
+
+## 0019 — trusted devices for PIN sign-in
+
+- `users.device_password_hash`: scrypt hash of the stronger password (≥ 8, letters and digits) that registers a new device for a PIN account. Null = no device can be registered yet.
+- `trusted_devices`: one row per (device cookie, account); the cookie `manage_device` holds a random token, only its SHA-256 is stored. On a trusted device the PIN alone signs in; revoked rows (`revoked_at`) need the device password again.
+
+Additive only. Rollback: the previous application ignores the table and column; `down/0019_staff_pin_devices.down.sql` is for disposable databases only.

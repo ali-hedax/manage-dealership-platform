@@ -134,6 +134,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
   const [username, setUsername] = useState('');
   const [digits, setDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
+  const [devicePassword, setDevicePassword] = useState(''), [needsDevice, setNeedsDevice] = useState(false);
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const pin = digits.join('');
 
@@ -147,9 +148,15 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
     setBusy(true);
     setError('');
     try {
-      await api('/auth/technician-login', { body: { username: username.trim(), pin } });
-      router.replace('/workshop/technician');
+      const me = await api<{ roles: string[] }>('/auth/technician-login', { body: { username: username.trim(), pin, ...(needsDevice && devicePassword ? { devicePassword } : {}) } });
+      router.replace(me.roles.every(r => r === 'technician') ? '/workshop/technician' : '/');
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'DEVICE_NOT_REGISTERED') {
+        setNeedsDevice(true);
+        setError('این دستگاه هنوز ثبت نشده است؛ رمز ثبت دستگاه را از مسئول بگیرید و وارد کنید.');
+        setBusy(false);
+        return;
+      }
       setError((err instanceof ApiError && technicianErrors[err.status]) || errorMessage(err));
       setBusy(false);
     }
@@ -212,6 +219,12 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
           ))}
         </div>
       </fieldset>
+      {needsDevice && (
+        <label className="field">
+          <span>رمز ثبت دستگاه (فقط بار اول روی این دستگاه)</span>
+          <input className="input ltr-input" type="password" name="devicePassword" autoComplete="current-password" value={devicePassword} onChange={event => setDevicePassword(event.target.value)} required />
+        </label>
+      )}
       {error && <div className="callout callout-red" role="alert">{error}</div>}
       <button className="btn btn-primary" type="submit" disabled={busy}>
         {busy ? 'در حال ورود…' : 'ورود به کارتابل'}
@@ -223,7 +236,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
 
 const loginModes = [
   { id: 'staff', label: 'کارکنان' },
-  { id: 'technician', label: 'تعمیرکار' },
+  { id: 'technician', label: 'تعمیرکار و کارکنان' },
 ] as const;
 
 function LoginPanels() {

@@ -257,6 +257,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'user.technician_pin_reset': 'رمز تازه و باز کردن قفل تعمیرکار',
   'user.technician_activated': 'فعال کردن تعمیرکار',
   'user.technician_deactivated': 'غیرفعال کردن تعمیرکار',
+  'user.technician_signed_out': 'خروج اجباری کارمند از همهٔ دستگاه‌ها',
+  'auth.device_registered': 'ثبت دستگاه تازه برای ورود با رمز ۴ رقمی',
   'user.invited': 'دعوت کارمند',
   'user.staff_admin_granted': 'دادن دسترسی دعوت و غیرفعال کردن کارکنان به مدیر سیستم',
   'user.staff_admin_revoked': 'گرفتن دسترسی دعوت و غیرفعال کردن کارکنان از مدیر سیستم',

@@ -1,14 +1,17 @@
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
 import { auditEvents, sessions, users } from '../src/db/schema';
+import { isPinEligible } from '@manage/shared';
 import { createHarness, type Client, type Harness } from './harness';
 
 const KEY = 'synthetic-test-authenticator-key-32-characters';
+const DP = 'Device2026test';
 
 describe('Technician sign-in with username + 4-digit PIN', () => {
   let h: Harness, admin: Client;
-  const pinLogin = (username: string, pin: string) =>
-    request(h.app.getHttpServer()).post('/api/v1/auth/technician-login').set('x-manage-client', 'test').send({ username, pin });
+  const pinLogin = (username: string, pin: string, devicePassword: string | undefined = DP, cookie = '') =>
+    request(h.app.getHttpServer()).post('/api/v1/auth/technician-login').set('x-manage-client', 'test').set('Cookie', cookie).send({ username, pin, ...(devicePassword ? { devicePassword } : {}) });
+  const as = (cookie: string, path: string) => request(h.app.getHttpServer()).get('/api/v1' + path).set('Cookie', cookie).set('x-manage-client', 'test');
   const cookieOf = (res: request.Response) => (res.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0]).join('; ');
 
   afterEach(async () => {
@@ -22,7 +25,7 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
     });
 
     it('lets user.manage create a technician who signs in with the PIN and sees only own tasks', async () => {
-      const created = await admin.post('/staff/technicians', { displayName: 'صافکار آزمون', username: 'Safkar2', pin: '۱۲۳۴' });
+      const created = await admin.post('/staff/technicians', { displayName: 'صافکار آزمون', username: 'Safkar2', pin: '۱۲۳۴', devicePassword: DP });
       expect(created.status).toBe(201);
       expect(created.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'safkar2', displayName: 'صافکار آزمون', hasPin: true, isActive: true })]));
       const [row] = await h.db.db.select().from(users).where(eq(users.username, 'safkar2'));
@@ -43,7 +46,7 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
     });
 
     it('rejects wrong PINs, locks after five with 423, and refuses PIN sign-in for other roles', async () => {
-      await admin.post('/staff/technicians', { displayName: 'نقاش آزمون', username: 'naghash1', pin: '4321' });
+      await admin.post('/staff/technicians', { displayName: 'نقاش آزمون', username: 'naghash1', pin: '4321', devicePassword: DP });
       for (let i = 0; i < 4; i++) expect((await pinLogin('naghash1', '0000')).status).toBe(401);
       const locked = await pinLogin('naghash1', '0000');
       expect(locked.status).toBe(423);
@@ -52,13 +55,17 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
 
       expect((await pinLogin('nobody', '1234')).status).toBe(401);
       expect((await pinLogin('naghash1', '12a4')).status).toBe(400);
-      // A staff account never gets a PIN session, even with a PIN hash planted.
-      await h.db.db.update(users).set({ pinHash: (await h.db.db.select().from(users).where(eq(users.username, 'naghash1')))[0]!.pinHash }).where(eq(users.username, 'parts'));
-      expect((await pinLogin('parts', '4321')).status).toBe(401);
+      // An administrator never gets a PIN session, even with a PIN and device password planted.
+      const [planted] = await h.db.db.select().from(users).where(eq(users.username, 'naghash1'));
+      await h.db.db.update(users).set({ pinHash: planted!.pinHash, devicePasswordHash: planted!.devicePasswordHash }).where(eq(users.username, 'admin'));
+      expect((await pinLogin('admin', '4321')).status).toBe(401);
+      expect(isPinEligible(['technician'], true)).toBe(false);
+      expect(isPinEligible(['technician', 'system_admin'])).toBe(false);
+      expect(isPinEligible(['accident_coordinator'])).toBe(false);
     });
 
     it('resets the PIN, unlocks the account and ends old sessions; deactivation blocks sign-in', async () => {
-      const list: { id: string; username: string }[] = (await admin.post('/staff/technicians', { displayName: 'مکانیک آزمون', username: 'mechanic1', pin: '1111' })).body;
+      const list: { id: string; username: string }[] = (await admin.post('/staff/technicians', { displayName: 'مکانیک آزمون', username: 'mechanic1', pin: '1111', devicePassword: DP })).body;
       const t = list.find((x) => x.username === 'mechanic1')!;
       const first = await pinLogin('mechanic1', '1111');
       expect(first.status).toBe(200);
@@ -78,40 +85,82 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       expect((await pinLogin('mechanic1', '2222')).status).toBe(401);
     });
 
+    it('registers a device with the device password, then accepts the PIN alone there; forced sign-out forgets it', async () => {
+      const list: { id: string; username: string }[] = (await admin.post('/staff/technicians', { displayName: 'قطعه آزمون', username: 'store1', pin: '2580', devicePassword: DP, role: 'parts_clerk' })).body;
+      const t = list.find((x) => x.username === 'store1')!;
+      const fresh = await pinLogin('store1', '2580', '');
+      expect(fresh.status).toBe(401);
+      expect(fresh.body.code).toBe('DEVICE_NOT_REGISTERED');
+      expect((await pinLogin('store1', '2580', 'WrongPass99')).status).toBe(401);
+      const reg = await pinLogin('store1', '2580');
+      expect(reg.status).toBe(200);
+      const device = (reg.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('manage_device='))!.split(';')[0]!;
+      expect(reg.body.roles).toEqual(['parts_clerk']);
+      const quick = await pinLogin('store1', '2580', '', device);
+      expect(quick.status).toBe(200);
+      expect((await pinLogin('store1', '9999', '', device)).status).toBe(401);
+      const signOut = await admin.post(`/staff/technicians/${t.id}/sign-out`, { reason: 'گم شدن تبلت (آزمون)' });
+      expect(signOut.status).toBe(201);
+      expect((await as(cookieOf(quick), '/auth/me')).status).toBe(401);
+      expect((await pinLogin('store1', '2580', '', device)).body.code).toBe('DEVICE_NOT_REGISTERED');
+      const audit = await h.db.db.select().from(auditEvents).where(eq(auditEvents.entityId, t.id));
+      expect(audit.map((a) => a.action)).toEqual(expect.arrayContaining(['auth.device_registered', 'user.technician_signed_out']));
+    });
+
+    it('enables PIN sign-in on an existing staff account without a duplicate, and a PIN session never gets admin permissions', async () => {
+      await h.db.db.update(users).set({ email: 'qc-pin@test.invalid', permissionOverrides: { allow: ['user.manage', 'audit.read'], deny: [] } }).where(eq(users.username, 'qc'));
+      const before = (await h.db.db.select().from(users)).length;
+      const listed: { id: string; username: string; hasPin: boolean }[] = (await admin.get('/staff/technicians')).body;
+      const qc = listed.find((x) => x.username === 'qc')!;
+      expect(qc.hasPin).toBe(false);
+      expect((await admin.put(`/staff/technicians/${qc.id}/pin`, { pin: '1470', reason: 'ورود ساده (آزمون)' })).body.code).toBe('DEVICE_PASSWORD_REQUIRED');
+      expect((await admin.put(`/staff/technicians/${qc.id}/pin`, { pin: '1470', devicePassword: DP, reason: 'ورود ساده (آزمون)' })).status).toBe(200);
+      expect((await h.db.db.select().from(users)).length).toBe(before);
+      const ok = await pinLogin('qc', '1470');
+      expect(ok.status).toBe(200);
+      expect(ok.body.permissions).not.toContain('user.manage');
+      expect(ok.body.permissions).not.toContain('audit.read');
+      expect(ok.body.permissions).toContain('qc.inspect');
+      expect((await as(cookieOf(ok), '/staff/technicians')).status).toBe(403);
+      // Administrators and the owner cannot be given a PIN.
+      const adminId = (await admin.get('/auth/me')).body.id;
+      expect((await admin.put(`/staff/technicians/${adminId}/pin`, { pin: '1470', devicePassword: DP, reason: 'x' })).body.code).toBe('NOT_TECHNICIAN_ACCOUNT');
+    });
+
     it('picks tech01, tech02, … when only a name and PIN are given', async () => {
-      const first = await admin.post('/staff/technicians', { displayName: 'صافکار بی‌نام‌کاربری', pin: '1357' });
+      const first = await admin.post('/staff/technicians', { displayName: 'صافکار بی‌نام‌کاربری', pin: '1357', devicePassword: DP });
       expect(first.status).toBe(201);
       expect(first.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'tech01', displayName: 'صافکار بی‌نام‌کاربری' })]));
-      const second = await admin.post('/staff/technicians', { displayName: 'نقاش بی‌نام‌کاربری', pin: '2468' });
+      const second = await admin.post('/staff/technicians', { displayName: 'نقاش بی‌نام‌کاربری', pin: '2468', devicePassword: DP });
       expect(second.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'tech02', displayName: 'نقاش بی‌نام‌کاربری' })]));
       expect((await pinLogin('tech01', '1357')).status).toBe(200);
     });
 
     it('puts the technician on a bay of his unit: a new code creates the bay, a held or other-unit bay is refused', async () => {
-      const created = await admin.post('/staff/technicians', { displayName: 'صافکار جایگاه‌دار', pin: '1122', trade: 'body', stationCode: 'B-91' });
+      const created = await admin.post('/staff/technicians', { displayName: 'صافکار جایگاه‌دار', pin: '1122', devicePassword: DP, trade: 'body', stationCode: 'B-91' });
       expect(created.status).toBe(201);
       const tech = (created.body as { displayName: string; id: string; station: unknown }[]).find((t) => t.displayName === 'صافکار جایگاه‌دار')!;
       expect(tech.station).toEqual({ code: 'B-91', name: 'صافکاری B-91', trade: 'body' });
       const stations: { code: string; trade: string; responsibleUserId: string | null }[] = (await admin.get('/workshop/stations')).body;
       expect(stations.find((s) => s.code === 'B-91')).toEqual(expect.objectContaining({ trade: 'body', responsibleUserId: tech.id }));
 
-      const taken = await admin.post('/staff/technicians', { displayName: 'صافکار دوم', pin: '3344', trade: 'body', stationCode: 'B-91' });
+      const taken = await admin.post('/staff/technicians', { displayName: 'صافکار دوم', pin: '3344', devicePassword: DP, trade: 'body', stationCode: 'B-91' });
       expect(taken.status).toBe(409);
       expect(taken.body.code).toBe('STATION_TAKEN');
-      const wrongUnit = await admin.post('/staff/technicians', { displayName: 'نقاش اشتباهی', pin: '5566', trade: 'paint', stationCode: 'B-91' });
+      const wrongUnit = await admin.post('/staff/technicians', { displayName: 'نقاش اشتباهی', pin: '5566', devicePassword: DP, trade: 'paint', stationCode: 'B-91' });
       expect(wrongUnit.status).toBe(422);
       expect(wrongUnit.body.code).toBe('STATION_TRADE_MISMATCH');
       // Nothing half-made: the refused technicians were not created.
       const names = ((await admin.get('/staff/technicians')).body as { displayName: string }[]).map((t) => t.displayName);
       expect(names).not.toContain('صافکار دوم');
       expect(names).not.toContain('نقاش اشتباهی');
-      expect((await admin.post('/staff/technicians', { displayName: 'بی‌جایگاه', pin: '7788', trade: 'body' })).status).toBe(400);
+      expect((await admin.post('/staff/technicians', { displayName: 'بی‌جایگاه', pin: '7788', devicePassword: DP, trade: 'body' })).status).toBe(400);
     });
 
     it('needs user.manage to manage technician accounts and refuses duplicate usernames', async () => {
       const qc = await h.login('qc');
       expect((await qc.post('/staff/technicians', { displayName: 'x آزمون', username: 'tech9', pin: '1234' })).status).toBe(403);
-      expect((await admin.post('/staff/technicians', { displayName: 'باتری‌ساز', username: 'parts', pin: '1234' })).status).toBe(409);
+      expect((await admin.post('/staff/technicians', { displayName: 'باتری‌ساز', username: 'parts', pin: '1234', devicePassword: DP })).status).toBe(409);
       const staffId = (await admin.get('/auth/me')).body.id;
       expect((await admin.put(`/staff/technicians/${staffId}/pin`, { pin: '1234' })).status).toBe(422);
     });
@@ -125,7 +174,7 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
     const [adminRow] = await h.db.db.select().from(users).where(eq(users.username, 'admin'));
     await svc.create(
       { user: { id: adminRow!.id, tenantId: tenantRow!.tenantId, tenantCode: 'x', tenantName: 'x', isTestTenant: true, username: 'admin', displayName: 'admin', roles: ['system_admin'], permissions: new Set(), sessionId: 'x' } },
-      { displayName: 'جلوبندی آزمون', username: 'jolo1', pin: '9876' },
+      { displayName: 'جلوبندی آزمون', username: 'jolo1', pin: '9876', devicePassword: DP, role: 'technician' },
     );
     const ok = await pinLogin('jolo1', '9876');
     expect(ok.status).toBe(200);
@@ -133,8 +182,11 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
     expect(me.status).toBe(200);
     expect(me.body.authentication).toBe('pin');
     // Promoting the account later invalidates its PIN session.
-    await h.db.db.update(users).set({ roles: ['technician', 'parts_clerk'] }).where(eq(users.username, 'jolo1'));
+    await h.db.db.update(users).set({ roles: ['technician', 'accident_coordinator'] }).where(eq(users.username, 'jolo1'));
     const after = await request(h.app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookieOf(ok)).set('x-manage-client', 'test');
     expect(after.status).toBe(401);
+    // Owner and administrators keep email + Authenticator: password sign-in stays closed.
+    const pw = await request(h.app.getHttpServer()).post('/api/v1/auth/login').set('x-manage-client', 'test').send({ username: 'admin', password: 'x' });
+    expect(pw.status).toBe(403);
   });
 });

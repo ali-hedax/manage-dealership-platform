@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { REPAIR_TRADES } from './workshop';
+import { PIN_LOGIN_ROLES } from './permissions';
 import {
   ASSESSMENT_ITEM_ACTIONS,
   ASSESSMENT_KINDS,
@@ -52,6 +53,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 /** Persian/Arabic-Indic digits to ASCII, for PINs typed on a Persian keyboard. */
 const asciiDigits = (v: string) =>
   v.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)).replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+const devicePasswordSchema = z.string().min(8, 'رمز ثبت دستگاه دست‌کم ۸ نویسه باشد').max(128).regex(/[A-Za-z]/, 'رمز ثبت دستگاه حرف انگلیسی داشته باشد').regex(/[0-9]/, 'رمز ثبت دستگاه عدد داشته باشد');
 const pinSchema = z.string().trim().transform(asciiDigits).pipe(z.string().regex(/^[0-9]{4}$/, 'رمز باید ۴ رقم باشد'));
 
 /** Technician sign-in: username + 4-digit PIN, no email or Authenticator. */
@@ -59,6 +61,8 @@ export const technicianLoginSchema = z.object({
   tenantCode: z.string().trim().max(32).optional(),
   username: z.string().trim().min(1).max(64),
   pin: pinSchema,
+  // Needed only on a device not yet registered for this account.
+  devicePassword: z.string().min(1).max(256).optional(),
 });
 export type TechnicianLoginInput = z.infer<typeof technicianLoginSchema>;
 
@@ -68,6 +72,8 @@ export const technicianAccountSchema = z.object({
   // Optional: without it the API picks the next free tech01, tech02, …
   username: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9._-]{2,31}$/, 'نام کاربری با حرف انگلیسی شروع شود و ۳ تا ۳۲ حرف، عدد، نقطه یا خط تیره باشد').optional(),
   pin: pinSchema,
+  devicePassword: devicePasswordSchema,
+  role: z.enum(PIN_LOGIN_ROLES).default('technician'),
   // The technician's unit (صافکاری، نقاشی، …) and bay code; Manage creates the bay if it is new.
   trade: z.enum(REPAIR_TRADES).optional(),
   stationCode: z.string().trim().min(1, 'کد جایگاه را وارد کنید').max(32).optional(),
@@ -83,7 +89,11 @@ export function nextTechnicianUsername(taken: Iterable<string>): string {
 export type TechnicianAccountInput = z.infer<typeof technicianAccountSchema>;
 
 // A system administrator (not the owner) must give a reason: a new PIN also unlocks the account.
-export const technicianPinSchema = z.object({ pin: pinSchema, reason: z.string().trim().max(300).optional() });
+// Also enables PIN sign-in for an existing eligible staff account (no duplicate account).
+export const technicianPinSchema = z
+  .object({ pin: pinSchema.optional(), devicePassword: devicePasswordSchema.optional(), reason: z.string().trim().max(300).optional() })
+  .refine((v) => v.pin || v.devicePassword, { message: 'رمز ۴ رقمی یا رمز ثبت دستگاه را وارد کنید', path: ['pin'] });
+export const technicianSignOutSchema = z.object({ reason: z.string().trim().max(300).optional() });
 export const technicianActiveSchema = z.object({ active: z.boolean(), reason: z.string().trim().max(300).optional() });
 export type TechnicianActiveInput = z.infer<typeof technicianActiveSchema>;
 
