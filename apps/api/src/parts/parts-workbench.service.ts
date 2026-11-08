@@ -49,7 +49,7 @@ export class PartsWorkbenchService {
         .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.status, ACTIVE)))
         .orderBy(asc(partRequests.createdAt), asc(partRequests.id)),
       db.select().from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId), isNotNull(emdadRequests.partRequestId))),
-      db.select({ partId: blockers.partRequestId, taskTitle: tasks.title }).from(blockers)
+      db.select({ partId: blockers.partRequestId, taskId: blockers.taskId, taskTitle: tasks.title }).from(blockers)
         .leftJoin(tasks, and(eq(tasks.id, blockers.taskId), eq(tasks.tenantId, tenantId)))
         .where(and(eq(blockers.tenantId, tenantId), isNull(blockers.resolvedAt), isNotNull(blockers.partRequestId))),
       calendarAt(db, tenantId, now.toISOString()),
