@@ -241,7 +241,7 @@ const loginModes = [
 
 function LoginPanels() {
   const params = useSearchParams();
-  const [mode, setMode] = useState(params.get('mode') === 'staff' ? 'staff' : 'technician');
+  const [mode, setMode] = useState(params.get('mode') === 'technician' ? 'technician' : 'staff');
   const [busy, setBusy] = useState(false);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
 
