@@ -663,3 +663,13 @@ Resumed the preserved staged and unstaged changes on feature/reports-center afte
 Final regression: report/discrepancy 12/12 passed after transactional detection audit, versioning and cross-tenant checks; final oversized-row PDF regression 9/9 passed. Ordinary PDF (3 pages) and long-row PDF (4 pages) were rendered with pdfjs/canvas and every page visually inspected. Full application CI on 5e529fd: 6/6 jobs successful (41424078886), including PostgreSQL 16 migration/seed/reset, Chromium E2E and Docker HTTPS smoke. Local full API 102/102; shared 9/9; browser 18 passed and 2 optional documentation screenshot tests intentionally skipped.
 
 Published to the owner-approved Preview after a verified restore drill. Health passed; owner browser session preserved; manager daily work and statistics, discrepancy queue and deployed PDF download verified. PDF from the live API rendered correctly with embedded Persian fonts. No real data import or demo purge. See PREVIEW_DEPLOYMENT_20261101.md for backup, version and rollback.
+
+## 2026-11-08 — Parts desk UX and ready-for-pickup PR #70 (branch only)
+
+- Search parts-workbench cards by plate, admission, case number, VIN/chassis, car model and matched emergency references; collapsible vehicle details.
+- Show case admission and verified matched emergency IDs (not arbitrary daily report rows); reorganize navigation.
+- Read unambiguous company unit price from active stock snapshot even for zero-stock lines; allow staff to override missing/changed company price; never guess conflicting prices.
+- Add explicit parts-ready internal reminder action for the same-case technician(s), case responsible and accident supervisor. Existing technician pickup audit continues to record receiving actor and timestamp. If no station exists, block notification; department-specific supervisor mapping is not present.
+- Prefill empty mileage from latest vehicle history; require human check of current odometer; add new-case link after saving. No carryover of prior case identity.
+- CI on latest head pending at authoring time. No local test, merge or deployment; main and real records untouched.
+- Next: review CI, run browser/e2e tests for notification, emergency order and case creation; address failures before merge; get owner approval for production.
