@@ -121,7 +121,8 @@ export class PartsWorkbenchService {
       const card = cards.get(c.id) ?? {
         card: { id: c.id, caseNumber: c.caseNumber, model: [v.brand, v.model, v.trim].filter(Boolean).join(' '),
           plate: v.plate, color: v.color, coverage: c.coverageType as PartsWorkbench['cards'][number]['coverage'],
-          waiting: null, items: [] },
+          admissionNo: c.admissionNo, vin: v.vin, chassisRef: v.chassisRef,
+          emdadRefs: [], waiting: null, items: [] },
         deadline: (c.officialDeadlineAt ?? c.forecastDeliveryAt)?.getTime() ?? Infinity,
         started: p.createdAt.getTime(), late: false,
       };
@@ -134,6 +135,9 @@ export class PartsWorkbenchService {
         : overdue ? 'از موعد رسیدن گذشته؛ امروز با شرکت یا فروشنده پیگیری کنید.'
         : overdueHandover ? 'قطعه آماده است؛ به واحد اطلاع دهید که تحویل بگیرد.'
         : null;
+      if (official) for (const ref of [official.emdadNo, official.requestNo]) {
+        if (ref && !card.card.emdadRefs.includes(ref)) card.card.emdadRefs.push(ref);
+      }
       if (blocking) card.card.waiting = blockersByPart.get(p.id) || 'تعمیر';
       card.late ||= overdueHandover;
       card.card.items.push({
