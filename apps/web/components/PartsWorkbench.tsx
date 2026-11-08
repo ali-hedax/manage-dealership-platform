@@ -126,7 +126,9 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
     setError(''); setBusy(true);
     try {
       if (action === 'handover') {
-        await api(`/parts/${item.id}/actions`, { body: { action: 'hand_over', expectedVersion, salePriceRial, recipientName: data.get('recipient'), departmentId: undefined } });
+        const destination = item.destinations.find(d => d.taskId === targetTask);
+        if (!destination) throw new Error('پیش از تحویل، جایگاه مقصد قطعه را انتخاب کنید.');
+        await api(`/parts/${item.id}/actions`, { body: { action: 'hand_over', expectedVersion, salePriceRial, recipientName: data.get('recipient'), departmentId: destination.departmentId } });
       } else if (action === 'reserve') {
         const selected = item.stockOptions.find(o => `${o.snapshotId}|${o.fullStockCode}|${o.locationAddress}` === data.get('stock'));
         if (!selected) throw new Error('موجودی و محل صحیح را انتخاب کنید.');
