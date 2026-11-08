@@ -149,6 +149,23 @@ export class PartsWorkbenchService {
       card.late ||= overdueHandover;
       const linkedTasks = (tasksByCase.get(c.id) ?? []).filter(t => waiting.some(w => w.partId === p.id && w.taskId === t.id));
       const destinationTasks = linkedTasks.length ? linkedTasks : tasksByCase.get(c.id) ?? [];
+      const negativeRecommendations: PartsWorkbenchLine['negativeRecommendations'] = [];
+      if (!p.partNumber) negativeRecommendations.push({ route: 'reserve', reason: 'کد فنی قطعه ثبت نشده؛ امکان تطبیق قابل اعتماد با موجودی وجود ندارد.' });
+      else if (!options.length) negativeRecommendations.push({ route: 'reserve', reason: 'در گزارش موجودی فعال، مقدار قابل رزرو کافی برای تعداد درخواستی پیدا نشد.' });
+      if (prices.length > 1) negativeRecommendations.push({ route: 'emdad', reason: 'چند قیمت متفاوت در گزارش موجودی ثبت شده است؛ پیش از ثبت درخواست قیمت شرکت را بررسی کنید.' });
+      else if (inferredPrice === null) negativeRecommendations.push({ route: 'emdad', reason: 'قیمت شرکت در گزارش موجودی قابل تعیین نیست؛ قبل از درخواست آن را دستی تأیید کنید.' });
+      if (average !== null && left !== null && average > left) negativeRecommendations.push({
+        route: 'emdad', reason: `زمان معمول امداد ویژه (${average} روز) از فرصت برنامه تعمیر (${left} روز کاری) بیشتر است؛ تحویل به‌موقع را بررسی کنید.`,
+      });
+      if (blocking && !options.length) negativeRecommendations.push({
+        route: 'emdad', reason: 'واحد تعمیر همین حالا منتظر قطعه است؛ مسیر تأمین سریع‌تر را بررسی کنید.',
+      });
+      if (!destinationTasks.length) negativeRecommendations.push({
+        route: 'market', reason: 'جایگاه دریافت‌کننده در برنامه تعمیر مشخص نیست؛ قبل از تحویل مقصد را تعیین کنید.',
+      });
+      const preferredRoute: PartsWorkbenchLine['preferredRoute'] =
+        options.length && blocking ? 'reserve' :
+        options.length && average !== null && left !== null && average > left ? 'reserve' : null;
       card.card.items.push({
         id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
         action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
@@ -156,6 +173,7 @@ export class PartsWorkbenchService {
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
         stockOptions: options.map(o => ({ snapshotId: o.snapshotId, fullStockCode: o.fullStockCode, locationAddress: o.locationAddress, available: o.available })),
         destinations: destinationTasks.map(t => ({ taskId: t.id, departmentId: t.departmentId, label: [t.stationSnapshot?.name || t.stationSnapshot?.code || departmentNames.get(t.departmentId) || 'جایگاه تعیین نشده', t.technicianName].filter(Boolean).join(' · ') })),
+        negativeRecommendations, preferredRoute,
         emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
       cards.set(c.id, card);
