@@ -99,12 +99,13 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
   const [validUntil, setValidUntil] = useState<string | null>(null);
   const [quoteOnly, setQuoteOnly] = useState(false);
   const [noticeSent, setNoticeSent] = useState(false);
+  const [advisorOpen, setAdvisorOpen] = useState(false);
   const [targetTask, setTargetTask] = useState(item.destinations.length === 1 ? item.destinations[0]!.taskId : '');
   const action = item.action === 'emdad' ? choice : item.action;
   const showForm = open && !!action && action !== 'follow_up';
 
-  function choose(next: 'reserve' | 'market' | 'emdad') {
-    setChoice(next); setOpen(true); setQuoteOnly(false); setError('');
+  function choose(next: 'reserve' | 'market' | 'emdad', fromManage = false) {
+    setChoice(next); setOpen(true); setQuoteOnly(fromManage && next === 'market'); setError('');
   }
 
   async function notify() {
@@ -181,16 +182,26 @@ function PartLine({ item, card, refresh }: { item: PartsWorkbenchLine; card: Wor
             {ready ? 'ثبت تحویل' : item.action === 'received' ? 'ثبت رسیدن قطعه' : 'اقدام'}
           </button> : null}
     </div>
-    {item.action === 'emdad' && <details className="compact-disclosure" style={{ marginTop: 8 }}>
-      <summary><AppIcon name="alert" /> پیشنهاد منفی و بررسی ریسک مسیر تأمین {item.negativeRecommendations.length ? `· ${faNum(item.negativeRecommendations.length)} نکته` : ''}</summary>
-      {item.preferredRoute && <p className="callout small">پیشنهاد اولیه بر اساس داده‌های فعلی: {item.preferredRoute === 'reserve' ? 'استفاده از موجودی' : item.preferredRoute === 'market' ? 'خرید بازار' : 'امداد ویژه'}؛ تصمیم نهایی با مسئول قطعات است.</p>}
-      {item.negativeRecommendations.length ? <ul className="stack small">
-        {item.negativeRecommendations.map((tip, index) => <li key={index}>
-          <strong>{tip.route === 'reserve' ? 'موجودی' : tip.route === 'market' ? 'خرید بازار' : 'امداد ویژه'}:</strong> {tip.reason}
-        </li>)}
-      </ul> : <p className="small muted">طبق اطلاعات موجود هشدار مشخصی پیدا نشد؛ این به معنی تأیید قطعی قیمت، موجودی یا قابلیت امداد ویژه نیست.</p>}
-      <p className="small muted">این توصیه‌ها صرفاً بررسی عملیاتی هستند و مجوز خرید، بیمه یا امداد ویژه صادر نمی‌کنند.</p>
-    </details>}
+    {item.action === 'emdad' && <div className="stack" style={{ marginTop: 8 }}>
+      <button type="button" className="btn" aria-expanded={advisorOpen}
+        onClick={() => setAdvisorOpen(v => !v)}><AppIcon name="sparkles" /> دستیار منیج · پیشنهاد تأمین قطعه</button>
+      {advisorOpen && <div className="panel panel-body stack" role="region" aria-label="پیشنهاد دستیار منیج">
+        <div className="row"><AppIcon name="sparkles" /><strong>{item.manageAdvice.headline}</strong>
+          <span className="chip">{item.manageAdvice.confidence === 'high' ? 'اطمینان بیشتر' : item.manageAdvice.confidence === 'medium' ? 'نیازمند بررسی' : 'اطلاعات محدود'}</span>
+        </div>
+        <div className="small muted">این راهنمای داخلی منیج از موجودی، مهلت تعمیر و سوابق ثبت‌شده محاسبه می‌شود؛ در این مرحله به سرویس هوش مصنوعی متصل نیست.</div>
+        <ul>{item.manageAdvice.why.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
+        {item.manageAdvice.required.length > 0 && <details className="compact-disclosure">
+          <summary>اطلاعات و مجوزهای لازم پیش از ثبت · {faNum(item.manageAdvice.required.length)}</summary>
+          <ul>{item.manageAdvice.required.map((need, index) => <li key={index}>{need}</li>)}</ul>
+        </details>}
+        {item.manageAdvice.route && <button type="button" className="btn btn-primary" disabled={busy}
+          onClick={() => choose(item.manageAdvice.route!, true)}>
+          <AppIcon name="check" /> استفاده از پیشنهاد منیج و تکمیل فرم
+        </button>}
+        <p className="small muted">ثبت نهایی فقط با تأیید کاربر و کنترل دوبارهٔ قیمت، موجودی و مجوزها انجام می‌شود.</p>
+      </div>}
+    </div>}
     {item.action === 'emdad' && <div className="row" style={{ gap: 8, flexWrap: 'wrap' }} role="group" aria-label={`انتخاب روش تأمین ${item.description}`}>
       <button type="button" className={`btn ${action === 'reserve' && open ? 'btn-primary' : ''}`} disabled={!item.stockOptions.length || busy}
         onClick={() => choose('reserve')} aria-pressed={action === 'reserve' && open}><AppIcon name="box" /> استفاده از موجودی</button>

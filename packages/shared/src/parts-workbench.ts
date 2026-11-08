@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { reserveSchema } from './daily-reports';
 import type { CoverageType } from './enums';
+import type { ManageAdvice } from './manage-advisor';
 
 const version = z.number().int().positive();
 const price = z.number().int().min(0).max(1_000_000_000_000);
@@ -35,6 +36,7 @@ export interface PartsWorkbenchLine {
   blocking: boolean;
   negativeRecommendations: { route: 'reserve' | 'market' | 'emdad'; reason: string }[];
   preferredRoute: 'reserve' | 'market' | 'emdad' | null;
+  manageAdvice: ManageAdvice;
   overdue: boolean;
   overdueHandover: boolean;
   /** Manage's next-step advice for the parts person, if any. */

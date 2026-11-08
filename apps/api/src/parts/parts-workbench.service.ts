@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import {
-  parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
+  manageSupplyAdvice, parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
   type PartPickup, type PartsWorkbench, type PartsWorkbenchAction, type PartsWorkbenchLine,
   workingDayMinutes,
 } from '@manage/shared';
@@ -166,6 +166,13 @@ export class PartsWorkbenchService {
       const preferredRoute: PartsWorkbenchLine['preferredRoute'] =
         options.length && blocking ? 'reserve' :
         options.length && average !== null && left !== null && average > left ? 'reserve' : null;
+      const manageAdvice = manageSupplyAdvice({
+        partCode: p.partNumber, quantity: p.quantity,
+        available: options.reduce((sum, o) => sum + Math.max(0, Number(o.available)), 0),
+        companyPriceRial: inferredPrice, salePriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
+        coverage: c.coverageType, leadDays: average, workingDaysLeft: left,
+        blocking, hasDestination: destinationTasks.length > 0,
+      });
       card.card.items.push({
         id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
         action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
@@ -173,7 +180,7 @@ export class PartsWorkbenchService {
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
         stockOptions: options.map(o => ({ snapshotId: o.snapshotId, fullStockCode: o.fullStockCode, locationAddress: o.locationAddress, available: o.available })),
         destinations: destinationTasks.map(t => ({ taskId: t.id, departmentId: t.departmentId, label: [t.stationSnapshot?.name || t.stationSnapshot?.code || departmentNames.get(t.departmentId) || 'جایگاه تعیین نشده', t.technicianName].filter(Boolean).join(' · ') })),
-        negativeRecommendations, preferredRoute,
+        negativeRecommendations, preferredRoute, manageAdvice,
         emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
       cards.set(c.id, card);

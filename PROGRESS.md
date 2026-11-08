@@ -1,3 +1,12 @@
+## 2026-11-08 — Manage Advisor, independent of Source (PR #70)
+
+- Corrected request: assistant is for Manage only. Renamed per-part suggestion panel to «دستیار منیج»; it uses deterministic supply rules (stock, deadlines, lead history, eligibility caveats) without external AI.
+- Clicking an actionable suggestion selects a supply route and prepares its form; a separate explicit submit remains, with official approvals and missing vendor/reference fields enforced.
+- Accident coordinator advisor shows urgency on assigned case queue; case-level assistant reuses the historical station-duration/availability endpoint and prefills the task form on selection.
+- Added isolated deterministic-rule unit tests and docs/MANAGE_ADVISOR.md for safe optional future AI integration.
+- All changes remain on PR #70; no merge, deployment or actual data modifications.
+- Next: CI, API integration and browser validation for the latest SHA; owner review before merge/release.
+
 
 ## 2026-11-08 — Additional supply-source and station ownership refinements (PR #70)
 
