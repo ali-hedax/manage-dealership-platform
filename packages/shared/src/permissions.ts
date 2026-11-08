@@ -55,7 +55,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   accident_supervisor: COORDINATOR,
   technician: ['task.execute'],
   service_manager: ['case.read','report.manager','dashboard.read','audit.read','workshop.read','stock.read','emdad.read','wage.report'],
-  parts_clerk: ['case.read','blocker.report','part.manage','part.quote','dashboard.read','reference.parts.read','reference.parts.manage','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage','workshop.read','daily_reports.upload'],
+  parts_clerk: ['case.read','blocker.report','part.manage','part.quote','part.price_authorize','dashboard.read','reference.parts.read','reference.parts.manage','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage','workshop.read','daily_reports.upload'],
   cashier: ['case.read','customer.pii.read','finance.payment','finance.close','dashboard.read'],
   qc_inspector: ['case.read','blocker.report','qc.inspect','dashboard.read'],
   // Wages stay with accident coordinators, the service manager and the owner unless the owner grants them.
