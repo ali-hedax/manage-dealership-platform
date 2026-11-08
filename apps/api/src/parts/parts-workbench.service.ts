@@ -155,7 +155,7 @@ export class PartsWorkbenchService {
         companyPriceRial: inferredPrice,
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
         stockOptions: options.map(o => ({ snapshotId: o.snapshotId, fullStockCode: o.fullStockCode, locationAddress: o.locationAddress, available: o.available })),
-        destinations: destinationTasks.map(t => ({ taskId: t.id, label: [t.stationSnapshot?.name || t.stationSnapshot?.code || departmentNames.get(t.departmentId) || 'جایگاه تعیین نشده', t.technicianName].filter(Boolean).join(' · ') })),
+        destinations: destinationTasks.map(t => ({ taskId: t.id, departmentId: t.departmentId, label: [t.stationSnapshot?.name || t.stationSnapshot?.code || departmentNames.get(t.departmentId) || 'جایگاه تعیین نشده', t.technicianName].filter(Boolean).join(' · ') })),
         emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
       cards.set(c.id, card);
