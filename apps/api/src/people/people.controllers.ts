@@ -55,6 +55,10 @@ export class RemindersController {
     return this.reminders.send(actor, body);
   }
 
+  @Post('parts-ready/:id')
+  @RequirePermissions('part.manage')
+  partsReady(@CurrentActor() actor: Actor, @IdParam() id: string) { return this.reminders.partsReady(actor, id); }
+
   @Post(':id/respond')
   respond(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(reminderRespondSchema)) body: ReminderRespondInput) {
     return this.reminders.respond(actor, id, body);
