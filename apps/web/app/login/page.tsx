@@ -299,6 +299,7 @@ export default function LoginPage() {
   return (
     <main className="login entry-login">
       <div className="side">
+        <div className="sx-stage" aria-hidden="true"><i /><i /><i /><i /></div>
         <span className="brand-lockup" role="img" aria-label="Manage by HEDAX">
           <img src="/brand/manage-wordmark-dark.svg" alt="" width={124} height={30} />
           <span className="brand-by" aria-hidden="true">by HEDAX</span>

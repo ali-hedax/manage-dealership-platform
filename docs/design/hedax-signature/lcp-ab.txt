@@ -1,0 +1,10 @@
+LCP (ms), three fresh-context runs per theme, same build, local Linux container, Chromium 1243 headless
+classic   dashboard lcp=[248, 304, 340] load=[825, 897, 924] cls=[0.0002, 0.0002, 0.0002] longTasks=[0, 0, 0] worstFrameMs=[17, 17, 17]
+classic   case-list lcp=[256, 260, 256] load=[888, 903, 906] cls=[0.0532, 0.0535, 0.0537] longTasks=[0, 0, 0] worstFrameMs=[17, 17, 17]
+classic   login     lcp=[64, 100, 96] load=[686, 738, 736] cls=[0.0009, 0.0009, 0.0009] longTasks=[0, 0, 0] worstFrameMs=[17, 17, 17]
+signature dashboard lcp=[356, 340, 364] load=[915, 912, 937] cls=[0.0003, 0.0004, 0.0003] longTasks=[0, 0, 0] worstFrameMs=[17, 17, 17]
+signature case-list lcp=[256, 256, 288] load=[925, 904, 973] cls=[0.0349, 0.0326, 0.0349] longTasks=[0, 0, 0] worstFrameMs=[17, 17, 17]
+signature login     lcp=[264, 256, 300] load=[743, 748, 790] cls=[0.0009, 0.0009, 0.0009] longTasks=[0, 0, 0] worstFrameMs=[17, 17, 17]
+
+Login A/B in one context (first load cold, then three warm loads):
+signature [296, 92, 108, 104]   classic [268, 108, 112, 104]
