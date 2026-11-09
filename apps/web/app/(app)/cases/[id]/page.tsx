@@ -13,6 +13,7 @@ import {
   type CaseStage,
 } from '@manage/shared';
 import { AssessmentPanel } from '@/components/AssessmentPanel';
+import { VehicleDisclosure } from '@/components/VehicleDisclosure';
 import { BlockersPanel } from '@/components/BlockersPanel';
 import { CompletionPanel } from '@/components/CompletionPanel';
 import { FinancePanel } from '@/components/FinancePanel';
@@ -108,11 +109,7 @@ export default function CaseDetailPage() {
             {kase.isLegacyEntry && <span className="chip">ثبت‌شده از قبل از Manage</span>}
             {kase.isTest && <span className="chip chip-amber">داده آزمایشی</span>}
           </div>
-          <div className="muted small">
-            {toPersianDigits(kase.vehicleLabel)}
-            {v.modelYear ? `، مدل ${toPersianDigits(v.modelYear)}` : ''}
-            {v.color ? `، ${v.color}` : ''}
-          </div>
+          <div className="muted small"><VehicleDisclosure label={kase.vehicleLabel} details={<>{v.modelYear ? <div>سال مدل: {toPersianDigits(v.modelYear)}</div> : null}{v.color ? <div>رنگ: {v.color}</div> : null}</>} /></div>
         </div>
         <div className="row no-print">
           {can('case.create') && <Link className="btn btn-primary" href="/cases/new">ثبت پرونده بعدی</Link>}
