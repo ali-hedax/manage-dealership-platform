@@ -1,5 +1,28 @@
 # Test report
 
+## Production release of HEDAX Signature `f47a4b5` — 2026-11-09 — **released**
+
+Owner-approved integration of PR #62 into main through **PR #72**, then release. No migration. [Release record](RELEASE_SIGNATURE_20261109.md).
+
+- **Ran locally:** `@manage/web` typecheck and lint clean; `node scripts/check-docs.mjs` passed (66 files, 167 routes). Full suites were left to CI, as requested.
+- **CI:** [PR run 42586923915](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42586923915) on `b67c1cf` and [main run 42588103421](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42588103421) on `f47a4b5` both passed all six jobs:
+  - lint/typecheck/build/unit + integration
+  - PostgreSQL 16 migrations + seed
+  - Playwright e2e, now with Signature as the default theme
+  - Docker build + compose smoke
+  - docs
+  - security
+- **Rehearsal:** the pre-install backup was restored into an isolated database. The read-only probe of the new image ran on it, and the fingerprint was unchanged.
+- **Live checks:**
+  - health and the owner-identity read-only probe
+  - `.env` unchanged and 20 migrations
+  - 401 without a session and 0 API error lines
+  - `data-ui="signature"` and the classic boot switch in `/login`
+  - the Signature CSS layer and `ico-s` icon rules served
+  - `/login?ui=classic` returns 200
+- **Final backup:** restored in isolation, and every table fingerprint matched.
+- **Not run:** a visual browser check of production, because this session had no browser tool. That check is left to the owner.
+
 ## Simple staff sign-in (PIN on trusted device) — 2026-11-08 — branch `feature/staff-pin-login`
 
 - **Changed:** ordinary staff (technician, parts clerk, QC) sign in with username + 4-digit PIN on a registered device; a new device also needs the device password (≥ 8, letters + digits). Owner creates them with name, username, PIN, device password and role; can reset PIN/device password, deactivate and force sign-out from all devices; an existing eligible account gets a PIN without a new account. Migration 0019 (additive).
