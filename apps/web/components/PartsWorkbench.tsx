@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { faNum, parseRials } from '@/lib/format';
 import { Plate } from './Plate';
+import { VehicleDisclosure } from './VehicleDisclosure';
 import { JalaliInput } from './JalaliInput';
 import { PartsOperationNotices, ExternalWorkPanel } from './PartsOperations';
 import { QuotePanel } from './WorkshopQuotes';
@@ -53,7 +54,7 @@ export function PartsWorkbench() {
       {needle && shown.length === 0 && <p className="callout">خودرویی مطابق جست‌وجو در کارهای فعلی پیدا نشد.</p>}
       {shown.map(card => <article key={card.id} className="panel parts-workbench-card">
         <div className="panel-head">
-          <div className="row"><Plate value={card.plate ?? ''}/><Link href={`/cases/${card.id}#case-parts`}><strong>{card.model || card.caseNumber}{card.color && ` · ${card.color}`}</strong></Link><span className="chip">{COVERAGE_LABELS[card.coverage]}</span></div>
+          <div className="row"><Plate value={card.plate ?? ''}/><Link href={`/cases/${card.id}#case-parts`}><strong>{card.caseNumber}</strong></Link><span className="chip">{COVERAGE_LABELS[card.coverage]}</span></div>
           <div className="row" style={{gap: 6, flexWrap: 'wrap'}}>
             {card.waiting && <span className="chip chip-red">{card.waiting} منتظر قطعه است</span>}
             {card.items.some(i => i.action === 'emdad') && <span className="chip chip-amber">{faNum(card.items.filter(i => i.action === 'emdad').length)} قلم منتظر تصمیم</span>}
@@ -63,7 +64,7 @@ export function PartsWorkbench() {
         <div className="row small" style={{ flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
           <span>پذیرش: <bdi>{card.admissionNo ? toPersianDigits(card.admissionNo) : 'ثبت نشده'}</bdi></span>
           <span>پرونده: <bdi>{toPersianDigits(card.caseNumber)}</bdi></span>
-          <span>{card.model || 'مدل نامشخص'}</span>
+          <VehicleDisclosure label={card.model} details={card.color ? <div>رنگ: {card.color}</div> : undefined} />
           {card.emdadRefs.length > 0 && <span className="chip chip-amber">امداد ویژه: <bdi>{card.emdadRefs.map(toPersianDigits).join('، ')}</bdi></span>}
         </div>
         <details className="compact-disclosure" style={{ margin: '0 16px 8px' }}>
