@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useState,type FormEvent} from 'react';
 import useSWR from 'swr';
-import {ROLES,ROLE_LABELS,type Role} from '@manage/shared';
+import {ROLE_LABELS,type Role} from '@manage/shared';
 import {api,fetcher,errorMessage} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 import {AccessPanel} from '@/components/AccessPanel';
@@ -16,8 +16,8 @@ type InvitationInput={email:string;displayName:string;roles:Role[]};
 type Tab='staff'|'technicians'|'access';
 // Old deep links (#access-control, #owner-admin, #invite-staff) still land on the right tab.
 const TAB_FROM_HASH:Record<string,Tab>={staff:'staff','invite-staff':'staff',technicians:'technicians',access:'access','access-control':'access','owner-admin':'access'};
-// Technicians get their own tab (username + 4-digit PIN); legacy roles are not offered for new staff.
-const INVITE_ROLES=ROLES.filter(r=>!['accident_expert','accident_supervisor','technician'].includes(r));
+// Staff sign in with username + 4-digit PIN (the کارکنان tab). Email + Authenticator invitations are only for system administrators.
+const INVITE_ROLES:Role[]=['system_admin'];
 const deliveryLabels:Record<string,string>={manual:'در انتظار فعال‌سازی با لینک دعوت',sending:'نتیجه ارسال مشخص نیست؛ در صورت نیاز دوباره بفرستید',sent:'دعوت ایمیل شد؛ در انتظار فعال‌سازی',failed:'ارسال ایمیل ناموفق بود'};
 // Why a send or check failed; categories come from the API (never the raw SMTP error).
 const failureLabels:Record<string,string>={
@@ -39,7 +39,7 @@ export default function UsersPage(){
   const {data:presets}=useSWR<{templates:PermissionTemplates;assignableRoles?:Role[]}>(allowed?'/access/presets':null,fetcher);
   const {data:mail,error:mailError}=useSWR<{configured:boolean}>(allowed?'/auth/invitations/email/status':null,fetcher);
   const [formOpen,setFormOpen]=useState(false);
-  const [email,setEmail]=useState(''),[displayName,setName]=useState(''),[roles,setRoles]=useState<Role[]>(['accident_coordinator']);
+  const [email,setEmail]=useState(''),[displayName,setName]=useState(''),[roles,setRoles]=useState<Role[]>(['system_admin']);
   const [busyEmail,setBusyEmail]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [privateLink,setPrivateLink]=useState('');
   const [check,setCheck]=useState<MailCheck|null>(null),[checking,setChecking]=useState(false);
@@ -75,11 +75,12 @@ export default function UsersPage(){
       await mutate();
     }catch(err){setError(errorMessage(err));}finally{setBusyEmail('');}
   }
-  function submit(e:FormEvent){e.preventDefault();if(!roles.length){setError('حداقل یک نقش برای کارمند انتخاب کنید.');return;}const delivery=(e.nativeEvent as SubmitEvent).submitter?.getAttribute('data-delivery')==='manual'?'manual':'email';void invite({email:email.trim().toLowerCase(),displayName:displayName.trim(),roles},delivery);}
+  function submit(e:FormEvent){e.preventDefault();if(!roles.length){setError('سمت مدیر سیستم را انتخاب کنید.');return;}const delivery=(e.nativeEvent as SubmitEvent).submitter?.getAttribute('data-delivery')==='manual'?'manual':'email';void invite({email:email.trim().toLowerCase(),displayName:displayName.trim(),roles},delivery);}
   if(!allowed)return <p>به بخش کارکنان دسترسی ندارید.</p>;
   const ready=mail?.configured===true;
-  const staff=data??[];
-  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'technicians',label:'کارکنان (رمز ۴ رقمی)',count:technicians?.length},{id:'staff',label:'حساب‌های قدیمی و دعوت‌ها',count:data?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
+  // Only owner and system-administrator accounts belong here; other staff appear in the کارکنان tab.
+  const staff=(data??[]).filter(u=>u.roles.includes('system_admin'));
+  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'technicians',label:'کارکنان',count:technicians?.length},{id:'staff',label:'مدیر سیستم',count:staff.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
 
   return <><div className="page-head"><h1>کارکنان</h1></div>
     <div className="staff-tabs" role="tablist" aria-label="بخش‌های کارکنان">
@@ -88,16 +89,16 @@ export default function UsersPage(){
 
     {tab==='staff'&&<div role="tabpanel" id="staff-panel-staff" aria-labelledby="staff-tab-staff" className="staff-panel">
       <div className="staff-panel-head">
-        <p className="muted">این بخش فقط برای بررسی و انتقال ایمن حساب‌های قدیمی است. کارکنان جدید را از زبانه «کارکنان (رمز ۴ رقمی)» بسازید. مالک و مدیر سیستم همچنان با احراز هویت دومرحله‌ای وارد می‌شوند.</p>
-        {!formOpen&&<button type="button" className="btn btn-primary" onClick={()=>{setFormOpen(true);setError('');setMessage('');setPrivateLink('');}}>افزودن کارمند</button>}
+        <p className="muted">مدیر سیستم با ایمیل، رمز شخصی و Google Authenticator وارد می‌شود. سایر کارکنان را از زبانه «کارکنان» بسازید.</p>
+        {!formOpen&&<button type="button" className="btn btn-primary" onClick={()=>{setFormOpen(true);setError('');setMessage('');setPrivateLink('');}}>افزودن مدیر سیستم</button>}
       </div>
       {mail?.configured===false&&<p className="callout callout-amber" role="status">ارسال خودکار ایمیل فعلاً ممکن نیست؛ سرور منیج به سرویس‌های ایمیل خارجی مثل Gmail دسترسی ندارد. لینک دعوت بسازید و در پیام‌رسان برای همکار بفرستید.</p>}
       {mailError&&<p role="alert" className="callout callout-red">وضعیت ارسال ایمیل دریافت نشد. صفحه را تازه کنید.</p>}
 
-      {formOpen&&<section id="invite-staff" className="card" aria-labelledby="invite-title"><h2 id="invite-title">افزودن کارمند</h2>
+      {formOpen&&<section id="invite-staff" className="card" aria-labelledby="invite-title"><h2 id="invite-title">افزودن مدیر سیستم</h2>
         <form className="form" onSubmit={submit} aria-busy={busy}>
           <fieldset disabled={busy} className="staff-form">
-            <legend className="sr-only">مشخصات کارمند</legend>
+            <legend className="sr-only">مشخصات مدیر سیستم</legend>
             <div className="staff-form-row">
               <label className="field"><span>نام و نام خانوادگی</span><input name="displayName" className="input" autoComplete="name" required maxLength={120} value={displayName} onChange={e=>setName(e.target.value)}/></label>
               <label className="field"><span>ایمیل</span><input name="email" className="input ltr-input" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/></label>
@@ -123,10 +124,10 @@ export default function UsersPage(){
       <div role="status" aria-live="polite" aria-atomic="true">{message&&<p className="callout">{message}</p>}</div>
       {privateLink&&<div className="callout"><label className="field" htmlFor="private-invitation"><span>لینک دعوت محرمانه</span></label><input id="private-invitation" className="input ltr-input" readOnly value={privateLink} onFocus={e=>e.target.select()}/><button type="button" className="btn" style={{marginBlockStart:12}} onClick={()=>void navigator.clipboard.writeText(privateLink).then(()=>setMessage('لینک دعوت کپی شد؛ فقط برای همان همکار بفرستید.')).catch(()=>setError('کپی خودکار انجام نشد؛ لینک را انتخاب و کپی کنید.'))}>کپی لینک دعوت</button></div>}
 
-      <section className="card staff-list" aria-label="فهرست کارکنان">
+      <section className="card staff-list" aria-label="فهرست مدیران سیستم">
         {isLoading&&<p role="status">در حال دریافت کارکنان…</p>}
         {listError&&<p role="alert">دریافت فهرست کارکنان ناموفق بود. <button type="button" className="btn" onClick={()=>void mutate()}>تلاش دوباره</button></p>}
-        {data?.length===0&&<p className="muted">هنوز کارمندی اضافه نشده است.</p>}
+        {data&&staff.length===0&&<p className="muted">هنوز مدیر سیستمی اضافه نشده است.</p>}
         {staff.map(u=><article key={u.id} className="staff-person">
           <div className="staff-person-main">
             <h3>{u.displayName}</h3>

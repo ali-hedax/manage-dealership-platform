@@ -242,7 +242,7 @@ test('reduced motion, print, keyboard focus and the classic switch', async ({ br
 test('interaction recording', async ({ browser }) => {
   const ctx = await browser.newContext({ viewport: DESKTOP, recordVideo: { dir: join(OUT, 'video'), size: DESKTOP } });
   const p = await ctx.newPage();
-  await p.goto(UI ? `/login?ui=${UI}` : '/login');
+  await p.goto(UI ? `/login?mode=staff&ui=${UI}` : '/login?mode=staff');
   await p.waitForTimeout(1600);
   await p.getByLabel('نام کاربری').fill('manager');
   await p.getByLabel('رمز عبور').fill((await import('../playwright.config')).E2E_PASSWORD);
