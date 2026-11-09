@@ -53,6 +53,20 @@ Owner-approved release of PR #60, with no migration. [Release record](RELEASE_BA
 - **Not done here:** browser review in the owner's real session (no browser tool in this session).
 
 
+## HEDAX Signature visual layer — 2026-11-07 — local green, **CI green**
+
+**Review round 2:** dashboard welcome band flattened when the instrument follows it (CSS only, Signature theme). Re-run: lint, typecheck, build, docs check pass; Playwright main 43 passed, daily 4 passed; evidence 5/5 (0 overflow, 0 contrast failures, no motion under reduced motion). CI to re-run on the PR.
+
+GitHub Actions run [42357733293](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/42357733293) on PR #62, head `b79375a`: all six jobs succeeded (documentation and API inventory; dependency audit and secret scan; lint, typecheck, build, unit and integration tests; migrations and demo seed on PostgreSQL 16; Docker images and compose smoke test; Playwright end-to-end).
+
+Branch `feature/hedax-signature-3d-manage` from `main` `5cf9c72`. Visual-only change (theme layer, icons, dashboard instrument, pointer light). No API, schema or permission change. Synthetic data only. Full record: [design QA](design/HEDAX_3D_QA.md).
+
+- `pnpm -r lint`, `pnpm -r typecheck`, `pnpm build`, `node scripts/check-docs.mjs`: pass.
+- `pnpm test` (with `NODE_OPTIONS=--max-old-space-size=4096`, as for `main` in this container): API 223 passed, 9 skipped (PostgreSQL-only), 0 failed; shared suite passed.
+- `pnpm test:e2e` on the Signature theme (now the default): main config 43 passed, 9 skipped (opt-in screenshot/evidence specs); daily/owner config 4 passed.
+- `e2e/signature-evidence.spec.ts` (opt-in, 5/5): 0 horizontal overflow on 23 screens at 360/390/768/1024/1440/1920 px; 0 WCAG AA text-contrast failures (classic mode keeps the existing dashboard grey); 0 animations under reduced motion and none running after a page settles; print stays light; first Tab reaches the skip link with a visible ring; `?ui=classic` matches `main` pixel for pixel apart from timestamps.
+- Performance (same build, headless Chromium): no long tasks, no frame over 20 ms, CLS equal or lower; LCP about +25 ms on a cold sign-in and about +50 ms on the dashboard; JS +7.5 KB, CSS +29 KB uncompressed. A fade that delayed LCP was found and replaced with transform-only motion.
+- Not run: real devices (Windows Edge, iOS Safari, Android), screen reader, live design research.
 
 ## Technician unit and bay on creation — 2026-11-07 — local green
 

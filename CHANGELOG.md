@@ -9,6 +9,14 @@
 - Latest CI result must be checked before merge: prior run found and fixed one TypeScript narrowing error; no direct local build or Production deploy performed.
 # Changelog
 
+## 2026-11-09 — HEDAX Signature visual layer (PR #62, integrated in #72)
+
+- New default look: dark mineral ground, graphite plates with machined edges, a champagne key light and restrained blue. The navigation rail sits above the workspace and the active destination is lit. Opened case sections rise as an inspector, and dialogs enter as a separate layer. Desk cards respond to the pointer.
+- The dashboard opens with an operations view: the share of active cases within their deadline, plus overdue, blocked, due-within-48-hours and ready-for-delivery figures. Each figure links to the existing filtered case list.
+- Redrawn engineered icon set. The sign-in screen has a showroom plinth and a one-time light sweep.
+- The previous interface stays available: add `?ui=classic` to any address (remembered per browser) or build with `NEXT_PUBLIC_UI_THEME=classic`. Print keeps the light layout. Reduced-motion settings remove all motion.
+
+
 ## 2026-11-08 — ورود ساده کارکنان
 
 - کارکنان عادی (تعمیرکار، قطعات، کنترل کیفیت) روی دستگاه ثبت‌شده با نام کاربری و رمز ۴ رقمی وارد می‌شوند؛ دستگاه تازه یک بار «رمز ثبت دستگاه» می‌خواهد.

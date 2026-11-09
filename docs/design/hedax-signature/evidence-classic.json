@@ -1,0 +1,55 @@
+{
+  "ui": "classic",
+  "generatedAt": "2026-11-07T08:12:51.103Z",
+  "loginContrast": [],
+  "overflow": [],
+  "contrast": {
+    "dashboard": [
+      "1.49 span.n «۰»"
+    ]
+  },
+  "metrics": {
+    "dashboard": {
+      "loadMs": 882,
+      "lcpMs": 332,
+      "cls": 0.0002,
+      "longTasks": 0,
+      "jsBytes": 1233152,
+      "cssBytes": 91658,
+      "heapMB": 8.6,
+      "frames": {
+        "frames": 61,
+        "worstMs": 17,
+        "over20ms": 0
+      }
+    },
+    "case-list": {
+      "loadMs": 883,
+      "lcpMs": 240,
+      "cls": 0.0537,
+      "longTasks": 0,
+      "jsBytes": 1233152,
+      "cssBytes": 91658,
+      "heapMB": 8.6,
+      "frames": {
+        "frames": 61,
+        "worstMs": 17,
+        "over20ms": 0
+      }
+    },
+    "login": {
+      "loadMs": 737,
+      "lcpMs": 104,
+      "cls": 0.0009,
+      "longTasks": 0,
+      "jsBytes": 1065041,
+      "cssBytes": 91658,
+      "heapMB": 6.1,
+      "frames": {
+        "frames": 61,
+        "worstMs": 17,
+        "over20ms": 0
+      }
+    }
+  }
+}
