@@ -33,7 +33,7 @@ const expired=(u:UserRow)=>!!u.invitationExpiresAt&&new Date(u.invitationExpires
 
 export default function UsersPage(){
   const {can,me}=useAuth();const allowed=can('user.manage');
-  const [tab,setTab]=useState<Tab>('staff');
+  const [tab,setTab]=useState<Tab>('technicians');
   const {data,error:listError,mutate,isLoading}=useSWR<UserRow[]>(allowed?'/auth/invitations':null,fetcher);
   const {data:technicians}=useSWR<unknown[]>(allowed?'/staff/technicians':null,fetcher);
   const {data:presets}=useSWR<{templates:PermissionTemplates;assignableRoles?:Role[]}>(allowed?'/access/presets':null,fetcher);
@@ -52,7 +52,7 @@ export default function UsersPage(){
     function follow(){
       const hash=window.location.hash.slice(1),next=TAB_FROM_HASH[hash];
       if(!next)return;
-      setTab(next==='access'&&!me.isOwner?'staff':next);
+      setTab(next==='access'&&!me.isOwner?'technicians':next);
       if(hash==='invite-staff')setFormOpen(true);
       if(['access-control','owner-admin'].includes(hash))requestAnimationFrame(()=>document.getElementById(hash)?.scrollIntoView({block:'start'}));
     }
@@ -79,7 +79,7 @@ export default function UsersPage(){
   if(!allowed)return <p>به بخش کارکنان دسترسی ندارید.</p>;
   const ready=mail?.configured===true;
   const staff=data??[];
-  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'staff',label:'کارکنان',count:data?.length},{id:'technicians',label:'ورود ساده (PIN)',count:technicians?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
+  const tabs:{id:Tab;label:string;count?:number}[]=[{id:'technicians',label:'کارکنان (رمز ۴ رقمی)',count:technicians?.length},{id:'staff',label:'حساب‌های قدیمی و دعوت‌ها',count:data?.length},...(me.isOwner?[{id:'access' as Tab,label:'دسترسی‌ها'}]:[])];
 
   return <><div className="page-head"><h1>کارکنان</h1></div>
     <div className="staff-tabs" role="tablist" aria-label="بخش‌های کارکنان">
@@ -88,7 +88,7 @@ export default function UsersPage(){
 
     {tab==='staff'&&<div role="tabpanel" id="staff-panel-staff" aria-labelledby="staff-tab-staff" className="staff-panel">
       <div className="staff-panel-head">
-        <p className="muted">همکارانی که با ایمیل، رمز شخصی و Google Authenticator وارد می‌شوند.</p>
+        <p className="muted">این بخش فقط برای بررسی و انتقال ایمن حساب‌های قدیمی است. کارکنان جدید را از زبانه «کارکنان (رمز ۴ رقمی)» بسازید. مالک و مدیر سیستم همچنان با احراز هویت دومرحله‌ای وارد می‌شوند.</p>
         {!formOpen&&<button type="button" className="btn btn-primary" onClick={()=>{setFormOpen(true);setError('');setMessage('');setPrivateLink('');}}>افزودن کارمند</button>}
       </div>
       {mail?.configured===false&&<p className="callout callout-amber" role="status">ارسال خودکار ایمیل فعلاً ممکن نیست؛ سرور منیج به سرویس‌های ایمیل خارجی مثل Gmail دسترسی ندارد. لینک دعوت بسازید و در پیام‌رسان برای همکار بفرستید.</p>}
