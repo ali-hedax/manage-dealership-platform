@@ -91,11 +91,11 @@ export function TechniciansPanel() {
   return (
     <section className="card technicians" aria-labelledby="technicians-title">
       <h2 id="technicians-title">ورود ساده کارکنان</h2>
-      <p className="muted small">کارکنان عادی (تعمیرکار، قطعات، کنترل کیفیت) ایمیل و Authenticator لازم ندارند. روی دستگاه ثبت‌شده با نام کاربری و رمز ۴ رقمی وارد می‌شوند؛ دستگاه تازه یک بار «رمز ثبت دستگاه» (دست‌کم ۸ نویسه با حرف و عدد) هم می‌خواهد. مالک و مدیر سیستم همیشه با ایمیل و Authenticator وارد می‌شوند. برای کارمند فعلی، در جدول زیر «فعال‌سازی ورود ساده» را بزنید؛ حساب تازه لازم نیست.</p>
+      <p className="muted small">همهٔ کارکنان غیرمدیریتی (مدیر خدمات، مسئول تصادفات، قطعات، مالی، کنترل کیفیت، تعمیرکار و سایر نقش‌های عملیاتی) ایمیل و Authenticator لازم ندارند. روی دستگاه ثبت‌شده با نام کاربری و رمز ۴ رقمی وارد می‌شوند؛ دستگاه تازه یک بار «رمز ثبت دستگاه» (دست‌کم ۸ نویسه با حرف و عدد) هم می‌خواهد. مالک و مدیر سیستم همیشه با ایمیل و Authenticator وارد می‌شوند. برای کارمند فعلی، در جدول زیر «فعال‌سازی ورود ساده» را بزنید؛ حساب تازه لازم نیست.</p>
 
       <form onSubmit={create} className="technician-form">
         <label className="field">
-          <span>نام تعمیرکار</span>
+          <span>نام و نام خانوادگی</span>
           <input name="displayName" className="input" required minLength={2} maxLength={120} placeholder="مثلاً رضا حسینی" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
