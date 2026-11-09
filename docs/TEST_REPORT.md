@@ -22,6 +22,16 @@
   - `personal-auth` recovery ×2: the مدیر سیستم tab lists only system administrators, and کارکنان is now the default. The tests now use a system-administrator colleague on `/users#staff`.
   - `staff.spec` service manager: the system administrator must write a reason before deactivating. The test now fills it in.
   - Also fixed: choosing a tab cleared the address hash for the wrong tab (`#staff` instead of the new default).
+- **CI after the fix:** all six checks green on `55217c7` (run 42620207443) and on the main merge `cc1d7e1` (run 42621217599).
+- **Production (2026-11-09):**
+  - **Release checks:** the release probe on the restored copy and on production passed. It also checks the new PIN rules: service manager, coordinator and cashier are eligible; `system_admin` is refused; a bay is refused for non-technicians.
+  - **Migrations and tables:** 20 migrations, identical table set.
+  - **Login page:** both login tabs are served.
+  - **Sign-in, tested with synthetic usernames only:**
+    - PIN without device → `DEVICE_NOT_REGISTERED`
+    - wrong PIN, device password or email → 401
+    - legacy password login → 403
+    - `/auth/me` and `/staff/technicians` without a session → 401
 
 ## Simple staff sign-in (PIN on trusted device) — 2026-11-08 — branch `feature/staff-pin-login`
 
