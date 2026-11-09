@@ -469,7 +469,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
             ))}
           </select>
         </label>
-        <label className="field"><span>مدت تعمیر (روز کاری)</span><input className="input" type="number" aria-label="مدت تعمیر (روز کاری)" name="repairDurationDays" min={0.25} max={365} step={0.25} value={f.repairDurationDays??''} onChange={e=>set('repairDurationDays',e.target.value)}/><span className="hint">یک روز معادل یک روز کاملِ ساعات تنظیم‌شده نمایندگی است؛ پنجشنبه نیمه‌وقت، استراحت و تعطیلات لحاظ می‌شوند.</span></label>
+        <label className="field"><span>مدت تعمیر (روز کاری)</span><input className="input" type="number" aria-label="مدت تعمیر (روز کاری)" name="repairDurationDays" min={1} max={365} step={1} value={f.repairDurationDays??''} onChange={e=>set('repairDurationDays',e.target.value)}/><span className="hint">یک روز معادل یک روز کاملِ ساعات تنظیم‌شده نمایندگی است؛ پنجشنبه نیمه‌وقت، استراحت و تعطیلات لحاظ می‌شوند.</span></label>
         {planPreview&&<p className="callout callout-blue">پایان محاسبه‌شده: {formatJalali(planPreview,{time:true})}</p>}
         <details className="span-all compact-disclosure"><summary>موعد رسمی یا پیش‌بینی ثبت‌شده از قبل</summary><div className="grid-2">
         <JalaliInput

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { VehicleDisclosure } from '@/components/VehicleDisclosure';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import useSWR from 'swr';
@@ -348,7 +349,7 @@ function ReportsPage() {
                               </Link>
                               <div className="small">پذیرش ایران‌خودرو: <bdi>{i.admissionNo?toPersianDigits(i.admissionNo):'ثبت نشده'}</bdi></div>
                               <div className="xs muted">
-                                {i.vehicleLabel}
+                                <VehicleDisclosure label={i.vehicleLabel} />
                                 {i.plate ? ` — ${toPersianDigits(i.plate)}` : ''}
                               </div>
                             </td>
