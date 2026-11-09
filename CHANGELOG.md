@@ -1,4 +1,13 @@
 
+## 2026-11-09 — یک روش ورود برای همهٔ کارکنان (PR #74)
+
+- صفحهٔ ورود فقط دو گزینه دارد. پیش‌فرض «ورود کارکنان» است: نام کاربری و رمز ۴ رقمی. گزینهٔ دیگر «ورود مالک و مدیر سیستم» است: ایمیل، رمز و Google Authenticator.
+- همهٔ سمت‌های عملیاتی با رمز ۴ رقمی وارد می‌شوند: مدیر خدمات، مسئول تصادفات، قطعات، مالی و صندوق، کنترل کیفیت و تعمیرکار.
+- در نشست رمز ۴ رقمی، دسترسی‌های همان سمت حفظ می‌شود. فقط مدیریت کاربران و تنظیمات در آن نشست نیست.
+- ساخت همهٔ کارکنان یک فرم دارد: نام، سمت، نام کاربری، رمز ۴ رقمی و رمز ثبت دستگاه. واحد و جایگاه فقط برای تعمیرکار پرسیده می‌شود.
+- زبانهٔ «حساب‌های قدیمی و دعوت‌ها» حذف شد. دعوت با ایمیل فقط برای مدیر سیستم مانده است.
+- حساب‌های غیرفعال و نمونه از فهرست فعال بیرون رفتند و در بخش جمع‌شدهٔ «حساب‌های غیرفعال و بایگانی» هستند.
+
 ## 2026-11-08 — Additional supply-source and station ownership refinements (PR #70)
 
 - Parts workbench now shows collapsible vehicle parts; each needed part has an explicit choice: reserve from exact available stock location, buy from market, or submit emergency/company order. Stock availability is informative and does not force a supply source.

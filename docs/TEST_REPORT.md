@@ -1,5 +1,28 @@
 # Test report
 
+## Unified staff PIN sign-in — 2026-11-09 — **PR #74**
+
+- **Changed:**
+  - The login page has two tabs, and staff PIN is the default.
+  - Every operational role can use PIN sign-in. `system_admin` and the owner stay on email + TOTP.
+  - A PIN session now loses only `user.manage`, `settings.manage` and `daily_reports.settings`. Everything else follows the role, so the service manager and coordinator keep their approvals.
+  - Every role is created with one form. Unit and bay are for technicians only, and the server enforces this.
+  - The legacy invitation tab is now system-administrator-only.
+  - Inactive accounts are listed in a collapsed archive.
+- **Ran locally:**
+  - `technician-pin.e2e-spec.ts` 11/11 passed. New tests:
+    - service manager and coordinator are created via the staff form and keep their role permissions in the PIN session (with no admin permissions)
+    - unit/bay is refused for a non-technician
+    - a system_admin role is refused in the form
+    - deactivating an existing staff member ends their password session and keeps the row
+  - web and api `tsc --noEmit` clean, and the docs check passed.
+- **Browser tests:** `staff.spec.ts` was rewritten (system-admin tab, technician and service-manager creation with PIN sign-in, archive). `helpers.login` and `personal-auth` open `/login?mode=staff`. They run in CI.
+- **CI run 42617476240 (head `0bfca4b`):** five checks green, Playwright red with 4 tests. Causes and fixes:
+  - `pwa.spec` ×2: the install button lived inside the owner form, which is no longer the default tab. It now sits under both tabs.
+  - `personal-auth` recovery ×2: the مدیر سیستم tab lists only system administrators, and کارکنان is now the default. The tests now use a system-administrator colleague on `/users#staff`.
+  - `staff.spec` service manager: the system administrator must write a reason before deactivating. The test now fills it in.
+  - Also fixed: choosing a tab cleared the address hash for the wrong tab (`#staff` instead of the new default).
+
 ## Simple staff sign-in (PIN on trusted device) — 2026-11-08 — branch `feature/staff-pin-login`
 
 - **Changed:** ordinary staff (technician, parts clerk, QC) sign in with username + 4-digit PIN on a registered device; a new device also needs the device password (≥ 8, letters + digits). Owner creates them with name, username, PIN, device password and role; can reset PIN/device password, deactivate and force sign-out from all devices; an existing eligible account gets a PIN without a new account. Migration 0019 (additive).

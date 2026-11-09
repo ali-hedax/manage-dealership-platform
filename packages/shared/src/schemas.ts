@@ -77,7 +77,9 @@ export const technicianAccountSchema = z.object({
   // The technician's unit (صافکاری، نقاشی، …) and bay code; Manage creates the bay if it is new.
   trade: z.enum(REPAIR_TRADES).optional(),
   stationCode: z.string().trim().min(1, 'کد جایگاه را وارد کنید').max(32).optional(),
-}).refine((v) => !v.trade === !v.stationCode, { message: 'واحد و کد جایگاه را با هم وارد کنید', path: ['stationCode'] });
+}).refine((v) => !v.trade === !v.stationCode, { message: 'واحد و کد جایگاه را با هم وارد کنید', path: ['stationCode'] })
+  // Unit and bay belong to technicians only.
+  .refine((v) => v.role === 'technician' || (!v.trade && !v.stationCode), { message: 'واحد و جایگاه فقط برای تعمیرکار ثبت می‌شود', path: ['trade'] });
 /** Next free automatic technician username (tech01, tech02, …) given the usernames in use. */
 export function nextTechnicianUsername(taken: Iterable<string>): string {
   const used = new Set(taken);

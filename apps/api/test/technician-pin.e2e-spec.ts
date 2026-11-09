@@ -61,7 +61,9 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       expect((await pinLogin('admin', '4321')).status).toBe(401);
       expect(isPinEligible(['technician'], true)).toBe(false);
       expect(isPinEligible(['technician', 'system_admin'])).toBe(false);
-      expect(isPinEligible(['accident_coordinator'])).toBe(false);
+      expect(isPinEligible(['accident_coordinator'])).toBe(true);
+      expect(isPinEligible(['service_manager', 'cashier'])).toBe(true);
+      expect(isPinEligible(['system_admin'])).toBe(false);
     });
 
     it('resets the PIN, unlocks the account and ends old sessions; deactivation blocks sign-in', async () => {
@@ -107,7 +109,7 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       expect(audit.map((a) => a.action)).toEqual(expect.arrayContaining(['auth.device_registered', 'user.technician_signed_out']));
     });
 
-    it('enables PIN sign-in on an existing staff account without a duplicate, and a PIN session never gets admin permissions', async () => {
+    it('enables PIN sign-in on an existing staff account without a duplicate, and a PIN session never gets admin permissions but keeps its role access', async () => {
       await h.db.db.update(users).set({ email: 'qc-pin@test.invalid', permissionOverrides: { allow: ['user.manage', 'audit.read'], deny: [] } }).where(eq(users.username, 'qc'));
       const before = (await h.db.db.select().from(users)).length;
       const listed: { id: string; username: string; hasPin: boolean }[] = (await admin.get('/staff/technicians')).body;
@@ -119,7 +121,7 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       const ok = await pinLogin('qc', '1470');
       expect(ok.status).toBe(200);
       expect(ok.body.permissions).not.toContain('user.manage');
-      expect(ok.body.permissions).not.toContain('audit.read');
+      expect(ok.body.permissions).toContain('audit.read');
       expect(ok.body.permissions).toContain('qc.inspect');
       expect((await as(cookieOf(ok), '/staff/technicians')).status).toBe(403);
       // Administrators and the owner cannot be given a PIN.
@@ -134,6 +136,39 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       const second = await admin.post('/staff/technicians', { displayName: 'نقاش بی‌نام‌کاربری', pin: '2468', devicePassword: DP });
       expect(second.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'tech02', displayName: 'نقاش بی‌نام‌کاربری' })]));
       expect((await pinLogin('tech01', '1357')).status).toBe(200);
+    });
+
+    it('creates every operational role the same way, and a PIN session keeps the access of that role', async () => {
+      const made = await admin.post('/staff/technicians', { displayName: 'مدیر خدمات آزمون', username: 'svc.pin', pin: '2580', devicePassword: DP, role: 'service_manager' });
+      expect(made.status).toBe(201);
+      expect((await admin.post('/staff/technicians', { displayName: 'مسئول تصادفات آزمون', username: 'coord.pin', pin: '0852', devicePassword: DP, role: 'accident_coordinator' })).status).toBe(201);
+      // Unit and bay are for technicians only.
+      expect((await admin.post('/staff/technicians', { displayName: 'صندوق‌دار آزمون', username: 'cash.pin', pin: '1590', devicePassword: DP, role: 'cashier', trade: 'body', stationCode: 'C-01' })).status).toBe(400);
+      // Never a system administrator through this form.
+      expect((await admin.post('/staff/technicians', { displayName: 'مدیر سیستم آزمون', username: 'sys.pin', pin: '1590', devicePassword: DP, role: 'system_admin' })).status).toBe(400);
+      const svc = await pinLogin('svc.pin', '2580');
+      expect(svc.status).toBe(200);
+      expect(svc.body.roles).toEqual(['service_manager']);
+      expect(svc.body.permissions).toEqual(expect.arrayContaining(['report.manager', 'audit.read', 'wage.report']));
+      const coord = await pinLogin('coord.pin', '0852');
+      expect(coord.status).toBe(200);
+      expect(coord.body.permissions).toEqual(expect.arrayContaining(['case.create', 'case.release_authorize', 'part.price_authorize']));
+      for (const res of [svc, coord]) {
+        expect(res.body.permissions).not.toContain('user.manage');
+        expect(res.body.permissions).not.toContain('settings.manage');
+      }
+    });
+
+    it('deactivating an existing staff member ends his sessions but keeps the account and its history', async () => {
+      const manager = await h.login('manager');
+      expect((await manager.get('/auth/me')).status).toBe(200);
+      const row = ((await admin.get('/staff/technicians')).body as { id: string; username: string }[]).find((x) => x.username === 'manager')!;
+      expect((await admin.put('/staff/technicians/' + row.id + '/active', { active: false, reason: 'بایگانی (آزمون)' })).status).toBe(200);
+      expect((await manager.get('/auth/me')).status).toBe(401);
+      const [kept] = await h.db.db.select().from(users).where(eq(users.id, row.id));
+      expect(kept!.isActive).toBe(false);
+      const listed = ((await admin.get('/staff/technicians')).body as { id: string; isActive: boolean }[]).find((x) => x.id === row.id)!;
+      expect(listed.isActive).toBe(false);
     });
 
     it('puts the technician on a bay of his unit: a new code creates the bay, a held or other-unit bay is refused', async () => {
@@ -181,8 +216,8 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
     const me = await request(h.app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookieOf(ok)).set('x-manage-client', 'test');
     expect(me.status).toBe(200);
     expect(me.body.authentication).toBe('pin');
-    // Promoting the account later invalidates its PIN session.
-    await h.db.db.update(users).set({ roles: ['technician', 'accident_coordinator'] }).where(eq(users.username, 'jolo1'));
+    // Promoting the account to system administrator later invalidates its PIN session.
+    await h.db.db.update(users).set({ roles: ['technician', 'system_admin'] }).where(eq(users.username, 'jolo1'));
     const after = await request(h.app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookieOf(ok)).set('x-manage-client', 'test');
     expect(after.status).toBe(401);
     // Owner and administrators keep email + Authenticator: password sign-in stays closed.

@@ -14,7 +14,7 @@ test('personal login asks for the Authenticator code after the password',async({
   await page.route('**/api/v1/auth/email/verify',async r=>{
     expect(r.request().postDataJSON().code).toBe('123456');await r.fulfill({json:{...me,authentication:'totp'}});
   });
-  await page.goto('/login');await page.getByLabel('ایمیل کاری',{exact:true}).fill('owner@example.test');
+  await page.goto('/login?mode=staff');await page.getByLabel('ایمیل کاری',{exact:true}).fill('owner@example.test');
   await page.getByLabel('رمز عبور',{exact:true}).fill('synthetic-personal-password');
   await page.getByRole('button',{name:'ورود',exact:true}).click();
   await page.getByLabel('کد تأیید',{exact:true}).fill('۱۲۳۴۵۶');
@@ -43,14 +43,14 @@ test('owner makes a private recovery link for a colleague, never for the owner a
   await page.route('**/api/v1/auth/me',r=>r.fulfill({json:{...me,isOwner:true}}));
   const colleague='00000000-0000-4000-8000-000000000001';
   await page.route('**/api/v1/auth/invitations',r=>r.fulfill({json:[
-    {id:me.id,email:'owner@example.test',displayName:'مالک آزمون',roles:['service_manager'],isActive:true,invitationDelivery:'manual',invitationFailure:null,invitationExpiresAt:null},
-    {id:colleague,email:'worker@example.test',displayName:'همکار آزمون',roles:['parts_clerk'],isActive:true,invitationDelivery:'manual',invitationFailure:null,invitationExpiresAt:null},
+    {id:me.id,email:'owner@example.test',displayName:'مالک آزمون',roles:['system_admin','service_manager'],isActive:true,invitationDelivery:'manual',invitationFailure:null,invitationExpiresAt:null},
+    {id:colleague,email:'worker@example.test',displayName:'همکار آزمون',roles:['system_admin'],isActive:true,invitationDelivery:'manual',invitationFailure:null,invitationExpiresAt:null},
   ]}));
   await page.route('**/api/v1/auth/invitations/email/status',r=>r.fulfill({json:{configured:false}}));
   const link='https://manage.example.test/activate#token=00000000-0000-4000-8000-000000000000.'+'x'.repeat(43)+'&mode=recovery';
   let issued=0;
   await page.route('**/api/v1/auth/users/*/recovery',async r=>{expect(r.request().url()).toContain(colleague);issued++;await r.fulfill({status:201,json:{recoveryUrl:link,expiresAt:'2030-01-01T00:00:00.000Z'}});});
-  await page.goto('/users');
+  await page.goto('/users#staff');
   await expect(page.getByRole('button',{name:'بازیابی دسترسی مالک آزمون'})).toHaveCount(0);
   await page.getByRole('button',{name:'بازیابی دسترسی همکار آزمون'}).click();
   const dialog=page.getByRole('dialog',{name:'بازیابی دسترسی همکار آزمون'});
@@ -66,8 +66,8 @@ test('owner makes a private recovery link for a colleague, never for the owner a
 
 test('a staff member without owner rights sees no recovery action',async({page})=>{
   await login(page,'admin');
-  await page.route('**/api/v1/auth/invitations',r=>r.fulfill({json:[{id:'00000000-0000-4000-8000-000000000001',email:'worker@example.test',displayName:'همکار آزمون',roles:['parts_clerk'],isActive:true,invitationDelivery:'manual',invitationFailure:null,invitationExpiresAt:null}]}));
-  await page.goto('/users');
+  await page.route('**/api/v1/auth/invitations',r=>r.fulfill({json:[{id:'00000000-0000-4000-8000-000000000001',email:'worker@example.test',displayName:'همکار آزمون',roles:['system_admin'],isActive:true,invitationDelivery:'manual',invitationFailure:null,invitationExpiresAt:null}]}));
+  await page.goto('/users#staff');
   await expect(page.getByRole('heading',{name:'همکار آزمون'})).toBeVisible();
   await expect(page.getByRole('button',{name:/بازیابی دسترسی/})).toHaveCount(0);
 });

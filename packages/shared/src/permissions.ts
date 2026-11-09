@@ -80,10 +80,14 @@ export function hasPermission(roles: readonly Role[], permission: Permission): b
   return permissionsFor(roles).has(permission);
 }
 
-/** Roles that may sign in with username + 4-digit PIN on a trusted device. Never the owner or an administrator. */
-export const PIN_LOGIN_ROLES = ['technician', 'parts_clerk', 'qc_inspector'] as const satisfies readonly Role[];
+/** Roles that may sign in with username + 4-digit PIN on a trusted device. Never the owner or a system administrator. */
+export const PIN_LOGIN_ROLES = ['accident_coordinator', 'technician', 'accident_expert', 'accident_supervisor', 'service_manager', 'parts_clerk', 'cashier', 'qc_inspector'] as const satisfies readonly Role[];
 export type PinLoginRole = (typeof PIN_LOGIN_ROLES)[number];
 export const isPinEligible = (roles: readonly string[], isOwner = false) =>
   !isOwner && roles.length > 0 && roles.every((r) => (PIN_LOGIN_ROLES as readonly string[]).includes(r));
-/** Never available in a PIN session, whatever templates or overrides say. */
-export const PIN_DENIED_PERMISSIONS: readonly Permission[] = ['user.manage', 'settings.manage', 'audit.read', 'finance.approve', 'case.release_authorize', 'part.price_authorize', 'daily_reports.settings', 'wage.manage', 'wage.report'];
+/**
+ * Never available in a PIN session, whatever templates or overrides say. Removed from every PIN session: administration belongs to the owner and the system administrator,
+ * who always sign in with email + Authenticator. Everything else follows the person's role, so a
+ * service manager or coordinator keeps their approvals when they sign in with the 4-digit PIN.
+ */
+export const PIN_DENIED_PERMISSIONS: readonly Permission[] = ['user.manage', 'settings.manage', 'daily_reports.settings'];
