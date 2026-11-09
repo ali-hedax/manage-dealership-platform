@@ -14,6 +14,7 @@ import {
   type Paged,
 } from '@manage/shared';
 import { CoverageChip, StageChip } from '@/components/Chips';
+import { VehicleDisclosure } from '@/components/VehicleDisclosure';
 import { Plate } from '@/components/Plate';
 import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -211,7 +212,7 @@ function CasesList() {
                     <Plate value={c.plate} />
                   </td>
                   <td>
-                    <div>{toPersianDigits(c.vehicleSummary ?? c.vehicleLabel)}</div>
+                    <VehicleDisclosure label={c.vehicleSummary ?? c.vehicleLabel} />
                     <div className="xs muted">{c.customerName ?? 'مالک نامشخص'}</div>
                   </td>
                   <td className="hide-sm">
