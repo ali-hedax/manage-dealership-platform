@@ -1,3 +1,21 @@
+## نسخهٔ عملیاتی جاری — طراحی HEDAX Signature منتشر شد — 2026-11-09
+
+Production اکنون commit **`f47a4b5885092c389ef27c8ba0256315e8fdd5cb`** را اجرا می‌کند. این commit ادغام PR #72 است که طراحی نادیا (PR #62) را روی main تازه (شامل #68، #70 و #71) سوار کرد. پیش از آن Production روی `7515abb` (PR #70) بود. جزئیات در [گزارش انتشار](docs/RELEASE_SIGNATURE_20261109.md) است.
+
+- **CI:** اجرای 42586923915 روی PR و اجرای 42588103421 روی main، هر دو شش از شش سبز.
+- **artifact:** شمارهٔ 13660516215. SHA256 فایل ZIP با digest گیت‌هاب برابر بود.
+- **migration:** ندارد. تعداد migrationها ۲۰ ماند و `.env` تغییری نکرد.
+- **وقفه:** ۹ ثانیه (09:21:34 تا 09:21:43 UTC).
+- **پشتیبان‌ها:** پیش از نصب `operational/20261109T091926Z` و نهایی `operational/20261109T092245Z`. هر دو جدا بازیابی شدند و اثرانگشت همهٔ جدول‌ها برابر بود.
+- **بازگشت:** تصاویر `7515abb` با برچسب `rollback-signature-20261109`. پوشهٔ سرور `/home/manage/incoming/signature-f47a4b5`.
+- **حل تعارض:** همهٔ آیکون‌های تازهٔ #70 حفظ شدند. برای آیکون‌های sparkles، truck، bell و shopping-cart طرح Signature هم اضافه شد.
+- **بررسی زنده:** همهٔ این موارد موفق بودند:
+  - health و probe فقط‌خواندنی (پرونده‌ها، میز قطعه با ۷۵ ردیف، کارگاه)
+  - پاسخ 401 بدون نشست
+  - تم Signature به‌عنوان پیش‌فرض و پاسخ ۲۰۰ برای `?ui=classic`
+  - لایهٔ CSS Signature و آیکون‌های آن
+- **قدم بعد:** مالک ظاهر تازه را روی کامپیوتر و گوشی نمایندگی ببیند. این نشست ابزار مرورگر نداشت. برای بازگشت در یک مرورگر: `?ui=classic`. برای برگشت به طرح تازه: `?ui=signature`. PR #62 با ادغام #72 جایگزین شد و بستن آن با مالک است.
+
 ## 2026-11-08 — Grouped Manage planning, independent per-part authorization (PR #70)
 - Added per-vehicle Manage Advisor supply plan preview: calculates route per needed part and allows each selection to be changed before action.
 - Every part's decision remains independent. Single exact stock option with known sale price can be reserved explicitly on the second action; all other paths prepare their per-part form and require further entry/approval.

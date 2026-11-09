@@ -9,7 +9,7 @@
 - Latest CI result must be checked before merge: prior run found and fixed one TypeScript narrowing error; no direct local build or Production deploy performed.
 # Changelog
 
-## 2026-11-09 — HEDAX Signature visual layer (PR #62, integrated in #72)
+## 2026-11-09 — HEDAX Signature visual layer (PR #62, integrated in #72, released to Production)
 
 - New default look: dark mineral ground, graphite plates with machined edges, a champagne key light and restrained blue. The navigation rail sits above the workspace and the active destination is lit. Opened case sections rise as an inspector, and dialogs enter as a separate layer. Desk cards respond to the pointer.
 - The dashboard opens with an operations view: the share of active cases within their deadline, plus overdue, blocked, due-within-48-hours and ready-for-delivery figures. Each figure links to the existing filtered case list.
