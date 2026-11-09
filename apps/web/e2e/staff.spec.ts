@@ -135,6 +135,9 @@ test('a service manager is created the same way without unit or bay, signs in wi
   await login(page,'admin');
   await page.goto('/users');
   await page.getByRole('row',{name:/مدیر خدمات آزمون/}).getByRole('button',{name:'غیرفعال کردن',exact:true}).click();
+  // The system administrator (not the owner) must give a reason for the owner's report.
+  await page.getByLabel('دلیل (در گزارش مالک دیده می‌شود)',{exact:true}).fill('بایگانی حساب آزمون');
+  await page.locator('.technician-confirm').getByRole('button',{name:'تأیید',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'غیرفعال شد'})).toBeVisible();
   const archive=page.locator('details.technicians-archived');
   await expect(archive.locator('summary')).toContainText('حساب‌های غیرفعال و بایگانی');

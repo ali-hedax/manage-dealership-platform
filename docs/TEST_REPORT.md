@@ -17,6 +17,11 @@
     - deactivating an existing staff member ends their password session and keeps the row
   - web and api `tsc --noEmit` clean, and the docs check passed.
 - **Browser tests:** `staff.spec.ts` was rewritten (system-admin tab, technician and service-manager creation with PIN sign-in, archive). `helpers.login` and `personal-auth` open `/login?mode=staff`. They run in CI.
+- **CI run 42617476240 (head `0bfca4b`):** five checks green, Playwright red with 4 tests. Causes and fixes:
+  - `pwa.spec` ×2: the install button lived inside the owner form, which is no longer the default tab. It now sits under both tabs.
+  - `personal-auth` recovery ×2: the مدیر سیستم tab lists only system administrators, and کارکنان is now the default. The tests now use a system-administrator colleague on `/users#staff`.
+  - `staff.spec` service manager: the system administrator must write a reason before deactivating. The test now fills it in.
+  - Also fixed: choosing a tab cleared the address hash for the wrong tab (`#staff` instead of the new default).
 
 ## Simple staff sign-in (PIN on trusted device) — 2026-11-08 — branch `feature/staff-pin-login`
 

@@ -60,7 +60,7 @@ export default function UsersPage(){
     window.addEventListener('hashchange',follow);
     return()=>window.removeEventListener('hashchange',follow);
   },[me.isOwner]);
-  function choose(next:Tab){setTab(next);history.replaceState(null,'',next==='staff'?window.location.pathname:`#${next}`);}
+  function choose(next:Tab){setTab(next);history.replaceState(null,'',next==='technicians'?window.location.pathname:`#${next}`);}
   async function checkMail(){setChecking(true);setCheck(null);try{setCheck(await api<MailCheck>('/auth/invitations/email/check',{body:{}}));}catch(err){setError(errorMessage(err));}finally{setChecking(false);}}
   const busy=!!busyEmail;
   async function invite(input:InvitationInput,delivery:'email'|'manual'='email'){

@@ -116,7 +116,6 @@ function StaffLoginForm({ active, busy, setBusy }: LoginSubmission & { active: b
       </button>
       {emailEnabled && !challenge && <p className="login-2fa"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>در مرحلهٔ بعد، کد Google Authenticator خواسته می‌شود.</p>}
       {challenge && <><p className="small muted">کد در برنامه هر ۳۰ ثانیه عوض می‌شود. اگر کد قبلی را استفاده کرده‌اید، منتظر کد تازه بمانید.</p><button className="btn" type="button" onClick={()=>{setChallenge(null);setCode('');setError('');}}>بازگشت به ایمیل و رمز</button></>}
-      {!challenge&&<div className="install-login"><InstallButton/></div>}
     </form>
   );
 }
@@ -291,6 +290,8 @@ function LoginPanels() {
       <div id="login-panel-technician" role="tabpanel" aria-labelledby="login-tab-technician" hidden={mode !== 'technician'}>
         {mode === 'technician' && <TechnicianLoginForm busy={busy} setBusy={setBusy} />}
       </div>
+      {/* Installing the app is the same for every sign-in path. */}
+      <div className="install-login"><InstallButton/></div>
     </div>
   );
 }
