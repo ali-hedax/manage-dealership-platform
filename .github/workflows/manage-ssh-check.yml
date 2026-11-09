@@ -1,0 +1,34 @@
+name: Manage SSH connection check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manage-ssh-connection-check
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH without printing secrets
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.MANAGE_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.MANAGE_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" || { echo "Missing MANAGE_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "$SSH_KNOWN_HOSTS" || { echo "Missing MANAGE_SSH_KNOWN_HOSTS"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/manage_key
+          chmod 600 ~/.ssh/manage_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/manage_key > /dev/null
+      - name: Verify inbound connection to Manage server (read-only)
+        run: |
+          ssh -i ~/.ssh/manage_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12 hedax-deploy@85.198.52.255 'test "$(whoami)" = hedax-deploy && test "$(hostname)" = manage-preview && echo "Manage SSH connection OK"'
