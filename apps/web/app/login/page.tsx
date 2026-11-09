@@ -121,7 +121,7 @@ function StaffLoginForm({ active, busy, setBusy }: LoginSubmission & { active: b
   );
 }
 
-const technicianUnavailable = 'ورود تعمیرکار به‌زودی فعال می‌شود؛ فعلاً از مسئول تصادفات کمک بگیرید.';
+const technicianUnavailable = 'ورود چهاررقمی در دسترس نیست؛ با مدیر سیستم تماس بگیرید.';
 const technicianErrors: Partial<Record<number, string>> = {
   401: 'نام کاربری یا رمز اشتباه است.',
   423: 'چند بار اشتباه وارد شد؛ ۱۵ دقیقه دیگر دوباره امتحان کنید.',
@@ -149,7 +149,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
     setError('');
     try {
       const me = await api<{ roles: string[] }>('/auth/technician-login', { body: { username: username.trim(), pin, ...(needsDevice && devicePassword ? { devicePassword } : {}) } });
-      router.replace(me.roles.every(r => r === 'technician') ? '/workshop/technician' : '/');
+      router.replace(me.roles.every(r => r === 'technician') ? '/workshop/technician' : '/launch');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'DEVICE_NOT_REGISTERED') {
         setNeedsDevice(true);
@@ -170,7 +170,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
           className="input ltr-input"
           name="username"
           value={username}
-          placeholder="tech01"
+          placeholder="نام کاربری کارمند"
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
@@ -229,19 +229,19 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
       <button className="btn btn-primary" type="submit" disabled={busy}>
         {busy ? 'در حال ورود…' : 'ورود به کارتابل'}
       </button>
-      <p className="login-help muted small">رمز را فراموش کرده‌اید؟ به مسئول تصادفات بگویید تا تازه‌اش کند.</p>
+      <p className="login-help muted small">رمز را فراموش کرده‌اید؟ از مالک یا مدیر سیستم بخواهید آن را بازنشانی کند.</p>
     </form>
   );
 }
 
 const loginModes = [
-  { id: 'staff', label: 'کارکنان' },
-  { id: 'technician', label: 'تعمیرکار و کارکنان' },
+  { id: 'technician', label: 'ورود کارکنان' },
+  { id: 'staff', label: 'ورود مالک و مدیر سیستم' },
 ] as const;
 
 function LoginPanels() {
   const params = useSearchParams();
-  const [mode, setMode] = useState(params.get('mode') === 'technician' ? 'technician' : 'staff');
+  const [mode, setMode] = useState(params.get('mode') === 'staff' || params.get('mode') === 'management' ? 'staff' : 'technician');
   const [busy, setBusy] = useState(false);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
 
