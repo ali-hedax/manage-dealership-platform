@@ -113,6 +113,12 @@ export class TasksService {
       await this.assertSameCase(tx, tenantId, caseId, before);
       const planned: string[] = [];
       for (const [i, step] of input.steps.entries()) {
+        const [assignee] = await tx.select({ roles: users.roles }).from(users).where(and(
+          eq(users.id, step.assignedUserId), eq(users.tenantId, tenantId), eq(users.isActive, true),
+        ));
+        if (!assignee?.roles.includes('technician')) {
+          throw badRequest('INVALID_ASSIGNEE', 'هر قدم باید به یک تکنسین فعال همین نمایندگی سپرده شود');
+        }
         const deps = stepDependencies(input.steps.slice(0, i + 1), [...planned, ''], before)[i]!;
         const id = await this.createIn(tx, actor, caseId, {
           departmentId: step.departmentId,

@@ -179,7 +179,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
     expect(round1.status).toBe(201);
     let state = round1.body as CaseCompletion;
     expect(state.qc).toHaveLength(1);
-    expect(state.qc[0]).toMatchObject({ round: 1, outcome: 'failed', inspectedBy: { displayName: 'کنترل کیفیت نمونه' } });
+    expect(state.qc[0]).toMatchObject({ round: 1, outcome: 'failed', inspectedBy: { displayName: (await qc.get('/auth/me')).body.displayName } });
     const fixId = state.qc[0]!.checks.find((x) => x.item === 'paint')!.correctiveTaskId!;
     let kase = await caseOf(c.id);
     expect(kase.stage).toBe('in_repair');
@@ -199,7 +199,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
     expect((await caseOf(c.id)).stage).toBe('quality_control');
 
     state = await closeTechnically(c.id);
-    expect(state.technical).toMatchObject({ valid: true, closedBy: { displayName: 'سرپرست نمونه' } });
+    expect(state.technical).toMatchObject({ valid: true, closedBy: { displayName: (await supervisor.get('/auth/me')).body.displayName } });
     expect((await caseOf(c.id)).stage).toBe('ready_for_delivery');
     expect(state.deliveryIssues.map((i) => i.code)).toEqual(['financial_not_closed']);
 
@@ -230,7 +230,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
     expect((delivered.body as CaseCompletion).delivery).toMatchObject({
       recipientName: 'مشتری آزمون تحویل',
       recipientRelation: 'owner',
-      deliveredBy: { displayName: 'کارشناس نمونه' },
+      deliveredBy: { displayName: (await expert.get('/auth/me')).body.displayName },
     });
     kase = await caseOf(c.id);
     expect(kase).toMatchObject({ stage: 'delivered', status: 'closed' });

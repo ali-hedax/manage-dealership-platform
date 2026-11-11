@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const repairStepSchema = z.object({
   departmentId: z.uuid(),
   stationId: z.uuid().nullish(),
-  assignedUserId: z.uuid().nullish(),
+  assignedUserId: z.uuid({ error: 'برای هر قدم، تکنسین مسئول را انتخاب کنید' }),
   days: z.number().min(0.25).max(180).multipleOf(0.25),
   /** Technician wage of this step in Rial, independent of the assessment labour. */
   wageRial: z.number().int().min(0).max(1_000_000_000_000).optional(),

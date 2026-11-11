@@ -46,7 +46,7 @@ export function RepairPlanEditor({ kase, onDone }: { kase: CaseDetail; onDone: (
     });
 
   const parsed = rows.map((r) => ({ ...r, daysN: days(r.days), wageN: r.wage.trim() ? parseAmount(r.wage) : undefined }));
-  const valid = parsed.every((r) => r.departmentId && r.daysN >= 0.25 && r.daysN <= 180 && (r.wageN === undefined || r.assignedUserId));
+  const valid = parsed.every((r) => r.departmentId && r.assignedUserId && r.daysN >= 0.25 && r.daysN <= 180);
   const total = valid ? repairDurationDays(parsed.map((r) => ({ days: r.daysN, concurrentWithPrevious: r.concurrentWithPrevious }))) : null;
 
   async function save() {
@@ -57,7 +57,7 @@ export function RepairPlanEditor({ kase, onDone }: { kase: CaseDetail; onDone: (
           steps: parsed.map((r) => ({
             departmentId: r.departmentId,
             stationId: r.stationId || null,
-            assignedUserId: r.assignedUserId || null,
+            assignedUserId: r.assignedUserId,
             days: Math.round(r.daysN * 4) / 4,
             wageRial: wages ? r.wageN : undefined,
             title: r.title || undefined,
@@ -104,9 +104,9 @@ export function RepairPlanEditor({ kase, onDone }: { kase: CaseDetail; onDone: (
                 </select>
               </label>
               <label className="field">
-                <span>نفر</span>
+                <span>تکنسین مسئول *</span>
                 <select className="input" value={r.assignedUserId} onChange={(e) => set(r.key, { assignedUserId: e.target.value })}>
-                  <option value="">بعداً</option>
+                  <option value="">انتخاب تکنسین</option>
                   {staff?.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
                 </select>
               </label>

@@ -144,8 +144,9 @@ describe('reports: consistent figures', () => {
     expect((await manager.get('/reports?view=manager&period=custom&from=1405/08/05&to=1405/08/01')).body.code).toBe('INVALID_PERIOD');
 
     const mine = await report(expert, 'view=accident&responsibleUserId=me');
-    expect(mine.filters.find((f) => f.key === 'responsible')!.value).toBe('کارشناس نمونه');
-    expect(mine.items.rows.every((i) => i.responsible?.displayName === 'کارشناس نمونه')).toBe(true);
+    const viewer = (await expert.get('/auth/me')).body;
+    expect(mine.filters.find((f) => f.key === 'responsible')!.value).toBe(viewer.displayName);
+    expect(mine.items.rows.every((i) => i.responsible?.displayName === viewer.displayName)).toBe(true);
   });
 
   it('workshop view counts activities per unit and links bars back to the report', async () => {

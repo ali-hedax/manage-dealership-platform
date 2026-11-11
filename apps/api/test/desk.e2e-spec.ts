@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { users } from '../src/db/schema';
+import { dayWord } from '@manage/shared';
 import { createHarness, type Client, type Harness } from './harness';
 
 // Package 6 — desks as folders: one card per open car with place, days and one «قدم بعدی».
@@ -34,13 +35,17 @@ it('a folder follows the car: assessment, plan, finished step waiting for the ex
 
   const plan = await expert.post(`/cases/${caseId}/repair-plan/steps`, { steps: [
     { departmentId: body, assignedUserId: techId, days: 2, title: 'صافکاری' },
-    { departmentId: paint, days: 2, title: 'نقاشی' },
+    { departmentId: paint, assignedUserId: techId, days: 2, title: 'نقاشی' },
   ] });
   expect(plan.status).toBe(201);
-  const first = plan.body[0] as { id: string };
+  const first = plan.body[0] as { id: string; plannedEndAt: string };
   expect((await tech.post(`/workshop/my-tasks/${first.id}/actions`, { action: 'start', expectedVersion: 1 })).status).toBe(201);
   folder = (await expert.get(`/desk/folders/${caseId}`)).body;
-  expect(folder.next.text).toMatch(/^طبق برنامه — پایان صافکاری/);
+  // Plans start at admission; this two-day-old intake may already be late,
+  // depending on the working calendar. Assert the actual deadline, not weekday luck.
+  expect(folder.next).toEqual(Date.parse(first.plannedEndAt) < Date.now()
+    ? { text: 'عقب‌تر از برنامه — صافکاری', actor: 'technician', tone: 'stop' }
+    : { text: `طبق برنامه — پایان صافکاری ${dayWord(first.plannedEndAt)}`, actor: 'technician', tone: 'ok' });
   expect(folder.place).toBe('صافکاری');
   expect((await tech.post(`/workshop/my-tasks/${first.id}/actions`, { action: 'complete', expectedVersion: 2 })).status).toBe(201);
   folder = (await expert.get(`/desk/folders/${caseId}`)).body;

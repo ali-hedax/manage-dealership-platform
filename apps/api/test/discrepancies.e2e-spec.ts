@@ -70,7 +70,7 @@ describe('parts discrepancy queue', () => {
     // Assign a reviewer, then close with a reason; no reason is refused.
     const assigned = await parts.post(`/part-discrepancies/${item.id}/assign`, { expectedVersion: item.version, assigneeUserId: (await parts.get('/auth/me')).body.id });
     expect(assigned.status).toBe(201);
-    expect(assigned.body).toMatchObject({ status: 'in_review', assignee: { displayName: 'کاربر قطعات نمونه' } });
+    expect(assigned.body).toMatchObject({ status: 'in_review', assignee: { displayName: (await parts.get('/auth/me')).body.displayName } });
     const noReason = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: assigned.body.version, outcome: 'resolved', reason: '' });
     expect(noReason.status).toBe(400);
     const stale = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: item.version, outcome: 'resolved', reason: 'بررسی شد؛ قطعه در واحد پیدا شد' });
@@ -81,7 +81,7 @@ describe('parts discrepancy queue', () => {
       reason: 'بررسی شد؛ قطعه در قفسه واحد صافکاری پیدا شد، مانع رفع شد',
     });
     expect(closed.status).toBe(201);
-    expect(closed.body).toMatchObject({ status: 'resolved', resolvedBy: { displayName: 'کاربر قطعات نمونه' }, resolutionReason: expect.stringContaining('قفسه') });
+    expect(closed.body).toMatchObject({ status: 'resolved', resolvedBy: { displayName: (await parts.get('/auth/me')).body.displayName }, resolutionReason: expect.stringContaining('قفسه') });
     const again = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: closed.body.version, outcome: 'dismissed', reason: 'دوباره' });
     expect(again.body.code).toBe('DISCREPANCY_CLOSED');
 

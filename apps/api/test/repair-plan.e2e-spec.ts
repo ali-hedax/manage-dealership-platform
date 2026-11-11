@@ -36,9 +36,9 @@ describe('repair plan steps', () => {
     const res = await expert.post(`/cases/${caseId}/repair-plan/steps`, {
       steps: [
         { departmentId: body, assignedUserId: techId, days: 2, wageRial: 12_000_000, title: 'صافکاری' },
-        { departmentId: paint, days: 3, title: 'نقاشی' },
-        { departmentId: body, days: 1, title: 'مونتاژ', concurrentWithPrevious: true },
-        { departmentId: body, days: 2, title: 'صافکاری دوباره' },
+        { departmentId: paint, assignedUserId: techId, days: 3, title: 'نقاشی' },
+        { departmentId: body, assignedUserId: techId, days: 1, title: 'مونتاژ', concurrentWithPrevious: true },
+        { departmentId: body, assignedUserId: techId, days: 2, title: 'صافکاری دوباره' },
       ],
     });
     expect(res.status).toBe(201);
@@ -53,7 +53,7 @@ describe('repair plan steps', () => {
     expect(wages.find((w) => w.taskId === a!.id)?.wageRial).toBe(12_000_000);
 
     // A later addition continues after the open tail of the plan.
-    const more = await expert.post(`/cases/${caseId}/repair-plan/steps`, { steps: [{ departmentId: paint, days: 1, title: 'پولیش' }] });
+    const more = await expert.post(`/cases/${caseId}/repair-plan/steps`, { steps: [{ departmentId: paint, assignedUserId: techId, days: 1, title: 'پولیش' }] });
     expect(more.status).toBe(201);
     expect(more.body[0].dependsOn).toEqual([d!.id]);
   });
@@ -66,5 +66,19 @@ describe('repair plan steps', () => {
     expect((await tech.post(`/cases/${caseId}/repair-plan/steps`, { steps: [{ departmentId: body, days: 1 }] })).status).toBe(403);
     // Nothing was written by the failed calls.
     expect((await expert.get(`/cases/${caseId}`)).body.tasks ?? []).toHaveLength(0);
+  });
+
+  it('requires a technician on every step and rolls back the entire plan for an invalid assignee', async () => {
+    const caseId = await newCase();
+    expect((await expert.post(`/cases/${caseId}/repair-plan/steps`, { steps: [{ departmentId: body, days: 1 }] })).status).toBe(400);
+    const expertId = (await expert.get('/auth/me')).body.id;
+    const rejected = await expert.post(`/cases/${caseId}/repair-plan/steps`, { steps: [
+      { departmentId: body, assignedUserId: techId, days: 1, wageRial: 1000 },
+      { departmentId: paint, assignedUserId: expertId, days: 1 },
+    ] });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.code).toBe('INVALID_ASSIGNEE');
+    expect((await expert.get(`/cases/${caseId}`)).body.tasks).toHaveLength(0);
+    expect((await expert.get(`/cases/${caseId}/wages`)).body).toHaveLength(0);
   });
 });

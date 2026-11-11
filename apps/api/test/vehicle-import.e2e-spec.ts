@@ -101,7 +101,10 @@ describe('existing-vehicle import: preview', () => {
   });
 
   it('requires the import permission and rejects files that are not the vehicle list', async () => {
-    expect((await preview([complete(ids().adm, ids().chs)], {}, expert)).status).toBe(403);
+    const readOnly = await h.login('manager');
+    expect((await preview([complete(ids().adm, ids().chs)], {}, readOnly)).status).toBe(403);
+    // Intake/import now belongs to the accident expert as well as system support.
+    expect((await preview([complete(ids().adm, ids().chs)], {}, expert)).status).toBe(201);
     const bad = await manager.post('/vehicle-imports', { fileName: 'x.xlsx', fileBase64: b64(new TextEncoder().encode('not a zip')) });
     expect(bad.body.code).toBe('IMPORT_FILE_INVALID');
   });
@@ -114,7 +117,7 @@ describe('existing-vehicle import: apply and re-import', () => {
       complete(a.adm, a.chs, {
         'اقدام بعدی': 'صافکاری گلگیر',
         'واحد درگیر': 'صافکاری',
-        'مسئول پیگیری': 'سرپرست نمونه',
+        'مسئول پیگیری': 'کارشناس تصادفات نمونهٔ دوم',
         'نوع پوشش تأییدشده': 'کارت طلایی / امداد خودرو',
         'پوشش مندرج در لیست': 'کارت طلایی',
         'توضیحات فعلی — عین برگه': 'متن اولیه برگه آزمون',
@@ -142,7 +145,7 @@ describe('existing-vehicle import: apply and re-import', () => {
       coverageType: 'golden_card',
       coverageNotes: 'کارت طلایی',
       stage: 'in_repair',
-      responsible: { displayName: 'سرپرست نمونه' },
+      responsible: { displayName: 'کارشناس تصادفات نمونهٔ دوم' },
     });
     expect(first.vehicle).toMatchObject({ chassisRef: a.chs, vin: null, model: 'دنا پلاس' });
     expect(first.admittedAt).toBe('2026-10-12T05:45:00.000Z'); // 1405/07/20 09:15 Tehran

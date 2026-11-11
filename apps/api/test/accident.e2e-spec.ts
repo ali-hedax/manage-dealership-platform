@@ -50,7 +50,8 @@ beforeAll(async () => {
   );
   depts = (await supervisor.get('/departments')).body;
   const assignable = (await expert.get('/users/assignable')).body as { id: string; displayName: string }[];
-  supervisorId = assignable.find((u) => u.displayName === 'سرپرست نمونه')!.id;
+  supervisorId = (await supervisor.get('/auth/me')).body.id;
+  expect(assignable.map((u) => u.id)).toContain(supervisorId);
 });
 
 afterAll(async () => {
@@ -266,7 +267,7 @@ describe('acceptance 6: multiple departments, parallel and dependent work', () =
     expect((await act(cur, 'reopen')).status).toBe(400);
     cur = (await act(cur, 'approve')).body as Task;
     expect(cur.status).toBe('approved');
-    expect(cur.approvedBy?.displayName).toBe('سرپرست نمونه');
+    expect(cur.approvedBy?.id).toBe(supervisorId);
 
     // Even with all work approved the stage selector cannot deliver or skip QC:
     // both go through QC, technical/financial close and handover (qc-delivery spec).
@@ -299,7 +300,7 @@ describe('blockers: occurrence, follow-up and resolution timing', () => {
 
     expect((await supervisor.post(`/blockers/${b.id}/resolve`, {})).status).toBe(400);
     const r = await supervisor.post(`/blockers/${b.id}/resolve`, { note: 'رفع شد' });
-    expect(r.body.resolvedBy.displayName).toBe('سرپرست نمونه');
+    expect(r.body.resolvedBy.id).toBe(supervisorId);
     const task = (await supervisor.get(`/cases/${c.id}`)).body.tasks[0];
     expect(task.status).toBe('in_progress');
     expect((await supervisor.post(`/blockers/${b.id}/resolve`, { note: 'دوباره' })).body.code).toBe(
