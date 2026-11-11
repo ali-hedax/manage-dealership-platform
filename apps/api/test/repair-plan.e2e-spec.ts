@@ -71,7 +71,7 @@ describe('repair plan steps', () => {
   it('requires a technician on every step and rolls back the entire plan for an invalid assignee', async () => {
     const caseId = await newCase();
     expect((await expert.post(`/cases/${caseId}/repair-plan/steps`, { steps: [{ departmentId: body, days: 1 }] })).status).toBe(400);
-    const expertId = (await expert.get('/auth/me')).body.id;
+    const expertId = (await h.db.db.select({ id: users.id }).from(users).where(eq(users.username, 'p5-expert')))[0]!.id;
     const rejected = await expert.post(`/cases/${caseId}/repair-plan/steps`, { steps: [
       { departmentId: body, assignedUserId: techId, days: 1, wageRial: 1000 },
       { departmentId: paint, assignedUserId: expertId, days: 1 },
