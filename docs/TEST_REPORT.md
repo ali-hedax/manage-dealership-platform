@@ -1,5 +1,31 @@
 # Test report
 
+## Package 9 — owner's approved visual direction, release candidate — 2026-11-11 — tested code commit `9f79eb3`
+
+Branch `feature/p9-visual-direction` (= `integration/spec-rebuild-rc1`), on top of packages 0–8 and upstream `main` `cc1d7e1`. The commit that adds this report changes documentation only.
+
+**Ran here and green on `9f79eb3`:**
+
+| Check | Result |
+|---|---|
+| `packages/shared` unit tests (`node --test`) | **52/52** pass (incl. the new «پرونده‌های من» desk filter) |
+| API TypeScript vs. previous baseline (stubbed third-party types) | 159 = 159, **no new error** |
+| Web TypeScript (`app`, `components`, `lib`) with typed stand-ins for React 19, SWR 2 and Next | **0 errors** — the stand-ins now type hooks, events, `key` and component props, so this is a real check of the web code, not only of syntax |
+| Playwright specs (`apps/web/e2e/*.ts`) against the real `@playwright/test` 1.63 types | **0 errors** |
+| Migrations 0000 → 0022 on PostgreSQL 16; down of 0022, 0021, 0020 and re-apply | green (run on `3693df4`; `9f79eb3` changes two web components only) |
+| `node scripts/check-docs.mjs` | green (68 Markdown files, 175 API routes) |
+| Visual harness (`tools/visual-harness`): 12 screens × 360 / 390 / 768 / 1440 px | **48/48 without horizontal overflow**, 0 page errors, 0 crashed pages |
+| Same harness: approximate WCAG contrast of every visible text node on solid backgrounds (1440 and 390) | **0 findings** after raising grey text to `#656B75` / `#575D66`; dark sheets checked by hand (`#8A93A3` on `#18282F` 4.9:1, tone inks ≥ 7:1) |
+| Keyboard | Tab order: skip link → brand → sidebar → search → notifications → account → range → each bay of the map; Enter selects a bay (`aria-pressed`) and lists its cars as links |
+| Reduced motion | pulse and shimmer animations resolve to `none` under `prefers-reduced-motion: reduce` |
+| Print | case folder prints without tabs/clip/buttons; control room prints KPI, funnel and a plain bay list instead of the drawing |
+
+The harness renders the **real** pages and CSS of `apps/web` in Chrome 153 with Vazirmatn and an in-page synthetic API whose numbers come from the shared rules; it is not the built Next app and not the real API. Its screenshots, reference-versus-actual images and a 32-second interaction recording are in [design/p9](design/p9/).
+
+**Written, not run here** (need the installed workspace): API e2e `control-room.e2e-spec.ts` (new assertion: alerts carry `caseNumber`); Playwright `role-journeys.spec.ts` (bay selection with the keyboard, parts desk with ledger and stock card, settings hub → workshop settings with «بازگشت به تنظیمات», admin desk title), `workspaces.spec.ts` (new sidebar), `accident.spec.ts` and `mobile.spec.ts` («پرونده‌ها» link), `parts-workbench`, `parts-finance`, `daily-reports` («انتخاب مسیر تأمین»); `helpers.login` now matches «ورود» exactly (the sign-in page also has «راهنمای ورود» and «مشکل در ورود؟»).
+
+**Could not run in this environment, with the reason:** `pnpm install` (npm registry blocked), therefore `pnpm lint`, the full `pnpm typecheck`, Jest, `next build`, `pnpm test:e2e` against the real app and the Docker compose smoke test; GitHub CI (Actions are off on the fork and no pull request can be opened on `ali-hedax/manage-dealership-platform` from this session); HawkScan (no `HAWK_API_KEY`, and the app cannot be started without its dependencies). **Release readiness depends on these being green in CI on the merged commit.**
+
 ## Rebuild per the approved product spec — packages 0–8 — 2026-11-10/11 — branches `feature/p0-spec-housekeeping` … `feature/p8-quality-delivery`
 
 - **Scope:** [PRODUCT_SPEC_FA.md](PRODUCT_SPEC_FA.md) packages 0–8 (six roles, cost alerts, one parts list with a server-side state machine, usable stock, repair path and technician desk, paper/dark interface, control room and alert table, demo fleet, docs).
