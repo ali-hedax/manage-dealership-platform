@@ -77,7 +77,7 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   const ledger = page.getByTestId('parts-ledger');
   const front = ledger.getByTestId('part').filter({ hasText: 'لنت جلو' });
   await expect(front).toContainText('تعیین تکلیف نشده');
-  await front.getByRole('button', { name: 'تعیین تکلیف' }).click();
+  await front.getByRole('button', { name: 'انتخاب مسیر تأمین' }).click();
   await front.getByRole('button', { name: 'رزرو از موجودی', exact: true }).click();
   // All suffixes of the base code with usable quantity; nothing chosen automatically when several fit.
   await expect(front.getByRole('radio')).toHaveCount(8);
@@ -93,7 +93,7 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   await front.locator('.m-row-head').click();
   await expect(front.getByRole('button', { name: 'لغو رزرو' })).toBeVisible();
   const rear = ledger.getByTestId('part').filter({ hasText: 'لنت عقب' });
-  await rear.getByRole('button', { name: 'تعیین تکلیف' }).click();
+  await rear.getByRole('button', { name: 'انتخاب مسیر تأمین' }).click();
   await rear.getByRole('button', { name: 'رزرو از موجودی', exact: true }).click();
   await rear.getByRole('radio').first().check();
   await rear.getByRole('button', { name: 'رزرو از موجودی', exact: true }).last().click();

@@ -6,7 +6,7 @@ import { TECHNICIAN_PROBLEMS, TECHNICIAN_PROBLEM_LABELS, type MyWorkMonth, type 
 import { useAuth } from '@/lib/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { faNum, formatJalali, rial, toPersianDigits } from '@/lib/format';
-import { Plate } from '@/components/Plate';
+import { Plate, PlateText } from '@/components/Plate';
 import { Dialog } from '@/components/Dialog';
 import { ReminderCards } from '@/components/ReminderCards';
 
@@ -95,7 +95,7 @@ export default function TechnicianPage() {
               <li key={t.id} className="tc-mini">
                 <div>
                   <strong>{t.vehicleLabel}</strong>
-                  <span><bdi>{toPersianDigits(t.plate ?? '')}</bdi> · {t.title || t.departmentName}{t.status === 'done' ? ' · منتظر تأیید کارشناس' : ''}</span>
+                  <span><PlateText value={t.plate} /> · {t.title || t.departmentName}{t.status === 'done' ? ' · منتظر تأیید کارشناس' : ''}</span>
                 </div>
                 {t.wage && <b>{faNum(t.wage.amountRial)}</b>}
               </li>
@@ -109,7 +109,7 @@ export default function TechnicianPage() {
       </nav>
 
       <Dialog open={!!problemFor} title="مشکل دیگر" onClose={() => !busy && setProblemFor(null)} footer={<button type="button" className="btn" disabled={busy} onClick={() => setProblemFor(null)}>انصراف</button>}>
-        <p className="small">پیام برای کارشناس همین خودرو فرستاده می‌شود{problemFor?.plate ? <> (پلاک <bdi>{toPersianDigits(problemFor.plate)}</bdi>)</> : ''}.</p>
+        <p className="small">پیام برای کارشناس همین خودرو فرستاده می‌شود{problemFor?.plate ? <> (پلاک <PlateText value={problemFor.plate} />)</> : ''}.</p>
         <div className="technician-problems">
           {TECHNICIAN_PROBLEMS.map((p) => <button key={p} type="button" className="btn" disabled={busy} onClick={() => problemFor && void report(problemFor, p)}>{TECHNICIAN_PROBLEM_LABELS[p]}</button>)}
         </div>

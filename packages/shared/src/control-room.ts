@@ -27,6 +27,8 @@ export interface UnansweredAlert {
   kind: UnansweredKind;
   text: string;
   caseId: string | null;
+  /** File number shown in the alert table (null for tenant-wide alerts). */
+  caseNumber?: string | null;
   plate: string | null;
   vehicle: string | null;
   since: string;

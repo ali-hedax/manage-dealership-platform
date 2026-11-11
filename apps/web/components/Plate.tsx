@@ -28,3 +28,14 @@ export function Plate({ value, large, size }: { value: string | null | undefined
     </span>
   );
 }
+
+/** Compact one-line plate for tables and chips, in the physical order of the plate (left to right). */
+export function PlateText({ value }: { value: string | null | undefined }) {
+  if (!value) return null;
+  const p = parsePlate(value);
+  return (
+    <bdi dir="ltr" className="plate-text" aria-label={`پلاک ${toPersianDigits(value)}`}>
+      {p ? <>{toPersianDigits(p.a)} <bdi>{p.letter}</bdi> {toPersianDigits(p.b)} | {toPersianDigits(p.region)}</> : toPersianDigits(value)}
+    </bdi>
+  );
+}

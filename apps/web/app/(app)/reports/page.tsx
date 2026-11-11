@@ -26,6 +26,7 @@ import { DiscrepancyQueue } from '@/components/DiscrepancyQueue';
 import { ReportChart } from '@/components/ReportChart';
 import { ReminderComposer, type ReminderDefaults } from '@/components/ReminderComposer';
 import { useAuth } from '@/lib/auth';
+import { PlateText } from '@/components/Plate';
 
 type Views = { views: ReportView[]; defaultView: ReportView | null; defaultResponsible: 'me' | null };
 const PRIORITY_TONE: Record<string, string> = { overdue: 'chip-red', today: 'chip-amber', soon: 'chip-amber', later: 'chip-blue', none: '' };
@@ -349,7 +350,7 @@ function ReportsPage() {
                               <div className="small">پذیرش ایران‌خودرو: <bdi>{i.admissionNo?toPersianDigits(i.admissionNo):'ثبت نشده'}</bdi></div>
                               <div className="xs muted">
                                 {i.vehicleLabel}
-                                {i.plate ? ` — ${toPersianDigits(i.plate)}` : ''}
+                                {i.plate ? <> — <PlateText value={i.plate} /></> : ''}
                               </div>
                             </td>
                             <td data-label="شرح" className="wide">

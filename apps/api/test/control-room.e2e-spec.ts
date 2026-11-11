@@ -44,6 +44,8 @@ it('shows four numbers, the funnel, the map, analysis, people and unanswered ale
   const problem = room.alerts.find((a: { kind: string; caseId: string }) => a.kind === 'technician_problem' && a.caseId === caseId);
   expect(problem).toMatchObject({ vehicle: 'دنا پلاس', recipient: 'مسئول قطعات، کارشناس' });
   expect(problem.recipientUserIds).toContain(expertId);
+  // The alert table names the file, so the manager can find it without opening the map.
+  expect(problem.caseNumber).toMatch(/^AC-\d{4}-\d{4}$/);
   expect(room.people.some((p: { userId: string; open: number }) => p.userId === expertId && p.open >= 1)).toBe(true);
   // Oldest first.
   const waits = room.alerts.map((a: { waitingHours: number }) => a.waitingHours);

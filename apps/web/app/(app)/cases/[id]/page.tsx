@@ -22,12 +22,13 @@ import { CaseSection } from '@/components/CaseSection';
 import { PartsLedger } from '@/components/PartsLedger';
 import { ProvenancePanel } from '@/components/ProvenancePanel';
 import { CoverageChip, StageChip } from '@/components/Chips';
-import { Plate } from '@/components/Plate';
 import { TasksPanel } from '@/components/TasksPanel';
 import { ResponsibilityBar } from '@/components/ResponsibilityBar';
 import { CaseWagesPanel } from '@/components/CaseWagesPanel';
 import { BackLink } from '@/components/BackLink';
-import { CaseFolderHeader, SECTION_TAB, type CaseTab } from '@/components/CaseFolderHeader';
+import { CaseFolderHeader, NextStepCard, SECTION_TAB, type CaseTab } from '@/components/CaseFolderHeader';
+import { CaseHistoryCard, RepairPlanTable } from '@/components/CaseToday';
+import { AppIcon } from '@/components/AppIcon';
 import { ReminderComposer } from '@/components/ReminderComposer';
 import { Dialog } from '@/components/Dialog';
 import { Timeline } from '@/components/Timeline';
@@ -106,7 +107,6 @@ export default function CaseDetailPage() {
   }
 
   const v = kase.vehicle;
-  const currentTasks = kase.tasks.filter(t => ['in_progress','blocked','done'].includes(t.status));
   // Default tab by role and stage: the parts clerk opens the parts list; the expert opens
   // the assessment while there is no repair plan yet; everyone else opens «کار امروز».
   const partsOnly = can('part.manage') && !can('assessment.manage');
@@ -148,18 +148,22 @@ export default function CaseDetailPage() {
       {can('case.create') && <Link className="m-btn2-s" href="/cases/new">پذیرش بعدی</Link>}
     </>
   );
+  const chips = (
+    <>
+      <StageChip stage={kase.stage} />
+      <CoverageChip coverage={kase.coverageType} />
+      {kase.openBlockers > 0 && <span className="chip chip-red">{faNum(kase.openBlockers)} مانع باز</span>}
+      {kase.isLegacyEntry && <span className="chip">ثبت‌شده از قبل از Manage</span>}
+      {kase.isTest && <span className="chip chip-amber">داده آزمایشی</span>}
+    </>
+  );
   return (
     <div className="stack case-folder">
-      <BackLink href={workspaceHome(me)} label="میز کار" />
-      <CaseFolderHeader kase={kase} tab={activeTab} onTab={goTab} actions={actions} />
-      <div className="row cf-chips">
-        <StageChip stage={kase.stage} />
-        <CoverageChip coverage={kase.coverageType} />
-        {kase.openBlockers > 0 && <span className="chip chip-red">{faNum(kase.openBlockers)} مانع باز</span>}
-        {kase.isLegacyEntry && <span className="chip">ثبت‌شده از قبل از Manage</span>}
-        {kase.isTest && <span className="chip chip-amber">داده آزمایشی</span>}
+      <div className="cf-title-row">
+        <p className="cf-title"><AppIcon name="folder" />پوشهٔ پرونده خودرو</p>
+        <BackLink href={workspaceHome(me)} label="بازگشت به میز کار" />
       </div>
-
+      <CaseFolderHeader kase={kase} tab={activeTab} onTab={goTab} actions={actions} chips={chips}>
       <div id="case-tabpanel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="stack cf-panel">
       {(printing || activeTab === 'today') && <>
       {kase.missingFields.length > 0 && (
@@ -174,19 +178,26 @@ export default function CaseDetailPage() {
           )}
         </div>
       )}
-      {currentTasks.length > 0 && <div className="case-current-route"><strong>فعالیت‌های جاری خودرو</strong><div className="row">
-        {currentTasks.map(t => <a className="chip" key={t.id} href="#case-tasks">{t.stationCode || t.department.name} · {t.status === 'done' ? 'منتظر تأیید تحویل' : t.status === 'blocked' ? 'دارای مانع' : 'در حال انجام'}</a>)}
-      </div></div>}
-      {active && <AlertsPanel caseId={kase.id} />}
+      <div className="cf-today">
+        <div className="cf-main">
+          <div className="cf-cards">
+            <NextStepCard kase={kase} onTab={goTab} onChange={refresh} />
+            {active && <AlertsPanel caseId={kase.id} onAnswered={refresh} />}
+          </div>
+          <RepairPlanTable kase={kase} />
+        </div>
+        <CaseHistoryCard kase={kase} onAll={() => goTab('history', 'case-history')} />
+      </div>
       <CaseSection id="case-tasks" title="برنامهٔ تعمیر" note="قدم‌ها، جایگاه، نفر، روز و اجرت؛ شروع، پایان و تأیید" initialOpen><TasksPanel kase={kase} onChange={refresh} /><ExternalWorkPanel kase={kase} onChange={refresh} /><CaseWagesPanel kase={kase} /></CaseSection>
       <CaseSection id="case-blockers" title="موانع و پیگیری" note={`${faNum(kase.openBlockers)} مانع باز`} initialOpen={kase.openBlockers > 0}><BlockersPanel kase={kase} onChange={refresh} /></CaseSection>
       <CaseSection id="case-quality" title="کنترل نهایی و پایان کار" initialOpen={['quality_control', 'ready_for_delivery', 'delivered'].includes(kase.stage)}><CompletionPanel kase={kase} onChange={refresh} /></CaseSection>
       <ResponsibilityBar kase={kase} onChange={refresh} />
       </>}
 
+      {!printing && (activeTab === 'assessment' || activeTab === 'parts') && <NextStepCard kase={kase} onTab={goTab} onChange={refresh} />}
       {(printing || activeTab === 'assessment') && <CaseSection id="case-assessment" title="کارشناسی و الحاقیه" note="اقلام، فایل اکسل و ارسال به قطعات" initialOpen><AssessmentPanel kase={kase} onChange={refresh} /></CaseSection>}
 
-      {(printing || activeTab === 'parts') && <CaseSection id="case-parts" title="قطعات" note="یک فهرست: تعیین تکلیف، تأمین، قیمت و تحویل" initialOpen><PartsLedger kase={kase} onChange={refresh} /><PartsStatementPanel kase={kase} /></CaseSection>}
+      {(printing || activeTab === 'parts') && <CaseSection id="case-parts" title="قطعات" note="یک فهرست: تعیین تکلیف، تأمین، قیمت و تحویل" initialOpen><PartsLedger kase={kase} title="قطعات این خودرو" onChange={refresh} /><PartsStatementPanel kase={kase} /></CaseSection>}
 
       {(printing || activeTab === 'docs') && <>
       <section className="panel times" aria-label="زمان‌ها">
@@ -310,6 +321,7 @@ export default function CaseDetailPage() {
           {!can('audit.read') && <p className="m-empty">تاریخچهٔ تغییرات برای نقش شما باز نیست.</p>}
       </>}
       </div>
+      </CaseFolderHeader>
       <Dialog
         open={!!stageBack}
         title="برگرداندن پرونده به مرحلهٔ قبل"

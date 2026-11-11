@@ -33,7 +33,8 @@ test('accident expert: folder desk → case folder → tabs and «قدم بعد�
   await expect(folders.first().locator('.folder-next')).toContainText('قدم بعدی');
   await page.getByRole('button', { name: /^همه/ }).click();
   await shots(page, 'expert-desk', (n) => info.outputPath(n));
-  await folders.first().click();
+  // A folder opens only through its own «باز کردن پرونده» link (one clear action per card).
+  await folders.first().getByRole('link', { name: /باز کردن پرونده/ }).click();
   await expect(page.locator('.case-hero')).toBeVisible();
   await expect(page.getByRole('list', { name: 'مسیر خودرو' }).getByRole('listitem')).toHaveCount(5);
   for (const tab of ['کار امروز', 'کارشناسی', 'قطعات', 'مدارک', 'تاریخچه']) await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible();
@@ -46,14 +47,18 @@ test('accident expert: folder desk → case folder → tabs and «قدم بعد�
   await expect(page.locator('#case-info')).toBeAttached();
 });
 
-test('parts clerk: only cars with open part lines, counts on every folder', async ({ page }, info) => {
+test('parts clerk: parts desk with the cars, the unified list of the selected car and stock', async ({ page }, info) => {
   await login(page, 'parts');
   await page.goto('/accidents/parts');
-  await expect(page.locator('.desk-kicker')).toHaveText('میز کار مسئول قطعات');
-  await page.getByRole('button', { name: /^همه/ }).click();
-  const folders = page.locator('.folder');
-  if (await folders.count()) await expect(folders.first().locator('.folder-counts .cnt').first()).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'میز قطعات' })).toBeVisible();
+  const cars = page.getByRole('complementary', { name: 'خودروها و وضعیت' });
+  await expect(cars.getByRole('region', { name: 'وضعیت موجودی' })).toBeVisible();
+  await expect(page.getByTestId('parts-ledger')).toBeVisible();
+  await expect(page.getByTestId('parts-ledger').getByRole('heading', { level: 2 })).toContainText('قطعات');
   await shots(page, 'parts-desk', (n) => info.outputPath(n));
+  // The same desk is the «قطعات» destination of the sidebar.
+  await page.goto('/parts');
+  await expect(page.getByRole('heading', { level: 1, name: 'میز قطعات' })).toBeVisible();
 });
 
 test('technician on a phone: month wage on top and one big button', async ({ page }, info) => {
@@ -77,7 +82,14 @@ test('service manager: control room with four numbers, funnel, map and «تذک�
   await room.getByRole('button', { name: 'این هفته' }).click();
   await expect(room.getByRole('button', { name: 'این هفته' })).toHaveAttribute('aria-pressed', 'true');
   await shots(page, 'control-room', (n) => info.outputPath(n));
-  await room.getByRole('button', { name: 'ارسال تذکر ←' }).click();
+  // The live workshop map is drawn from the bays; choosing a bay lists its cars as links.
+  await expect(room.getByTestId('workshop-scene')).toBeVisible();
+  const bay = room.getByTestId('workshop-scene').getByRole('button').first();
+  await bay.focus();
+  await page.keyboard.press('Enter');
+  await expect(bay).toHaveAttribute('aria-pressed', 'true');
+  await expect(room.getByTestId('bay-detail')).toBeVisible();
+  await room.getByRole('button', { name: 'ارسال تذکر', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   // Display only: no operational button anywhere in the room.
   await page.keyboard.press('Escape');
@@ -87,9 +99,14 @@ test('service manager: control room with four numbers, funnel, map and «تذک�
 test('system administrator: «گره‌ها» first, report status and alert thresholds', async ({ page }, info) => {
   await login(page, 'admin');
   await page.goto('/accidents/admin');
-  await expect(page.locator('.desk-kicker')).toHaveText('میز کار مدیر سیستم');
+  await expect(page.locator('.desk-kicker')).toHaveText('میز پشتیبانی مدیر سیستم');
   await expect(page.getByRole('button', { name: /^گره‌ها/ })).toHaveAttribute('aria-pressed', 'true');
   await shots(page, 'admin-desk', (n) => info.outputPath(n));
-  await page.goto('/workshop/settings');
+  // Settings hub: every settings area of the account in one place, each a real page.
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { level: 1, name: 'تنظیمات' })).toBeVisible();
+  await page.getByRole('link', { name: /تقویم، جایگاه‌ها و سقف هشدارها/ }).click();
+  await expect(page).toHaveURL(/\/workshop\/settings$/);
+  await expect(page.getByRole('link', { name: 'بازگشت به تنظیمات' })).toBeVisible();
   await expect(page.getByText('امداد ویژهٔ دیرشده بعد از', { exact: false })).toBeVisible();
 });

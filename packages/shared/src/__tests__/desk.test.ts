@@ -58,6 +58,9 @@ test('desk filters, days in shop and greeting', () => {
   assert.equal(deskFilterMatch(f, 'mine', ['accident_expert']), false);
   assert.equal(deskFilterMatch(f, 'parts', []), true);
   assert.equal(deskFilterMatch(f, 'behind', []), false);
+  const owned = { ...f, responsibleUserId: 'u1' } as DeskFolder;
+  assert.equal(deskFilterMatch(owned, 'own', [], 'u1'), true);
+  assert.equal(deskFilterMatch(owned, 'own', [], 'u2'), false);
   assert.equal(daysInShop('2026-11-05T06:00:00Z', NOW), 6);
   assert.equal(greeting('مهدی رضایی', NOW), 'صبح بخیر، مهدی');
 });

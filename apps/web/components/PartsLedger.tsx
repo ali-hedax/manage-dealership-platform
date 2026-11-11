@@ -25,6 +25,7 @@ import {
 import { api, errorMessage, fetcher, newKey } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { ReminderComposer } from './ReminderComposer';
+import { AppIcon } from './AppIcon';
 import { faNum, parseAmount, toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import { QuotePanel, QuoteProposal } from './WorkshopQuotes';
@@ -73,7 +74,7 @@ function stateDetail(p: Part): string {
 /** The one button shown on the closed row; the rest live inside the row. */
 function primaryAction(p: Part): PartFlowAction | 'decide' | null {
   if (p.flowState === 'needed' || p.flowState === 'dealer_supply') return 'decide';
-  for (const a of ['hand_over', 'receive'] as const) if (p.allowedActions.includes(a)) return a;
+  for (const a of ['hand_over', 'receive', 'return'] as const) if (p.allowedActions.includes(a)) return a;
   return null;
 }
 
@@ -83,7 +84,7 @@ function primaryAction(p: Part): PartFlowAction | 'decide' | null {
  * all on one list. The parts clerk acts; the accident expert reads, adds needs
  * and answers price announcements. Each row is one line; details open on demand.
  */
-export function PartsLedger({ kase, onChange }: { kase: CaseDetail; onChange?: () => void }) {
+export function PartsLedger({ kase, onChange, title = 'فهرست قطعات', onFocusPart }: { kase: CaseDetail; onChange?: () => void; title?: string; onFocusPart?: (p: Part | null) => void }) {
   const { can } = useAuth();
   const { data: parts, mutate, error } = useSWR<Part[]>(`/cases/${kase.id}/parts`, fetcher);
   const [q, setQ] = useState('');
@@ -120,44 +121,48 @@ export function PartsLedger({ kase, onChange }: { kase: CaseDetail; onChange?: (
     await mutate();
     onChange?.();
   };
+  const toggle = (id: string) => {
+    const next = open === id ? null : id;
+    setOpen(next);
+    onFocusPart?.(next ? (parts ?? []).find((p) => p.id === next) ?? null : null);
+  };
 
   return (
-    <section className="m-paper m-sheet" data-testid="parts-ledger" aria-labelledby="parts-ledger-title">
-      <div className="m-head">
-        <div>
-          <h2 id="parts-ledger-title">فهرست قطعات</h2>
-          <span className="m-lbl">یک فهرست برای این خودرو · {faNum(parts?.length ?? 0)} قلم</span>
-        </div>
-        {editable && can('part.request') && <AddPart caseId={kase.id} onDone={refresh} />}
-      </div>
-      <div className="m-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-          <label className="m-search">
-            <span className="m-lbl" aria-hidden="true">جست‌وجو</span>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام، کد فنی یا شمارهٔ درخواست" aria-label="جست‌وجو در قطعات" />
+    <section className="ledger" data-testid="parts-ledger" aria-labelledby="parts-ledger-title">
+      <div className="ledger-tab"><h2 id="parts-ledger-title">{title}</h2><span>{faNum(parts?.length ?? 0)} قلم</span></div>
+      <div className="ledger-sheet">
+        <div className="ledger-tools">
+          <AppIcon name="filter" className="ledger-filter-ico" />
+          <div className="m-chips" role="group" aria-label="صافی قطعات">
+            <button type="button" className="m-chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
+              همه <span>{faNum((parts?.length ?? 0) - closedCount)}</span>
+            </button>
+            {PART_FLOW_FILTERS.map((f) => (
+              <button key={f} type="button" className="m-chip" aria-pressed={filter === f} onClick={() => setFilter(f)}>
+                {PART_FLOW_FILTER_LABELS[f]} <span>{faNum(counts[f])}</span>
+              </button>
+            ))}
+            {closedCount > 0 && (
+              <button type="button" className="m-chip" aria-pressed={showClosed} onClick={() => setShowClosed((v) => !v)}>
+                لغوشده و مرجوعی <span>{faNum(closedCount)}</span>
+              </button>
+            )}
+          </div>
+          <label className="srch ledger-search">
+            <AppIcon name="search" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجوی قطعه، کد فنی یا شمارهٔ درخواست…" aria-label="جست‌وجو در قطعات" />
           </label>
-        </div>
-        <div className="m-chips" role="group" aria-label="صافی قطعات">
-          <button type="button" className="m-chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
-            همه <span>{faNum((parts?.length ?? 0) - closedCount)}</span>
-          </button>
-          {PART_FLOW_FILTERS.map((f) => (
-            <button key={f} type="button" className="m-chip" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-              {PART_FLOW_FILTER_LABELS[f]} <span>{faNum(counts[f])}</span>
-            </button>
-          ))}
-          {closedCount > 0 && (
-            <button type="button" className="m-chip" aria-pressed={showClosed} onClick={() => setShowClosed((v) => !v)}>
-              لغوشده و مرجوعی <span>{faNum(closedCount)}</span>
-            </button>
-          )}
+          {editable && can('part.request') && <AddPart caseId={kase.id} onDone={refresh} />}
         </div>
         {error && <p className="m-error" role="alert">دریافت فهرست قطعات ناموفق بود؛ صفحه را تازه کنید.</p>}
         {!parts && !error && <p className="m-empty" role="status">در حال دریافت قطعات…</p>}
         {parts && visible.length === 0 && <p className="m-empty">{parts.length ? 'قطعه‌ای با این صافی نیست.' : 'هنوز قطعه‌ای برای این خودرو ثبت نشده است.'}</p>}
-        <div className="m-rows">
-          {visible.map((p) => (
-            <PartRow key={p.id} kase={kase} part={p} manage={manage} expanded={open === p.id} onToggle={() => setOpen(open === p.id ? null : p.id)} onDone={refresh} />
+        {visible.length > 0 && (
+          <div className="ledger-thead" aria-hidden="true"><span>ردیف</span><span>نام قطعه</span><span>تعداد</span><span>قیمت (ریال)</span><span>وضعیت</span><span>عملیات</span></div>
+        )}
+        <div className="m-rows ledger-rows">
+          {visible.map((p, i) => (
+            <PartRow key={p.id} index={i + 1} kase={kase} part={p} manage={manage} expanded={open === p.id} onToggle={() => toggle(p.id)} onDone={refresh} />
           ))}
         </div>
         {/* Payer authorization for golden card / insurance (spec section 7): the clerk proposes a market price, the expert records the payer's answer. */}
@@ -168,7 +173,7 @@ export function PartsLedger({ kase, onChange }: { kase: CaseDetail; onChange?: (
   );
 }
 
-function PartRow({ kase, part: p, manage, expanded, onToggle, onDone }: { kase: CaseDetail; part: Part; manage: boolean; expanded: boolean; onToggle: () => void; onDone: () => Promise<void> }) {
+function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: { index: number; kase: CaseDetail; part: Part; manage: boolean; expanded: boolean; onToggle: () => void; onDone: () => Promise<void> }) {
   const { can } = useAuth();
   const [form, setForm] = useState<PartFlowAction | null>(null);
   const [reminding, setReminding] = useState(false);
@@ -181,26 +186,30 @@ function PartRow({ kase, part: p, manage, expanded, onToggle, onDone }: { kase: 
   const decideActions = p.allowedActions.filter((a) => a !== 'set_price' && a !== 'announce_price');
   return (
     <div className="m-row" id={`part-${p.id}`} data-testid="part" data-state={p.flowState}>
-      <div className="m-row-head" role="button" tabIndex={0} aria-expanded={expanded} onClick={onToggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
-        <div className="m-row-name">
+      <div className="m-row-head ledger-row" role="button" tabIndex={0} aria-expanded={expanded} onClick={onToggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
+        <span className="c-idx m-num">{faNum(index)}</span>
+        <div className="m-row-name c-name">
           <span>{p.description}</span>
-          <small className="m-num">× {faNum(p.quantity)}</small>
           {p.fromSupplement && <span className="m-badge">الحاقیه</span>}
           {p.priceNotice && <span className="m-tag wait">اعلام قیمت</span>}
         </div>
-        <div className="m-row-state">
+        <span className="c-qty m-num"><span className="sr-only">تعداد </span>{faNum(p.quantity)}</span>
+        <span className="c-price m-num"><span className="sr-only">قیمت فروش </span>{p.salePriceRial != null ? faNum(p.salePriceRial) : p.approvedUnitPriceRial != null ? faNum(p.approvedUnitPriceRial) : '—'}</span>
+        <div className="m-row-state c-state">
           <span className={`m-tag ${STATE_TONE[p.flowState]}`}>{PART_FLOW_STATE_LABELS[p.flowState]}</span>
           {detail && <small>{detail}</small>}
         </div>
-        <div className="m-row-action" onClick={(e) => e.stopPropagation()}>
-          {primary === 'decide' && <button type="button" className="m-btn-s" aria-expanded={expanded} onClick={onToggle}>تعیین تکلیف</button>}
-          {primary && primary !== 'decide' && <button type="button" className="m-btn-s" onClick={() => choose(primary)}>{partActionLabel(p.flowState, primary)}</button>}
+        <div className="m-row-action c-act" onClick={(e) => e.stopPropagation()}>
+          {primary === 'decide' && <button type="button" className="m-btn2-s" aria-expanded={expanded} onClick={onToggle}>انتخاب مسیر تأمین <AppIcon name="chevron-down" /></button>}
+          {primary && primary !== 'decide' && <button type="button" className="m-btn2-s" onClick={() => choose(primary)}>{partActionLabel(p.flowState, primary)} <AppIcon name={primary === 'hand_over' ? 'arrow-left' : primary === 'receive' ? 'receipt' : 'return'} /></button>}
+          <AppIcon name="chevron-down" className={`ledger-caret${expanded ? ' up' : ''}`} />
         </div>
       </div>
       {expanded && (
         <div className="m-row-body">
           {manage && <div className="m-next"><b>قدم بعدی</b>{PART_FLOW_NEXT_STEP[p.flowState]}</div>}
-          <dl className="m-dl">
+          <h3 className="ledger-detail-title">جزئیات تأمین</h3>
+          <dl className="m-dl ledger-dl">
             <dt>کد فنی</dt>
             <dd><bdi className="m-num">{toPersianDigits(p.partNumber ?? '—')}</bdi></dd>
             {(p.orderRef || p.emdad?.requestNo) && (<><dt>شمارهٔ درخواست امداد ویژه</dt><dd><bdi>{toPersianDigits(p.emdad?.requestNo ?? p.orderRef ?? '')}</bdi>{p.orderedAt ? ` · ${dayText(p.orderedAt)}` : ''}</dd></>)}

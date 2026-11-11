@@ -164,10 +164,11 @@ export interface DeskFolder {
   tasks: (FolderTaskFact & { assignedUserId: string | null; stationId: string | null })[];
 }
 
-export const DESK_FILTERS = ['all', 'mine', 'parts', 'repair', 'delivery', 'behind', 'stuck'] as const;
+export const DESK_FILTERS = ['all', 'own', 'mine', 'parts', 'repair', 'delivery', 'behind', 'stuck'] as const;
 export type DeskFilter = (typeof DESK_FILTERS)[number];
 export const DESK_FILTER_LABELS: Record<DeskFilter, string> = {
   all: 'همه',
+  own: 'پرونده‌های من',
   mine: 'منتظر اقدام من',
   parts: 'منتظر قطعه',
   repair: 'در تعمیر',
@@ -176,11 +177,13 @@ export const DESK_FILTER_LABELS: Record<DeskFilter, string> = {
   stuck: 'گره‌ها',
 };
 
-/** Whether a folder belongs to a desk filter; «mine» means the next step is the viewer's role. */
-export function deskFilterMatch(f: DeskFolder, filter: DeskFilter, myActors: readonly NextActor[]): boolean {
+/** Whether a folder belongs to a desk filter; «mine» means the next step is the viewer's role, «own» that the viewer is the case's follow-up owner. */
+export function deskFilterMatch(f: DeskFolder, filter: DeskFilter, myActors: readonly NextActor[], myId?: string): boolean {
   switch (filter) {
     case 'all':
       return true;
+    case 'own':
+      return !!myId && f.responsibleUserId === myId;
     case 'mine':
       return myActors.includes(f.next.actor);
     case 'parts':

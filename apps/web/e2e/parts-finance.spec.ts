@@ -46,7 +46,7 @@ test('expert records customer price approval; parts orders and hands over', asyn
   await openCase3(page, 'parts');
   const mirror = page.getByTestId('part').filter({ hasText: 'آینه بغل چپ' });
   await expect(mirror).toContainText('تعیین تکلیف نشده');
-  await mirror.getByRole('button', { name: 'تعیین تکلیف' }).click();
+  await mirror.getByRole('button', { name: 'انتخاب مسیر تأمین' }).click();
   await mirror.getByRole('button', { name: 'خرید بازار', exact: true }).click();
   await mirror.getByLabel('فروشنده *').fill('فروشگاه آزمون');
   await mirror.getByLabel('قیمت خرید واحد (ریال) *').fill('14000000');

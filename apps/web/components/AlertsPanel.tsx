@@ -53,10 +53,10 @@ export function AlertsPanel({ caseId, onAnswered }: { caseId?: string; onAnswere
   }
 
   return (
-    <section className="panel" aria-labelledby="alerts-title">
+    <section className={`panel${caseId ? ' cf-alert' : ''}`} aria-labelledby="alerts-title">
       <div className="panel-head">
         <div>
-          <h2 id="alerts-title">هشدارها</h2>
+          <h2 id="alerts-title">{caseId ? 'هشدار هزینهٔ قطعات' : 'هشدارها'}</h2>
           <p className="muted small">{faNum(data.length)} مورد منتظر جواب شما؛ هیچ‌کدام کار را متوقف نمی‌کند.</p>
         </div>
       </div>

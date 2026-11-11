@@ -99,9 +99,9 @@ export class ControlRoomService {
     for (const r of stageRows) if (r.caseId && !(r.caseId in stageDays)) stageDays[r.caseId] = Math.max(0, (now - r.at.getTime()) / DAY);
 
     const alerts: UnansweredAlert[] = [];
-    const push = (a: Omit<UnansweredAlert, 'waitingHours' | 'plate' | 'vehicle'> & { caseId: string | null }) => {
+    const push = (a: Omit<UnansweredAlert, 'waitingHours' | 'plate' | 'vehicle' | 'caseNumber'> & { caseId: string | null }) => {
       const f = a.caseId ? byCase.get(a.caseId) : undefined;
-      alerts.push({ ...a, plate: f?.plate ?? null, vehicle: f?.vehicle ?? null, waitingHours: Math.max(0, Math.round((now - Date.parse(a.since)) / HOUR)) });
+      alerts.push({ ...a, caseNumber: f?.caseNumber ?? null, plate: f?.plate ?? null, vehicle: f?.vehicle ?? null, waitingHours: Math.max(0, Math.round((now - Date.parse(a.since)) / HOUR)) });
     };
     const answered = new Set(problems.filter((p) => p.status === 'done' || !!p.reply).map((p) => p.id));
     const seenProblem = new Set<string>();
