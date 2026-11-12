@@ -7,7 +7,6 @@ import { api, ApiError, errorMessage } from '@/lib/api';
 import { toLatinDigits, toPersianDigits, type Me } from '@manage/shared';
 import {InstallButton} from '@/components/InstallApp';
 import { AppIcon } from '@/components/AppIcon';
-import { WorkshopBackdrop } from '@/components/WorkshopScene';
 import { Dialog } from '@/components/Dialog';
 
 type LoginSubmission = { busy: boolean; setBusy: (busy: boolean) => void };
@@ -182,7 +181,7 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
       </label>
       <fieldset className="login-pin">
         <legend>پین چهاررقمی</legend>
-        <div className="login-pin-row"><span className="lg-lock" aria-hidden="true"><AppIcon name="lock" /></span>
+        <div className="login-pin-row">
         <div className="login-pin-grid" dir="ltr">
           {digits.map((digit, index) => (
             <input
@@ -264,13 +263,13 @@ function LoginPanels() {
   }
 
   const door = mode === 'technician'
-    ? { title: 'ورود کارکنان', sub: 'برای ادامه، نام کاربری و پین چهاررقمی خود را وارد کنید.', icon: 'user' as const }
-    : { title: 'ورود مدیر سیستم', sub: 'ایمیل، رمز و کد شش‌رقمی Google Authenticator.', icon: 'gear' as const };
+    ? { title: 'ورود کارکنان', sub: 'نام کاربری و پین چهاررقمی خود را وارد کنید.' }
+    : { title: 'ورود مدیر سیستم', sub: 'ایمیل، رمز و کد شش‌رقمی Google Authenticator.' };
   return (
     <div className="entry-login-body lg-card">
       <header className="lg-head">
-        <span className="lg-ico" aria-hidden="true"><AppIcon name={door.icon} /></span>
-        <div><h1>{door.title}</h1><p>{door.sub}</p></div>
+        <h1>{door.title}</h1>
+        <p>{door.sub}</p>
       </header>
       <div id="login-panel-staff" role="tabpanel" aria-labelledby="login-tab-staff" hidden={mode !== 'staff'}>
         <StaffLoginForm active={mode === 'staff'} busy={busy} setBusy={setBusy} />
@@ -294,12 +293,14 @@ function LoginPanels() {
               onClick={() => { if (!busy) setMode(id); }}
               onKeyDown={event => handleTabKey(event, index)}
             >
-              <AppIcon name={id === 'technician' ? 'user' : 'gear'} /><span>{label}</span>{mode === id ? <AppIcon name="check" className="door-on" /> : <AppIcon name="chevron-left" className="door-go" />}
+              <AppIcon name={id === 'technician' ? 'user' : 'gear'} /><span>{label}</span>
             </button>
           ))}
         </div>
-        <button type="button" className="door-row" onClick={() => setInfo('guide')}><AppIcon name="book" /><span>راهنمای ورود</span><AppIcon name="chevron-left" className="door-go" /></button>
-        <button type="button" className="door-row" onClick={() => setInfo('trouble')}><AppIcon name="help" /><span>مشکل در ورود؟</span><AppIcon name="chevron-left" className="door-go" /></button>
+        <div className="lg-links">
+          <button type="button" className="door-row" onClick={() => setInfo('guide')}>راهنمای ورود</button>
+          <button type="button" className="door-row" onClick={() => setInfo('trouble')}>مشکل در ورود؟</button>
+        </div>
       </div>
       {/* Installing the app is the same for every sign-in path. */}
       <div className="install-login"><InstallButton/></div>
@@ -324,9 +325,10 @@ function LoginPanels() {
 }
 
 /**
- * Sign-in (spec §3, §12; owner reference «manage-cinematic»): a dark, cinematic workshop
- * with the case folder on the bench on the left, and a warm ivory form on the right.
- * The artwork is CSS/SVG with real text, so nothing is baked into an image.
+ * Sign-in (spec §3, §12; refined 2026-11-12): a quiet ivory form on the right and a dark
+ * panel on the left with hairline artwork. Small, calm sizes. The artwork is plain SVG/CSS
+ * with real text, so nothing is baked into an image; the car outline draws itself once
+ * (skipped when the user prefers reduced motion).
  */
 export default function LoginPage() {
   return (
@@ -335,27 +337,46 @@ export default function LoginPage() {
         <LoginPanels />
       </Suspense>
       <div className="side lg-art" aria-label="Manage by HEDAX">
-        <div className="lg-scene" aria-hidden="true">
-          <WorkshopBackdrop className="lg-backdrop" />
-          <span className="lg-glow" />
-          <span className="lg-bench" />
-          <div className="lg-folder">
-            <span className="lg-papers"><i /><i /><i /></span>
-            <span className="lg-clip" />
-            <div className="lg-cover">
-              <svg viewBox="0 0 120 40" className="lg-car-line"><path d="M6 30c8-1 12-6 18-10 10-7 22-12 38-12 16 0 26 6 34 12l12 4c4 1 6 4 6 7" fill="none" stroke="#C9A85A" strokeWidth="2.2" strokeLinecap="round" /><path d="M30 31h60" stroke="#C9A85A" strokeWidth="2" strokeLinecap="round" /></svg>
-              <span className="lg-cover-title">پرونده خودرو</span>
-              <span className="lg-cover-rule" />
-              <span className="lg-badge">HEDAX</span>
-            </div>
-          </div>
-        </div>
+        <svg className="lg-rings" viewBox="0 0 800 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg-floor" x1="0" x2="1">
+              <stop offset="0" stopColor="#C9A96A" stopOpacity="0" />
+              <stop offset=".5" stopColor="#C9A96A" stopOpacity=".55" />
+              <stop offset="1" stopColor="#C9A96A" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <g fill="none" stroke="#FFFFFF" strokeOpacity=".05" strokeWidth="1">
+            <circle cx="400" cy="640" r="180" />
+            <circle cx="400" cy="640" r="300" />
+            <circle cx="400" cy="640" r="420" />
+            <circle cx="400" cy="640" r="540" />
+          </g>
+          <rect x="120" y="700" width="560" height="1" fill="url(#lg-floor)" />
+        </svg>
         <div className="lg-brand">
-          <span className="lg-logo"><span className="brand-slashes"><i /><i /></span><span className="lg-word">Manage</span></span>
-          <span className="lg-by">by <b>HEDAX</b></span>
-          <p className="lg-claim">هر خودرو، یک مسیر روشن.</p>
-          <p className="lg-sub">منیج پیگیری می‌کند، شما تصمیم می‌گیرید.</p>
-          <span className="lg-rule" />
+          <svg className="lg-slashes" width="20" height="22" viewBox="0 0 20 22" aria-hidden="true"><path d="M8 0h4.4L4.4 22H0z" fill="#34C2A8" /><path d="M15.6 0H20l-8 22H7.6z" fill="#1E8F7E" /></svg>
+          <span className="lg-word">Manage</span>
+          <span className="lg-divider" />
+          <span className="lg-by">BY HEDAX</span>
+        </div>
+        <div className="lg-center">
+          <div>
+            <p className="lg-claim">هر خودرو، یک مسیر روشن.</p>
+            <p className="lg-sub">منیج پیگیری می‌کند، شما تصمیم می‌گیرید.</p>
+            <span className="lg-rule" />
+          </div>
+          <svg className="lg-car" viewBox="0 0 600 190" role="img" aria-label="طرح خطی یک خودرو">
+            <g fill="none" stroke="#C9A96A" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity=".85">
+              <path className="lg-car-draw" pathLength={1} d="M28 140 L28 118 C28 106 38 100 54 97 L142 82 C168 58 204 42 250 40 L358 40 C400 42 432 60 458 82 L544 92 C562 96 572 104 572 116 L572 140" />
+              <path className="lg-car-draw" pathLength={1} d="M28 140 L96 140 M204 140 L396 140 M504 140 L572 140" />
+              <path className="lg-car-draw" pathLength={1} opacity=".7" d="M166 84 C190 64 218 54 252 53 L350 53 C384 55 410 70 430 88 Z" />
+              <path className="lg-car-draw" pathLength={1} opacity=".5" d="M300 53 L300 88" />
+              <circle className="lg-car-draw" pathLength={1} cx="150" cy="140" r="34" />
+              <circle className="lg-car-draw" pathLength={1} opacity=".6" cx="150" cy="140" r="16" />
+              <circle className="lg-car-draw" pathLength={1} cx="450" cy="140" r="34" />
+              <circle className="lg-car-draw" pathLength={1} opacity=".6" cx="450" cy="140" r="16" />
+            </g>
+          </svg>
         </div>
         <p className="entry-signature"><span>نمایندگی ۱۳۰۷ ایران‌خودرو · قم</span><span>یک محصول هداکس</span></p>
       </div>

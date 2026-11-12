@@ -2,6 +2,12 @@
 
 منبع واحد حقیقت: [سند جامع محصول](docs/PRODUCT_SPEC_FA.md) (تأیید مالک، ۱۹ آبان ۱۴۰۵). تاریخچهٔ قبلی: [بایگانی تا PR #74](docs/archive/PROGRESS_2026-11.md).
 
+## ورود ظریف‌تر — ۲۱ آبان ۱۴۰۵ (2026-11-12) — در انتظار بازبینی و ادغام مالک
+
+- شاخهٔ `feature/login-refined-redesign` از `main`؛ فقط `apps/web/app/login/page.tsx` و بخش ورود در `manage-ui.css` (و تصویرها در `docs/design/login-refined`). API و Production دست نخورده‌اند.
+- آزمون‌ها: تایپ‌چک و build سبز؛ Playwright ورود و موبایل ۵ از ۵ سبز ([TEST_REPORT](docs/TEST_REPORT.md)). CI روی PR باید اجرا شود.
+- **قدم بعدی:** مالک تصویر را در PR ببیند؛ در صورت تأیید ادغام و استقرار طبق [RELEASE_RUNBOOK_RC1_FA](docs/RELEASE_RUNBOOK_RC1_FA.md). بعد از آن، همین مقیاس اندازه (فونت ۱۳–۱۴، کنترل ۳۶–۴۰، آیکون ۱۶) برای صفحه‌های داخلی و موبایل جداگانه طراحی شود.
+
 ## وضعیت فعلی — انتشار در Production — ۲۱ آبان ۱۴۰۵ (2026-11-12)
 
 - **Production روی `462c122`** (ادغام PR #77 با merge commit؛ همهٔ commitهای نادیا حفظ شده) با دادهٔ واقعی، از 2026-11-12 06:32 UTC. نشانی: https://managebyhedax.ir
