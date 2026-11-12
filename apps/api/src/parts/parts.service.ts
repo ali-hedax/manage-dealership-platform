@@ -43,6 +43,15 @@ import { readFirstSheet, XlsxError } from './xlsx';
 
 type PartRow = typeof partRequests.$inferSelect;
 
+/**
+ * A line whose assessment row was rejected and that has no supply yet is not a
+ * need any more: only its cancellation remains (task 3). A line that already has
+ * supply keeps its normal actions; the clerk decides (never cancelled automatically).
+ */
+function rejectedNeedActions<T extends string>(p: { assessmentRejectedAt: Date | null; status: string }, actions: T[]): T[] {
+  return p.assessmentRejectedAt && p.status === 'needed' ? actions.filter((a) => a === 'cancel') : actions;
+}
+
 const createdByUser = alias(users, 'part_created_by');
 const noticeBy = alias(users, 'price_notice_by');
 const noticeAnswerBy = alias(users, 'price_notice_answer_by');
@@ -195,13 +204,14 @@ export class PartsService {
   /** Technical codes of the active lines of a case (spec section 5: anti-duplicate). */
   private async activeCodes(db: DbOrTx, tenantId: string, caseId: string) {
     const rows = await db
-      .select({ id: partRequests.id, partNumber: partRequests.partNumber, status: partRequests.status, source: partRequests.source, consumedAt: partRequests.consumedAt, version: partRequests.version, description: partRequests.description })
+      .select({ id: partRequests.id, partNumber: partRequests.partNumber, status: partRequests.status, source: partRequests.source, consumedAt: partRequests.consumedAt, version: partRequests.version, description: partRequests.description, rejected: partRequests.assessmentRejectedAt })
       .from(partRequests)
       .where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.caseId, caseId), notInArray(partRequests.status, ['cancelled', 'returned'])));
     const out = new Map<string, (typeof rows)[number]>();
     for (const r of rows) {
       const key = partCodeKey(r.partNumber);
-      if (key && !r.consumedAt && !out.has(key)) out.set(key, r);
+      // A line rejected in the assessment does not block its replacement with the same code (task 3).
+      if (key && !r.consumedAt && !r.rejected && !out.has(key)) out.set(key, r);
     }
     return out;
   }
@@ -231,6 +241,7 @@ export class PartsService {
   async actIn(tx: DbOrTx, actor: Actor, id: string, input: PartActionInput, at = new Date(), receivedByTechnician = false) {
     const tenantId = actor.user.tenantId;
     const p = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
+    if (!rejectedNeedActions(p, [input.action]).length) throw badRequest('PART_ASSESSMENT_REJECTED', 'این قلم در کارشناسی/الحاقیه رد شده است؛ تأمینش ثبت نمی‌شود. فقط لغو قطعه ممکن است');
     let patch: Partial<PartRow> = {};
     let action = `part.${input.action}`;
     let before: Record<string, unknown> | null = null;
@@ -390,6 +401,9 @@ export class PartsService {
       if (!isPartActionAllowed(state, input.action)) {
         throw badRequest('PART_ACTION_NOT_ALLOWED', `«${partActionLabel(state, input.action)}» در وضعیت «${PART_FLOW_STATE_LABELS[state]}» مجاز نیست`, { state, allowed: allowedPartActions(state) });
       }
+      if (!rejectedNeedActions(p, [input.action]).length) {
+        throw badRequest('PART_ASSESSMENT_REJECTED', 'این قلم در کارشناسی/الحاقیه رد شده است؛ تأمینش ثبت نمی‌شود. فقط لغو قطعه ممکن است', { state, allowed: rejectedNeedActions(p, allowedPartActions(state)) });
+      }
       const now = new Date();
       let patch: Partial<PartRow> = {};
       let action = `part.${input.action}`;
@@ -543,6 +557,8 @@ export class PartsService {
     const emdad = await this.emdadByPart(this.db, tenantId, rows.map((r) => r.p.id));
     const cards = new Map<string, PartsDeskCard>();
     for (const { p, c, plate, model, customer } of rows) {
+      // A rejected assessment line without supply is not a need (task 3); with supply it stays visible.
+      if (p.assessmentRejectedAt && p.status === 'needed') continue;
       const state = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: emdad.get(p.id)?.category });
       const f = partFlowFilter(state);
       if (!f) continue;
@@ -629,13 +645,23 @@ export class PartsService {
     // «الحاقیه»: the root line was first written in a supplement, or an earlier row of the same root exists.
     const firstOfRoot = new Map<string, string>();
     for (const { p } of rows) if (p.assessmentItemId && !firstOfRoot.has(p.assessmentItemId)) firstOfRoot.set(p.assessmentItemId, p.id);
+    // «جایگزین»: the root line replaces a rejected line (migration 0023).
+    const replacedIds = [...new Set([...roots.values()].map((r) => r.replacesItemId).filter((x): x is string => !!x))];
+    const replaced = new Map(
+      replacedIds.length
+        ? (await this.db.select({ id: assessmentItems.id, description: assessmentItems.description }).from(assessmentItems).where(and(eq(assessmentItems.tenantId, tenantId), inArray(assessmentItems.id, replacedIds)))).map((x) => [x.id, x.description])
+        : [],
+    );
     return rows.map(({ p, d, createdByName }) => {
       const e = emdad.get(p.id) ?? null;
       const flowState = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: e?.category });
+      const root = p.assessmentItemId ? roots.get(p.assessmentItemId) : undefined;
       return {
       flowState,
-      allowedActions: allowedPartActions(flowState),
-      fromSupplement: !!p.assessmentItemId && ((roots.get(p.assessmentItemId) ?? 1) > 1 || firstOfRoot.get(p.assessmentItemId) !== p.id),
+      allowedActions: rejectedNeedActions(p, allowedPartActions(flowState)),
+      fromSupplement: !!p.assessmentItemId && ((root?.versionNo ?? 1) > 1 || firstOfRoot.get(p.assessmentItemId) !== p.id),
+      assessmentRejection: p.assessmentRejectedAt ? { versionNo: p.assessmentRejectedVersion ?? 0, at: p.assessmentRejectedAt.toISOString() } : null,
+      replaces: root?.replacesItemId && replaced.has(root.replacesItemId) ? { description: replaced.get(root.replacesItemId)!, probable: root.replacementBasis !== 'same_file' } : null,
       consumedAt: iso(p.consumedAt),
       returnedAt: iso(p.returnedAt),
       returnReason: p.returnReason,
@@ -683,14 +709,14 @@ export class PartsService {
 
   /** Version number of the assessment where each root line was first written. */
   private async rootVersions(tenantId: string, rootIds: string[]) {
-    const out = new Map<string, number>();
+    const out = new Map<string, { versionNo: number; replacesItemId: string | null; replacementBasis: string | null }>();
     if (!rootIds.length) return out;
     const rows = await this.db
-      .select({ id: assessmentItems.id, versionNo: assessments.versionNo })
+      .select({ id: assessmentItems.id, versionNo: assessments.versionNo, replacesItemId: assessmentItems.replacesItemId, replacementBasis: assessmentItems.replacementBasis })
       .from(assessmentItems)
       .innerJoin(assessments, eq(assessments.id, assessmentItems.assessmentId))
       .where(and(eq(assessmentItems.tenantId, tenantId), inArray(assessmentItems.id, [...new Set(rootIds)])));
-    for (const r of rows) out.set(r.id, r.versionNo);
+    for (const r of rows) out.set(r.id, { versionNo: r.versionNo, replacesItemId: r.replacesItemId, replacementBasis: r.replacementBasis });
     return out;
   }
 

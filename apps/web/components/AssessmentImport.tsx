@@ -64,6 +64,8 @@ export function AssessmentImport({ assessment, onClose, onDone }: { assessment: 
     {error && <p className="callout callout-red" role="alert">{error}</p>}
     {r && <>
       <p role="status">{faNum(parts)} قطعه و {faNum(labour)} اجرت قابل ورود؛ {faNum(r.setAside.length)} ردیف ردشده یا نیازمند اصلاح و {faNum(r.equivalents.length)} اجرت معادل جدا نگه داشته شد</p>
+      {r.lineCounts && <p className="import-line-counts" data-testid="import-line-counts">{faNum(r.lineCounts.new)} قلم تازه، {faNum(r.lineCounts.unchanged)} قلم تکراری، {faNum(r.lineCounts.rejected)} قلم رد شده، {faNum(r.lineCounts.replacements)} قلم جایگزین{r.lineCounts.updated ? `، ${faNum(r.lineCounts.updated)} قلم اصلاح‌شده` : ''}</p>}
+      {!!r.rejectedExisting?.length && <div className="callout callout-amber" data-testid="import-rejected-existing">این اقلام قبلی در فایل «رد» شده‌اند؛ حذف نمی‌شوند، با نشان «رد شده» می‌مانند و دیگر نیاز تأمین حساب نمی‌شوند:<ul>{r.rejectedExisting.map((x) => <li key={x.itemId}>{x.description}{x.code ? <> · <bdi>{toPersianDigits(x.code)}</bdi></> : null} ({origin(x)})</li>)}</ul></div>}
       {!!r.errors.length && <div className="callout callout-red" role="alert">فایل خطا دارد؛ هیچ ردیفی ثبت نمی‌شود.<ul>{r.errors.map((x, i) => <li key={i}>{origin(x)}: {x.message}</li>)}</ul></div>}
       {!!r.warnings.length && <div className="callout callout-amber" data-testid="import-warnings">پیش از ثبت بررسی کنید:<ul>{r.warnings.map((x, i) => <li key={i}>{origin(x)}: {x.message}</li>)}</ul></div>}
       <dl className="dl import-summary" data-testid="import-summary">
@@ -78,7 +80,7 @@ export function AssessmentImport({ assessment, onClose, onDone }: { assessment: 
       </dl>
       <div className="table-scroll import-preview-table"><table className="table static"><caption className="sr-only">اقلام قابل ورود</caption><thead><tr><th>محل در فایل</th><th>نتیجه تطبیق</th><th>نوع / شرح</th><th>کد</th><th>تعداد</th><th>واحد</th><th>تاریخ</th><th>مبلغ کل</th></tr></thead><tbody>{r.rows.map((x, i) => <tr key={i}>
         <td className="small">{origin(x)}</td>
-        <td>{x.outcome === 'unchanged' ? 'قبلی؛ بدون ثبت دوباره' : x.outcome === 'updated' ? 'اصلاح قلم قبلی' : 'قلم جدید'}</td>
+        <td>{x.outcome === 'replacement' && x.replaces ? <>جایگزین «{x.replaces.description}»{x.replaces.basis === 'probable' ? ' (احتمالی؛ از روی کد فنی یکسان)' : ''}</> : x.outcome === 'unchanged' ? 'قبلی؛ بدون ثبت دوباره' : x.outcome === 'updated' ? 'اصلاح قلم قبلی' : 'قلم جدید'}</td>
         <td><span className="chip">{x.action === 'replace' ? 'قطعه' : 'اجرت'}</span> {x.description}</td>
         <td><bdi>{x.partNumber || x.evidence.match(/کد اجرت (.+)$/)?.[1] || '—'}</bdi></td>
         <td>{faNum(x.quantity)}</td><td>{x.unit ? toPersianDigits(x.unit) : '—'}</td><td><bdi>{fa(x.date)}</bdi></td>

@@ -1,5 +1,11 @@
 # Test report
 
+## Supplement rejections and replacements — 2026-11-12 — branch `feature/assessment-rejections` (task 3)
+
+- **API e2e** `test/assessment-rejections.e2e-spec.ts` 1/1. Synthetic journey: initial assessment imported with the official «وضعیت» column and sent to parts, then Emdad registered on one line. Supplement 1 rejects X and re-adds it with the same code (same_file replacement) and rejects W, with the preview counts checked. The rejected line keeps only «لغو» and supply is refused (`PART_ASSESSMENT_REJECTED`). The parts desk stops counting it, and the replacement is dispatched as its own linked line. Supplement 2 rejects Z, which already has Emdad: not cancelled, clerk and expert notified. W returns as a probable replacement. Re-importing the same file changes nothing. Five part lines remain; nothing is deleted.
+- **Regression:** `assessment`, `assessment-dispatch`, `part-flow`, `parts-finance`, `parts-workbench`, `control-room`, `desk`, `daily-reports` and `src/assessments`: 79 passed, 1 explicit skip. Shared 52/52. Typecheck (shared, API, web) and lint clean.
+- **Migration 0023** is applied by the PGlite harness. PostgreSQL 16 up/down was not run locally (no Docker on this machine); the CI migration job checks it. Full Playwright runs in CI.
+- **Timing:** this journey exceeded the 60 s default under local memory pressure when run with nine suites, so it has a 180 s limit; alone it takes about 12 s.
 ## Emdad Vijeh status on each part line — 2026-11-12 — branch `feature/emdad-auto-status` (task 2)
 
 - **Unit** `src/daily-reports/emdad-parts.spec.ts` 4/4: request-number key (Persian/Arabic digits, spaces, dashes, leading zeros), code chooses among the lines of one request, chassis confirms a single candidate, ambiguous/contradicting → review.

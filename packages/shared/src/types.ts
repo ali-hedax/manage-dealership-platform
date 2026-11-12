@@ -236,6 +236,10 @@ export interface Part {
   allowedActions: PartFlowAction[];
   /** The line came from a supplement (الحاقیه), or a supplement raised its quantity. */
   fromSupplement: boolean;
+  /** The assessment line behind this part was rejected (official «رد»). The line stays; it no longer counts as a need. */
+  assessmentRejection: { versionNo: number; at: string } | null;
+  /** This line replaces a rejected line with the same technical code; probable when linked by the code only. */
+  replaces: { description: string; probable: boolean } | null;
   consumedAt: string | null;
   returnedAt: string | null;
   returnReason: string | null;
@@ -370,7 +374,13 @@ interface AssessmentImportOrigin {
 export interface AssessmentImportCounts { final: number; rejected: number; correction: number; unknown: number }
 export interface AssessmentImportPreview {
   /** Final rows that can be added to the draft (parts and main labour). */
-  rows: (AssessmentImportOrigin & { action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string; date: string | null; unit: string | null; outcome?: 'new' | 'unchanged' | 'updated' })[];
+  rows: (AssessmentImportOrigin & { action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string; date: string | null; unit: string | null; outcome?: 'new' | 'unchanged' | 'updated' | 'replacement';
+    /** The rejected line this row replaces (same technical code): certain when both came in this file, probable otherwise. */
+    replaces?: { itemId: string; description: string; basis: 'same_file' | 'probable' } })[];
+  /** Active lines of the draft that a «رد» row of this file rejects (kept, marked rejected, never deleted). */
+  rejectedExisting?: (AssessmentImportOrigin & { itemId: string; description: string; code: string | null })[];
+  /** «N قلم تازه، N قلم تکراری، N قلم رد شده، N قلم جایگزین» against the draft. */
+  lineCounts?: { new: number; unchanged: number; updated: number; rejected: number; replacements: number };
   errors: (AssessmentImportOrigin & { message: string })[];
   warnings: (AssessmentImportOrigin & { message: string })[];
   /** Section titles and sheets without a table: informational notes only. */

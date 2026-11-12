@@ -491,6 +491,11 @@ export const assessmentItems = pgTable(
     evidence: text('evidence'),
     approvalStatus: text('approval_status').notNull().default('pending'),
     originItemId: uuid('origin_item_id'),
+    // A supplement line that replaces a line rejected in the official assessment
+    // (same technical code). 'same_file': rejection and replacement came in one
+    // file; 'probable': linked by the code only. Migration 0023.
+    replacesItemId: uuid('replaces_item_id'),
+    replacementBasis: text('replacement_basis'),
     // Copied lines start unchanged; any edit in the supplement sets this.
     changed: boolean('changed').notNull().default(true),
     isTest: boolean('is_test').notNull().default(false),
@@ -529,6 +534,11 @@ export const partRequests = pgTable(
     consumedAt: ts('consumed_at'),
     returnedAt: ts('returned_at'),
     returnReason: text('return_reason'),
+    // The assessment line behind this part was rejected (official status «رد»). The
+    // line stays visible and is never cancelled automatically; it no longer counts
+    // as a supply need or toward the cost alert. Migration 0023.
+    assessmentRejectedAt: ts('assessment_rejected_at'),
+    assessmentRejectedVersion: smallint('assessment_rejected_version'),
     unitPriceRial: bigint('unit_price_rial', { mode: 'number' }),
     priceApprovalRef: text('price_approval_ref'),
     priceApprovedBy: text('price_approved_by'),
