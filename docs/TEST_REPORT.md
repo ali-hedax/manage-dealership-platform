@@ -15,7 +15,10 @@
   - deleted 112 part lines, 106 assessment items, 9 assessments, 16 reservations, 5 tasks, 4 blockers, 2 quotes, 1 QC, 1 reminder (2 recipients);
   - 117 Emdad lines unlinked, 1 notification marked read, 21 cases reset;
   - a second run deleted nothing.
-- Production database, images and source unchanged. **Not executed on production**; that needs the owner's explicit approval and a fresh backup.
+- **Production execution (owner approval 2026-11-12, all 21 cases, no exclusions):** API/web stopped 09:48:43 UTC. Fresh backup `20261112T094844Z`, checksums OK. Dry run, then execute, then rerun, using the same compiled module as the rehearsal. Committed 09:50:35, services healthy 09:50:42.
+  - Counts identical to the rehearsal and to the dry run.
+  - Kept-data fingerprints equal; one audit row; the rerun deleted nothing.
+  - Afterwards: all 21 cases at reception, API health ok/db ok/production, `/login` 200, `/api/v1/auth/me` 401, no API error lines.
 - Typecheck and lint clean.
 
 ## Refined sign-in page — 2026-11-12 — branch `feature/login-refined-redesign`
