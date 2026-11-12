@@ -1,5 +1,12 @@
 # Test report
 
+## Production release — 2026-11-12 — `9e14c91` — **done**
+
+- Main CI run 43200965594: 6/6. Exact CI images (artifact hash, source and IDs verified; running IDs equal).
+- Rehearsal on restored backup `20261112T102233Z`: migration 0023 brought the journal to 24, the four new columns exist and are empty, the business fingerprint is identical, and read-only service probes passed.
+- Install: API/web stopped 11:21:36 UTC, backup `20261112T112137Z`, same migration and fingerprint result on production, live 11:23:31; rollback armed, not needed.
+- Live checks: health ok/db ok/production, containers healthy, 0 API error lines, `/login` 200, private APIs 401, manifest 200, `.env` unchanged. Chrome at 1440/390 px: RTL login with both tabs, no errors, no overflow.
+
 ## Reset of trial stages — 2026-11-12 — branch `feature/reset-test-stages` (task 1)
 
 - **API e2e** `test/reset-test-stages.e2e-spec.ts` 3/3 on the synthetic 20-car fleet (PGlite):
