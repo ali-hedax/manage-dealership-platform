@@ -126,6 +126,12 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   await page.getByLabel('کد پایه، کد کامل یا نام قطعه').fill('9999999999A');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.getByTestId('stock-option')).toContainText('نیازمند تطبیق کد');
+  // Family mapping is system configuration in the six-role model.
+  await expect(page.getByRole('button', { name: 'تنظیم اتصال خانواده' })).toHaveCount(0);
+  await login(page, 'admin');
+  await page.goto('/stock');
+  await page.getByLabel('کد پایه، کد کامل یا نام قطعه').fill('9999999999A');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.getByRole('button', { name: 'تنظیم اتصال خانواده' }).click();
   const aliasDialog = page.getByRole('dialog');
   await aliasDialog.getByLabel('کد پایه تأییدشده (هشت رقم)').fill(BASE);
@@ -137,6 +143,7 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   await expect(page.getByTestId('stock-option')).toHaveCount(9);
 
   // Emdad: official text, code issue label, history of the status change, kept follow-up.
+  await login(page, 'parts');
   await page.goto('/emdad');
   await expect(page.getByTestId('emdad-row')).toHaveCount(2);
   await expect(page.getByTestId('emdad-list')).toContainText('مغایرت کد');
