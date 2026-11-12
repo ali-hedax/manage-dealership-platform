@@ -6,6 +6,12 @@
 - **Regression:** `assessment`, `assessment-dispatch`, `part-flow`, `parts-finance`, `parts-workbench`, `control-room`, `desk`, `daily-reports` and `src/assessments`: 79 passed, 1 explicit skip. Shared 52/52. Typecheck (shared, API, web) and lint clean.
 - **Migration 0023** is applied by the PGlite harness. PostgreSQL 16 up/down was not run locally (no Docker on this machine); the CI migration job checks it. Full Playwright runs in CI.
 - **Timing:** this journey exceeded the 60 s default under local memory pressure when run with nine suites, so it has a 180 s limit; alone it takes about 12 s.
+## Emdad Vijeh status on each part line — 2026-11-12 — branch `feature/emdad-auto-status` (task 2)
+
+- **Unit** `src/daily-reports/emdad-parts.spec.ts` 4/4: request-number key (Persian/Arabic digits, spaces, dashes, leading zeros), code chooses among the lines of one request, chassis confirms a single candidate, ambiguous/contradicting → review.
+- **API e2e** `test/part-flow.e2e-spec.ts` 8/8 (3 new, synthetic data): one vehicle request with two lines linked by code with a Persian-digit request number; contradicting line and same request on two cars kept for review, unmatched row kept and both linked by a later overlapping report once the chassis is recorded and the request registered; history over four reports (two repeats/overlaps add nothing, two events total) and «وارد موجودی» → ready; status cannot be changed by hand.
+- **Regression:** `test/daily-reports.e2e-spec.ts` and `src/daily-reports` 48/48. Typecheck (shared, API, web) and lint (API, web) clean.
+- **Not run locally:** full Playwright (CI runs it); no production data used.
 
 ## Refined sign-in page — 2026-11-12 — branch `feature/login-refined-redesign`
 

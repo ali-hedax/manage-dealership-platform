@@ -35,7 +35,7 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, cases, customers, departments, emdadRequests, partPriceNotices, partRequests, partQuotes, stockReservations, tasks, users, vehicles } from '../db/schema';
+import { assessmentItems, assessments, blockers, cases, customers, departments, emdadRequestEvents, emdadRequests, partPriceNotices, partRequests, partQuotes, stockReservations, tasks, users, vehicles } from '../db/schema';
 import { caseAndBayRecipients, notifyUsers, partLink } from './part-notify';
 import { StockService } from '../daily-reports/stock.service';
 import { FinanceService, PURCHASE_SOURCES } from '../finance/finance.service';
@@ -354,17 +354,34 @@ export class PartsService {
   // ------------------------------------------------------- unified list (spec 7)
 
   /** Latest official Emdad category linked to each line (by match or by request number). */
-  private async emdadByPart(db: DbOrTx, tenantId: string, partIds: string[]) {
-    const out = new Map<string, { requestNo: string | null; category: string; statusText: string | null; reportAt: string }>();
+  private async emdadByPart(db: DbOrTx, tenantId: string, partIds: string[], withHistory = false) {
+    const out = new Map<string, NonNullable<Part['emdad']>>();
     if (!partIds.length) return out;
     const rows = await db
-      .select({ partId: emdadRequests.partRequestId, requestNo: emdadRequests.requestNo, category: emdadRequests.statusCategory, official: emdadRequests.official, at: emdadRequests.lastReportAt })
+      .select({ id: emdadRequests.id, partId: emdadRequests.partRequestId, requestNo: emdadRequests.requestNo, category: emdadRequests.statusCategory, official: emdadRequests.official, at: emdadRequests.lastReportAt })
       .from(emdadRequests)
       .where(and(eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.partRequestId, partIds)))
       .orderBy(asc(emdadRequests.lastReportAt));
+    // Status history from the daily reports: one entry per change of the official status (a report that repeats it adds nothing).
+    const history = new Map<string, { at: string; statusText: string | null }[]>();
+    if (withHistory && rows.length) {
+      const events = await db
+        .select({ requestId: emdadRequestEvents.requestId, reportAt: emdadRequestEvents.reportAt, changes: emdadRequestEvents.changes })
+        .from(emdadRequestEvents)
+        .where(and(eq(emdadRequestEvents.tenantId, tenantId), inArray(emdadRequestEvents.requestId, rows.map((r) => r.id))))
+        .orderBy(asc(emdadRequestEvents.reportAt));
+      for (const e of events) {
+        const s = (e.changes as Record<string, unknown>).emdadStatus;
+        if (s === undefined) continue;
+        const statusText = typeof s === 'string' ? s : ((s as { to?: string | null } | null)?.to ?? null);
+        const list = history.get(e.requestId) ?? [];
+        if (list.at(-1)?.statusText !== statusText) list.push({ at: e.reportAt.toISOString(), statusText });
+        history.set(e.requestId, list);
+      }
+    }
     for (const r of rows) {
       const official = (r.official ?? {}) as { emdadStatus?: string };
-      out.set(r.partId!, { requestNo: r.requestNo, category: r.category, statusText: official.emdadStatus ?? null, reportAt: r.at.toISOString() });
+      out.set(r.partId!, { requestNo: r.requestNo, category: r.category, statusText: official.emdadStatus ?? null, reportAt: r.at.toISOString(), ...(withHistory ? { history: (history.get(r.id) ?? []).reverse() } : {}) });
     }
     return out;
   }
@@ -621,7 +638,7 @@ export class PartsService {
     const now = Date.now();
     const ids = rows.map((r) => r.p.id);
     const [emdad, openNotices, roots] = await Promise.all([
-      this.emdadByPart(this.db, tenantId, ids),
+      this.emdadByPart(this.db, tenantId, ids, true),
       this.notices(this.db, tenantId, { partIds: ids, openOnly: true }),
       this.rootVersions(tenantId, rows.map((r) => r.p.assessmentItemId).filter((x): x is string => !!x)),
     ]);
