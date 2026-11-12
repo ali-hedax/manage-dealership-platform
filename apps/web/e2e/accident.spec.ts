@@ -58,6 +58,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await expect(task).toContainText('دارای مانع');
   await expect(task).toContainText('قطعه نرسیده');
 
+  await openCaseSections(page, 'blockers');
   await page.getByRole('button', { name: 'رفع مانع' }).click();
   await page.getByRole('dialog').getByLabel('شرح رفع مانع *').fill('قطعه تحویل واحد شد');
   await page.getByRole('dialog').getByRole('button', { name: 'ثبت رفع مانع' }).click();

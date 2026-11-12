@@ -84,5 +84,5 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await expect(page.locator('.timeline')).toContainText('شروع الحاقیه (آسیب پنهان)');
 
   // SCREENSHOTS=1 also refreshes the documentation image of this panel.
-  if (process.env.SCREENSHOTS) await panel.screenshot({ path: '../../docs/screenshots/desktop-assessment.png' });
+  if (process.env.SCREENSHOTS) { await openCaseTab(page, 'کارشناسی'); await panel.screenshot({ path: '../../docs/screenshots/desktop-assessment.png' }); }
 });
