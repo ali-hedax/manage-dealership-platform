@@ -1,5 +1,14 @@
 # Test report
 
+## Production release — 2026-11-12 — `462c122` (PR #77) — **done**
+
+- **CI:** final PR head `fbb95d3`, [run 43162309223](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43162309223): 6/6 jobs passed (including Playwright end-to-end on Chromium). Merge commit `462c122` on `main`, [run 43163764028](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43163764028): 6/6 jobs passed.
+- **Images:** artifact `preview-images-462c122…`; archive hash, source SHA and image IDs verified locally and on the server; running containers use exactly those IDs. No build on the server.
+- **Migration rehearsal** on the restored backup (`manage_rebuild_rehearsal_20261112`): journal 20 → 23; 0020 remapped 4 legacy-role accounts (all already inactive, 0 deactivated by the migration), reset one tenant's role templates, changed 0 reminders, all logged in `role_migration_log`; one active owner kept; business-data fingerprint identical before/after; read-only probes of case folders, control room, cases, Emdad, assessments, workshop, technicians and the parts ledger passed without writes.
+- **Install:** API/web stopped 06:31:03 UTC, fresh backup `20261112T063104Z` (checksums verified), same migration result and identical business fingerprint on production, exact images started, live at 06:32:37 UTC (~94 s). Automatic rollback was armed and not needed.
+- **Live checks:** API health ok/db ok/production; `/login` 200; `/api/v1/auth/me`, `/api/v1/dashboard`, `/api/v1/cases` 401 without a session; manifest 200; HSTS and noindex headers; `.env` unchanged; 0 API error lines after start. Real Chrome: new login page (RTL, staff and system-admin tabs) at 1440 px and 390 px with no page errors and no horizontal overflow.
+- **Not run:** signed-in journeys on production (no test accounts on real data by policy); HawkScan.
+
 ## Integrated release validation — 2026-11-12 — PR #77
 
 The full Nadia rebuild is preserved from `a22f789` over production `cc1d7e1`. Release corrections restore catalog lookup in the unified parts list, require an active same-tenant technician on every repair-plan step with atomic rollback, label ledger expanders and keep nested action keyboard events from toggling the row, and adapt browser journeys to the five real folder tabs and six-role seed.
