@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import request from 'supertest';
 import { formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part } from '@manage/shared';
-import { notifications, partPriceNotices, stockReservations, users } from '../src/db/schema';
+import { cases, emdadRequestEvents, emdadRequests, notifications, partPriceNotices, stockReservations, users, vehicles } from '../src/db/schema';
 import { buildEmdadXml, emdadRow } from '../src/daily-reports/fixtures';
 import { Client, createHarness, daysAgo, type Harness } from './harness';
 
@@ -180,5 +180,79 @@ describe('daily Emdad report moves the line automatically', () => {
     expect((await expert.get('/parts/desk')).status).toBe(403);
     // No stock reservation is created by an Emdad arrival.
     expect(await h.db.db.select().from(stockReservations).where(eq(stockReservations.partRequestId, arrived.id))).toHaveLength(0);
+  });
+
+  // Report rows here never match by admission (X-…), so only request number + code/chassis can link them.
+  const row = (i: number, requestNo: string, code: string, status = 'در حال تامین', chassis = `C${String(i).padStart(7, '0')}`) =>
+    emdadRow(i, { 'شماره کارت پذيرش': `X-REQ-${i}`, 'شماره درخواست': requestNo, 'کد قطعه': code, 'کد اختصاصی اولیه': code, 'كد تداركاتي كالا': `${code}01`, 'شماره شاسی': chassis, 'وضعیت امداد ویژه': status });
+  const requestOf = async (partId: string) => (await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.partRequestId, partId)))[0];
+
+  it('links each line of one vehicle request by request number + technical code, with Persian digits and leading zeros', async () => {
+    const c = await newCase('960051');
+    let p1 = await newPart(c.id, '22223351', 1, 'درب جلو آزمون');
+    let p2 = await newPart(c.id, '22223352', 1, 'آینه آزمون');
+    p1 = (await flow(p1, { action: 'emdad', requestNo: '۰۵۶۰۰۵۱' })).body;
+    p2 = (await flow(p2, { action: 'emdad', requestNo: '560051' })).body;
+
+    const result = await publish([row(51, '560051', '22223352'), row(52, '560051', '22223351')], -55);
+    expect(result.counts).toMatchObject({ linkedByRequestNo: 2 });
+    const now = await partsOf(c.id);
+    expect(now.find((p) => p.id === p1.id)!.emdad).toMatchObject({ requestNo: '560051', statusText: 'در حال تامین' });
+    expect(now.find((p) => p.id === p2.id)!.emdad).toMatchObject({ requestNo: '560051' });
+    expect((await requestOf(p1.id))!.matchNote).toBe('شمارهٔ درخواست و کد فنی یکسان است');
+  });
+
+  it('keeps contradicting or ambiguous lines for review and links them on a later report once the evidence agrees', async () => {
+    const c = await newCase('960061');
+    let p = await newPart(c.id, '33334461', 1, 'رادیاتور آزمون');
+    p = (await flow(p, { action: 'emdad', requestNo: '570061' })).body;
+    // The same request number typed on two cars with the same part: never guessed.
+    for (const adm of ['960071', '960072']) {
+      const twin = await newCase(adm);
+      const q = await newPart(twin.id, '44445571', 1, 'سپر عقب آزمون');
+      await flow(q, { action: 'emdad', requestNo: '580071' });
+    }
+    const first = await publish([row(61, '570061', '99998861', 'در حال تامین', 'ZZZ00061'), row(71, '580071', '44445571'), row(91, '600091', '66667791')], -54);
+    expect(first.counts).toMatchObject({ linkedByRequestNo: 0, requestNoReview: 2 });
+    expect((await one(p)).emdad).toBeNull();
+    const pending = await h.db.db.select().from(emdadRequests).where(inArray(emdadRequests.requestNo, ['570061', '580071', '600091']));
+    expect(pending.map((r) => [r.requestNo, r.matchStatus, r.partRequestId]).sort()).toEqual([
+      ['570061', 'needs_review', null],
+      ['580071', 'needs_review', null],
+      ['600091', 'unmatched', null],
+    ]);
+    expect(pending.find((r) => r.requestNo === '580071')!.matchNote).toContain('چند قطعهٔ باز');
+
+    // The chassis of the case is recorded, and a line for 600091 gets its request number: the next (overlapping) report links both.
+    const [kase] = await h.db.db.select({ vehicleId: cases.vehicleId }).from(cases).where(eq(cases.id, c.id));
+    await h.db.db.update(vehicles).set({ chassisRef: 'ZZZ00061' }).where(eq(vehicles.id, kase!.vehicleId));
+    let late = await newPart(c.id, '66667791', 1, 'فن آزمون');
+    late = (await flow(late, { action: 'emdad', requestNo: '600091' })).body;
+    const second = await publish([row(61, '570061', '99998861', 'در حال تامین', 'ZZZ00061'), row(71, '580071', '44445571'), row(91, '600091', '66667791'), row(92, '600092', '12121292')], -53);
+    expect(second.counts).toMatchObject({ linkedByRequestNo: 2 });
+    expect((await requestOf(p.id))!.matchNote).toContain('شاسی یکسان');
+    expect((await requestOf(late.id))!.requestNo).toBe('600091');
+    // The two identical lines still wait for a person.
+    expect((await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.requestNo, '580071')))[0]).toMatchObject({ matchStatus: 'needs_review', partRequestId: null });
+  });
+
+  it('records one history entry per status change across days, none for repeats or overlapping files, and turns «وارد موجودی» into ready', async () => {
+    const c = await newCase('960081');
+    let p = await newPart(c.id, '55556681', 1, 'کاپوت آزمون');
+    p = (await flow(p, { action: 'emdad', requestNo: '590081' })).body;
+    await publish([row(81, '590081', '55556681')], -50);
+    await publish([row(81, '590081', '55556681'), row(82, '590082', '12121282')], -40);
+    let now = await one(p);
+    // While Emdad is in progress the status is read only from the report: no action changes it.
+    expect(now).toMatchObject({ flowState: 'emdad', allowedActions: ['cancel', 'set_price', 'announce_price'] });
+    expect(now.emdad!.history).toEqual([{ at: expect.any(String), statusText: 'در حال تامین' }]);
+
+    await publish([row(81, '590081', '55556681', 'وارد موجودی شده است')], -30);
+    await publish([row(81, '590081', '55556681', 'وارد موجودی شده است'), row(83, '590083', '12121283')], -20);
+    now = await one(p);
+    expect(now).toMatchObject({ flowState: 'ready' });
+    expect(now.emdad!.history!.map((x) => x.statusText)).toEqual(['وارد موجودی شده است', 'در حال تامین']);
+    const req = await requestOf(p.id);
+    expect(await h.db.db.select().from(emdadRequestEvents).where(eq(emdadRequestEvents.requestId, req!.id))).toHaveLength(2);
   });
 });

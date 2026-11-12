@@ -1,43 +1,113 @@
 import { and, eq, inArray, isNull, isNotNull } from 'drizzle-orm';
-import { EMDAD_ARRIVED_CATEGORIES, EMDAD_DEALER_SUPPLY_CATEGORY } from '@manage/shared';
+import { EMDAD_ARRIVED_CATEGORIES, EMDAD_DEALER_SUPPLY_CATEGORY, normalizePersian, parseBasePartNumber, parseStockCode } from '@manage/shared';
 import type { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import type { DbOrTx } from '../db/database';
-import { cases, emdadRequests, partRequests } from '../db/schema';
+import { cases, emdadRequests, partRequests, vehicles } from '../db/schema';
 import { caseAndBayRecipients, notifyUsers, partLink, usersWithRole } from '../parts/part-notify';
+import { idKey } from '../vehicle-import/vehicle-sheet';
+import type { EmdadOfficial } from './report-rows';
+
+/**
+ * Comparison key of a request number: Persian/Arabic digits and letters
+ * normalised, spaces and dashes removed; an all-digit number loses its leading
+ * zeros («۰۵۰۰۰۴۱» = «500041»). The stored text is never rewritten.
+ */
+export function requestNoKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const k = idKey(normalizePersian(raw));
+  if (!k) return null;
+  return /^\d+$/.test(k) ? k.replace(/^0+(?=\d)/, '') : k;
+}
+
+const baseOf = (code: string | null | undefined) => (code ? (parseStockCode(code)?.basePartNumber ?? parseBasePartNumber(code)) : null);
+
+type RequestCandidate = { id: string; caseId: string; partNumber: string | null; vin: string | null; chassisRef: string | null };
+type RequestDecision = { kind: 'link'; part: RequestCandidate; note: string } | { kind: 'review'; note: string };
+
+/**
+ * One Emdad request number belongs to one vehicle and may cover several of its
+ * lines, so the technical code chooses the line; the chassis confirms a single
+ * candidate whose code differs. Anything else waits for a person: never a guess.
+ */
+export function decideByRequest(o: Pick<EmdadOfficial, 'partCode' | 'initialCode' | 'fullCodeBase'>, chassis: string | null, candidates: RequestCandidate[]): RequestDecision {
+  const reportBases = new Set([o.partCode, o.initialCode, o.fullCodeBase].map((c) => baseOf(c)).filter((b): b is string => !!b));
+  const shortChassis = idKey(chassis ?? '');
+  const chassisOk = (c: RequestCandidate) => !!shortChassis && (shortChassis.length === 17 ? idKey(c.vin ?? '') === shortChassis : idKey(c.chassisRef ?? '') === shortChassis);
+  const byCode = candidates.filter((c) => {
+    const b = baseOf(c.partNumber);
+    return !!b && reportBases.has(b);
+  });
+  if (byCode.length === 1) {
+    return { kind: 'link', part: byCode[0]!, note: chassisOk(byCode[0]!) ? 'شمارهٔ درخواست، کد فنی و شاسی یکسان است' : 'شمارهٔ درخواست و کد فنی یکسان است' };
+  }
+  if (byCode.length > 1) return { kind: 'review', note: 'چند قطعهٔ باز با همین شمارهٔ درخواست و کد فنی هست؛ یکی را دستی انتخاب کنید' };
+  if (candidates.length === 1 && chassisOk(candidates[0]!)) {
+    return { kind: 'link', part: candidates[0]!, note: 'شمارهٔ درخواست و شاسی یکسان است؛ کد فنی گزارش با قطعه فرق دارد' };
+  }
+  return { kind: 'review', note: 'شمارهٔ درخواست در منیج ثبت شده ولی کد فنی و شاسی با گزارش یکسان نیست؛ دستی تطبیق دهید' };
+}
 
 /**
  * Daily Emdad Vijeh report → unified parts list (spec section 7). Runs inside
  * the publish transaction of the report.
- *  1. A request with no case link is linked by its request number when exactly
- *     one open Emdad line of Manage carries that number (never overrides a manual decision).
+ *  1. A report line not yet linked to a part is linked by its request number
+ *     (normalised) plus technical code or chassis (decideByRequest); an
+ *     ambiguous or contradicting line waits in the review queue. A manual
+ *     decision is never overridden.
  *  2. «وارد موجودی» / «رسید توسط نمایندگی»: the line becomes «امداد ویژه رسیده»
  *     (ready for handover); the case's expert and its bays are told.
  *  3. «تأمین توسط نمایندگی»: the parts clerks are told to price and supply it.
  */
 export async function applyEmdadToParts(tx: DbOrTx, audit: AuditService, actor: Actor, importId: string, reportAt: Date) {
   const tenantId = actor.user.tenantId;
-  const result = { linkedByRequestNo: 0, arrived: 0, dealerSupply: 0 };
+  const result = { linkedByRequestNo: 0, arrived: 0, dealerSupply: 0, needsReview: 0 };
 
-  // 1. Link by request number.
+  // 1. Link by request number + technical code + chassis (the request number
+  // is entered by hand once, when the clerk registers Emdad on the line).
   const unlinked = await tx
     .select()
     .from(emdadRequests)
     .where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.lastImportId, importId), isNull(emdadRequests.partRequestId), isNotNull(emdadRequests.requestNo), eq(emdadRequests.matchSource, 'auto')));
-  const numbers = [...new Set(unlinked.map((r) => r.requestNo!).filter(Boolean))];
-  if (numbers.length) {
-    const candidates = await tx
-      .select({ id: partRequests.id, caseId: partRequests.caseId, orderRef: partRequests.orderRef })
+  if (unlinked.length) {
+    const open = await tx
+      .select({ id: partRequests.id, caseId: partRequests.caseId, orderRef: partRequests.orderRef, partNumber: partRequests.partNumber, vin: vehicles.vin, chassisRef: vehicles.chassisRef })
       .from(partRequests)
       .innerJoin(cases, eq(cases.id, partRequests.caseId))
-      .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.orderRef, numbers), eq(partRequests.source, 'company'), eq(partRequests.status, 'ordered'), eq(cases.status, 'open')));
+      .innerJoin(vehicles, eq(vehicles.id, cases.vehicleId))
+      .where(and(eq(partRequests.tenantId, tenantId), isNotNull(partRequests.orderRef), eq(partRequests.source, 'company'), eq(partRequests.status, 'ordered'), eq(cases.status, 'open')));
+    const taken = new Set(
+      open.length
+        ? (await tx.select({ id: emdadRequests.partRequestId }).from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.partRequestId, open.map((p) => p.id))))).map((x) => x.id!)
+        : [],
+    );
+    const byRequest = new Map<string, typeof open>();
+    for (const p of open) {
+      if (taken.has(p.id)) continue; // already followed by another report line
+      const k = requestNoKey(p.orderRef);
+      if (k) byRequest.set(k, [...(byRequest.get(k) ?? []), p]);
+    }
     for (const r of unlinked) {
-      const same = candidates.filter((c) => c.orderRef === r.requestNo);
-      if (same.length !== 1) continue;
+      const candidates = byRequest.get(requestNoKey(r.requestNo) ?? '') ?? [];
+      if (!candidates.length) continue;
+      const decision = decideByRequest(r.official as EmdadOfficial, r.chassis, candidates);
+      if (decision.kind === 'review') {
+        if (r.matchStatus !== 'needs_review' || r.matchNote !== decision.note) {
+          await tx
+            .update(emdadRequests)
+            .set({ matchStatus: 'needs_review', matchNote: decision.note, updatedAt: new Date(), version: r.version + 1 })
+            .where(and(eq(emdadRequests.id, r.id), eq(emdadRequests.version, r.version)));
+          result.needsReview += 1;
+        }
+        continue;
+      }
+      const part = decision.part;
+      byRequest.set(requestNoKey(r.requestNo)!, candidates.filter((c) => c.id !== part.id));
       await tx
         .update(emdadRequests)
-        .set({ partRequestId: same[0]!.id, caseId: same[0]!.caseId, matchStatus: 'matched', matchNote: 'اتصال با شمارهٔ درخواست ثبت‌شده در منیج', updatedAt: new Date(), version: r.version + 1 })
+        .set({ partRequestId: part.id, caseId: part.caseId, matchStatus: 'matched', matchNote: decision.note, updatedAt: new Date(), version: r.version + 1 })
         .where(and(eq(emdadRequests.id, r.id), eq(emdadRequests.version, r.version)));
+      const same = [part];
       await audit.record(tx, actor, { entityType: 'part', entityId: same[0]!.id, caseId: same[0]!.caseId, action: 'emdad.linked_by_request_no', after: { requestId: r.id, requestNo: r.requestNo } });
       result.linkedByRequestNo += 1;
     }

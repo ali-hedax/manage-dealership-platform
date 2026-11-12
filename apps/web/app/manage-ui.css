@@ -695,6 +695,8 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .ledger-dl { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); background: #FFFEFB; border: 1px solid #E3DED3; border-radius: 12px; padding: 12px 14px; }
 .ledger-dl dt { font-size: 12px; }
 .ledger-dl dd { font-weight: 700; margin-block-end: 6px; }
+.ledger-emdad-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-weight: 500; }
+.ledger-emdad-history li:first-child { font-weight: 700; }
 .m-tag.ok { background: #E3F2E8; color: #1E6B44; } .m-tag.wait { background: #FBEBD3; color: #7A4A0B; } .m-tag.em { background: #E2ECF7; color: #1E4A85; } .m-tag.stop { background: #FBE2DC; color: #8E2E1F; } .m-tag.mute { background: #EEECE7; color: #5F6672; }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 16px; }
 .settings-card { display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 16px; background: #FFFEFB; border: 1px solid #E6E2D9; color: #15181D !important; text-decoration: none !important; box-shadow: 0 16px 30px -26px rgba(21, 24, 29, .3); }

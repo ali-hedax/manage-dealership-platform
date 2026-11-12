@@ -2,6 +2,11 @@
 
 منبع واحد حقیقت: [سند جامع محصول](docs/PRODUCT_SPEC_FA.md) (تأیید مالک، ۱۹ آبان ۱۴۰۵). تاریخچهٔ قبلی: [بایگانی تا PR #74](docs/archive/PROGRESS_2026-11.md).
 
+## کار ۲: وضعیت امداد ویژه جلوی قطعه — ۲۱ آبان ۱۴۰۵ — PR در انتظار تأیید مالک
+
+- شاخهٔ `feature/emdad-auto-status` از `main` (`5d12659`). اتصال با شمارهٔ درخواست + کد فنی/شاسی، صف بررسی، تلاش دوباره، تاریخچه در فهرست قطعات. بدون migration.
+- آزمون‌ها سبز ([TEST_REPORT](docs/TEST_REPORT.md)). **قدم بعدی:** کار ۳ (`feature/assessment-rejections`)، سپس کار ۱. ادغام و استقرار فقط با تأیید مالک.
+
 ## ورود ظریف‌تر — ۲۱ آبان ۱۴۰۵ (2026-11-12) — در انتظار بازبینی و ادغام مالک
 
 - شاخهٔ `feature/login-refined-redesign` از `main`؛ فقط `apps/web/app/login/page.tsx` و بخش ورود در `manage-ui.css` (و تصویرها در `docs/design/login-refined`). API و Production دست نخورده‌اند.

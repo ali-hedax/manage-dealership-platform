@@ -215,6 +215,16 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
             <dd><bdi className="m-num">{toPersianDigits(p.partNumber ?? '—')}</bdi></dd>
             {(p.orderRef || p.emdad?.requestNo) && (<><dt>شمارهٔ درخواست امداد ویژه</dt><dd><bdi>{toPersianDigits(p.emdad?.requestNo ?? p.orderRef ?? '')}</bdi>{p.orderedAt ? ` · ${dayText(p.orderedAt)}` : ''}</dd></>)}
             {p.emdad && (<><dt>گزارش امداد ویژه</dt><dd>{p.emdad.statusText ?? '—'} · {dayText(p.emdad.reportAt)}</dd></>)}
+            {p.emdad?.history && p.emdad.history.length > 1 && (
+              <>
+                <dt>تاریخچهٔ وضعیت امداد ویژه</dt>
+                <dd>
+                  <ol className="ledger-emdad-history" aria-label="تاریخچهٔ وضعیت امداد ویژه از گزارش‌های روزانه">
+                    {p.emdad.history.map((h, i) => <li key={`${h.at}-${i}`}>{h.statusText ?? '—'} · {dayText(h.at)}</li>)}
+                  </ol>
+                </dd>
+              </>
+            )}
             <dt>قیمت فروش</dt>
             <dd className="m-num">{rialText(p.salePriceRial)}</dd>
             {p.unitPriceRial != null && (<><dt>قیمت خرید</dt><dd className="m-num">{rialText(p.unitPriceRial)}{p.supplier ? ` · ${p.supplier}` : ''}</dd></>)}
