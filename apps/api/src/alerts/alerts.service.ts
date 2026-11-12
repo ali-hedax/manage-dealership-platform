@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { alertSettingsOf, DEFAULT_ALERT_SETTINGS, openAlerts, type AlertResponseInput, type AlertSettings, type AlertSettingsInput, type CaseAlert } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
@@ -77,7 +77,7 @@ export class AlertsService {
       this.db
         .select({ caseId: partRequests.caseId, description: partRequests.description, quantity: partRequests.quantity, sale: partRequests.salePriceRial, unit: partRequests.unitPriceRial, approved: partRequests.approvedUnitPriceRial })
         .from(partRequests)
-        .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, ids), notInArray(partRequests.status, INACTIVE_PART_STATUSES)))
+        .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, ids), notInArray(partRequests.status, INACTIVE_PART_STATUSES), isNull(partRequests.assessmentRejectedAt)))
         .orderBy(partRequests.createdAt),
       this.alertSettings(tenantId),
     ]);

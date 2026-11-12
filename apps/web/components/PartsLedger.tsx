@@ -74,6 +74,8 @@ function stateDetail(p: Part): string {
 
 /** The one button shown on the closed row; the rest live inside the row. */
 function primaryAction(p: Part): PartFlowAction | 'decide' | null {
+  // Rejected in the assessment and not supplied: no supply route to choose; only «لغو قطعه» stays in the details.
+  if (p.assessmentRejection && p.flowState === 'needed') return null;
   if (p.flowState === 'needed' || p.flowState === 'dealer_supply') return 'decide';
   for (const a of ['hand_over', 'receive', 'return'] as const) if (p.allowedActions.includes(a)) return a;
   return null;
@@ -192,6 +194,8 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
         <div className="m-row-name c-name">
           <span>{p.description}</span>
           {p.fromSupplement && <span className="m-badge">الحاقیه</span>}
+          {p.assessmentRejection && <span className="m-badge stop" title="این قلم در کارشناسی رد شده است؛ نیاز تأمین حساب نمی‌شود">رد شده{p.assessmentRejection.versionNo > 1 ? ` · الحاقیه ${toPersianDigits(p.assessmentRejection.versionNo)}` : ""}</span>}
+          {p.replaces && <span className="m-badge" title={p.replaces.probable ? "پیوند از روی کد فنی یکسان؛ قطعی نیست" : undefined}>جایگزین «{p.replaces.description}»{p.replaces.probable ? " · احتمالی" : ""}</span>}
           {p.priceNotice && <span className="m-tag wait">اعلام قیمت</span>}
         </div>
         <span className="c-qty m-num"><span className="sr-only">تعداد </span>{faNum(p.quantity)}</span>
@@ -215,6 +219,16 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
             <dd><bdi className="m-num">{toPersianDigits(p.partNumber ?? '—')}</bdi></dd>
             {(p.orderRef || p.emdad?.requestNo) && (<><dt>شمارهٔ درخواست امداد ویژه</dt><dd><bdi>{toPersianDigits(p.emdad?.requestNo ?? p.orderRef ?? '')}</bdi>{p.orderedAt ? ` · ${dayText(p.orderedAt)}` : ''}</dd></>)}
             {p.emdad && (<><dt>گزارش امداد ویژه</dt><dd>{p.emdad.statusText ?? '—'} · {dayText(p.emdad.reportAt)}</dd></>)}
+            {p.emdad?.history && p.emdad.history.length > 1 && (
+              <>
+                <dt>تاریخچهٔ وضعیت امداد ویژه</dt>
+                <dd>
+                  <ol className="ledger-emdad-history" aria-label="تاریخچهٔ وضعیت امداد ویژه از گزارش‌های روزانه">
+                    {p.emdad.history.map((h, i) => <li key={`${h.at}-${i}`}>{h.statusText ?? '—'} · {dayText(h.at)}</li>)}
+                  </ol>
+                </dd>
+              </>
+            )}
             <dt>قیمت فروش</dt>
             <dd className="m-num">{rialText(p.salePriceRial)}</dd>
             {p.unitPriceRial != null && (<><dt>قیمت خرید</dt><dd className="m-num">{rialText(p.unitPriceRial)}{p.supplier ? ` · ${p.supplier}` : ''}</dd></>)}

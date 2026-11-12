@@ -49,6 +49,12 @@ const FILE_TTL_MS = 7 * 86_400_000;
 const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 const dec = (v: string | null | undefined) => (v == null ? null : parseDecimal(v));
 const chunks = <T>(list: T[], size = BATCH) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
+/**
+ * An automatic match is tried again on every report until it reaches a part
+ * line: unmatched, ambiguous, needs-review, and linked to the case but not yet
+ * to a part (the part may be added later). A manual decision is never redone.
+ */
+const retryMatch = (p: { matchSource: string; matchStatus: string; partRequestId: string | null }) => p.matchSource === 'auto' && (p.matchStatus !== 'matched' || !p.partRequestId);
 const cleanName = (name: string) =>
   (name.split(/[\\/]/).pop() ?? '')
     .replace(/\p{Cc}/gu, '')
@@ -571,7 +577,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
     };
     const rematch = rows.filter((r) => {
       const p = prev.get(r.rowKey!);
-      return !p || (p.matchSource === 'auto' && p.matchStatus !== 'matched');
+      return !p || retryMatch(p);
     });
     const match = await this.emdad.matcher(tx, tenantId, rematch.map(officialOf));
     const counts = { inserted: 0, updated: 0, unchanged: 0, older: 0, matched: 0 };
@@ -615,7 +621,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
         continue;
       }
       const base = { lastImportId: job.id, lastReportAt: reportAt, updatedAt: new Date() };
-      const m = p.matchSource === 'auto' && p.matchStatus !== 'matched' ? match(o) : null;
+      const m = retryMatch(p) ? match(o) : null;
       const matchPatch = m && (m.caseId !== p.caseId || m.matchStatus !== p.matchStatus || m.partRequestId !== p.partRequestId) ? m : null;
       const before = p.official as Record<string, unknown>;
       const changed = changedFields(before, o as unknown as Record<string, unknown>);
@@ -645,7 +651,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
     }
     // Spec section 7: the report moves the linked part lines automatically.
     const parts = await applyEmdadToParts(tx, this.audit, actor, job.id, reportAt);
-    return { counts: { ...counts, partsArrived: parts.arrived, partsDealerSupply: parts.dealerSupply, linkedByRequestNo: parts.linkedByRequestNo } };
+    return { counts: { ...counts, partsArrived: parts.arrived, partsDealerSupply: parts.dealerSupply, linkedByRequestNo: parts.linkedByRequestNo, requestNoReview: parts.needsReview } };
   }
 
   // -------------------------------------------------------------- profiles

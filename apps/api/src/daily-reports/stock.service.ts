@@ -257,6 +257,7 @@ export class StockService {
       .for('update');
     if (!need) throw notFound('نیاز قطعه');
     if (['cancelled', 'handed_over'].includes(need.status)) throw badRequest('PART_NOT_OPEN', 'این نیاز قطعه لغو یا تحویل شده است');
+    if (need.assessmentRejectedAt && need.status === 'needed') throw badRequest('PART_ASSESSMENT_REJECTED', 'این قلم در کارشناسی/الحاقیه رد شده است؛ رزرو ثبت نشد');
     const [kase] = await tx.select({ id: cases.id, stage: cases.stage, status: cases.status }).from(cases).where(and(eq(cases.id, need.caseId), eq(cases.tenantId, tenantId)));
     if (!kase || kase.stage === 'delivered' || kase.status !== 'open') throw badRequest('CASE_NOT_OPEN', 'پرونده باز نیست؛ رزرو ثبت نشد');
     // Serializes every reservation of the same code and location, across requests and workers.
