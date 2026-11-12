@@ -3,10 +3,16 @@ import { E2E_PASSWORD } from '../playwright.config';
 
 export async function login(page: Page, username: string) {
   // Staff PIN is the default tab; the password form is the owner/system-admin tab.
-  await page.goto('/login?mode=staff');
-  await page.getByLabel('نام کاربری').fill(username);
-  await page.getByLabel('رمز عبور').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: 'ورود', exact: true }).click();
+  // Right after a sign-out the previous page may still redirect itself; that aborts this navigation once.
+  await page.goto('/login?mode=staff').catch(async (e: Error) => {
+    if (!String(e.message).includes('ERR_ABORTED')) throw e;
+    await page.goto('/login?mode=staff');
+  });
+  // Both sign-in panels are in the page (one hidden); use the password panel only.
+  const form = page.locator('#login-panel-staff');
+  await form.getByLabel('نام کاربری').fill(username);
+  await form.getByLabel('رمز عبور', { exact: true }).fill(E2E_PASSWORD);
+  await form.getByRole('button', { name: 'ورود', exact: true }).click();
   await expect(page.getByRole('button', { name: 'خروج', includeHidden:true })).toBeAttached();
 }
 
