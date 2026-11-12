@@ -4,7 +4,7 @@ const headers={'x-manage-client':'test'};
 test('coded station, schedule, technician mobile start/end and coordinator handover through the real API',async({page},info)=>{
  await login(page,'admin');
  const staff=await (await page.request.get('/api/v1/workshop/staff')).json();
- const technician=staff.find((s:{displayName:string})=>s.displayName==='تعمیرکار نمونه');expect(technician).toBeTruthy();
+ const technician=staff.find((s:{displayName:string})=>s.displayName==='تکنسین نمونه');expect(technician).toBeTruthy();
  const departments=await (await page.request.get('/api/v1/departments')).json();
  const body=departments.find((d:{code:string})=>d.code==='body');
  const stationResponse=await page.request.post('/api/v1/workshop/stations',{headers,data:{code:'TEST-MOBILE-01',name:'صافکاری آزمایشی',trade:'body',departmentId:body.id,responsibleUserId:technician.id}});expect(stationResponse.ok()).toBe(true);
@@ -17,14 +17,14 @@ test('coded station, schedule, technician mobile start/end and coordinator hando
  await page.goto('/workshop');await expect(page.getByRole('heading',{name:'برنامه و پیگیری تعمیرات'})).toBeVisible();await expect(page.getByRole('cell',{name:/TEST-MOBILE-01/})).toBeVisible();
  await page.screenshot({path:info.outputPath('coordinator-desktop.png'),fullPage:true});
  await login(page,'technician');await page.setViewportSize({width:390,height:844});await page.goto('/workshop/technician');
- await expect(page.getByRole('heading',{name:'کارهای من',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'شروع کار',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{level:1,name:/^سلام/})).toBeVisible();await expect(page.getByRole('button',{name:'شروع کار',exact:true})).toBeVisible();
  expect((await page.getByRole('button',{name:'شروع کار',exact:true}).boundingBox())!.height).toBeGreaterThanOrEqual(64);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('technician-mobile-before.png'),fullPage:true});
  await page.getByRole('button',{name:'شروع کار',exact:true}).click();await expect(page.getByRole('button',{name:'پایان کار',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'پایان کار',exact:true}).click();await expect(page.getByRole('button',{name:'پایان کار',exact:true})).toHaveCount(0);await expect(page.getByText('پایان ثبت شده؛ منتظر تأیید مسئول تصادفات.')).toBeVisible();
+ await page.getByRole('button',{name:'پایان کار',exact:true}).click();await expect(page.getByRole('button',{name:'پایان کار',exact:true})).toHaveCount(0);await expect(page.getByText('تمام شد. منتظر تأیید کارشناس.')).toBeVisible();
  expect((await page.request.get(`/api/v1/cases/${kase.id}`)).status()).toBe(403);
- await page.reload();await expect(page.getByText('پایان ثبت شده؛ منتظر تأیید مسئول تصادفات.')).toBeVisible();
+ await page.reload();await expect(page.getByText('تمام شد. منتظر تأیید کارشناس.')).toBeVisible();
  await page.screenshot({path:info.outputPath('technician-mobile-after.png'),fullPage:true});
  await login(page,'expert');const detail=await (await page.request.get(`/api/v1/cases/${kase.id}`)).json();const done=detail.tasks.find((t:{id:string})=>t.id===task.id);expect(done.status).toBe('done');
  const approved=await page.request.post(`/api/v1/tasks/${task.id}/actions`,{headers,data:{action:'approve',expectedVersion:done.version}});expect(approved.ok()).toBe(true);

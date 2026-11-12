@@ -1,5 +1,56 @@
 # Test report
 
+## Integrated release validation — 2026-11-12 — PR #77
+
+The full Nadia rebuild is preserved from `a22f789` over production `cc1d7e1`. Release corrections restore catalog lookup in the unified parts list, require an active same-tenant technician on every repair-plan step with atomic rollback, label ledger expanders and keep nested action keyboard events from toggling the row, and adapt browser journeys to the five real folder tabs and six-role seed.
+
+Validated with installed dependencies and the real API/web (not typed stand-ins): shared tests 52/52; API tests 255 passed (36 suites; 10 explicit integration-environment skips); lint, typecheck, API integration tests and production build passed in [CI run 43161250160](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43161250160). PostgreSQL 16 migration/seed/locking checks and Docker build/compose/HTTPS gate checks also passed there. The Docker smoke assertion now checks the approved 20-car synthetic fleet.
+
+Local real-browser checks passed for intake, legacy intake, masked parts access, planned modules, assessment/supplements, catalog and historic lookup, role permissions, reminders, wages, technician start/end and expert approval, QC/financial close/handover, reporting, PWA entry, and purchase/receipt/handover/import. Browser refinements on top of that CI run are being checked on the final PR head; final release requires all six CI jobs green on the merged commit. Local role screenshot journeys passed 6/6; the daily stock/Emdad reservation, issue/release, family mapping and history journey passed after switching to the system administrator for configuration (parts clerks have no settings permission). Screenshot journeys cover login, expert desk, case folder, parts desk, technician, control room and support desk at desktop and 390px.
+
+Production preparation: a fresh backup was restored to an isolated database and its complete table/migration fingerprints matched the live backup. Production has not been changed at this validation stage. Installation is gated on an exact CI image artifact, isolated 0020–0022 rehearsal, unchanged business-data fingerprints, role-migration invariants, backup and automatic rollback. The deployment receipt records the eventual installed SHA and outcome.
+
+
+## Package 9 — owner's approved visual direction, release candidate — 2026-11-11 — tested code commit `9f79eb3`
+
+Branch `feature/p9-visual-direction` (= `integration/spec-rebuild-rc1`), on top of packages 0–8 and upstream `main` `cc1d7e1`. The commit that adds this report changes documentation only.
+
+**Ran here and green on `9f79eb3`:**
+
+| Check | Result |
+|---|---|
+| `packages/shared` unit tests (`node --test`) | **52/52** pass (incl. the new «پرونده‌های من» desk filter) |
+| API TypeScript vs. previous baseline (stubbed third-party types) | 159 = 159, **no new error** |
+| Web TypeScript (`app`, `components`, `lib`) with typed stand-ins for React 19, SWR 2 and Next | **0 errors** — the stand-ins now type hooks, events, `key` and component props, so this is a real check of the web code, not only of syntax |
+| Playwright specs (`apps/web/e2e/*.ts`) against the real `@playwright/test` 1.63 types | **0 errors** |
+| Migrations 0000 → 0022 on PostgreSQL 16; down of 0022, 0021, 0020 and re-apply | green (run on `3693df4`; `9f79eb3` changes two web components only) |
+| `node scripts/check-docs.mjs` | green (68 Markdown files, 175 API routes) |
+| Visual harness (`tools/visual-harness`): 12 screens × 360 / 390 / 768 / 1440 px | **48/48 without horizontal overflow**, 0 page errors, 0 crashed pages |
+| Same harness: approximate WCAG contrast of every visible text node on solid backgrounds (1440 and 390) | **0 findings** after raising grey text to `#656B75` / `#575D66`; dark sheets checked by hand (`#8A93A3` on `#18282F` 4.9:1, tone inks ≥ 7:1) |
+| Keyboard | Tab order: skip link → brand → sidebar → search → notifications → account → range → each bay of the map; Enter selects a bay (`aria-pressed`) and lists its cars as links |
+| Reduced motion | pulse and shimmer animations resolve to `none` under `prefers-reduced-motion: reduce` |
+| Print | case folder prints without tabs/clip/buttons; control room prints KPI, funnel and a plain bay list instead of the drawing |
+
+The harness renders the **real** pages and CSS of `apps/web` in Chrome 153 with Vazirmatn and an in-page synthetic API whose numbers come from the shared rules; it is not the built Next app and not the real API. Its screenshots, reference-versus-actual images and a 32-second interaction recording are in [design/p9](design/p9/).
+
+**Written, not run here** (need the installed workspace): API e2e `control-room.e2e-spec.ts` (new assertion: alerts carry `caseNumber`); Playwright `role-journeys.spec.ts` (bay selection with the keyboard, parts desk with ledger and stock card, settings hub → workshop settings with «بازگشت به تنظیمات», admin desk title), `workspaces.spec.ts` (new sidebar), `accident.spec.ts` and `mobile.spec.ts` («پرونده‌ها» link), `parts-workbench`, `parts-finance`, `daily-reports` («انتخاب مسیر تأمین»); `helpers.login` now matches «ورود» exactly (the sign-in page also has «راهنمای ورود» and «مشکل در ورود؟»).
+
+**Could not run in this environment, with the reason:** `pnpm install` (npm registry blocked), therefore `pnpm lint`, the full `pnpm typecheck`, Jest, `next build`, `pnpm test:e2e` against the real app and the Docker compose smoke test; GitHub CI (Actions are off on the fork and no pull request can be opened on `ali-hedax/manage-dealership-platform` from this session); HawkScan (no `HAWK_API_KEY`, and the app cannot be started without its dependencies). **Release readiness depends on these being green in CI on the merged commit.**
+
+## Rebuild per the approved product spec — packages 0–8 — 2026-11-10/11 — branches `feature/p0-spec-housekeeping` … `feature/p8-quality-delivery`
+
+- **Scope:** [PRODUCT_SPEC_FA.md](PRODUCT_SPEC_FA.md) packages 0–8 (six roles, cost alerts, one parts list with a server-side state machine, usable stock, repair path and technician desk, paper/dark interface, control room and alert table, demo fleet, docs).
+- **Ran locally and green (this environment):**
+  - `packages/shared` unit tests with `node --test`: **52/52**. Includes the part state machine (every allowed and forbidden transition), usable stock with the spec example (5 → reserve → 4 → tomorrow's 5 still 4 → finish → report 4, no double deduction), roles and permissions of the six roles, cost alerts, repair-path dependencies and duration (spec example: 8 days), desk «قدم بعدی» rules, control-room funnel/map/analysis.
+  - Migrations **0000 → 0022 on real PostgreSQL 16**; down scripts of 0020 (six roles, with exact restore of legacy roles, deactivated cashier-only accounts and templates), 0021 and 0022 run and re-applied.
+  - The stock report reader on synthetic files: HTML table with `.xls` name, blank lines before `<html>`, Arabic «ي/ك», `colspan`, entities, unclosed cells, windows-1256.
+  - TypeScript of `apps/api` and `apps/web` against the previous baseline with stubbed third-party types: **no new error** in API code; in web code only stub artefacts (untyped `useSWR<T>`, `ReactNode`, `key` props) that also exist for every untouched file.
+  - `node scripts/check-docs.mjs`: green (175 routes in [API.md](API.md)).
+- **Written but not run here** (they need the installed workspace):
+  - API e2e (Jest + PGlite): new `repair-plan`, `desk`, `control-room`, `demo-fleet`, `part-flow`; updated `people`, `daily-reports`, `parts-finance`, `access`, `qc-delivery`, `reports` and others for the six roles.
+  - Playwright: new `role-journeys.spec.ts` (two-door login without «مالک», expert desk → folder → tabs, parts desk counts, technician at 390px, control room with four numbers/funnel/bottleneck/«تذکر», system admin «گره‌ها» and thresholds; desktop and 390px screenshots of each screen); updated `people`, `workshop`, `workspaces`, `system-admin`, `compact-assessment`, `assessment`, `vehicle-import`, `daily-reports`, `parts-finance`, `screenshots`; `signature-evidence.spec.ts` removed with the Signature theme. Screenshots of a full workshop: `DEMO_FLEET=true pnpm test:e2e role-journeys`.
+- **Could not run in this environment, with the reason:** `pnpm install` (the npm registry answers 403 here), therefore `pnpm lint`, the full `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm test:e2e`; GitHub CI (Actions are disabled on the fork and the upstream PRs could not be opened from here); the HawkScan DAST loop (no running app, no `HAWK_API_KEY`). These must be green on the PRs before any merge.
+
 ## Unified staff PIN sign-in — 2026-11-09 — **PR #74**
 
 - **Changed:**

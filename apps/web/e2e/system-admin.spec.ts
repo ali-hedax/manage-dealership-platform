@@ -11,6 +11,7 @@ test('owner-configured support desk exposes daily upload, all operational queues
  await login(page,'admin');await expect(page).toHaveURL(/\/launch$/);await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:/مدیر سیستم/}).click();
  const me=await (await page.request.get('/api/v1/auth/me')).json();
  expect(me.isOwner).toBe(false);expect(me.permissions).toHaveLength(PERMISSIONS.length);
+ await page.getByText('همهٔ ابزارهای پشتیبانی',{exact:true}).click();
  const desk=page.getByRole('navigation',{name:'کارهای مدیر سیستم',exact:true});
  // Locator.all() does not wait for the newly navigated workspace to render.
  await expect(desk.locator('details > summary')).toHaveCount(2);
@@ -35,7 +36,7 @@ test('owner-configured support desk exposes daily upload, all operational queues
  // The non-owner support session cannot retrieve or mutate access administration.
  expect((await page.request.get('/api/v1/access')).status()).toBe(403);
  await page.goto('/users');await expect(page.locator('#access-control')).toHaveCount(0);
- await page.goto('/accidents/expert');await expect(page.getByRole('heading',{name:'میز کار مسئول تصادفات',exact:true})).toBeVisible();
+ await page.goto('/accidents/expert');await expect(page.locator('.desk-kicker')).toHaveText('میز کار کارشناس تصادفات');
  await page.goto('/accidents/owner');await expect(page.getByRole('heading',{name:'این میز کار برای شما فعال نیست',exact:true})).toBeVisible();
 });
 

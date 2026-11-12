@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, openCaseSections } from './helpers';
+import { login, openCaseSections, openCaseTab } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -32,10 +32,12 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await page.getByRole('button', { name: 'ثبت پرونده' }).click();
 
   // Case detail: number, plate, three independent times, no missing fields.
-  await expect(page.locator('.case-number')).toHaveText(/AC-/);
-  const caseNumber = (await page.locator('.case-number').textContent())!;
+  await expect(page.locator('.cf-ids bdi:first-child')).toHaveText(/AC-/);
+  const caseNumber = (await page.locator('.cf-ids bdi:first-child').textContent())!;
   await expect(page.getByRole('img', { name: /پلاک/ })).toBeVisible();
+  await openCaseTab(page, 'مدارک');
   await expect(page.getByLabel('زمان‌ها')).toContainText('۱۵۰۰/۰۱/۱۰ ۱۲:۰۰');
+  await openCaseTab(page, 'کار امروز');
   await expect(page.getByText('نیازمند تکمیل:')).toHaveCount(0);
 
   // Add a body-shop activity and record start.
@@ -57,6 +59,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await expect(task).toContainText('دارای مانع');
   await expect(task).toContainText('قطعه نرسیده');
 
+  await openCaseSections(page, 'blockers');
   await page.getByRole('button', { name: 'رفع مانع' }).click();
   await page.getByRole('dialog').getByLabel('شرح رفع مانع *').fill('قطعه تحویل واحد شد');
   await page.getByRole('dialog').getByRole('button', { name: 'ثبت رفع مانع' }).click();
@@ -66,14 +69,16 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await expect(task).toContainText('اتمام (منتظر تأیید)');
   await task.getByRole('button', { name: 'تأیید تحویل' }).click();
   await expect(task).toContainText('تأییدشده');
+  await openCaseTab(page, 'مدارک');
   await expect(page.getByLabel('زمان‌ها')).toContainText('۱۰۰٪');
+  await openCaseTab(page, 'تاریخچه');
 
   // History records each step with the actor.
   await expect(page.locator('.timeline')).toContainText('رفع مانع');
-  await expect(page.locator('.timeline')).toContainText('سرپرست نمونه');
+  await expect(page.locator('.timeline')).toContainText('کارشناس تصادفات نمونهٔ دوم');
 
   // Search by plate in loose form finds the case.
-  await page.getByRole('link', { name: 'پرونده‌های تصادفی' }).click();
+  await page.getByRole('link', { name: 'پرونده‌ها', exact: true }).click();
   await page.getByLabel('جست‌وجوی پرونده').fill('68ط421');
   await page.waitForURL(/q=/);
   await expect(page.locator('tbody tr')).toHaveCount(1);
@@ -93,8 +98,10 @@ test('legacy entry: a vehicle already in the workshop keeps its past admission a
 
   await expect(page.locator('.case-hero')).toContainText('در انتظار قطعه');
   await expect(page.locator('.case-hero')).toContainText('ثبت‌شده از قبل از Manage');
+  await openCaseTab(page, 'مدارک');
   await expect(page.getByLabel('زمان‌ها')).toContainText('۱۴۰۵/۰۷/۱۵ ۰۹:۳۰');
   // Unknown data stays empty and is flagged, never invented.
+  await openCaseTab(page, 'کار امروز');
   await expect(page.getByText('نیازمند تکمیل:')).toContainText('نام مالک');
 });
 
@@ -117,7 +124,7 @@ test('parts clerk: read-only view with masked customer phone and no create actio
 
 test('planned modules are visible as roadmap and expose no actions', async ({ page }) => {
   await login(page, 'manager');
-  await page.getByText('سایر واحدها',{exact:true}).click();
+  await page.getByText('ابزارهای بیشتر',{exact:true}).click();
   await page.getByRole('link', { name: /انبار، قطعات و تأمین‌کنندگان/ }).click();
   await expect(page.getByText('این بخش در دست توسعه است و هنوز قابل استفاده نیست.')).toBeVisible();
   await expect(page.locator('main').getByRole('button')).toHaveCount(0);

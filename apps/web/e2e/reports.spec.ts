@@ -8,7 +8,7 @@ async function as(page: Page, user: string) {
   await page.goto('about:blank');
   await page.context().clearCookies();
   await login(page, user);
-  await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:user==='manager'?/مدیر خدمات/:/قطعات و تأمین/}).click();
+  await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:user==='manager'?/مدیر خدمات/:/مسئول قطعات/}).click();
 }
 
 test('service manager: KPI opens its list, filters survive opening a case, charts have tables', async ({ page }) => {

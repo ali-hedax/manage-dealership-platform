@@ -6,7 +6,7 @@ import { hashPassword } from '../src/auth/password';
 import { newId } from '../src/common/ids';
 import { departments, tenants, users, tasks } from '../src/db/schema';
 import { readWorkbook } from '../src/parts/xlsx';
-import { Client, createHarness, daysAgo, TEST_PASSWORD, type Harness } from './harness';
+import { Client, LEGACY_QC_PERMISSIONS, createHarness, LEGACY_CASHIER_PERMISSIONS, daysAgo, TEST_PASSWORD, type Harness } from './harness';
 
 // Reports center (docs/REPORTS_FA.md): figures, charts, work list and export
 // agree under the same filter; vehicles are not double counted; access by
@@ -46,9 +46,11 @@ async function newCase(body: object = {}): Promise<CaseDetail> {
 
 beforeAll(async () => {
   h = await createHarness({ withCases: true });
-  [manager, supervisor, expert, parts, cashier, qc] = await Promise.all(
-    ['manager', 'supervisor', 'expert', 'parts', 'cashier', 'qc'].map((u) => h.login(u)),
-  );
+  [manager, supervisor, expert, parts, cashier, qc] = await Promise.all([
+    ...['manager', 'supervisor', 'expert', 'parts'].map((u) => h.login(u)),
+    h.loginAs('payments', [], LEGACY_CASHIER_PERMISSIONS),
+    h.loginAs('narrow', [], LEGACY_QC_PERMISSIONS),
+  ]);
   depts = (await supervisor.get('/departments')).body;
 });
 afterAll(async () => {
@@ -60,7 +62,7 @@ describe('reports: access', () => {
     expect((await manager.get('/reports/views')).body).toMatchObject({ views: ['manager', 'parts', 'accident', 'workshop'], defaultView: 'manager' });
     expect((await parts.get('/reports/views')).body).toMatchObject({ views: ['parts'], defaultView: 'parts' });
     expect((await qc.get('/reports/views')).body).toMatchObject({ views: ['workshop'], defaultView: 'workshop' });
-    expect((await expert.get('/reports/views')).body).toMatchObject({ views: ['accident','workshop'], defaultResponsible: 'me' });
+    expect((await expert.get('/reports/views')).body).toMatchObject({ views: ['accident','workshop'], defaultResponsible: null });
     expect((await cashier.get('/reports/views')).body.views).toEqual([]);
     expect((await parts.get('/reports?view=manager')).status).toBe(403);
     expect((await parts.get('/reports/export?view=manager')).status).toBe(403);
@@ -142,8 +144,9 @@ describe('reports: consistent figures', () => {
     expect((await manager.get('/reports?view=manager&period=custom&from=1405/08/05&to=1405/08/01')).body.code).toBe('INVALID_PERIOD');
 
     const mine = await report(expert, 'view=accident&responsibleUserId=me');
-    expect(mine.filters.find((f) => f.key === 'responsible')!.value).toBe('کارشناس نمونه');
-    expect(mine.items.rows.every((i) => i.responsible?.displayName === 'کارشناس نمونه')).toBe(true);
+    const viewer = (await expert.get('/auth/me')).body;
+    expect(mine.filters.find((f) => f.key === 'responsible')!.value).toBe(viewer.displayName);
+    expect(mine.items.rows.every((i) => i.responsible?.displayName === viewer.displayName)).toBe(true);
   });
 
   it('workshop view counts activities per unit and links bars back to the report', async () => {

@@ -22,7 +22,7 @@ test('personal login asks for the Authenticator code after the password',async({
   await page.getByRole('button',{name:'تأیید کد و ورود',exact:true}).click();
   await expect(page).toHaveURL(/\/launch$/);
   await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:/مدیر خدمات/}).click();
-  await expect(page.getByRole('heading',{name:'میز کار مدیر خدمات'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'اتاق کنترل مدیر خدمات'})).toBeVisible();
 });
 
 test('invitation setup explains QR enrollment and confirms the first code',async({page})=>{

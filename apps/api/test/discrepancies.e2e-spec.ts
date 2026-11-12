@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { partDiscrepancies, partRequests, tenants, users } from '../src/db/schema';
 import { newId } from '../src/common/ids';
 import { hashPassword } from '../src/auth/password';
-import { Client, createHarness, daysAgo, TEST_PASSWORD, type Harness } from './harness';
+import { Client, LEGACY_QC_PERMISSIONS, createHarness, daysAgo, TEST_PASSWORD, type Harness } from './harness';
 
 // Parts discrepancy queue (#11): rules flag contradicting records once per
 // condition; only a person closes an item, with a reason and history.
@@ -39,7 +39,7 @@ const queue = async (who: Client = parts, query = ''): Promise<PartDiscrepancy[]
 
 beforeAll(async () => {
   h = await createHarness();
-  [expert, supervisor, manager, parts, qc] = await Promise.all(['expert', 'supervisor', 'manager', 'parts', 'qc'].map((u) => h.login(u)));
+  [expert, supervisor, manager, parts, qc] = await Promise.all([...['expert', 'supervisor', 'manager', 'parts'].map((u) => h.login(u)), h.loginAs('narrow', [], LEGACY_QC_PERMISSIONS)]);
   depts = (await supervisor.get('/departments')).body;
 });
 afterAll(async () => {
@@ -70,7 +70,7 @@ describe('parts discrepancy queue', () => {
     // Assign a reviewer, then close with a reason; no reason is refused.
     const assigned = await parts.post(`/part-discrepancies/${item.id}/assign`, { expectedVersion: item.version, assigneeUserId: (await parts.get('/auth/me')).body.id });
     expect(assigned.status).toBe(201);
-    expect(assigned.body).toMatchObject({ status: 'in_review', assignee: { displayName: 'کاربر قطعات نمونه' } });
+    expect(assigned.body).toMatchObject({ status: 'in_review', assignee: { displayName: (await parts.get('/auth/me')).body.displayName } });
     const noReason = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: assigned.body.version, outcome: 'resolved', reason: '' });
     expect(noReason.status).toBe(400);
     const stale = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: item.version, outcome: 'resolved', reason: 'بررسی شد؛ قطعه در واحد پیدا شد' });
@@ -81,7 +81,7 @@ describe('parts discrepancy queue', () => {
       reason: 'بررسی شد؛ قطعه در قفسه واحد صافکاری پیدا شد، مانع رفع شد',
     });
     expect(closed.status).toBe(201);
-    expect(closed.body).toMatchObject({ status: 'resolved', resolvedBy: { displayName: 'کاربر قطعات نمونه' }, resolutionReason: expect.stringContaining('قفسه') });
+    expect(closed.body).toMatchObject({ status: 'resolved', resolvedBy: { displayName: (await parts.get('/auth/me')).body.displayName }, resolutionReason: expect.stringContaining('قفسه') });
     const again = await parts.post(`/part-discrepancies/${item.id}/resolve`, { expectedVersion: closed.body.version, outcome: 'dismissed', reason: 'دوباره' });
     expect(again.body.code).toBe('DISCREPANCY_CLOSED');
 

@@ -1,15 +1,15 @@
 import {test,expect} from '@playwright/test';
-import {login} from './helpers';
+import {login,openCaseTab} from './helpers';
 
 test('entry, permitted desk selection and folded filters stay usable on phone',async({page},info)=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/login');
- await expect(page.getByRole('heading',{name:'خوش آمدید'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'ورود کارکنان',exact:true})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('entry-login-mobile.png'),fullPage:true});
  await login(page,'qc');await expect(page).toHaveURL(/\/launch$/);
  const desks=page.getByRole('navigation',{name:'میزهای کار مجاز من'});
- await expect(desks.getByRole('link',{name:/کنترل کیفیت/})).toBeVisible();
- await expect(desks.getByRole('link',{name:/مالک سامانه|قطعات و تأمین/})).toHaveCount(0);
+ await expect(desks.getByRole('link',{name:/کارشناس تصادفات/})).toBeVisible();
+ await expect(desks.getByRole('link',{name:/مالک|مسئول قطعات|کنترل کیفیت|مالی و صندوق/})).toHaveCount(0);
  await page.screenshot({path:info.outputPath('entry-desks-mobile.png'),fullPage:true});
  await page.goto('/cases');const filters=page.locator('details.case-filters');
  await expect(filters).not.toHaveAttribute('open','');
@@ -40,12 +40,12 @@ test('Google holiday refresh excludes tentative dates by default and preserves l
 test('operational navigation and each synthetic case retain working destinations after decluttering',async({page},info)=>{
  test.setTimeout(180_000);
  await login(page,'admin');
- const routes=['/launch','/','/accidents','/accidents/admin','/accidents/expert','/accidents/parts','/accidents/manager','/accidents/finance','/accidents/quality','/cases','/cases/new','/cases/import','/workshop','/workshop/settings','/reports','/daily-reports','/stock','/emdad','/users','/reference-data'];
+ const routes=['/launch','/','/accidents','/accidents/admin','/accidents/expert','/accidents/parts','/accidents/manager','/cases','/cases/new','/cases/import','/workshop','/workshop/settings','/reports','/daily-reports','/stock','/emdad','/users','/reference-data'];
  // No external service or customer mutation: traverse the seeded local app only.
  await page.route('**/api/v1/workshop/calendar/iran-holidays',r=>r.fulfill({json:{fetchedAt:new Date().toISOString(),items:[]}}));
  for(const route of routes){await page.goto(route);await expect(page.locator('main#page-content h1').first()).toBeVisible();await expect(page.getByText('Application error: a client-side exception has occurred',{exact:false})).toHaveCount(0);}
  const cases=await(await page.request.get('/api/v1/cases?pageSize=100')).json();
- for(const kase of cases.items){await page.goto(`/cases/${kase.id}`);await expect(page.locator('.case-hero')).toBeVisible();for(const section of await page.locator('details.case-section').all()){await section.locator(':scope > summary').click();}}
+ for(const kase of cases.items){await page.goto(`/cases/${kase.id}`);await expect(page.locator('.case-hero')).toBeVisible();for(const tab of ['کار امروز','کارشناسی','قطعات','مدارک','تاریخچه']){await openCaseTab(page,tab);for(const section of await page.locator('details.case-section').all()){if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();}}}
  await page.goto('/launch');await page.setViewportSize({width:1366,height:860});await page.screenshot({path:info.outputPath('entry-desks-desktop.png'),fullPage:true});
  await page.goto('/login');await page.screenshot({path:info.outputPath('entry-login-desktop.png'),fullPage:true});
 });
