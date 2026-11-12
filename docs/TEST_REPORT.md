@@ -1,5 +1,23 @@
 # Test report
 
+## Reset of trial stages — 2026-11-12 — branch `feature/reset-test-stages` (task 1)
+
+- **API e2e** `test/reset-test-stages.e2e-spec.ts` 3/3 on the synthetic 20-car fleet (PGlite):
+  - refuses missing confirmation, unknown excluded cases and non-owner actors;
+  - the dry run equals the real counts and changes nothing;
+  - execution keeps every case, customer, vehicle and Emdad line, plus the excluded case, its parts and its version;
+  - it removes all stage records of the other cases and resets them to reception with unchanged identity;
+  - it writes one audit row, leaves earlier audit history untouched, and a second run deletes nothing.
+- **PostgreSQL 16 rehearsal** on a restored copy of today's production backup (`20261112T093235Z`, checksums OK, restore fingerprint equal to live), database `manage_reset_rehearsal_20261112`, compiled module with `--actor @owner`:
+  - dry-run counts equal execute counts, and the dry run left the copy byte-identical;
+  - kept-table fingerprints were equal before and after;
+  - 21 cases in scope, all open, none delivered (13 in repair, 5 awaiting parts, 1 QC, 2 reception);
+  - deleted 112 part lines, 106 assessment items, 9 assessments, 16 reservations, 5 tasks, 4 blockers, 2 quotes, 1 QC, 1 reminder (2 recipients);
+  - 117 Emdad lines unlinked, 1 notification marked read, 21 cases reset;
+  - a second run deleted nothing.
+- Production database, images and source unchanged. **Not executed on production**; that needs the owner's explicit approval and a fresh backup.
+- Typecheck and lint clean.
+
 ## Refined sign-in page — 2026-11-12 — branch `feature/login-refined-redesign`
 
 - **Scope:** `apps/web/app/login/page.tsx` markup and the sign-in block of `apps/web/app/manage-ui.css` only. No API, schema or permission change; form logic, tab semantics and labels are unchanged.
