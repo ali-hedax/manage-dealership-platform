@@ -11,6 +11,7 @@ test('owner-configured support desk exposes daily upload, all operational queues
  await login(page,'admin');await expect(page).toHaveURL(/\/launch$/);await page.getByRole('navigation',{name:'میزهای کار مجاز من'}).getByRole('link',{name:/مدیر سیستم/}).click();
  const me=await (await page.request.get('/api/v1/auth/me')).json();
  expect(me.isOwner).toBe(false);expect(me.permissions).toHaveLength(PERMISSIONS.length);
+ await page.getByText('همهٔ ابزارهای پشتیبانی',{exact:true}).click();
  const desk=page.getByRole('navigation',{name:'کارهای مدیر سیستم',exact:true});
  // Locator.all() does not wait for the newly navigated workspace to render.
  await expect(desk.locator('details > summary')).toHaveCount(2);

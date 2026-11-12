@@ -37,6 +37,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await expect(page.getByRole('img', { name: /پلاک/ })).toBeVisible();
   await openCaseTab(page, 'مدارک');
   await expect(page.getByLabel('زمان‌ها')).toContainText('۱۵۰۰/۰۱/۱۰ ۱۲:۰۰');
+  await openCaseTab(page, 'کار امروز');
   await expect(page.getByText('نیازمند تکمیل:')).toHaveCount(0);
 
   // Add a body-shop activity and record start.
@@ -100,6 +101,7 @@ test('legacy entry: a vehicle already in the workshop keeps its past admission a
   await openCaseTab(page, 'مدارک');
   await expect(page.getByLabel('زمان‌ها')).toContainText('۱۴۰۵/۰۷/۱۵ ۰۹:۳۰');
   // Unknown data stays empty and is flagged, never invented.
+  await openCaseTab(page, 'کار امروز');
   await expect(page.getByText('نیازمند تکمیل:')).toContainText('نام مالک');
 });
 

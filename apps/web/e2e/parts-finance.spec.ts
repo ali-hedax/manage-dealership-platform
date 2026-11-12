@@ -56,14 +56,14 @@ test('expert records customer price approval; parts orders and hands over', asyn
   await mirror.getByRole('button', { name: 'خرید بازار', exact: true }).last().click();
   await expect(mirror).toContainText('خرید بازار · در راه');
 
-  await mirror.getByRole('button', { name: 'ثبت رسید' }).first().click();
+  await mirror.getByRole('button', { name: 'ثبت رسید', exact: true }).first().click();
   await mirror.getByLabel('شمارهٔ رسید (اختیاری)').fill('RCV-E2E-1');
-  await mirror.getByRole('button', { name: 'ثبت رسید' }).last().click();
+  await mirror.getByRole('button', { name: 'ثبت رسید', exact: true }).last().click();
   await expect(mirror).toContainText('آمادهٔ تحویل');
 
-  await mirror.getByRole('button', { name: 'تحویل به واحد تعمیر' }).first().click();
+  await mirror.getByRole('button', { name: 'تحویل به واحد تعمیر', exact: true }).first().click();
   await mirror.getByLabel('تحویل‌گیرنده *').fill('تکنسین آزمون');
-  await mirror.getByRole('button', { name: 'تحویل به واحد تعمیر' }).last().click();
+  await mirror.getByRole('button', { name: 'تحویل به واحد تعمیر', exact: true }).last().click();
   await expect(mirror).toContainText('تحویل‌شده به جایگاه');
   await expect(mirror).toContainText('تکنسین آزمون');
 

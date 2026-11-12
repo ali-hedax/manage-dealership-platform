@@ -1,5 +1,16 @@
 # Test report
 
+## Integrated release validation — 2026-11-12 — PR #77
+
+The full Nadia rebuild is preserved from `a22f789` over production `cc1d7e1`. Release corrections restore catalog lookup in the unified parts list, require an active same-tenant technician on every repair-plan step with atomic rollback, label ledger expanders and keep nested action keyboard events from toggling the row, and adapt browser journeys to the five real folder tabs and six-role seed.
+
+Validated with installed dependencies and the real API/web (not typed stand-ins): shared tests 52/52; lint, typecheck, API integration tests and production build passed in [CI run 43161250160](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43161250160). PostgreSQL 16 migration/seed/locking checks and Docker build/compose/HTTPS gate checks also passed there. The Docker smoke assertion now checks the approved 20-car synthetic fleet.
+
+Local real-browser checks passed for intake, legacy intake, masked parts access, planned modules, assessment/supplements, catalog and historic lookup, role permissions, reminders, wages, technician start/end and expert approval, QC/financial close/handover, reporting, PWA entry, and purchase/receipt/handover/import. Browser refinements on top of that CI run are being checked on the final PR head; final release requires all six CI jobs green on the merged commit. Screenshot journeys cover login, expert desk, case folder, parts desk, technician, control room and support desk at desktop and 390px.
+
+Production preparation: a fresh backup was restored to an isolated database and its complete table/migration fingerprints matched the live backup. Production has not been changed at this validation stage. Installation is gated on an exact CI image artifact, isolated 0020–0022 rehearsal, unchanged business-data fingerprints, role-migration invariants, backup and automatic rollback. The deployment receipt records the eventual installed SHA and outcome.
+
+
 ## Package 9 — owner's approved visual direction, release candidate — 2026-11-11 — tested code commit `9f79eb3`
 
 Branch `feature/p9-visual-direction` (= `integration/spec-rebuild-rc1`), on top of packages 0–8 and upstream `main` `cc1d7e1`. The commit that adds this report changes documentation only.

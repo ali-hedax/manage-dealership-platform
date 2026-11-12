@@ -187,7 +187,7 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
   const decideActions = p.allowedActions.filter((a) => a !== 'set_price' && a !== 'announce_price');
   return (
     <div className="m-row" id={`part-${p.id}`} data-testid="part" data-state={p.flowState}>
-      <div className="m-row-head ledger-row" role="button" tabIndex={0} aria-expanded={expanded} onClick={onToggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
+      <div className="m-row-head ledger-row" role="button" tabIndex={0} aria-label={`جزئیات ${p.description}`} aria-expanded={expanded} onClick={onToggle} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onToggle(); } }}>
         <span className="c-idx m-num">{faNum(index)}</span>
         <div className="m-row-name c-name">
           <span>{p.description}</span>

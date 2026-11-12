@@ -88,9 +88,9 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
   await page.screenshot({ path: info.outputPath('reserve-option-desktop.png') });
   await front.getByRole('button', { name: 'رزرو از موجودی', exact: true }).last().click();
   await expect(front).toContainText('رزرو از موجودی');
-  await expect(front.getByRole('button', { name: 'تحویل به واحد تعمیر' })).toBeVisible();
+  await expect(front.getByRole('button', { name: 'تحویل به واحد تعمیر', exact: true }).first()).toBeVisible();
   // The cancel button turns into «لغو رزرو».
-  await front.locator('.m-row-head').click();
+  if (await front.locator('.m-row-head').getAttribute('aria-expanded') !== 'true') await front.locator('.m-row-head').click();
   await expect(front.getByRole('button', { name: 'لغو رزرو' })).toBeVisible();
   const rear = ledger.getByTestId('part').filter({ hasText: 'لنت عقب' });
   await rear.getByRole('button', { name: 'انتخاب مسیر تأمین' }).click();

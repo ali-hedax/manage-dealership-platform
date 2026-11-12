@@ -54,7 +54,7 @@ test('parts clerk: parts desk with the cars, the unified list of the selected ca
   const cars = page.getByRole('complementary', { name: 'خودروها و وضعیت' });
   await expect(cars.getByRole('region', { name: 'وضعیت موجودی' })).toBeVisible();
   await expect(page.getByTestId('parts-ledger')).toBeVisible();
-  await expect(page.getByTestId('parts-ledger').getByRole('heading', { level: 2 })).toContainText('قطعات');
+  await expect(page.getByTestId('parts-ledger').getByRole('heading', { level: 2, name: /^قطعات/ })).toBeVisible();
   await shots(page, 'parts-desk', (n) => info.outputPath(n));
   // The same desk is the «قطعات» destination of the sidebar.
   await page.goto('/parts');
