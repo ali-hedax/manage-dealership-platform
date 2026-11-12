@@ -1,5 +1,25 @@
 # Test report
 
+## Reset of trial stages — 2026-11-12 — branch `feature/reset-test-stages` (task 1)
+
+- **API e2e** `test/reset-test-stages.e2e-spec.ts` 3/3 on the synthetic 20-car fleet (PGlite):
+  - refuses missing confirmation, unknown excluded cases and non-owner actors;
+  - the dry run equals the real counts and changes nothing;
+  - execution keeps every case, customer, vehicle and Emdad line, plus the excluded case, its parts and its version;
+  - it removes all stage records of the other cases and resets them to reception with unchanged identity;
+  - it writes one audit row, leaves earlier audit history untouched, and a second run deletes nothing.
+- **PostgreSQL 16 rehearsal** on a restored copy of today's production backup (`20261112T093235Z`, checksums OK, restore fingerprint equal to live), database `manage_reset_rehearsal_20261112`, compiled module with `--actor @owner`:
+  - dry-run counts equal execute counts, and the dry run left the copy byte-identical;
+  - kept-table fingerprints were equal before and after;
+  - 21 cases in scope, all open, none delivered (13 in repair, 5 awaiting parts, 1 QC, 2 reception);
+  - deleted 112 part lines, 106 assessment items, 9 assessments, 16 reservations, 5 tasks, 4 blockers, 2 quotes, 1 QC, 1 reminder (2 recipients);
+  - 117 Emdad lines unlinked, 1 notification marked read, 21 cases reset;
+  - a second run deleted nothing.
+- **Production execution (owner approval 2026-11-12, all 21 cases, no exclusions):** API/web stopped 09:48:43 UTC. Fresh backup `20261112T094844Z`, checksums OK. Dry run, then execute, then rerun, using the same compiled module as the rehearsal. Committed 09:50:35, services healthy 09:50:42.
+  - Counts identical to the rehearsal and to the dry run.
+  - Kept-data fingerprints equal; one audit row; the rerun deleted nothing.
+  - Afterwards: all 21 cases at reception, API health ok/db ok/production, `/login` 200, `/api/v1/auth/me` 401, no API error lines.
+- Typecheck and lint clean.
 ## Supplement rejections and replacements — 2026-11-12 — branch `feature/assessment-rejections` (task 3)
 
 - **API e2e** `test/assessment-rejections.e2e-spec.ts` 1/1. Synthetic journey: initial assessment imported with the official «وضعیت» column and sent to parts, then Emdad registered on one line. Supplement 1 rejects X and re-adds it with the same code (same_file replacement) and rejects W, with the preview counts checked. The rejected line keeps only «لغو» and supply is refused (`PART_ASSESSMENT_REJECTED`). The parts desk stops counting it, and the replacement is dispatched as its own linked line. Supplement 2 rejects Z, which already has Emdad: not cancelled, clerk and expert notified. W returns as a probable replacement. Re-importing the same file changes nothing. Five part lines remain; nothing is deleted.
