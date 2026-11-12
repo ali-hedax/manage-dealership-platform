@@ -11,7 +11,7 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await login(page, 'expert');
   const me = await (await page.request.get('/api/v1/auth/me')).json();
   const staff = await (await page.request.get('/api/v1/workshop/staff')).json();
-  const technician = staff.find((s: { displayName: string }) => s.displayName === 'تعمیرکار نمونه');
+  const technician = staff.find((s: { displayName: string }) => s.displayName === 'تکنسین نمونه');
   expect(technician).toBeTruthy();
   const departments = await (await page.request.get('/api/v1/departments')).json();
   const body = departments.find((d: { code: string }) => d.code === 'body');
@@ -34,10 +34,10 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await wageDialog.getByLabel('اجرت تعمیرکار (ریال)').fill('45000000');
   await wageDialog.getByRole('button', { name: 'ثبت اجرت', exact: true }).click();
   await expect(wages).toContainText('۴۵,۰۰۰,۰۰۰ ریال');
-  await expect(page.getByTestId('responsibility-bar')).toContainText('کارشناس نمونه');
+  await expect(page.getByTestId('responsibility-bar')).toContainText('کارشناس تصادفات نمونه');
   await page.getByRole('button', { name: 'تذکر', exact: true }).click();
   const compose = page.getByRole('dialog', { name: 'فرستادن تذکر' });
-  await compose.getByRole('checkbox', { name: /تعمیرکار نمونه/ }).check();
+  await compose.getByRole('checkbox', { name: /تکنسین نمونه/ }).check();
   await compose.getByRole('button', { name: 'لطفاً امروز پیگیری کن.', exact: true }).click();
   await compose.getByRole('button', { name: 'فوری', exact: true }).click();
   await compose.getByRole('button', { name: 'فرستادن تذکر', exact: true }).click();
@@ -50,7 +50,7 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await expect(page.getByRole('heading', { level: 1, name: /^سلام/ })).toBeVisible();
   await expect(page.getByRole('link', { name: 'اجرت این ماه' })).toBeVisible();
   const card = page.getByTestId('reminder-card').filter({ hasText: 'لطفاً امروز پیگیری کن.' });
-  await expect(card).toContainText('تذکر از کارشناس نمونه');
+  await expect(card).toContainText('تذکر از کارشناس تصادفات نمونه');
   await card.getByRole('button', { name: 'دیدم', exact: true }).click();
   await card.getByRole('button', { name: 'انجام شد', exact: true }).click();
   await expect(card).toHaveCount(0);
@@ -83,12 +83,12 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await page.goto(`/cases/${kase.id}`);
   await page.getByRole('button', { name: 'انتقال پرونده', exact: true }).click();
   const transfer = page.getByRole('dialog', { name: 'انتقال پرونده' });
-  await transfer.getByLabel('مسئول تازه').selectOption({ label: 'سرپرست نمونه' });
+  await transfer.getByLabel('مسئول تازه').selectOption({ label: 'کارشناس تصادفات نمونهٔ دوم' });
   await transfer.getByLabel(/دلیل/).fill('تقسیم کار آزمون');
   await transfer.getByRole('button', { name: 'انتقال', exact: true }).click();
   const bar = page.getByTestId('responsibility-bar');
   await expect(bar.locator('li')).toHaveCount(2);
-  await expect(bar).toContainText('سرپرست نمونه');
+  await expect(bar).toContainText('کارشناس تصادفات نمونهٔ دوم');
   await expect(bar).toContainText('تقسیم کار آزمون');
 
   // Technician: approved job with its wage in this month's work, per coverage.

@@ -1,9 +1,9 @@
 import {test,expect} from '@playwright/test';
-import {login} from './helpers';
+import {login,openCaseTab} from './helpers';
 
 test('entry, permitted desk selection and folded filters stay usable on phone',async({page},info)=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/login');
- await expect(page.getByRole('heading',{name:'خوش آمدید'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'ورود کارکنان',exact:true})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('entry-login-mobile.png'),fullPage:true});
  await login(page,'qc');await expect(page).toHaveURL(/\/launch$/);
@@ -45,7 +45,7 @@ test('operational navigation and each synthetic case retain working destinations
  await page.route('**/api/v1/workshop/calendar/iran-holidays',r=>r.fulfill({json:{fetchedAt:new Date().toISOString(),items:[]}}));
  for(const route of routes){await page.goto(route);await expect(page.locator('main#page-content h1').first()).toBeVisible();await expect(page.getByText('Application error: a client-side exception has occurred',{exact:false})).toHaveCount(0);}
  const cases=await(await page.request.get('/api/v1/cases?pageSize=100')).json();
- for(const kase of cases.items){await page.goto(`/cases/${kase.id}`);await expect(page.locator('.case-hero')).toBeVisible();for(const section of await page.locator('details.case-section').all()){await section.locator(':scope > summary').click();}}
+ for(const kase of cases.items){await page.goto(`/cases/${kase.id}`);await expect(page.locator('.case-hero')).toBeVisible();for(const tab of ['کار امروز','کارشناسی','قطعات','مدارک','تاریخچه']){await openCaseTab(page,tab);for(const section of await page.locator('details.case-section').all()){if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();}}}
  await page.goto('/launch');await page.setViewportSize({width:1366,height:860});await page.screenshot({path:info.outputPath('entry-desks-desktop.png'),fullPage:true});
  await page.goto('/login');await page.screenshot({path:info.outputPath('entry-login-desktop.png'),fullPage:true});
 });

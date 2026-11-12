@@ -4,7 +4,7 @@ const headers={'x-manage-client':'test'};
 test('coded station, schedule, technician mobile start/end and coordinator handover through the real API',async({page},info)=>{
  await login(page,'admin');
  const staff=await (await page.request.get('/api/v1/workshop/staff')).json();
- const technician=staff.find((s:{displayName:string})=>s.displayName==='تعمیرکار نمونه');expect(technician).toBeTruthy();
+ const technician=staff.find((s:{displayName:string})=>s.displayName==='تکنسین نمونه');expect(technician).toBeTruthy();
  const departments=await (await page.request.get('/api/v1/departments')).json();
  const body=departments.find((d:{code:string})=>d.code==='body');
  const stationResponse=await page.request.post('/api/v1/workshop/stations',{headers,data:{code:'TEST-MOBILE-01',name:'صافکاری آزمایشی',trade:'body',departmentId:body.id,responsibleUserId:technician.id}});expect(stationResponse.ok()).toBe(true);

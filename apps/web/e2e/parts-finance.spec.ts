@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, openCaseSections } from './helpers';
+import { login, openCaseSections, openCaseTab } from './helpers';
 
 // Issues #9 and #10 in the browser, on demo case 3 (personal payment): the
 // customer approved the estimate. Payments are not recorded in Manage any more
@@ -12,8 +12,9 @@ async function openCase3(page: Page, user: string) {
   await login(page, user);
   await page.goto('/cases?q=' + encodeURIComponent('مشتری نمونه سه'));
   await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه سه' }).click();
-  await openCaseSections(page,'parts','finance','history');
+  await openCaseSections(page,'finance');
   await expect(page.getByTestId('finance-panel')).toBeVisible();
+  await openCaseTab(page, 'قطعات');
 }
 
 test('expert records customer price approval; parts orders and hands over', async ({
@@ -23,6 +24,7 @@ test('expert records customer price approval; parts orders and hands over', asyn
 
   // No payment buttons: the finance panel only explains where the decision is recorded.
   await openCase3(page, 'expert');
+  await openCaseSections(page, 'finance');
   await expect(page.getByTestId('finance-gate')).toContainText('هشدار هزینه');
   await expect(page.getByRole('button', { name: 'ثبت دریافت از مشتری', exact: true })).toHaveCount(0);
   // Market purchase: parts quotes, the coordinator records customer consent.
@@ -77,5 +79,6 @@ test('expert records customer price approval; parts orders and hands over', asyn
 
   // History (not visible to the parts clerk) records every step with its actor.
   await openCase3(page, 'manager');
+  await openCaseTab(page, 'تاریخچه');
   await expect(page.locator('.timeline')).toContainText('تحویل قطعه به واحد تعمیر');
 });

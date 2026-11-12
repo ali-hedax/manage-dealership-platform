@@ -76,7 +76,7 @@ describe('repair plan steps', () => {
       { departmentId: body, assignedUserId: techId, days: 1, wageRial: 1000 },
       { departmentId: paint, assignedUserId: expertId, days: 1 },
     ] });
-    expect(rejected.status).toBe(400);
+    expect(rejected.status).toBe(422);
     expect(rejected.body.code).toBe('INVALID_ASSIGNEE');
     expect((await expert.get(`/cases/${caseId}`)).body.tasks).toHaveLength(0);
     expect((await expert.get(`/cases/${caseId}/wages`)).body).toHaveLength(0);

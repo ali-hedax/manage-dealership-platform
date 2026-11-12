@@ -27,8 +27,8 @@ test('phase 3 screenshots', async ({ page }, info) => {
   await login(page, 'expert');
   const me = await (await page.request.get('/api/v1/auth/me')).json();
   const staff = await (await page.request.get('/api/v1/workshop/staff')).json();
-  const technician = staff.find((s: { displayName: string }) => s.displayName === 'تعمیرکار نمونه');
-  const supervisor = staff.find((s: { displayName: string }) => s.displayName === 'سرپرست نمونه');
+  const technician = staff.find((s: { displayName: string }) => s.displayName === 'تکنسین نمونه');
+  const supervisor = staff.find((s: { displayName: string }) => s.displayName === 'کارشناس تصادفات نمونهٔ دوم');
   const departments = await (await page.request.get('/api/v1/departments')).json();
   const dept = (code: string) => departments.find((d: { code: string }) => d.code === code).id;
   const mk = async (plate: string, vin: string, coverageType: string) =>

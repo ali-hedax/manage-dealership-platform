@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login } from './helpers';
+import { login, openCaseTab } from './helpers';
 
 // Issue #8 / acceptance scenario 5 in the browser: initial assessment,
 // insurer authorization, then a supplement after hidden damage.
@@ -49,7 +49,7 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await panel.getByRole('checkbox',{name:'انتخاب همه قطعات قابل ارسال'}).check();
   await panel.getByRole('button',{name:/ارسال به قطعات و تأمین/}).click();
   await expect(page.locator('#case-parts')).toBeInViewport();
-  await expect(page.getByTestId('part-stock')).toHaveCount(1);
+  await expect(page.getByTestId('part')).toHaveCount(1);
   await page.getByRole('tab', { name: 'کارشناسی', exact: true }).click();
 
   // Hidden damage: a supplement copies the approved lines and adds a new one.
@@ -80,6 +80,7 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await expect(v1).toContainText('جایگزین‌شده');
   await expect(v1.getByTestId('assessment-total')).toHaveText('۴۵,۰۰۰,۰۰۰ ریال');
 
+  await openCaseTab(page, 'تاریخچه');
   await expect(page.locator('.timeline')).toContainText('شروع الحاقیه (آسیب پنهان)');
 
   // SCREENSHOTS=1 also refreshes the documentation image of this panel.

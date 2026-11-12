@@ -30,4 +30,7 @@ export async function openCaseSections(page: Page, ...ids: string[]) {
     const section = page.locator(`#case-${id}`);
     if (await section.count() && await section.getAttribute('open') === null) await section.locator(':scope > summary').click();
   }
+  // Sections now live on separate folder tabs. Leave the first requested
+  // section visible; callers switch tabs explicitly before later operations.
+  if (ids[0] && SECTION_TAB[ids[0]]) await openCaseTab(page, SECTION_TAB[ids[0]]!);
 }

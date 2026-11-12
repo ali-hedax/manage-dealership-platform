@@ -29,6 +29,7 @@ import { AppIcon } from './AppIcon';
 import { faNum, parseAmount, toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import { QuotePanel, QuoteProposal } from './WorkshopQuotes';
+import { ReferenceLookup } from './ReferenceLookup';
 
 const STATE_TONE: Record<PartFlowState, string> = {
   needed: 'wait',
@@ -445,6 +446,7 @@ function PriceNoticeBox({ part, canAnswer, onDone }: { part: Part; canAnswer: bo
 /** The expert adds a need (single) or a sheet with preview; the same code never makes a second row. */
 function AddPart({ caseId, onDone }: { caseId: string; onDone: () => Promise<void> }) {
   const toast = useToast();
+  const { can } = useAuth();
   const [open, setOpen] = useState<'one' | 'sheet' | null>(null);
   const [desc, setDesc] = useState(''), [code, setCode] = useState(''), [qty, setQty] = useState('1');
   const [file, setFile] = useState<string | null>(null), [preview, setPreview] = useState<PartImportResult | null>(null);
@@ -507,6 +509,7 @@ function AddPart({ caseId, onDone }: { caseId: string; onDone: () => Promise<voi
       <button type="button" className="m-btn2-s" aria-pressed={open === 'sheet'} onClick={() => setOpen(open === 'sheet' ? null : 'sheet')}>ورود از اکسل</button>
       {open === 'one' && (
         <form className="m-form" onSubmit={addOne} style={{ flexBasis: '100%' }} aria-label="افزودن قطعه">
+          {can('reference.parts.read') && <details className="compact-disclosure" style={{ flexBasis: '100%' }}><summary>انتخاب از کاتالوگ قطعات</summary><ReferenceLookup kind="parts" onSelect={r => { setCode(r.data.partNumber || ''); setDesc(r.data.description || ''); toast('کد و نام قطعه انتخاب شد؛ تعداد را مشخص کنید'); }} /></details>}
           <label className="m-field">نام قطعه *<input required value={desc} onChange={(e) => setDesc(e.target.value)} /></label>
           <label className="m-field">کد فنی<input dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} /></label>
           <label className="m-field" style={{ flex: '0 1 90px' }}>تعداد<input inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} /></label>
