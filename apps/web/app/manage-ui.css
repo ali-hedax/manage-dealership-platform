@@ -813,79 +813,67 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 }
 @media print { .cf { background: none; border: 0; box-shadow: none; padding: 0; margin: 0; } .cf::before, .cf-clip, .cf-cover-tab, .cf-tabs, .cf-next-actions { display: none; } .cf-paper { border: 0; padding: 0; } }
 
-/* ===== Sign-in (owner reference «manage-cinematic»): ivory form right, cinematic art left ===== */
-.lg-root { min-block-size: 100vh; display: grid; grid-template-columns: minmax(380px, 40%) minmax(0, 1fr); background: #F3F0EA; }
-.lg-root .lg-card { align-self: center; justify-self: center; inline-size: min(560px, calc(100% - 48px)); margin: 32px 24px; padding: 34px 34px 26px; border-radius: 26px; background: #FBF9F4; border: 1px solid #EAE5DA; box-shadow: 0 40px 80px -48px rgba(21, 24, 29, .45), 0 1px 0 #fff inset; display: flex; flex-direction: column; gap: 18px; }
-.lg-head { display: flex; align-items: center; gap: 16px; }
-.lg-ico { inline-size: 64px; block-size: 64px; border-radius: 16px; display: grid; place-items: center; background: #ECE8DF; color: #0E5F66; flex: none; }
-.lg-ico .app-icon { inline-size: 34px; block-size: 34px; }
-.lg-head h1 { margin: 0; font-size: 32px; font-weight: 800; color: #15181D; }
-.lg-head p { margin: 6px 0 0; color: #4A505A; font-size: 14.5px; }
-.lg-root .form { display: flex; flex-direction: column; gap: 18px; padding: 0; background: transparent; }
-.lg-root .form .field > span, .lg-root .login-pin legend { font-size: 16px; font-weight: 800; color: #15181D; margin-block-end: 8px; }
-.lg-input-wrap { display: flex; align-items: center; gap: 10px; min-block-size: 58px; padding-inline: 14px; border: 1px solid #D8D2C6; border-radius: 14px; background: #FFFEFB; }
-.lg-input-wrap:focus-within { border-color: #0E5F66; box-shadow: 0 0 0 3px rgba(14, 95, 102, .14); }
-.lg-input-wrap .app-icon { color: #3A4049; flex: none; }
-.lg-input-wrap .input { border: 0 !important; box-shadow: none !important; background: transparent; min-block-size: 54px; font-size: 16px; padding: 0; }
-.lg-root .form .input:not(.lg-input-wrap .input) { min-block-size: 54px; border-radius: 14px; font-size: 16px; }
-.login-pin-row { display: flex; align-items: center; gap: 12px; }
-.lg-lock { inline-size: 62px; block-size: 62px; flex: none; border-radius: 14px; display: grid; place-items: center; background: #ECE8DF; color: #2A2F36; }
-.lg-root .login-pin-grid { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 72px)); gap: 12px; justify-content: end; }
-.lg-root .login-pin-grid .input { min-block-size: 64px; border-radius: 14px; text-align: center; font-size: 26px; font-weight: 700; border-color: #D8D2C6; background: #FFFEFB; }
-.lg-cta { min-block-size: 60px !important; border-radius: 14px !important; font-size: 18px !important; font-weight: 800 !important; gap: 14px; justify-content: center; }
-.lg-cta .app-icon { inline-size: 24px; block-size: 24px; }
-.door-list { display: flex; flex-direction: column; border-block-start: 1px solid #E6E1D6; }
-.door-list .login-tabs { display: flex; flex-direction: column; background: transparent; border: 0; padding: 0; border-radius: 0; gap: 0; }
-.door-list .login-tabs button, .door-row { display: flex; align-items: center; gap: 14px; inline-size: 100%; min-block-size: 58px; padding: 0 6px; border: 0; border-block-end: 1px solid #EDE9E0; border-radius: 0; background: transparent; color: #15181D; font: 600 16px Vazirmatn, sans-serif; cursor: pointer; text-align: start; }
-.door-list .login-tabs button span, .door-row span { flex: 1; }
-.door-list .login-tabs button[aria-selected='true'] { color: #0E5F66; background: transparent; }
-.door-list .app-icon { inline-size: 24px; block-size: 24px; color: #2A2F36; }
-.door-list .door-on { color: #0E5F66; }
-.door-list .door-go { inline-size: 18px; block-size: 18px; color: #6A707B; }
-.door-list button:hover { background: #F3F0E9; }
+/* ===== Sign-in (refined, 2026-11-12): quiet ivory form on the right, dark hairline-art panel on the left =====
+   Small, calm sizes on purpose: body 13–14px, controls 44–48px, 16px icons. The artwork is CSS/SVG only. */
+.lg-root { min-block-size: 100vh; display: grid; grid-template-columns: minmax(380px, 560px) minmax(0, 1fr); background: #F6F4EF; }
+.lg-root .lg-card { align-self: center; justify-self: center; inline-size: min(340px, calc(100% - 48px)); margin: 48px 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; display: flex; flex-direction: column; gap: 28px; }
+.lg-head { display: block; }
+.lg-head h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.2px; color: #14201F; }
+.lg-head p { margin: 6px 0 0; font-size: 13px; line-height: 1.9; font-weight: 400; color: #5B6866; }
+.lg-root .form { display: flex; flex-direction: column; gap: 20px; padding: 0; background: transparent; }
+.lg-root .form .field > span, .lg-root .form .field > label, .lg-root .login-pin legend { font-size: 12px; font-weight: 500; color: #33423F; margin-block-end: 8px; }
+.lg-input-wrap { display: flex; align-items: center; gap: 10px; min-block-size: 44px; padding-inline: 14px; border: 1px solid #D9D5CB; border-radius: 10px; background: #FFFFFF; }
+.lg-input-wrap:focus-within { border-color: #0F5E66; box-shadow: 0 0 0 3px rgba(15, 94, 102, .12); }
+.lg-input-wrap .app-icon { inline-size: 16px; block-size: 16px; color: #6F7B79; flex: none; }
+.lg-root .lg-input-wrap .input { border: 0 !important; box-shadow: none !important; background: transparent; min-block-size: 42px; block-size: 42px; font-size: 14px; line-height: 1.4; padding: 0; }
+.lg-root .form .input:not(.lg-input-wrap .input) { min-block-size: 44px; border-radius: 10px; font-size: 14px; border-color: #D9D5CB; background: #FFFFFF; }
+.lg-root .form .input:not(.lg-input-wrap .input):focus { border-color: #0F5E66; box-shadow: 0 0 0 3px rgba(15, 94, 102, .12); outline: none; }
+.lg-root .form .input::placeholder { color: #6F7B79; opacity: 1; }
+.lg-root .password-field .input { padding-inline: 14px 40px; }
+.login-pin-row { display: block; }
+.lg-root .login-pin-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.lg-root .login-pin-grid .input { min-block-size: 48px; border-radius: 10px; text-align: center; font-size: 18px; font-weight: 500; padding-inline: 0; border-color: #D9D5CB; background: #FFFFFF; }
+.lg-root .form > .btn { min-block-size: 44px; border-radius: 10px; font-size: 14px; font-weight: 500; }
+.lg-root .form > .btn-primary { background: #0F5E66; border-color: #0F5E66; color: #FFFFFF; gap: 8px; justify-content: center; box-shadow: none; }
+.lg-root .form > .btn-primary:hover:not(:disabled) { background: #0B4D54; border-color: #0B4D54; }
+.lg-cta .app-icon { inline-size: 16px; block-size: 16px; }
+.lg-root .callout-red { border-radius: 10px; font-size: 13px; }
+.door-list { display: flex; flex-direction: column; gap: 16px; padding-block-start: 4px; }
+.door-list::before { content: ''; block-size: 1px; background: #E4E0D6; }
+.door-list .login-tabs { display: flex; flex-direction: row; gap: 4px; padding: 3px; border: 1px solid #E4E0D6; border-radius: 10px; background: #EFECE4; inline-size: 100%; }
+.door-list .login-tabs button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: #4F5D5B; font: 500 12px Vazirmatn, sans-serif; cursor: pointer; }
+.door-list .login-tabs button[aria-selected='true'] { background: #FFFFFF; color: #0F5E66; box-shadow: 0 1px 2px rgba(20, 32, 31, .08); }
+.door-list .login-tabs .app-icon { inline-size: 14px; block-size: 14px; color: currentColor; }
+.lg-links { display: flex; justify-content: center; gap: 20px; }
+.door-row { display: inline-flex; align-items: center; min-block-size: 32px; padding: 0; border: 0; background: transparent; color: #4F5D5B; font: 400 12px Vazirmatn, sans-serif; cursor: pointer; }
+.door-row:hover { color: #0F5E66; }
 .lg-guide { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 10px; line-height: 1.9; }
-.lg-root .callout-red { border-radius: 12px; }
+.lg-root .install-login { margin: -12px 0 0; padding: 0; border: 0; text-align: center; }
 .lg-root .install-login:empty { display: none; }
-.lg-root .lg-art { position: relative; overflow: hidden; min-block-size: 100vh; padding: 56px 48px 32px; display: flex; flex-direction: column; justify-content: space-between; color: #F2F4F7; background: radial-gradient(900px 600px at 70% 30%, #1A2B33, #0B1115 65%), #0B1115; }
-.lg-scene { position: absolute; inset: 0; }
-.lg-backdrop { position: absolute; inset-inline-start: -4%; inset-block-start: 27%; inline-size: 112%; block-size: auto; filter: blur(2.2px) saturate(.85) brightness(.85); opacity: .7; }
-.lg-scene::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, #0B1115 0%, rgba(11, 17, 21, .55) 30%, rgba(11, 17, 21, .1) 52%, rgba(11, 17, 21, .35) 72%, rgba(11, 17, 21, .85) 100%), radial-gradient(70% 60% at 50% 55%, transparent, rgba(11, 17, 21, .6)); pointer-events: none; }
-.lg-glow { position: absolute; z-index: 1; inset-inline: 18% 26%; inset-block-end: 12%; block-size: 30%; background: radial-gradient(closest-side, rgba(94, 208, 191, .18), transparent); filter: blur(10px); }
-.lg-bench { position: absolute; z-index: 1; inset-inline: -10% 0; inset-block-end: 0; block-size: 20%; background: linear-gradient(180deg, #3A444C 0, #262E35 3%, #1A2026 30%, #0E1316 100%); border-block-start: 1px solid rgba(255, 255, 255, .16); box-shadow: 0 -24px 60px -20px rgba(0, 0, 0, .7), inset 0 18px 30px -20px rgba(160, 200, 210, .18); }
-.lg-folder { position: absolute; z-index: 2; inset-inline-start: 44%; inset-block-end: 11%; inline-size: min(320px, 36%); aspect-ratio: 3 / 4; perspective: 1200px; }
-.lg-cover, .lg-papers i { position: absolute; inset: 0; border-radius: 14px; transform-origin: bottom center; transform: rotateX(8deg) rotateY(-18deg) rotateZ(-4deg); }
-.lg-papers i { background: #EFE9DC; border: 1px solid #D9D0BE; box-shadow: 0 10px 20px rgba(0, 0, 0, .35); }
-.lg-papers i:nth-child(1) { transform: rotateX(8deg) rotateY(-18deg) rotateZ(4deg) translate(-26px, -10px); }
-.lg-papers i:nth-child(2) { transform: rotateX(8deg) rotateY(-18deg) rotateZ(1deg) translate(-16px, -6px); background: #F6F1E6; }
-.lg-papers i:nth-child(3) { transform: rotateX(8deg) rotateY(-18deg) rotateZ(-1deg) translate(-8px, -3px); background: #FBF8F0; }
-.lg-cover { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(160deg, #2A3036, #161A1E 70%); border: 1px solid rgba(255, 255, 255, .08); box-shadow: 0 40px 60px -20px rgba(0, 0, 0, .8), inset 0 0 0 6px rgba(255, 255, 255, .02); outline: 1px dashed rgba(201, 168, 90, .35); outline-offset: -12px; }
-.lg-clip { position: absolute; inset-block-start: -14px; inset-inline-start: 26%; inline-size: 48%; block-size: 26px; z-index: 2; border-radius: 6px; background: linear-gradient(180deg, #C9CDD2, #8E949B); box-shadow: 0 6px 10px rgba(0, 0, 0, .5); transform: rotateZ(-4deg); }
-.lg-car-line { inline-size: 62%; }
-.lg-cover-title { font-size: clamp(16px, 1.6vw, 22px); font-weight: 700; color: #D8BD78; }
-.lg-cover-rule { inline-size: 60%; block-size: 2px; background: linear-gradient(90deg, transparent, #C9A85A, transparent); }
-.lg-badge { position: absolute; inset-block-end: 12%; inset-inline-end: 12%; padding: 3px 10px; border-radius: 4px; font: 800 12px/1.4 system-ui, sans-serif; letter-spacing: 1px; color: #2A2F36; background: linear-gradient(180deg, #E8E4DA, #B9B3A6); direction: ltr; }
-.lg-brand { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
-.lg-logo { display: inline-flex; align-items: center; gap: 26px; direction: ltr; }
-.lg-logo .brand-slashes i { inline-size: 14px; block-size: 52px; background: linear-gradient(180deg, #5ED0BF, #1F8C83); }
-.lg-word { font: 800 clamp(44px, 5vw, 76px)/1 Vazirmatn, system-ui, sans-serif; letter-spacing: -1px; background: linear-gradient(180deg, #F2F4F7, #BFC6CF); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.lg-by { direction: ltr; font-size: 22px; letter-spacing: 3px; color: #B7BEC8; padding-inline-start: 14px; border-inline-start: 2px solid rgba(255, 255, 255, .25); }
-.lg-by b { color: #E6E9ED; }
-.lg-claim { margin: 18px 0 0; font-size: clamp(22px, 2.2vw, 32px); font-weight: 800; color: #F2F4F7; }
-.lg-sub { margin: 0; font-size: 16px; color: #B7BEC8; }
-.lg-rule { inline-size: 80px; block-size: 3px; border-radius: 2px; background: #5ED0BF; margin-block-start: 10px; }
-.lg-root .lg-art .entry-signature { position: relative; z-index: 1; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 0; font-size: 12.5px; color: #8A93A3; }
+
+/* dark panel */
+.lg-root .lg-art { position: relative; overflow: hidden; min-block-size: 100vh; padding: 40px 56px; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; color: #F1EFE9; background: radial-gradient(60% 55% at 50% 72%, rgba(31, 165, 143, .2), transparent), #0A1315; }
+.lg-rings { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: none; }
+.lg-brand { position: relative; z-index: 1; direction: ltr; display: flex; align-items: center; gap: 12px; }
+.lg-slashes { flex: none; }
+.lg-word { font: 600 22px/1 Vazirmatn, system-ui, sans-serif; letter-spacing: -.4px; color: #F4F2EC; }
+.lg-divider { inline-size: 1px; block-size: 14px; background: rgba(255, 255, 255, .22); }
+.lg-by { font: 500 10px/1 Vazirmatn, system-ui, sans-serif; letter-spacing: 2.4px; color: #9FB0AE; }
+.lg-center { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 36px; text-align: center; }
+.lg-claim { margin: 0; font-size: 28px; font-weight: 300; line-height: 1.5; letter-spacing: -.3px; color: #F4F2EC; }
+.lg-sub { margin: 12px 0 0; font-size: 13px; line-height: 1.9; color: #9FB0AE; }
+.lg-rule { display: block; inline-size: 28px; block-size: 1px; margin: 18px auto 0; background: #34C2A8; }
+.lg-car { inline-size: 420px; max-inline-size: 80%; block-size: auto; }
+.lg-root .lg-art .entry-signature { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 0; font-size: 11px; color: #7F918F; }
 @media (prefers-reduced-motion: no-preference) {
-  .lg-folder { animation: lg-float 8s ease-in-out infinite; }
-  @keyframes lg-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
+  .lg-car-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: lg-draw 2.2s cubic-bezier(.4, 0, .2, 1) .2s forwards; }
+  @keyframes lg-draw { to { stroke-dashoffset: 0; } }
 }
 @media (max-width: 960px) {
   .lg-root { grid-template-columns: minmax(0, 1fr); }
-  .lg-root .lg-art { order: -1; min-block-size: 0; padding: 28px 20px 22px; }
-  .lg-scene { display: none; }
-  .lg-word { font-size: 44px; } .lg-logo .brand-slashes i { block-size: 34px; inline-size: 10px; } .lg-by { font-size: 16px; }
-  .lg-claim { font-size: 21px; margin-block-start: 10px; }
-  .lg-root .lg-card { margin: 18px auto 28px; padding: 24px 18px; inline-size: calc(100% - 28px); }
-  .lg-head h1 { font-size: 26px; } .lg-ico { inline-size: 52px; block-size: 52px; }
-  .lg-lock { display: none; }
-  .lg-root .login-pin-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lg-root .lg-art { order: -1; min-block-size: 0; padding: 24px 20px 28px; gap: 20px; }
+  .lg-center { gap: 0; } .lg-car, .lg-rings, .lg-root .lg-art .entry-signature { display: none; }
+  .lg-claim { font-size: 20px; } .lg-sub { margin-block-start: 6px; }
+  .lg-root .lg-card { margin: 28px 0 36px; inline-size: calc(100% - 40px); }
+  .door-list .login-tabs button { min-block-size: 40px; } .door-row { min-block-size: 44px; }
 }

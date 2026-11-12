@@ -1,5 +1,13 @@
 # Test report
 
+## Refined sign-in page — 2026-11-12 — branch `feature/login-refined-redesign`
+
+- **Scope:** `apps/web/app/login/page.tsx` markup and the sign-in block of `apps/web/app/manage-ui.css` only. No API, schema or permission change; form logic, tab semantics and labels are unchanged.
+- **Typecheck:** `pnpm build:shared` and `pnpm --filter @manage/web typecheck` passed. `pnpm build` (shared, API, web) passed.
+- **Playwright (real API + built web, Chromium):** `e2e/entry-refresh.spec.ts` (4 tests, desktop) and `e2e/mobile.spec.ts` (1 test, Pixel 7) — **5/5 passed**. They cover the «ورود کارکنان» heading, no horizontal overflow at 390 px, and sign-in through the staff tab.
+- **Visual check:** real page captured at 1440×900, 1280×720 and 390×844 in both tabs; no horizontal overflow at 390 px. Images in `docs/design/login-refined/`.
+- **Not run:** the full e2e suite, CI, a real-device phone, and Windows Edge. The self-drawing car line was checked only with reduced motion on (static state).
+
 ## Production release — 2026-11-12 — `462c122` (PR #77) — **done**
 
 - **CI:** final PR head `fbb95d3`, [run 43162309223](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43162309223): 6/6 jobs passed (including Playwright end-to-end on Chromium). Merge commit `462c122` on `main`, [run 43163764028](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43163764028): 6/6 jobs passed.
