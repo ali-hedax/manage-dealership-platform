@@ -240,7 +240,14 @@ export interface Part {
   returnedAt: string | null;
   returnReason: string | null;
   /** Latest official Emdad Vijeh status linked to this line (text and date of the report). */
-  emdad: { requestNo: string | null; category: string; statusText: string | null; reportAt: string } | null;
+  emdad: {
+    requestNo: string | null;
+    category: string;
+    statusText: string | null;
+    reportAt: string;
+    /** Status changes read from the daily reports, newest first (on the case's parts list). */
+    history?: { at: string; statusText: string | null }[];
+  } | null;
   /** Open price announcement of the parts clerk, waiting for the expert. */
   priceNotice: PriceNotice | null;
 }
