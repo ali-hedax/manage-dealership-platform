@@ -74,6 +74,8 @@ function stateDetail(p: Part): string {
 
 /** The one button shown on the closed row; the rest live inside the row. */
 function primaryAction(p: Part): PartFlowAction | 'decide' | null {
+  // Rejected in the assessment and not supplied: no supply route to choose; only «لغو قطعه» stays in the details.
+  if (p.assessmentRejection && p.flowState === 'needed') return null;
   if (p.flowState === 'needed' || p.flowState === 'dealer_supply') return 'decide';
   for (const a of ['hand_over', 'receive', 'return'] as const) if (p.allowedActions.includes(a)) return a;
   return null;
@@ -192,6 +194,8 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
         <div className="m-row-name c-name">
           <span>{p.description}</span>
           {p.fromSupplement && <span className="m-badge">الحاقیه</span>}
+          {p.assessmentRejection && <span className="m-badge stop" title="این قلم در کارشناسی رد شده است؛ نیاز تأمین حساب نمی‌شود">رد شده{p.assessmentRejection.versionNo > 1 ? ` · الحاقیه ${toPersianDigits(p.assessmentRejection.versionNo)}` : ""}</span>}
+          {p.replaces && <span className="m-badge" title={p.replaces.probable ? "پیوند از روی کد فنی یکسان؛ قطعی نیست" : undefined}>جایگزین «{p.replaces.description}»{p.replaces.probable ? " · احتمالی" : ""}</span>}
           {p.priceNotice && <span className="m-tag wait">اعلام قیمت</span>}
         </div>
         <span className="c-qty m-num"><span className="sr-only">تعداد </span>{faNum(p.quantity)}</span>

@@ -2,6 +2,12 @@
 
 منبع واحد حقیقت: [سند جامع محصول](docs/PRODUCT_SPEC_FA.md) (تأیید مالک، ۱۹ آبان ۱۴۰۵). تاریخچهٔ قبلی: [بایگانی تا PR #74](docs/archive/PROGRESS_2026-11.md).
 
+## کار ۳: الحاقیه، قلم ردشده و جایگزین — ۲۱ آبان ۱۴۰۵ — PR در انتظار تأیید مالک
+
+- شاخهٔ `feature/assessment-rejections` از `main` (`5d12659`)، با migration افزایشی 0023. قالب واقعی ستون «وضعیت» از قبل در `assessment-sheet.ts` بود، پس نمونهٔ تازه از مالک لازم نشد.
+- آزمون‌ها سبز ([TEST_REPORT](docs/TEST_REPORT.md)). PR کار ۲ (#80) و این PR هر دو بالای PROGRESS/CHANGELOG/TEST_REPORT نوشته‌اند؛ هنگام ادغام دومی، تداخل متنی فقط در همین سه سند است.
+- **قدم بعدی:** کار ۱ (اسکریپت پاک‌سازی با dry-run) و ارسال جدول «نگه دار / پاک کن / بازنشانی» برای تأیید مالک، پیش از هر حذف.
+
 ## ورود ظریف‌تر — ۲۱ آبان ۱۴۰۵ (2026-11-12) — در انتظار بازبینی و ادغام مالک
 
 - شاخهٔ `feature/login-refined-redesign` از `main`؛ فقط `apps/web/app/login/page.tsx` و بخش ورود در `manage-ui.css` (و تصویرها در `docs/design/login-refined`). API و Production دست نخورده‌اند.

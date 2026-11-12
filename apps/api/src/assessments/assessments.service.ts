@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, notInArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   toPersianDigits,
@@ -24,7 +24,8 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, conflict, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, departments, users } from '../db/schema';
+import { assessmentItems, assessments, blockers, cases, departments, partRequests, users } from '../db/schema';
+import { notifyUsers, partLink, usersWithRole } from '../parts/part-notify';
 import { parseAssessmentSheet } from './assessment-sheet';
 
 type AssessmentRow = typeof assessments.$inferSelect;
@@ -164,29 +165,79 @@ export class AssessmentsService {
       const tenantId = actor.user.tenantId;
       const a = await this.loadDraft(tx, tenantId, assessmentId, input.expectedVersion);
       const previous = await tx.select().from(assessmentItems).where(and(eq(assessmentItems.tenantId, tenantId), eq(assessmentItems.assessmentId, a.id)));
-      const changes:{row:AssessmentImportPreview['rows'][number];existing:ItemRow|null}[]=[];
-      for(const row of result.rows){
-        const matches=previous.filter(p=>assessmentPartKey(p)===assessmentPartKey(row));
-        if(matches.length>1){result.errors.push({sheet:row.sheet,row:row.row,page:row.page,message:'چند قلم قبلی با این کد وجود دارد؛ ابتدا کارشناسی را اصلاح کنید'});continue;}
-        const old=matches[0]??null;
-        const unchanged=old&&['description','partNumber','quantity','unitPriceRial','labourRial'].every(k=>old[k as keyof ItemRow]===row[k as keyof typeof row]);
-        row.outcome=unchanged?'unchanged':old?'updated':'new';
-        if(!unchanged)changes.push({row,existing:old});
+      const keyOf = (p: Parameters<typeof assessmentPartKey>[0]) => assessmentPartKey(p);
+      const active = previous.filter((p) => p.approvalStatus !== 'rejected');
+
+      // 1. A «رد» part row of the official file rejects the active line with the same
+      // technical code (a line already rejected is left as it is: re-importing is a no-op).
+      const rejections: { origin: AssessmentImportPreview['setAside'][number]; item: ItemRow }[] = [];
+      for (const s of result.setAside) {
+        if (s.status !== 'rejected' || s.kind !== 'part') continue;
+        const key = keyOf({ action: 'replace', partNumber: s.code, description: s.description });
+        if (previous.some((p) => p.approvalStatus === 'rejected' && keyOf(p) === key)) continue;
+        const hits = active.filter((p) => p.action === 'replace' && keyOf(p) === key);
+        if (hits.length > 1) { result.warnings.push({ sheet: s.sheet, row: s.row, page: s.page, message: `چند قلم فعال با کد «${s.code ?? s.description}» هست؛ ردشدن دستی بررسی شود` }); continue; }
+        if (hits.length === 1) rejections.push({ origin: s, item: hits[0]! });
       }
+      const rejectedIds = new Set(rejections.map((r) => r.item.id));
+
+      // 2. Final rows: new, unchanged, updated — or a replacement of a rejected line with the same code
+      // (anti-duplicate rule of spec section 5: only a replacement may repeat a code).
+      type Change = { row: AssessmentImportPreview['rows'][number]; existing: ItemRow | null; replaces?: { item: ItemRow; basis: 'same_file' | 'probable' } };
+      const changes: Change[] = [];
+      for (const row of result.rows) {
+        const key = keyOf(row);
+        const rejectedHere = rejections.find((r) => keyOf(r.item) === key);
+        if (rejectedHere) {
+          row.outcome = 'replacement';
+          row.replaces = { itemId: rejectedHere.item.id, description: rejectedHere.item.description, basis: 'same_file' };
+          changes.push({ row, existing: null, replaces: { item: rejectedHere.item, basis: 'same_file' } });
+          continue;
+        }
+        const matches = active.filter((p) => !rejectedIds.has(p.id) && keyOf(p) === key);
+        if (matches.length > 1) { result.errors.push({ sheet: row.sheet, row: row.row, page: row.page, message: 'چند قلم قبلی با این کد وجود دارد؛ ابتدا کارشناسی را اصلاح کنید' }); continue; }
+        const old = matches[0] ?? null;
+        if (!old) {
+          const earlier = previous.filter((p) => p.approvalStatus === 'rejected' && keyOf(p) === key).sort((x, y) => y.lineNo - x.lineNo)[0];
+          if (earlier) {
+            // Rejected in an earlier version and the file does not say what replaces what: linked by the code, marked probable.
+            row.outcome = 'replacement';
+            row.replaces = { itemId: earlier.id, description: earlier.description, basis: 'probable' };
+            changes.push({ row, existing: null, replaces: { item: earlier, basis: 'probable' } });
+            continue;
+          }
+        }
+        const unchanged = old && ['description', 'partNumber', 'quantity', 'unitPriceRial', 'labourRial'].every((k) => old[k as keyof ItemRow] === row[k as keyof typeof row]);
+        row.outcome = unchanged ? 'unchanged' : old ? 'updated' : 'new';
+        if (!unchanged) changes.push({ row, existing: old });
+      }
+      result.rejectedExisting = rejections.map((r) => ({ sheet: r.origin.sheet, row: r.origin.row, page: r.origin.page, itemId: r.item.id, description: r.item.description, code: r.item.partNumber }));
+      result.lineCounts = {
+        new: result.rows.filter((r) => r.outcome === 'new').length,
+        unchanged: result.rows.filter((r) => r.outcome === 'unchanged').length,
+        updated: result.rows.filter((r) => r.outcome === 'updated').length,
+        rejected: rejections.length,
+        replacements: result.rows.filter((r) => r.outcome === 'replacement').length,
+      };
       if (input.dryRun) return;
-      if (result.errors.length || !result.rows.length) throw badRequest('ASSESSMENT_IMPORT_INVALID', 'فایل خطا دارد؛ هیچ قلمی وارد نشد. پیش‌نمایش را دوباره بررسی کنید');
-      let lineNo=Math.max(0,...previous.map(p=>p.lineNo));
-      const written=[];
-      for(const {row:r,existing:old} of changes){
-        const fields={description:r.description,partNumber:r.partNumber,quantity:r.quantity,unitPriceRial:r.unitPriceRial,labourRial:r.labourRial,evidence:r.evidence};
-        if(old){const [updated]=await tx.update(assessmentItems).set({...fields,changed:true,approvalStatus:'pending',updatedAt:new Date()}).where(and(eq(assessmentItems.id,old.id),eq(assessmentItems.tenantId,tenantId))).returning();written.push(updated);}
-        else{const [inserted]=await tx.insert(assessmentItems).values({...fields,id:newId(),tenantId,assessmentId:a.id,lineNo:++lineNo,action:r.action,isTest:actor.user.isTestTenant}).returning();written.push(inserted);}
+      if (result.errors.length || (!result.rows.length && !rejections.length)) throw badRequest('ASSESSMENT_IMPORT_INVALID', 'فایل خطا دارد؛ هیچ قلمی وارد نشد. پیش‌نمایش را دوباره بررسی کنید');
+      let lineNo = Math.max(0, ...previous.map((p) => p.lineNo));
+      const written = [];
+      for (const r of rejections) {
+        const [updated] = await tx.update(assessmentItems).set({ approvalStatus: 'rejected', changed: true, updatedAt: new Date() }).where(and(eq(assessmentItems.id, r.item.id), eq(assessmentItems.tenantId, tenantId))).returning();
+        written.push(updated);
       }
-      if(changes.length){
-        const saved=await this.touch(tx,a);
-        await this.audit.record(tx,actor,{entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.items_imported',before:{items:changes.flatMap(c=>c.existing?[c.existing]:[])},after:{currency:input.currency,items:written,unchanged:result.rows.filter(r=>r.outcome==='unchanged').length,skipped:result.skipped.length,
-          // Kept for the record only: rejected/correction rows and equivalent labour never become items or totals.
-          summary:result.summary,setAside:result.setAside,equivalents:result.equivalents},snapshot:{version:saved.version,row:saved}});
+      for (const { row: r, existing: old, replaces } of changes) {
+        const fields = { description: r.description, partNumber: r.partNumber, quantity: r.quantity, unitPriceRial: r.unitPriceRial, labourRial: r.labourRial, evidence: r.evidence };
+        if (old) { const [updated] = await tx.update(assessmentItems).set({ ...fields, changed: true, approvalStatus: 'pending', updatedAt: new Date() }).where(and(eq(assessmentItems.id, old.id), eq(assessmentItems.tenantId, tenantId))).returning(); written.push(updated); }
+        else { const [inserted] = await tx.insert(assessmentItems).values({ ...fields, id: newId(), tenantId, assessmentId: a.id, lineNo: ++lineNo, action: r.action, replacesItemId: replaces?.item.id ?? null, replacementBasis: replaces?.basis ?? null, isTest: actor.user.isTestTenant }).returning(); written.push(inserted); }
+      }
+      if (changes.length || rejections.length) {
+        const saved = await this.touch(tx, a);
+        await this.audit.record(tx, actor, { entityType: 'assessment', entityId: a.id, caseId: a.caseId, action: 'assessment.items_imported', before: { items: [...rejections.map((r) => r.item), ...changes.flatMap((c) => (c.existing ? [c.existing] : []))] }, after: { currency: input.currency, items: written, unchanged: result.rows.filter((r) => r.outcome === 'unchanged').length, skipped: result.skipped.length, lineCounts: result.lineCounts,
+          // Kept for the record only: correction rows and equivalent labour never become items or totals.
+          summary: result.summary, setAside: result.setAside, equivalents: result.equivalents }, snapshot: { version: saved.version, row: saved } });
+        if (rejections.length) await this.syncRejectedParts(tx, actor, saved);
       }
       result.applied = true;
     });
@@ -401,6 +452,7 @@ export class AssessmentsService {
       });
 
       if (previous) await this.supersede(tx, actor, previous, a.versionNo, now);
+      await this.syncRejectedParts(tx, actor, saved);
 
       if (forecast) {
         const label = a.kind === 'supplement' ? `الحاقیه نسخه ${toPersianDigits(a.versionNo)}` : 'کارشناسی';
@@ -662,6 +714,54 @@ export class AssessmentsService {
   }
 
   /** Bumps the assessment version so concurrent editors of the same draft conflict. */
+  /**
+   * Keeps the «رد شده» flag of the part lines in step with one assessment version:
+   * a part whose root assessment line is rejected in that version is flagged (and
+   * unflagged if a later version accepts it again). Nothing is cancelled: when a
+   * reservation, Emdad request or purchase already exists, the parts clerks and the
+   * case expert are told and decide themselves (task 3, spec section 7).
+   */
+  private async syncRejectedParts(tx: DbOrTx, actor: Actor, a: AssessmentRow) {
+    const tenantId = actor.user.tenantId;
+    const versions = await tx.select({ id: assessments.id }).from(assessments).where(and(eq(assessments.tenantId, tenantId), eq(assessments.caseId, a.caseId)));
+    const all = await tx.select({ id: assessmentItems.id, assessmentId: assessmentItems.assessmentId, originItemId: assessmentItems.originItemId, action: assessmentItems.action, approvalStatus: assessmentItems.approvalStatus }).from(assessmentItems)
+      .where(and(eq(assessmentItems.tenantId, tenantId), inArray(assessmentItems.assessmentId, versions.map((v) => v.id))));
+    const byId = new Map(all.map((i) => [i.id, i]));
+    const rootOf = (id: string) => { let cur = byId.get(id); const seen = new Set<string>(); while (cur?.originItemId && byId.has(cur.originItemId) && !seen.has(cur.id)) { seen.add(cur.id); cur = byId.get(cur.originItemId); } return cur?.id ?? id; };
+    const rejectedRoots = new Set(all.filter((i) => i.assessmentId === a.id && i.action === 'replace' && i.approvalStatus === 'rejected').map((i) => rootOf(i.id)));
+    const lines = await tx.select().from(partRequests).where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.caseId, a.caseId), notInArray(partRequests.status, ['cancelled', 'returned'])));
+    const now = new Date();
+    const supplied: string[] = [];
+    for (const p of lines) {
+      const rejected = !!p.assessmentItemId && rejectedRoots.has(p.assessmentItemId);
+      if (rejected === !!p.assessmentRejectedAt) continue;
+      const patch = rejected ? { assessmentRejectedAt: now, assessmentRejectedVersion: a.versionNo } : { assessmentRejectedAt: null, assessmentRejectedVersion: null };
+      const [saved] = await tx.update(partRequests).set({ ...patch, updatedAt: now, version: p.version + 1 }).where(and(eq(partRequests.id, p.id), eq(partRequests.version, p.version))).returning();
+      if (!saved) throw versionConflict();
+      await this.audit.record(tx, actor, {
+        entityType: 'part', entityId: p.id, caseId: p.caseId,
+        action: rejected ? 'part.assessment_rejected' : 'part.assessment_rejection_cleared',
+        before: { assessmentRejectedVersion: p.assessmentRejectedVersion },
+        after: { description: p.description, assessmentVersion: a.versionNo, status: p.status },
+        snapshot: { version: saved.version, row: saved },
+      });
+      if (rejected && p.status !== 'needed') supplied.push(p.description);
+    }
+    if (supplied.length) {
+      const [kase] = await tx.select({ responsible: cases.responsibleUserId, caseNumber: cases.caseNumber }).from(cases).where(and(eq(cases.id, a.caseId), eq(cases.tenantId, tenantId)));
+      const to = [...(await usersWithRole(tx, tenantId, ['parts_clerk'])), kase?.responsible];
+      for (const description of supplied) {
+        await notifyUsers(tx, tenantId, to, {
+          kind: 'part_assessment_rejected',
+          title: `قطعهٔ ردشده با تأمین ثبت‌شده: ${description}`,
+          body: `این قلم در ${a.kind === 'supplement' ? `الحاقیه نسخه ${toPersianDigits(a.versionNo)}` : 'کارشناسی'} پروندهٔ ${kase?.caseNumber ?? ''} رد شد ولی برایش رزرو، امداد ویژه یا خرید ثبت شده است. خودکار لغو نشد؛ تصمیم با شماست.`,
+          link: partLink(a.caseId, ''),
+          dedupeKey: `part_assessment_rejected:${a.id}:${description}`,
+        });
+      }
+    }
+  }
+
   private async touch(tx: DbOrTx, a: AssessmentRow): Promise<AssessmentRow> {
     const [row] = await tx
       .update(assessments)

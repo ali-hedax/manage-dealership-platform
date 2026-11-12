@@ -79,7 +79,7 @@ export class PartsWorkbenchService {
     const dayMinutes = workingDayMinutes(calendar.calendar);
     const workDaysUntil = (at: Date) => (dayMinutes ? workingMinutesBetween(now.toISOString(), at.toISOString(), calendar.calendar) / dayMinutes : 0);
     const canReserve = actor.user.permissions.has('stock.read') && actor.user.permissions.has('stock.reserve');
-    const needs = rows.filter(({ p }) => p.status === 'needed' && p.partNumber).map(({ p }) => p.partNumber!);
+    const needs = rows.filter(({ p }) => p.status === 'needed' && !p.assessmentRejectedAt && p.partNumber).map(({ p }) => p.partNumber!);
     // Price lookup is read-only and may include zero-stock rows. Reservation still requires stock.reserve.
     const stock = await this.stock.exactOptions(actor, actor.user.permissions.has('stock.read') ? [...new Set(needs)] : [], db, true);
     const byPart = new Map<string, typeof links>();
@@ -95,6 +95,7 @@ export class PartsWorkbenchService {
     const cards = new Map<string, { card: PartsWorkbench['cards'][number]; deadline: number; started: number; late: boolean }>();
     let inTransit = 0;
     for (const { p, c, v } of rows) {
+      if (p.assessmentRejectedAt && p.status === 'needed') continue; // rejected in the assessment, no supply: not a need (task 3)
       const related = (byPart.get(p.id) ?? []).filter(r => r.caseId === c.id && r.matchStatus === 'matched' && r.statusCategory !== 'cancelled');
       const matching = related.filter(r => !p.orderRef || r.requestNo === p.orderRef || r.emdadNo === p.orderRef);
       const official = matching.length === 1 ? matching[0] : undefined;

@@ -143,3 +143,12 @@ New table `part_price_notices`: one row per «اعلام قیمت» of the parts
 ## 0022 — reminder about one part line (spec section 9)
 
 New nullable column `reminders.part_request_id` (foreign key to `part_requests.id`): a «تذکر» may point to one part line of its car, in addition to the case. The API accepts a part only together with the case it belongs to (`INVALID_PART` otherwise). Existing reminders are unchanged. No other table is touched; control-room numbers and the alert sweep (`behind_schedule`, `emdad_late`, `daily_report_missing` notifications, unique per user and dedupe key) are derived from existing data and store nothing new. Verified on PostgreSQL 16 (0000→0022, down, up again). Rollback: `down/0022_reminder_part.down.sql` (drops the column and its constraint; the case link of every reminder stays).
+
+## 0023 — supplement rejections (task 3, spec section 5)
+
+New nullable columns, nothing else changes:
+
+- `assessment_items.replaces_item_id` and `replacement_basis` link a line to the rejected line it replaces. A rejected `«رد»` row and a final row with the same technical code in one imported file give `same_file`. A final row whose code matches a line rejected in an earlier version gives `probable`.
+- `part_requests.assessment_rejected_at` and `assessment_rejected_version` mark a part whose assessment line was rejected. The part stays in the list with the «رد شده» tag and is never cancelled automatically. It is left out of supply needs, the cost alert and dispatch. When a reservation, Emdad request or purchase already exists, the parts clerks and the case expert are notified.
+
+Existing rows keep `NULL`. Rollback: `down/0023_assessment_rejections.down.sql` (drops the four columns; rejected items keep `approval_status = 'rejected'`).
