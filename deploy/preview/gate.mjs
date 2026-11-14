@@ -59,8 +59,10 @@ export function createGate(config) {
       if (config.totpAuth) {
         const publicPath=['/login','/activate','/reset-password','/manifest.webmanifest','/favicon.ico'].includes(url.pathname)||url.pathname.startsWith('/_next/')||url.pathname.startsWith('/brand/')||url.pathname.startsWith('/api/v1/auth/');
         if(!publicPath){
+          // Staff sign in with username + 4-digit PIN (spec section 3); the API itself limits what a PIN session may do.
+          // A password-only session (TOTP not yet verified) stays outside.
           let ok=false;
-          try { const result=await fetch(config.authApi??'http://api:4000/api/v1/auth/me',{headers:{Cookie:String(req.headers.cookie??'')},redirect:'manual',signal:AbortSignal.timeout(5000)});ok=result.status===200&&(await result.json()).authentication==='totp'; } catch { return send(503,'سرویس ورود در دسترس نیست. دوباره تلاش کنید.'); }
+          try { const result=await fetch(config.authApi??'http://api:4000/api/v1/auth/me',{headers:{Cookie:String(req.headers.cookie??'')},redirect:'manual',signal:AbortSignal.timeout(5000)});ok=result.status===200&&['totp','pin'].includes((await result.json()).authentication); } catch { return send(503,'سرویس ورود در دسترس نیست. دوباره تلاش کنید.'); }
           if(!ok)return url.pathname.startsWith('/api/')?send(401,'{"error":"LOGIN_REQUIRED"}',{'Content-Type':'application/json'}):send(302,'',{Location:'/login'});
         }
         return proxy(req,res,send);

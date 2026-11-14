@@ -38,9 +38,10 @@ test('form gate preserves authentication without browser challenge dialogs', asy
 test('personal mode requires an application session and cannot use the shared gate cookie',async t=>{
   const target=http.createServer((req,res)=>{
     if(req.url==='/auth/me'){
-      const verified=String(req.headers.cookie).includes('manage_session=verified');
-      res.statusCode=verified||String(req.headers.cookie).includes('manage_session=password')?200:401;
-      res.end(JSON.stringify({authentication:verified?'totp':'password'}));
+      const cookie=String(req.headers.cookie);
+      const verified=cookie.includes('manage_session=verified'),pin=cookie.includes('manage_session=staffpin');
+      res.statusCode=verified||pin||cookie.includes('manage_session=password')?200:401;
+      res.end(JSON.stringify({authentication:verified?'totp':pin?'pin':'password'}));
     }
     else res.end('app');
   });
@@ -68,4 +69,8 @@ test('personal mode requires an application session and cannot use the shared ga
   assert.equal((await fetch(base+'/launch',{redirect:'manual'})).status,302);
   assert.equal((await fetch(base+'/cases',{redirect:'manual',headers:{Cookie:'manage_session=password'}})).status,302);
   assert.equal((await fetch(base+'/cases',{headers:{Cookie:'manage_session=verified'}})).status,200);
+  // A staff PIN session reaches its pages and API calls; before this, every staff member bounced back to /login.
+  assert.equal((await fetch(base+'/workshop/technician',{redirect:'manual',headers:{Cookie:'manage_session=staffpin'}})).status,200);
+  assert.equal((await fetch(base+'/launch',{redirect:'manual',headers:{Cookie:'manage_session=staffpin'}})).status,200);
+  assert.equal((await fetch(base+'/api/v1/dashboard',{headers:{Cookie:'manage_session=staffpin'}})).status,200);
 });
