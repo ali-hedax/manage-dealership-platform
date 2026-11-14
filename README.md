@@ -6,7 +6,7 @@
 
 سامانهٔ یکپارچهٔ مدیریت عملیات نمایندگی‌های خودرو
 
-[English](README.en.md) · [راهنمای کاربر](docs/USER_GUIDE_FA.md) · [معماری](docs/ARCHITECTURE.md) · [API](docs/API.md) · [نقشهٔ راه](docs/ROADMAP.md) · [وضعیت پیشرفت](PROGRESS.md)
+[English](README.en.md) · [راهنمای کاربر](docs/USER_GUIDE_FA.md) · [معماری](docs/ARCHITECTURE.md) · [API](docs/API.md) · [نقشهٔ راه](docs/ROADMAP.md) · [فهرست مستندات](docs/README.md) · [وضعیت پیشرفت](PROGRESS.md)
 
 </div>
 
@@ -110,7 +110,13 @@ legacy/          نمونهٔ اولیهٔ تک‌فایلی قدیمی، دست
 
 ## مستندات
 
+همهٔ راهنماها به تفکیک مخاطب در [فهرست مستندات](docs/README.md) آمده است. پرکاربردها:
+
 [سند محصول](docs/PRODUCT_SPEC_FA.md) · [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md) · [PROGRESS.md](PROGRESS.md) · [CHANGELOG.md](CHANGELOG.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [DATABASE](docs/DATABASE.md) · [WORKFLOWS](docs/WORKFLOWS.md) · [OFFLINE_SYNC](docs/OFFLINE_SYNC.md) · [DEPLOYMENT](docs/DEPLOYMENT.md) · [BACKUP_RESTORE](docs/BACKUP_RESTORE.md) · [ROADMAP](docs/ROADMAP.md) · [چک‌لیست سرور برای IT](docs/IT_SERVER_CHECKLIST_FA.md)
+
+## هداکس
+
+منیج یکی از دو محصول هداکس است، در کنار [Source by HEDAX](https://github.com/ali-hedax/source-auto-parts-platform)، فروشگاه قطعات خودرو و تأمین سفارشی. هر دو از [راهنمای برند هداکس](https://github.com/ali-hedax/brand-guide-hedax) پیروی می‌کنند.
 
 ## حقوق
 

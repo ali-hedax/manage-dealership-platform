@@ -532,7 +532,7 @@ Update: the complete isolated daily browser suite passed **2/2** in 1.3 minutes,
 
 ## Daily parts reports — in progress, not done, not released (2026-11-03)
 
-Local runs on `feature/daily-parts-reports` at `defcb9f` plus the uncommitted web UI. The branch is not pushed, so there is **no CI run**. See [the handoff](../HANDOFF_DAILY_PARTS.md).
+Local runs on `feature/daily-parts-reports` at `defcb9f` plus the uncommitted web UI. The branch is not pushed, so there is **no CI run**. See [the handoff](archive/HANDOFF_DAILY_PARTS_2026-11-03.md).
 
 | Check | Result |
 | --- | --- |

@@ -399,7 +399,7 @@ Preflight خصوصی با parser همین کد: ۶۶۹۷ ردیف موجودی (
 
 ## کار جاری: گزارش‌های روزانه قطعات — تحویل به Codex — ۱۴۰۵/۰۸/۱۲
 
-**منتشر نشده و عملیاتی نیست.** جزئیات کامل و اولین قدم: [HANDOFF_DAILY_PARTS.md](../../HANDOFF_DAILY_PARTS.md).
+**منتشر نشده و عملیاتی نیست.** جزئیات کامل و اولین قدم: [HANDOFF_DAILY_PARTS.md](HANDOFF_DAILY_PARTS_2026-11-03.md).
 
 - شاخه `feature/daily-parts-reports` فقط محلی است؛ PR و CI ندارد. آخرین commit کد `defcb9f` است.
 - API و تست‌ها commit شده‌اند. UI (صفحه‌های `daily-reports`، `stock`، `emdad` و کامپوننت‌ها) عمداً ثبت‌نشده مانده است؛ آن را پاک نکنید.
