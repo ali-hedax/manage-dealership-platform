@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import type { TechnicianPinInput } from '@manage/shared';
 import { randomBytes } from 'node:crypto';
-import { nextTechnicianUsername, technicianUsernameForStation, expertUsernameForCode, REPAIR_TRADE_LABELS, type RepairTrade, type TechnicianAccountInput } from '@manage/shared';
+import { normalizeRoles, nextTechnicianUsername, technicianUsernameForStation, expertUsernameForCode, REPAIR_TRADE_LABELS, type RepairTrade, type TechnicianAccountInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
@@ -190,6 +190,28 @@ export class TechniciansService {
       // A new PIN ends every open session; a new device password also forgets every registered device.
       await this.endSessions(tx, user.id, !!input.devicePassword);
       await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'user.technician_pin_reset', reason: reason?.trim() || null, after: { pin: !!input.pin, devicePassword: !!input.devicePassword } });
+    });
+    return this.list(actor);
+  }
+
+  /**
+   * Gives an existing expert, parts clerk or service manager the owner-chosen
+   * EXP + two-digit username. Only the sign-in name changes: ID, PIN, device
+   * password, registered devices, open sessions and history stay. The old name
+   * is not kept as an alias. Technicians follow their station code instead.
+   */
+  async setExpertCode(actor: Actor, id: string, code: string, reason?: string): Promise<TechnicianAccount[]> {
+    await this.db.transaction(async (tx) => {
+      const user = await this.loadTechnician(tx, actor.user.tenantId, id);
+      if (normalizeRoles(user.roles).includes('technician')) throw badRequest('TECHNICIAN_USES_STATION', 'نام کاربری تکنسین از کد جایگاه او ساخته می‌شود');
+      requireSupportReason(actor, reason);
+      let username: string;
+      try { username = expertUsernameForCode(code); } catch { throw badRequest('INVALID_STAFF_CODE', 'کد کارشناس باید دو رقم باشد'); }
+      if (username === user.username) return;
+      const [taken] = await tx.select({ id: users.id }).from(users).where(and(eq(users.tenantId, actor.user.tenantId), eq(users.username, username)));
+      if (taken) throw conflict('USERNAME_TAKEN', `نام کاربری ${username.toUpperCase()} متعلق به همکار دیگری است`);
+      await tx.update(users).set({ username, updatedAt: new Date(), version: sql`${users.version} + 1` }).where(eq(users.id, user.id));
+      await this.audit.record(tx, actor, { entityType: 'user', entityId: user.id, action: 'user.username_changed', reason: reason?.trim() || null, before: { username: user.username }, after: { username } });
     });
     return this.list(actor);
   }

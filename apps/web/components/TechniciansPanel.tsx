@@ -11,7 +11,9 @@ type Technician = { id: string; username: string; displayName: string; isActive:
 const UNITS: RepairTrade[] = ['body', 'paint', 'suspension', 'electrical', 'mechanical', 'engine_tuning'];
 // Roles offered for new staff. The legacy expert/supervisor roles stay readable but are not offered.
 const STAFF_ROLES: PinLoginRole[] = ['technician', 'accident_expert', 'parts_clerk', 'service_manager'];
-type Pending = { tech: Technician; kind: 'pin' | 'active' | 'signout' };
+type Pending = { tech: Technician; kind: 'pin' | 'active' | 'signout' | 'code' };
+const isTechnicianRow = (t: Technician) => t.roles.includes('technician');
+const hasExpertCode = (t: Technician) => /^exp[0-9]{2}$/.test(t.username);
 const DEVICE_PASSWORD = '(?=.*[A-Za-z])(?=.*[0-9]).{8,128}';
 const PIN = '[0-9۰-۹]{4}';
 const toLatinDigits = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
@@ -82,14 +84,17 @@ export function TechniciansPanel() {
     const fd = new FormData(e.currentTarget), reason = String(fd.get('reason') ?? '').trim(), t = pending.tech;
     const extra = reason ? { reason } : {};
     const newPin = toLatinDigits(String(fd.get('pin') ?? '')), newDevicePassword = String(fd.get('devicePassword') ?? '');
+    const newCode = toLatinDigits(String(fd.get('personnelCode') ?? '').trim());
     const ok =
-      pending.kind === 'pin'
+      pending.kind === 'code'
+        ? await run(() => api(`/staff/technicians/${t.id}/expert-code`, { method: 'PUT', body: { personnelCode: newCode, ...extra } }))
+        : pending.kind === 'pin'
         ? await run(() => api(`/staff/technicians/${t.id}/pin`, { method: 'PUT', body: { ...(newPin ? { pin: newPin } : {}), ...(newDevicePassword ? { devicePassword: newDevicePassword } : {}), ...extra } }))
         : pending.kind === 'signout'
         ? await run(() => api(`/staff/technicians/${t.id}/sign-out`, { body: extra }))
         : await run(() => api(`/staff/technicians/${t.id}/active`, { method: 'PUT', body: { active: !t.isActive, ...extra } }));
     if (ok) {
-      setMessage(pending.kind === 'pin' ? `رمز تازهٔ ${t.displayName} ثبت شد و ورودهای قبلی او بسته شد.` : pending.kind === 'signout' ? `${t.displayName} از همهٔ دستگاه‌ها خارج شد.` : t.isActive ? `${t.displayName} غیرفعال شد.` : `${t.displayName} فعال شد.`);
+      setMessage(pending.kind === 'code' ? `نام کاربری ${t.displayName} از این پس EXP ${toPersianDigits(newCode)} است؛ رمز و دستگاه‌هایش تغییری نکرد. نام تازه را به خودش بگویید.` : pending.kind === 'pin' ? `رمز تازهٔ ${t.displayName} ثبت شد و ورودهای قبلی او بسته شد.` : pending.kind === 'signout' ? `${t.displayName} از همهٔ دستگاه‌ها خارج شد.` : t.isActive ? `${t.displayName} غیرفعال شد.` : `${t.displayName} فعال شد.`);
       setPending(null);
     }
   }
@@ -161,7 +166,13 @@ export function TechniciansPanel() {
 
       {pending && (
         <form onSubmit={confirm} className="callout technician-confirm">
-          <strong>{pending.kind === 'pin' ? `رمز تازه برای ${pending.tech.displayName}` : pending.kind === 'signout' ? `خروج ${pending.tech.displayName} از همهٔ دستگاه‌ها` : `${pending.tech.isActive ? 'غیرفعال کردن' : 'فعال کردن'} ${pending.tech.displayName}`}</strong>
+          <strong>{pending.kind === 'code' ? `کد کارشناس برای ${pending.tech.displayName}` : pending.kind === 'pin' ? `رمز تازه برای ${pending.tech.displayName}` : pending.kind === 'signout' ? `خروج ${pending.tech.displayName} از همهٔ دستگاه‌ها` : `${pending.tech.isActive ? 'غیرفعال کردن' : 'فعال کردن'} ${pending.tech.displayName}`}</strong>
+          {pending.kind === 'code' && (
+            <label className="field">
+              <span>کد دو رقمی (نام کاربری: EXP + این کد)</span>
+              <input name="personnelCode" className="input ltr-input" inputMode="numeric" required pattern="[0-9۰-۹٠-٩]{2}" maxLength={2} title="دو رقم؛ مانند 00 یا 20" placeholder="20" defaultValue={hasExpertCode(pending.tech) ? pending.tech.username.slice(3) : ''} autoComplete="off" autoFocus />
+            </label>
+          )}
           {pending.kind === 'pin' && (
             <label className="field">
               <span>رمز تازهٔ ۴ رقمی{pending.tech.hasPin ? ' (خالی = بدون تغییر)' : ''}</span>
@@ -181,14 +192,14 @@ export function TechniciansPanel() {
             </label>
           )}
           <span className="technician-confirm-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy}>{pending.kind === 'pin' ? 'ثبت رمز' : 'تأیید'}</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>{pending.kind === 'pin' ? 'ثبت رمز' : pending.kind === 'code' ? 'ثبت کد' : 'تأیید'}</button>
             <button type="button" className="btn" onClick={() => setPending(null)}>انصراف</button>
           </span>
         </form>
       )}
 
       <h3>کارکنان فعال</h3>
-      <StaffTable rows={active} busy={busy} onPin={(t) => setPending({ tech: t, kind: 'pin' })} onSignOut={(t) => setPending({ tech: t, kind: 'signout' })} onToggle={toggleActive} empty="هنوز کارمند فعالی نیست." />
+      <StaffTable rows={active} busy={busy} onPin={(t) => setPending({ tech: t, kind: 'pin' })} onSignOut={(t) => setPending({ tech: t, kind: 'signout' })} onCode={(t) => setPending({ tech: t, kind: 'code' })} onToggle={toggleActive} empty="هنوز کارمند فعالی نیست." />
       {archived.length > 0 && (
         <details className="technicians-archived">
           <summary>حساب‌های غیرفعال و بایگانی ({toPersianDigits(archived.length)})</summary>
@@ -200,7 +211,7 @@ export function TechniciansPanel() {
   );
 }
 
-function StaffTable({ rows, busy, onPin, onSignOut, onToggle, empty }: { rows: Technician[]; busy: boolean; onPin?: (t: Technician) => void; onSignOut?: (t: Technician) => void; onToggle: (t: Technician) => void; empty: string }) {
+function StaffTable({ rows, busy, onPin, onSignOut, onCode, onToggle, empty }: { rows: Technician[]; busy: boolean; onPin?: (t: Technician) => void; onSignOut?: (t: Technician) => void; onCode?: (t: Technician) => void; onToggle: (t: Technician) => void; empty: string }) {
   return (
     <div className="table-scroll">
       <table className="table">
@@ -215,6 +226,7 @@ function StaffTable({ rows, busy, onPin, onSignOut, onToggle, empty }: { rows: T
               <td>{t.lastLoginAt ? formatJalali(t.lastLoginAt, { time: true }) : '—'}</td>
               <td className="technician-actions">
                 {onPin && <button type="button" className="btn btn-sm" disabled={busy} aria-label={`رمز تازه برای ${t.displayName}`} onClick={() => onPin(t)}>{t.hasPin && t.hasDevicePassword ? 'رمز تازه' : 'تعیین رمز ۴ رقمی'}</button>}
+                {onCode && !isTechnicianRow(t) && <button type="button" className="btn btn-sm" disabled={busy} aria-label={`کد کارشناس برای ${t.displayName}`} onClick={() => onCode(t)}>{hasExpertCode(t) ? 'تغییر کد EXP' : 'تعیین کد EXP'}</button>}
                 {onSignOut && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => onSignOut(t)}>خروج از دستگاه‌ها</button>}
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => onToggle(t)}>{t.isActive ? 'غیرفعال کردن' : 'فعال کردن'}</button>
               </td>
