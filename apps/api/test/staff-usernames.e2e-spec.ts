@@ -19,13 +19,12 @@ describe('Staff identifiers and legacy compatibility', () => {
   });
   afterEach(async () => h.close());
 
-  it('creates EXP00, accepts displayed Persian digits, registers a device and keeps the parts role session', async () => {
+  it('creates EXP00, accepts displayed Persian digits, signs in with the PIN alone and keeps the parts role session', async () => {
     const made = await admin.post('/staff/technicians', { displayName: 'قطعات ساختگی', personnelCode: '۰۰', role: 'parts_clerk', pin: '4815', devicePassword: 'Device2026test' });
     expect(made.status).toBe(201);
     expect(made.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'exp00' })]));
-    expect((await login('EXP ۰۰', '4815', '')).body.code).toBe('DEVICE_NOT_REGISTERED');
-    expect((await login('EXP00', '4815', 'WrongPass99')).status).toBe(401);
-    const ok = await login('EXP ۰۰');
+    expect((await login('EXP00', '1111', '')).status).toBe(401);
+    const ok = await login('EXP ۰۰', '4815', '');
     expect(ok.status).toBe(200);
     expect(ok.body.roles).toEqual(['parts_clerk']);
     expect(ok.body.permissions).not.toContain('user.manage');

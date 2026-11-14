@@ -90,14 +90,12 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       expect((await pinLogin('mechanic1', '2222')).status).toBe(401);
     });
 
-    it('registers a device with the device password, then accepts the PIN alone there; forced sign-out forgets it', async () => {
-      const list: { id: string; username: string }[] = (await admin.post('/staff/technicians', { displayName: 'قطعه آزمون', username: 'store1', pin: '2580', devicePassword: DP, role: 'parts_clerk' })).body;
+    it('signs in with username + PIN alone on a fresh device (spec section 3), records the device, and forced sign-out ends the session', async () => {
+      // Created without a device password: it is no longer asked for.
+      const list: { id: string; username: string }[] = (await admin.post('/staff/technicians', { displayName: 'قطعه آزمون', username: 'store1', pin: '2580', role: 'parts_clerk' })).body;
       const t = list.find((x) => x.username === 'store1')!;
-      const fresh = await pinLogin('store1', '2580', '');
-      expect(fresh.status).toBe(401);
-      expect(fresh.body.code).toBe('DEVICE_NOT_REGISTERED');
-      expect((await pinLogin('store1', '2580', 'WrongPass99')).status).toBe(401);
-      const reg = await pinLogin('store1', '2580');
+      expect((await pinLogin('store1', '9999', '')).status).toBe(401);
+      const reg = await pinLogin('store1', '2580', '');
       expect(reg.status).toBe(200);
       const device = (reg.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('manage_device='))!.split(';')[0]!;
       expect(reg.body.roles).toEqual(['parts_clerk']);
@@ -107,7 +105,7 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       const signOut = await admin.post(`/staff/technicians/${t.id}/sign-out`, { reason: 'گم شدن تبلت (آزمون)' });
       expect(signOut.status).toBe(201);
       expect((await as(cookieOf(quick), '/auth/me')).status).toBe(401);
-      expect((await pinLogin('store1', '2580', '', device)).body.code).toBe('DEVICE_NOT_REGISTERED');
+      expect((await pinLogin('store1', '2580', '', device)).status).toBe(200);
       const audit = await h.db.db.select().from(auditEvents).where(eq(auditEvents.entityId, t.id));
       expect(audit.map((a) => a.action)).toEqual(expect.arrayContaining(['auth.device_registered', 'user.technician_signed_out']));
     });
@@ -118,8 +116,8 @@ describe('Technician sign-in with username + 4-digit PIN', () => {
       const listed: { id: string; username: string; hasPin: boolean }[] = (await admin.get('/staff/technicians')).body;
       const qc = listed.find((x) => x.username === 'qc')!;
       expect(qc.hasPin).toBe(false);
-      expect((await admin.put(`/staff/technicians/${qc.id}/pin`, { pin: '1470', reason: 'ورود ساده (آزمون)' })).body.code).toBe('DEVICE_PASSWORD_REQUIRED');
-      expect((await admin.put(`/staff/technicians/${qc.id}/pin`, { pin: '1470', devicePassword: DP, reason: 'ورود ساده (آزمون)' })).status).toBe(200);
+      // A PIN alone enables sign-in; no device password is required any more.
+      expect((await admin.put(`/staff/technicians/${qc.id}/pin`, { pin: '1470', reason: 'ورود ساده (آزمون)' })).status).toBe(200);
       expect((await h.db.db.select().from(users)).length).toBe(before);
       const ok = await pinLogin('qc', '1470');
       expect(ok.status).toBe(200);

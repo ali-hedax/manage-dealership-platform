@@ -14,7 +14,6 @@ const STAFF_ROLES: PinLoginRole[] = ['technician', 'accident_expert', 'parts_cle
 type Pending = { tech: Technician; kind: 'pin' | 'active' | 'signout' | 'code' };
 const isTechnicianRow = (t: Technician) => t.roles.includes('technician');
 const hasExpertCode = (t: Technician) => /^exp[0-9]{2}$/.test(t.username);
-const DEVICE_PASSWORD = '(?=.*[A-Za-z])(?=.*[0-9]).{8,128}';
 const PIN = '[0-9۰-۹]{4}';
 const toLatinDigits = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 
@@ -27,8 +26,8 @@ export function TechniciansPanel() {
   // Free bays of the chosen unit are offered as suggestions; any new code creates the bay.
   const { data: stations, mutate: refreshStations } = useSWR<WorkshopStation[]>(can('user.manage') && can('workshop.read') ? '/workshop/stations' : null, fetcher);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const [role, setRole] = useState<PinLoginRole>('technician'), [devicePassword, setDevicePassword] = useState('');
-  const [created, setCreated] = useState<{ name: string; username: string; pin: string; devicePassword: string; bay: string } | null>(null), [message, setMessage] = useState('');
+  const [role, setRole] = useState<PinLoginRole>('technician');
+  const [created, setCreated] = useState<{ name: string; username: string; pin: string; bay: string } | null>(null), [message, setMessage] = useState('');
   const [trade, setTrade] = useState<RepairTrade | ''>(''), [stationCode, setStationCode] = useState('');
   const [name, setName] = useState(''), [pin, setPin] = useState(''), [username, setUsername] = useState('');
   const [pending, setPending] = useState<Pending | null>(null);
@@ -67,10 +66,9 @@ export function TechniciansPanel() {
   async function create(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (technician && !trade) return;
-    const account = { displayName: name.trim(), username: chosenUsername, ...(!technician ? {personnelCode: toLatinDigits(username.trim())} : {}), pin: toLatinDigits(pin), devicePassword, role, ...(technician && trade ? { trade, stationCode: stationCode.trim() } : {}) };
+    const account = { displayName: name.trim(), username: chosenUsername, ...(!technician ? {personnelCode: toLatinDigits(username.trim())} : {}), pin: toLatinDigits(pin), role, ...(technician && trade ? { trade, stationCode: stationCode.trim() } : {}) };
     if (await run(() => api('/staff/technicians', { body: account }))) {
-      setCreated({ name: account.displayName, username: account.username, pin: account.pin, devicePassword, bay: technician && trade ? `${REPAIR_TRADE_LABELS[trade]} · ${stationCode.trim()}` : ROLE_LABELS[role] });
-      setDevicePassword('');
+      setCreated({ name: account.displayName, username: account.username, pin: account.pin, bay: technician && trade ? `${REPAIR_TRADE_LABELS[trade]} · ${stationCode.trim()}` : ROLE_LABELS[role] });
       void refreshStations();
       setName('');
       setPin('');
@@ -83,13 +81,13 @@ export function TechniciansPanel() {
     if (!pending) return;
     const fd = new FormData(e.currentTarget), reason = String(fd.get('reason') ?? '').trim(), t = pending.tech;
     const extra = reason ? { reason } : {};
-    const newPin = toLatinDigits(String(fd.get('pin') ?? '')), newDevicePassword = String(fd.get('devicePassword') ?? '');
+    const newPin = toLatinDigits(String(fd.get('pin') ?? ''));
     const newCode = toLatinDigits(String(fd.get('personnelCode') ?? '').trim());
     const ok =
       pending.kind === 'code'
         ? await run(() => api(`/staff/technicians/${t.id}/expert-code`, { method: 'PUT', body: { personnelCode: newCode, ...extra } }))
         : pending.kind === 'pin'
-        ? await run(() => api(`/staff/technicians/${t.id}/pin`, { method: 'PUT', body: { ...(newPin ? { pin: newPin } : {}), ...(newDevicePassword ? { devicePassword: newDevicePassword } : {}), ...extra } }))
+        ? await run(() => api(`/staff/technicians/${t.id}/pin`, { method: 'PUT', body: { pin: newPin, ...extra } }))
         : pending.kind === 'signout'
         ? await run(() => api(`/staff/technicians/${t.id}/sign-out`, { body: extra }))
         : await run(() => api(`/staff/technicians/${t.id}/active`, { method: 'PUT', body: { active: !t.isActive, ...extra } }));
@@ -107,7 +105,7 @@ export function TechniciansPanel() {
   return (
     <section className="card technicians" aria-labelledby="technicians-title">
       <h2 id="technicians-title">افزودن کارمند</h2>
-      <p className="muted small">همهٔ کارکنان با نام کاربری و رمز ۴ رقمی وارد می‌شوند. دستگاه تازه یک بار «رمز ثبت دستگاه» می‌خواهد. مالک و مدیر سیستم با ایمیل و Google Authenticator وارد می‌شوند.</p>
+      <p className="muted small">همهٔ کارکنان فقط با نام کاربری و رمز ۴ رقمی وارد می‌شوند؛ تکنسین با TECH و کد جایگاه، بقیه با EXP و کد دو رقمی. مالک و مدیر سیستم با ایمیل و Google Authenticator وارد می‌شوند.</p>
 
       <form onSubmit={create} className="technician-form">
         <label className="field">
@@ -128,10 +126,6 @@ export function TechniciansPanel() {
         <label className="field">
           <span>رمز ۴ رقمی</span>
           <input name="pin" className="input ltr-input" inputMode="numeric" required pattern={PIN} maxLength={4} autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>رمز ثبت دستگاه</span>
-          <input name="devicePassword" className="input ltr-input" required pattern={DEVICE_PASSWORD} title="دست‌کم ۸ نویسه، با حرف انگلیسی و عدد" autoComplete="new-password" value={devicePassword} onChange={(e) => setDevicePassword(e.target.value)} />
         </label>
         {technician && <>
         <label className="field">
@@ -156,7 +150,6 @@ export function TechniciansPanel() {
           <span className="technician-credentials">
             <span>نام کاربری: <bdi dir="ltr">{created.username}</bdi></span>
             <span>رمز: <bdi dir="ltr">{toPersianDigits(created.pin)}</bdi></span>
-            <span>رمز ثبت دستگاه: <bdi dir="ltr">{created.devicePassword}</bdi></span>
             <span>سمت / جایگاه: <bdi>{created.bay}</bdi></span>
           </span>
         </div>
@@ -175,14 +168,8 @@ export function TechniciansPanel() {
           )}
           {pending.kind === 'pin' && (
             <label className="field">
-              <span>رمز تازهٔ ۴ رقمی{pending.tech.hasPin ? ' (خالی = بدون تغییر)' : ''}</span>
-              <input name="pin" className="input ltr-input" inputMode="numeric" required={!pending.tech.hasPin} pattern={PIN} maxLength={4} autoComplete="off" autoFocus />
-            </label>
-          )}
-          {pending.kind === 'pin' && (
-            <label className="field">
-              <span>رمز ثبت دستگاه{pending.tech.hasDevicePassword ? ' (خالی = بدون تغییر؛ تغییرش همهٔ دستگاه‌ها را خارج می‌کند)' : ''}</span>
-              <input name="devicePassword" className="input ltr-input" required={!pending.tech.hasDevicePassword} pattern={DEVICE_PASSWORD} title="دست‌کم ۸ نویسه، با حرف انگلیسی و عدد" autoComplete="new-password" />
+              <span>رمز تازهٔ ۴ رقمی</span>
+              <input name="pin" className="input ltr-input" inputMode="numeric" required pattern={PIN} maxLength={4} autoComplete="off" autoFocus />
             </label>
           )}
           {support && (
@@ -222,10 +209,10 @@ function StaffTable({ rows, busy, onPin, onSignOut, onCode, onToggle, empty }: {
               <th scope="row">{t.displayName}</th>
               <td>{t.station ? <>{REPAIR_TRADE_LABELS[t.station.trade] ?? t.station.trade} · <bdi dir="ltr">{t.station.code}</bdi></> : t.roles.map((r) => ROLE_LABELS[r as PinLoginRole] ?? r).join('، ')}</td>
               <td><bdi dir="ltr">{displayStaffUsername(t.username)}</bdi></td>
-              <td><span className={`chip ${!t.isActive ? '' : t.locked ? 'chip-red' : !t.hasPin || !t.hasDevicePassword ? 'chip-amber' : 'chip-green'}`}>{!t.isActive ? 'غیرفعال' : t.locked ? 'قفل موقت' : !t.hasPin || !t.hasDevicePassword ? 'رمز ۴ رقمی کامل نیست' : 'فعال'}</span>{t.trustedDevices > 0 && <span className="muted small"> · {toPersianDigits(t.trustedDevices)} دستگاه</span>}</td>
+              <td><span className={`chip ${!t.isActive ? '' : t.locked ? 'chip-red' : !t.hasPin ? 'chip-amber' : 'chip-green'}`}>{!t.isActive ? 'غیرفعال' : t.locked ? 'قفل موقت' : !t.hasPin ? 'رمز ۴ رقمی ندارد' : 'فعال'}</span>{t.trustedDevices > 0 && <span className="muted small"> · {toPersianDigits(t.trustedDevices)} دستگاه</span>}</td>
               <td>{t.lastLoginAt ? formatJalali(t.lastLoginAt, { time: true }) : '—'}</td>
               <td className="technician-actions">
-                {onPin && <button type="button" className="btn btn-sm" disabled={busy} aria-label={`رمز تازه برای ${t.displayName}`} onClick={() => onPin(t)}>{t.hasPin && t.hasDevicePassword ? 'رمز تازه' : 'تعیین رمز ۴ رقمی'}</button>}
+                {onPin && <button type="button" className="btn btn-sm" disabled={busy} aria-label={`رمز تازه برای ${t.displayName}`} onClick={() => onPin(t)}>{t.hasPin ? 'رمز تازه' : 'تعیین رمز ۴ رقمی'}</button>}
                 {onCode && !isTechnicianRow(t) && <button type="button" className="btn btn-sm" disabled={busy} aria-label={`کد کارشناس برای ${t.displayName}`} onClick={() => onCode(t)}>{hasExpertCode(t) ? 'تغییر کد EXP' : 'تعیین کد EXP'}</button>}
                 {onSignOut && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => onSignOut(t)}>خروج از دستگاه‌ها</button>}
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => onToggle(t)}>{t.isActive ? 'غیرفعال کردن' : 'فعال کردن'}</button>

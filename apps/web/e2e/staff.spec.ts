@@ -6,7 +6,7 @@ async function openAdminTab(page:Page){
   await page.goto('/users');await expect(page.getByRole('heading',{name:'کارکنان',exact:true})).toBeVisible();
   await page.getByRole('tab',{name:/^مدیر سیستم/}).click();
 }
-async function pinSignIn(page:Page,username:string,pin:string,devicePassword:string){
+async function pinSignIn(page:Page,username:string,pin:string){
   await page.context().clearCookies();
   await page.goto('/login');
   // Staff sign-in is the default of exactly two options.
@@ -15,9 +15,8 @@ async function pinSignIn(page:Page,username:string,pin:string,devicePassword:str
   const form=page.locator('#login-panel-technician');
   await form.getByLabel('نام کاربری',{exact:true}).fill(username);
   for(const [i,d] of [...pin].entries())await form.getByLabel(`رقم ${['۱','۲','۳','۴'][i]} رمز`,{exact:true}).fill(d);
-  await form.getByRole('button',{name:/ورود/}).click();
-  // First time on this device: the device password registers it.
-  await form.getByLabel(/رمز ثبت دستگاه/).fill(devicePassword);
+  // Spec section 3: username + PIN only, also on a device never used before.
+  await expect(form.getByLabel(/رمز ثبت دستگاه/)).toHaveCount(0);
   await form.getByRole('button',{name:/ورود/}).click();
 }
 
@@ -91,7 +90,7 @@ test('a technician is created with name, role, username, PIN, unit and bay, and 
   await panel.getByRole('combobox',{name:'واحد',exact:true}).selectOption({label:'صافکاری'});
   await panel.getByLabel('کد جایگاه',{exact:true}).fill('B-77');
   await panel.getByLabel('رمز ۴ رقمی',{exact:true}).fill('۴۸۱۵');
-  await panel.getByLabel('رمز ثبت دستگاه',{exact:true}).fill('Device2026e2e');
+  await expect(panel.getByLabel('رمز ثبت دستگاه',{exact:true})).toHaveCount(0);
   const username='techb-77';
   await expect(panel.getByLabel('نام کاربری',{exact:true})).toHaveValue(username);
   await panel.getByRole('button',{name:'افزودن کارمند',exact:true}).click();
@@ -108,7 +107,7 @@ test('a technician is created with name, role, username, PIN, unit and bay, and 
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('technicians-mobile.png'),fullPage:true});
 
-  await pinSignIn(page,username,'4815','Device2026e2e');
+  await pinSignIn(page,username,'4815');
   await expect(page).toHaveURL(/\/workshop\/technician$/);
 });
 
@@ -122,12 +121,11 @@ test('a service manager is created the same way without unit or bay, signs in wi
   await expect(panel.getByLabel('کد جایگاه',{exact:true})).toHaveCount(0);
   await panel.getByLabel('کد دو رقمی کارشناس',{exact:true}).fill('20');
   await panel.getByLabel('رمز ۴ رقمی',{exact:true}).fill('2580');
-  await panel.getByLabel('رمز ثبت دستگاه',{exact:true}).fill('Device2026svc');
   await panel.getByRole('button',{name:'افزودن کارمند',exact:true}).click();
   await expect(panel.locator('.technician-created')).toContainText('مدیر خدمات آزمون ساخته شد');
   await expect(panel.getByRole('row',{name:/مدیر خدمات آزمون/})).toContainText('مدیر خدمات');
 
-  await pinSignIn(page,'EXP 20','2580','Device2026svc');
+  await pinSignIn(page,'EXP 20','2580');
   await expect(page).toHaveURL(/\/launch$/);
 
   await page.context().clearCookies();

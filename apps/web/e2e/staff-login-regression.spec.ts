@@ -1,20 +1,18 @@
 import { test, expect } from '@playwright/test';
 import { login } from './helpers';
 
-test('synthetic EXP00: first device, PIN, parts desk, reload and second sign-in', async ({ page }) => {
+test('synthetic EXP00: fresh browser, PIN only, parts desk, reload and second sign-in', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await login(page, 'admin');
-  const created = await page.request.post('/api/v1/staff/technicians', { headers: { 'x-manage-client': 'test' }, data: { displayName: 'مسئول قطعات ساختگی', role: 'parts_clerk', personnelCode: '00', pin: '4815', devicePassword: 'Device2026test' } });
+  const created = await page.request.post('/api/v1/staff/technicians', { headers: { 'x-manage-client': 'test' }, data: { displayName: 'مسئول قطعات ساختگی', role: 'parts_clerk', personnelCode: '00', pin: '4815' } });
   expect(created.status()).toBe(201);
   await page.context().clearCookies();
   await page.goto('/login');
   const form = page.locator('#login-panel-technician');
   await form.getByLabel('نام کاربری', { exact: true }).fill('EXP ۰۰');
   for (const [index, digit] of [...'۴۸۱۵'].entries()) await form.getByLabel(`رقم ${['۱', '۲', '۳', '۴'][index]} رمز`, { exact: true }).fill(digit);
-  await form.getByRole('button', { name: 'ورود به میز کار', exact: true }).click();
-  await expect(form.getByLabel(/رمز ثبت دستگاه/)).toBeVisible();
-  await form.getByLabel(/رمز ثبت دستگاه/).fill('Device2026test');
+  // First sign-in on a fresh browser: the PIN alone is enough (spec section 3).
   await form.getByRole('button', { name: 'ورود به میز کار', exact: true }).click();
   await expect(page).toHaveURL(/\/launch$/);
   await expect(page.getByRole('heading', { name: 'از میز کار خود شروع کنید.' })).toBeVisible();
