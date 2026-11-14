@@ -1,6 +1,18 @@
 # Test report
 
-## Staff login and station identifiers — 2026-11-14 — branch only
+## Production release — 2026-11-14 — `a170340` (PR #85) — **done**
+
+- PR #85 merged 06:39 UTC (head `a9883a1`, 6/6). Main CI run [43567383358](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43567383358): 6/6.
+- Artifact `preview-images-a170340b3c1c62098346406a6d9945b688b18a60`: `sha256sum -c` OK on the server, source file = MAIN_SHA, loaded image IDs = artifact IDs. Nothing built on the server. Migration files 24 → 24; no deploy/compose/schema change.
+- Rehearsal 07:26:48–07:28:35 UTC: backup `20261114T072706Z` restored to a scratch DB; 53 table fingerprints and the migration journal (24) equal to live (cases 21, audit 54817). New API image booted on the copy: health ok, db ok, production. New web image: `/login` 200. Scratch DB dropped; production untouched.
+- Install: rollback tags `manage-{api,web}:rollback-deploy-20261114` (= previous running IDs). API/web stopped 07:28:57, final backup `20261114T072857Z`, services up 07:29:31, checks passed 07:29:33. No migration run; journal still 24. Rollback not needed.
+- Live checks: containers healthy; running image IDs = artifact IDs; server checkout = MAIN_SHA; health ok/db ok/production; `/login` 200, `/api/v1/auth/me` and `/api/v1/dashboard` 401, manifest 200; 0 API/web error lines; `.env` hash unchanged. Final backup restored to a scratch DB and matched the pre-switch fingerprint, then dropped.
+- Health deviation (owner approved before merge): public `/api/v1/health` is behind the form gate (401) and health returns `commit: null` because `GIT_COMMIT` is not set; health was checked inside the container and the version by image IDs.
+- Chrome at 1440 and 390 px: RTL (`dir=rtl`, `lang=fa`), both doors visible and switchable («ورود کارکنان» with username + PIN, «ورود مدیر سیستم» with email + password + Authenticator), no console errors, horizontal overflow 0. No real credentials used.
+- Technician identifier conversion: **preview only**. Script run without a plan, `applied: false`; 11 active technicians, 11 proposed changes (TECH + station code), 0 ambiguous/rejected/occupied. No account changed (0 `user.username_aligned` audit rows). Plan kept privately on the server (mode 600).
+- Not verified: signed-in journeys with real accounts; an off-server copy of these backups.
+
+## Staff login and station identifiers — 2026-11-14 — merged in PR #85, released as `a170340`
 
 - Shared 53/53: TECH preserves assigned station code and leading zeros, EXP accepts two selected digits, display spacing and Persian digits normalize without changing legacy punctuation.
 - API: technician-pin 11/11; staff-usernames 3/3. Synthetic EXP00 first-device registration, wrong device password, PIN-only second login, role restrictions, duplicate rejection; atomic username swaps, stable identity/PIN/session/owner, audit, stale-preview rejection, non-owner refusal, ambiguous bay and occupied destination with no partial changes.
