@@ -1,5 +1,15 @@
 # Test report
 
+## Staff login and station identifiers — 2026-11-14 — branch only
+
+- Shared 53/53: TECH preserves assigned station code and leading zeros, EXP accepts two selected digits, display spacing and Persian digits normalize without changing legacy punctuation.
+- API: technician-pin 11/11; staff-usernames 3/3. Synthetic EXP00 first-device registration, wrong device password, PIN-only second login, role restrictions, duplicate rejection; atomic username swaps, stable identity/PIN/session/owner, audit, stale-preview rejection, non-owner refusal, ambiguous bay and occupied destination with no partial changes.
+- Browser (installed Edge): staff-login-regression + staff 9/9. Synthetic EXP00 reaches parts desk, reloads and signs in again on its trusted device; expired session redirects; a stalled request times out and unlocks the form; service failure retries successfully. Staff creation, TECH from bay, selected EXP code, invitation and archive regressions passed.
+- Build, API/web typechecks, lint, documentation inventory and diff whitespace checks passed. Application commit 3ae3180; live CI status is on [PR #85 checks](https://github.com/ali-hedax/manage-dealership-platform/pull/85/checks). The full Linux suite, PostgreSQL and Chromium results are not inferred from these targeted local tests. A PostgreSQL-only regression now checks two concurrent reviewed username swaps: exactly one commits, the stale second plan fails, credentials/owner stay unchanged and two audit rows are written.
+- Read-only Production inspection: running 9e14c91, healthy containers, target account active/unlocked with PIN and device-password configured, successful PIN sessions exist. No real credentials entered/read/exported and no account or production application changed. Public login console had no error/warning in the fresh browser session; no authenticated live-browser reproduction was attempted. Existing station technician accounts still require their private device-password setup.
+- Failed initial local runs exposed test helper defaults, seeded unassigned technician and locator issues; corrected fixtures/labels and reran the affected suites successfully.
+- Release/migration procedure: [staff identifiers](STAFF_IDENTIFIERS_FA.md). No schema migration; data conversion is explicit, owner-scoped, reviewed-plan-only and has not run on Production.
+
 ## Production release — 2026-11-12 — `9e14c91` — **done**
 
 - Main CI run 43200965594: 6/6. Exact CI images (artifact hash, source and IDs verified; running IDs equal).

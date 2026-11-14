@@ -26,6 +26,7 @@ export function newKey(): string {
 }
 
 interface Options {
+  timeoutMs?: number;
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT';
   body?: unknown;
   /** Reuse the same key when retrying the same user action. */
@@ -46,14 +47,16 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
       credentials: 'same-origin',
       cache: 'no-store',
+      ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') throw new ApiError(0, 'TIMEOUT', 'پاسخ سرور دیر شد؛ دوباره تلاش کنید.');
     throw new ApiError(0, 'NETWORK', 'ارتباط با سرور برقرار نشد. اتصال شبکه را بررسی کنید.');
   }
   if (res.status === 204) return undefined as T;
   const data = (await res.json().catch(() => null)) as (ApiErrorBody & T) | null;
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith('/auth/')) {
+    if (res.status === 401 && (path === '/auth/me' || !path.startsWith('/auth/'))) {
       const next = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.href = `/login?next=${next}`;
     }
@@ -67,7 +70,7 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
   return data as T;
 }
 
-export const fetcher = <T,>(path: string) => api<T>(path);
+export const fetcher = <T,>(path: string) => api<T>(path, path === '/auth/me' ? { timeoutMs: 20_000 } : {});
 
 export function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {

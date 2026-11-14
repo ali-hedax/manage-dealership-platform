@@ -70,6 +70,7 @@ export type TechnicianLoginInput = z.infer<typeof technicianLoginSchema>;
 /** Owner/system admin creates a technician account (no email). */
 export const technicianAccountSchema = z.object({
   displayName: z.string().trim().min(2).max(120),
+  personnelCode: z.string().trim().transform(asciiDigits).pipe(z.string().regex(/^[0-9]{2}$/, 'کد کارشناس باید دو رقم باشد')).optional(),
   // Optional: without it the API picks the next free tech01, tech02, …
   username: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9._-]{2,31}$/, 'نام کاربری با حرف انگلیسی شروع شود و ۳ تا ۳۲ حرف، عدد، نقطه یا خط تیره باشد').optional(),
   pin: pinSchema,
