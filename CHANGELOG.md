@@ -1,3 +1,7 @@
+## 2026-11-14 - Staff PIN gate fix (PR #90; not deployed)
+
+- Gate now accepts PIN sessions alongside TOTP in the prepared fix. Production rollout stopped before installation because host Node was unavailable; the live gate remains unchanged.
+
 ## 2026-11-14 — ورود کارکنان فقط با نام کاربری و پین (منتشر شد: `1ba8d70`، ۲۳ آبان ۱۴۰۵)
 
 - رمز ثبت دستگاه از ورود کارکنان حذف شد؛ نام کاربری و پین ۴ رقمی کافی است.
