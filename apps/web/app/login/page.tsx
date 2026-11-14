@@ -135,7 +135,6 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
   const [username, setUsername] = useState('');
   const [digits, setDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
-  const [devicePassword, setDevicePassword] = useState(''), [needsDevice, setNeedsDevice] = useState(false);
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const pin = digits.join('');
 
@@ -149,15 +148,9 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
     setBusy(true);
     setError('');
     try {
-      const me = await api<{ roles: string[] }>('/auth/technician-login', { timeoutMs: 20_000, body: { username: username.trim(), pin, ...(needsDevice && devicePassword ? { devicePassword } : {}) } });
+      const me = await api<{ roles: string[] }>('/auth/technician-login', { timeoutMs: 20_000, body: { username: username.trim(), pin } });
       window.location.replace(me.roles.every(r => r === 'technician') ? '/workshop/technician' : '/launch');
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'DEVICE_NOT_REGISTERED') {
-        setNeedsDevice(true);
-        setError('این دستگاه هنوز ثبت نشده است؛ رمز ثبت دستگاه را از مسئول بگیرید و وارد کنید.');
-        setBusy(false);
-        return;
-      }
       setError((err instanceof ApiError && technicianErrors[err.status]) || errorMessage(err));
       setBusy(false);
     }
@@ -221,12 +214,6 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
           ))}
         </div></div>
       </fieldset>
-      {needsDevice && (
-        <label className="field">
-          <span>رمز ثبت دستگاه (فقط بار اول روی این دستگاه)</span>
-          <input className="input ltr-input" type="password" name="devicePassword" autoComplete="current-password" value={devicePassword} onChange={event => setDevicePassword(event.target.value)} required />
-        </label>
-      )}
       {error && <div className="callout callout-red" role="alert">{error}</div>}
       <button className="btn btn-primary lg-cta" type="submit" disabled={busy}>
         <AppIcon name="login" />{busy ? 'در حال ورود…' : 'ورود به میز کار'}

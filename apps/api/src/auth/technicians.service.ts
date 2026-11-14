@@ -120,7 +120,7 @@ export class TechniciansService {
         // Never used: technicians sign in with their PIN only.
         passwordHash: await hashPassword(randomBytes(24).toString('base64url')),
         pinHash: await hashPassword(input.pin),
-        devicePasswordHash: await hashPassword(input.devicePassword),
+        devicePasswordHash: input.devicePassword ? await hashPassword(input.devicePassword) : null,
         roles: [input.role],
         isActive: true,
         activatedAt: new Date(),
@@ -178,7 +178,6 @@ export class TechniciansService {
       const user = await this.loadTechnician(tx, actor.user.tenantId, id);
       requireSupportReason(actor, reason);
       if (!input.pin && !user.pinHash) throw badRequest('PIN_REQUIRED', 'رمز ۴ رقمی را هم وارد کنید');
-      if (!input.devicePassword && !user.devicePasswordHash) throw badRequest('DEVICE_PASSWORD_REQUIRED', 'رمز ثبت دستگاه را هم وارد کنید');
       await tx
         .update(users)
         .set({

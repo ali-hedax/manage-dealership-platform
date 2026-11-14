@@ -74,7 +74,8 @@ export const technicianAccountSchema = z.object({
   // Optional: without it the API picks the next free tech01, tech02, …
   username: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9._-]{2,31}$/, 'نام کاربری با حرف انگلیسی شروع شود و ۳ تا ۳۲ حرف، عدد، نقطه یا خط تیره باشد').optional(),
   pin: pinSchema,
-  devicePassword: devicePasswordSchema,
+  // No longer asked for: staff sign in with the PIN alone (spec section 3). Accepted for old clients.
+  devicePassword: devicePasswordSchema.optional(),
   role: z.enum(PIN_LOGIN_ROLES).default('technician'),
   // The technician's unit (صافکاری، نقاشی، …) and bay code; Manage creates the bay if it is new.
   trade: z.enum(REPAIR_TRADES).optional(),

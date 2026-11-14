@@ -142,16 +142,14 @@ export class AuthService {
       .limit(2);
     if (candidates.length > 1) throw new AppError(HttpStatus.BAD_REQUEST, 'TENANT_REQUIRED', 'کد نمایندگی را وارد کنید');
     const found = candidates[0];
-    const eligible = !!found && !!found.user.pinHash && !!found.user.devicePasswordHash && isTechnicianOnly(found.user.roles, found.user.isOwner);
-    // A device registered for this account lets the PIN alone sign in; any other device also needs the device password.
+    // Spec section 3: staff sign in with username + 4-digit PIN only, without a second step.
+    // The device cookie is still recorded so the owner can see devices and sign someone out everywhere.
+    const eligible = !!found && !!found.user.pinHash && isTechnicianOnly(found.user.roles, found.user.isOwner);
     const [device] = eligible && deviceToken
       ? await this.db.select({ id: trustedDevices.id }).from(trustedDevices)
           .where(and(eq(trustedDevices.userId, found!.user.id), eq(trustedDevices.tenantId, found!.tenant.id), eq(trustedDevices.tokenHash, sha256(deviceToken)), isNull(trustedDevices.revokedAt)))
           .limit(1)
       : [];
-    if (!device && !input.devicePassword) {
-      throw new AppError(HttpStatus.UNAUTHORIZED, 'DEVICE_NOT_REGISTERED', 'این دستگاه هنوز ثبت نشده است؛ رمز ثبت دستگاه را هم وارد کنید.');
-    }
     if (!found || !eligible) {
       await verifyPassword(input.pin, await this.dummyHash);
       this.logger.warn({ username: input.username, ip: meta.ip }, 'technician login failed: no PIN account');
@@ -162,7 +160,7 @@ export class AuthService {
     if (user.lockedUntil && user.lockedUntil > now) {
       throw new AppError(HttpStatus.LOCKED, 'ACCOUNT_LOCKED', 'چند بار اشتباه وارد شد؛ ۱۵ دقیقه دیگر دوباره امتحان کنید.');
     }
-    const ok = (await verifyPassword(input.pin, user.pinHash!)) && (!!device || (await verifyPassword(input.devicePassword!, user.devicePasswordHash!)));
+    const ok = await verifyPassword(input.pin, user.pinHash!);
     if (!ok || !user.isActive) {
       const failed = user.failedLoginCount + 1;
       const lock = failed >= MAX_FAILED_LOGINS;
