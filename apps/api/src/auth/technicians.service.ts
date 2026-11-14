@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import type { TechnicianPinInput } from '@manage/shared';
 import { randomBytes } from 'node:crypto';
-import { nextTechnicianUsername, REPAIR_TRADE_LABELS, type RepairTrade, type TechnicianAccountInput } from '@manage/shared';
+import { nextTechnicianUsername, technicianUsernameForStation, expertUsernameForCode, REPAIR_TRADE_LABELS, type RepairTrade, type TechnicianAccountInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
@@ -87,8 +87,22 @@ export class TechniciansService {
   async create(actor: Actor, input: TechnicianAccountInput): Promise<TechnicianAccount[]> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
-      const username =
-        input.username ??
+      if (input.stationCode && input.trade) {
+        const [bay] = await tx.select().from(workshopStations).where(and(eq(workshopStations.tenantId, tenantId), eq(workshopStations.code, input.stationCode))).for('update');
+        if (bay && bay.trade !== input.trade) throw badRequest('STATION_TRADE_MISMATCH', 'این جایگاه متعلق به واحد دیگری است');
+        if (bay?.responsibleUserId) {
+          const [holder] = await tx.select({ isActive: users.isActive }).from(users).where(and(eq(users.id, bay.responsibleUserId), eq(users.tenantId, tenantId)));
+          if (holder?.isActive) throw conflict('STATION_TAKEN', 'این جایگاه به همکار دیگری سپرده شده است');
+        }
+      }
+      let derived: string | undefined;
+      try {
+        derived = input.role === 'technician' && input.stationCode
+          ? technicianUsernameForStation(input.stationCode)
+          : input.role !== 'technician' && input.personnelCode ? expertUsernameForCode(input.personnelCode) : undefined;
+      } catch { throw badRequest('INVALID_STAFF_CODE', 'کد جایگاه یا کد دو رقمی کارشناس معتبر نیست'); }
+      if (derived && input.username && input.username.toLowerCase() !== derived) throw badRequest('USERNAME_CODE_MISMATCH', 'نام کاربری باید با کد جایگاه یا کد انتخابی کارشناس یکسان باشد');
+      const username = derived ?? input.username ??
         nextTechnicianUsername(
           (await tx.select({ username: users.username }).from(users).where(and(eq(users.tenantId, tenantId), like(users.username, 'tech%')))).map((r) => r.username),
         );

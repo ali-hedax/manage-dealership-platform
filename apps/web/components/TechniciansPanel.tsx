@@ -1,7 +1,7 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import { nextTechnicianUsername, REPAIR_TRADE_LABELS, ROLE_LABELS, type PinLoginRole, type RepairTrade, type WorkshopStation } from '@manage/shared';
+import { technicianUsernameForStation, expertUsernameForCode, displayStaffUsername, REPAIR_TRADE_LABELS, ROLE_LABELS, type PinLoginRole, type RepairTrade, type WorkshopStation } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatJalali, toPersianDigits } from '@/lib/format';
@@ -32,9 +32,10 @@ export function TechniciansPanel() {
   const [pending, setPending] = useState<Pending | null>(null);
   if (!can('user.manage')) return null;
   const technician = role === 'technician';
-  const suggested = nextTechnicianUsername((data ?? []).map((t) => t.username));
-  // A technician may leave the username empty (Manage picks tech01, tech02, …); other roles type one.
-  const chosenUsername = username.trim().toLowerCase() || (technician ? suggested : '');
+  let suggested = '';
+  try { suggested = technician ? (stationCode.trim() ? technicianUsernameForStation(stationCode) : '') : (username.trim() ? expertUsernameForCode(username) : ''); } catch { /* Native validation explains the code format on submission. */ }
+  // TECH follows the assigned bay; EXP follows the owner-selected two-digit code.
+  const chosenUsername = suggested;
   const freeBays = (stations ?? []).filter((st) => st.trade === trade && st.isActive && !st.responsibleUserId);
   const active = (data ?? []).filter((t) => t.isActive), archived = (data ?? []).filter((t) => !t.isActive);
 
@@ -64,7 +65,7 @@ export function TechniciansPanel() {
   async function create(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (technician && !trade) return;
-    const account = { displayName: name.trim(), username: chosenUsername, pin: toLatinDigits(pin), devicePassword, role, ...(technician && trade ? { trade, stationCode: stationCode.trim() } : {}) };
+    const account = { displayName: name.trim(), username: chosenUsername, ...(!technician ? {personnelCode: toLatinDigits(username.trim())} : {}), pin: toLatinDigits(pin), devicePassword, role, ...(technician && trade ? { trade, stationCode: stationCode.trim() } : {}) };
     if (await run(() => api('/staff/technicians', { body: account }))) {
       setCreated({ name: account.displayName, username: account.username, pin: account.pin, devicePassword, bay: technician && trade ? `${REPAIR_TRADE_LABELS[trade]} · ${stationCode.trim()}` : ROLE_LABELS[role] });
       setDevicePassword('');
@@ -115,9 +116,10 @@ export function TechniciansPanel() {
           </select>
         </label>
         <label className="field">
-          <span>نام کاربری</span>
-          <input name="username" className="input ltr-input" required={!technician} pattern="[A-Za-z][A-Za-z0-9._\-]{2,31}" title="با حرف انگلیسی شروع شود؛ ۳ تا ۳۲ حرف یا عدد" placeholder={technician ? suggested : ''} autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} />
+          <span>{technician ? 'نام کاربری' : 'کد دو رقمی کارشناس'}</span>
+          <input name="username" className="input ltr-input" readOnly={technician} required={!technician} pattern={technician ? undefined : '[0-9۰-۹٠-٩]{2}'} title="کد کارشناس دو رقم باشد؛ مانند 00 یا 02" placeholder={technician ? 'پس از انتخاب جایگاه' : '00'} autoCapitalize="none" spellCheck={false} value={technician ? displayStaffUsername(suggested) : username} onChange={(e) => setUsername(e.target.value)} />
         </label>
+        {!technician && <span className="muted small">نام کاربری: <bdi dir="ltr">{displayStaffUsername(suggested) || 'EXP …'}</bdi></span>}
         <label className="field">
           <span>رمز ۴ رقمی</span>
           <input name="pin" className="input ltr-input" inputMode="numeric" required pattern={PIN} maxLength={4} autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} />
@@ -208,7 +210,7 @@ function StaffTable({ rows, busy, onPin, onSignOut, onToggle, empty }: { rows: T
             <tr key={t.id}>
               <th scope="row">{t.displayName}</th>
               <td>{t.station ? <>{REPAIR_TRADE_LABELS[t.station.trade] ?? t.station.trade} · <bdi dir="ltr">{t.station.code}</bdi></> : t.roles.map((r) => ROLE_LABELS[r as PinLoginRole] ?? r).join('، ')}</td>
-              <td><bdi dir="ltr">{t.username}</bdi></td>
+              <td><bdi dir="ltr">{displayStaffUsername(t.username)}</bdi></td>
               <td><span className={`chip ${!t.isActive ? '' : t.locked ? 'chip-red' : !t.hasPin || !t.hasDevicePassword ? 'chip-amber' : 'chip-green'}`}>{!t.isActive ? 'غیرفعال' : t.locked ? 'قفل موقت' : !t.hasPin || !t.hasDevicePassword ? 'رمز ۴ رقمی کامل نیست' : 'فعال'}</span>{t.trustedDevices > 0 && <span className="muted small"> · {toPersianDigits(t.trustedDevices)} دستگاه</span>}</td>
               <td>{t.lastLoginAt ? formatJalali(t.lastLoginAt, { time: true }) : '—'}</td>
               <td className="technician-actions">

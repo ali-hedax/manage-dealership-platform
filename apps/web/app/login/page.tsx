@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { api, ApiError, errorMessage } from '@/lib/api';
@@ -12,7 +12,7 @@ import { Dialog } from '@/components/Dialog';
 type LoginSubmission = { busy: boolean; setBusy: (busy: boolean) => void };
 
 function StaffLoginForm({ active, busy, setBusy }: LoginSubmission & { active: boolean }) {
-  const router = useRouter();
+
   const params = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -43,7 +43,7 @@ function StaffLoginForm({ active, busy, setBusy }: LoginSubmission & { active: b
       });
       }
       const next = params.get('next');
-      router.replace(next && next.startsWith('/') && !next.startsWith('//') && !/[\\\r\n]/.test(next) ? next : '/launch');
+      window.location.replace(next && next.startsWith('/') && !next.startsWith('//') && !/[\\\r\n]/.test(next) ? next : '/launch');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'TENANT_REQUIRED') setNeedTenant(true);
       setError(errorMessage(err));
@@ -131,7 +131,7 @@ const technicianErrors: Partial<Record<number, string>> = {
 };
 
 function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
-  const router = useRouter();
+
   const [username, setUsername] = useState('');
   const [digits, setDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
@@ -149,8 +149,8 @@ function TechnicianLoginForm({ busy, setBusy }: LoginSubmission) {
     setBusy(true);
     setError('');
     try {
-      const me = await api<{ roles: string[] }>('/auth/technician-login', { body: { username: username.trim(), pin, ...(needsDevice && devicePassword ? { devicePassword } : {}) } });
-      router.replace(me.roles.every(r => r === 'technician') ? '/workshop/technician' : '/launch');
+      const me = await api<{ roles: string[] }>('/auth/technician-login', { timeoutMs: 20_000, body: { username: username.trim(), pin, ...(needsDevice && devicePassword ? { devicePassword } : {}) } });
+      window.location.replace(me.roles.every(r => r === 'technician') ? '/workshop/technician' : '/launch');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'DEVICE_NOT_REGISTERED') {
         setNeedsDevice(true);

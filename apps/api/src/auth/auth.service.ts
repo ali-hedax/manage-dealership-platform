@@ -1,7 +1,7 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
-import { isPinEligible, MODULES, normalizeRoles, permissionsFor, PIN_DENIED_PERMISSIONS, type LoginInput, type Me, type TechnicianLoginInput } from '@manage/shared';
+import { isPinEligible, MODULES, normalizeRoles, normalizeStaffUsername, permissionsFor, PIN_DENIED_PERMISSIONS, type LoginInput, type Me, type TechnicianLoginInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { AppError } from '../common/errors';
@@ -132,7 +132,7 @@ export class AuthService {
     deviceToken?: string,
   ): Promise<{ token: string; expiresAt: Date; deviceToken?: string }> {
     const wrong = () => new AppError(HttpStatus.UNAUTHORIZED, 'INVALID_CREDENTIALS', 'نام کاربری یا رمز اشتباه است.');
-    const conditions = [eq(users.username, input.username.toLowerCase())];
+    const conditions = [eq(users.username, normalizeStaffUsername(input.username))];
     if (input.tenantCode) conditions.push(eq(tenants.code, input.tenantCode.toLowerCase()));
     const candidates = await this.db
       .select({ user: users, tenant: tenants })

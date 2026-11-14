@@ -92,9 +92,8 @@ test('a technician is created with name, role, username, PIN, unit and bay, and 
   await panel.getByLabel('کد جایگاه',{exact:true}).fill('B-77');
   await panel.getByLabel('رمز ۴ رقمی',{exact:true}).fill('۴۸۱۵');
   await panel.getByLabel('رمز ثبت دستگاه',{exact:true}).fill('Device2026e2e');
-  // A technician may leave the username empty: Manage suggests tech01, tech02, …
-  const username=(await panel.getByLabel('نام کاربری',{exact:true}).getAttribute('placeholder'))!.trim();
-  expect(username).toMatch(/^tech\d{2,}$/);
+  const username='techb-77';
+  await expect(panel.getByLabel('نام کاربری',{exact:true})).toHaveValue(username);
   await panel.getByRole('button',{name:'افزودن کارمند',exact:true}).click();
   const created=panel.locator('.technician-created');
   await expect(created).toContainText('صافکار تصویری آزمون ساخته شد');
@@ -121,14 +120,14 @@ test('a service manager is created the same way without unit or bay, signs in wi
   await panel.getByRole('combobox',{name:'سمت',exact:true}).selectOption({label:'مدیر خدمات'});
   await expect(panel.getByRole('combobox',{name:'واحد',exact:true})).toHaveCount(0);
   await expect(panel.getByLabel('کد جایگاه',{exact:true})).toHaveCount(0);
-  await panel.getByLabel('نام کاربری',{exact:true}).fill('svc.e2e');
+  await panel.getByLabel('کد دو رقمی کارشناس',{exact:true}).fill('20');
   await panel.getByLabel('رمز ۴ رقمی',{exact:true}).fill('2580');
   await panel.getByLabel('رمز ثبت دستگاه',{exact:true}).fill('Device2026svc');
   await panel.getByRole('button',{name:'افزودن کارمند',exact:true}).click();
   await expect(panel.locator('.technician-created')).toContainText('مدیر خدمات آزمون ساخته شد');
   await expect(panel.getByRole('row',{name:/مدیر خدمات آزمون/})).toContainText('مدیر خدمات');
 
-  await pinSignIn(page,'svc.e2e','2580','Device2026svc');
+  await pinSignIn(page,'EXP 20','2580','Device2026svc');
   await expect(page).toHaveURL(/\/launch$/);
 
   await page.context().clearCookies();
