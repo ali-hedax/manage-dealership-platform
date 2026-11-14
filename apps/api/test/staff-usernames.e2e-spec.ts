@@ -74,4 +74,34 @@ describe('Staff identifiers and legacy compatibility', () => {
     expect((await h.db.db.select().from(users).where(eq(users.id, tech!.id)))[0]!.username).toBe('oldtech');
     expect((await h.db.db.select().from(workshopStations)).find(s => s.code === '03')!.responsibleUserId).toBe(tech!.id);
   });
+
+  it('gives an existing parts clerk an owner-chosen EXP code without touching PIN, devices or sessions', async () => {
+    expect((await admin.post('/staff/technicians', { displayName: 'قطعات قدیمی ساختگی', username: 'parts.legacy', role: 'parts_clerk', pin: '4815', devicePassword: 'Device2026test' })).status).toBe(201);
+    expect((await admin.post('/staff/technicians', { displayName: 'کارشناس ساختگی', personnelCode: '21', role: 'accident_expert', pin: '4815', devicePassword: 'Device2026test' })).status).toBe(201);
+    expect((await admin.post('/staff/technicians', { displayName: 'تکنسین ساختگی', stationCode: '03', trade: 'suspension', pin: '4815', devicePassword: 'Device2026test' })).status).toBe(201);
+    const [clerk] = await h.db.db.select().from(users).where(eq(users.username, 'parts.legacy'));
+    const [tech] = await h.db.db.select().from(users).where(eq(users.username, 'tech03'));
+    const first = await login('parts.legacy');
+    expect(first.status).toBe(200);
+    const cookie = (first.headers['set-cookie'] as unknown as string[]).map(c => c.split(';')[0]).join('; ');
+    // A PIN session never manages staff.
+    expect((await request(h.app.getHttpServer()).put(`/api/v1/staff/technicians/${clerk!.id}/expert-code`).set('x-manage-client', 'test').set('Cookie', cookie).send({ personnelCode: '20' })).status).toBe(403);
+    expect((await admin.put(`/staff/technicians/${tech!.id}/expert-code`, { personnelCode: '20' })).body.code).toBe('TECHNICIAN_USES_STATION');
+    expect((await admin.put(`/staff/technicians/${clerk!.id}/expert-code`, { personnelCode: '21' })).status).toBe(409);
+    expect((await admin.put(`/staff/technicians/${clerk!.id}/expert-code`, { personnelCode: '2' })).status).toBe(400);
+    const changed = await admin.put(`/staff/technicians/${clerk!.id}/expert-code`, { personnelCode: '۲۰' });
+    expect(changed.status).toBe(200);
+    expect(changed.body).toEqual(expect.arrayContaining([expect.objectContaining({ id: clerk!.id, username: 'exp20' })]));
+    const [after] = await h.db.db.select().from(users).where(eq(users.id, clerk!.id));
+    expect(after!.pinHash).toBe(clerk!.pinHash);
+    expect(after!.devicePasswordHash).toBe(clerk!.devicePasswordHash);
+    // The open session continues; the registered device signs in with the PIN alone under the new name.
+    expect((await request(h.app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookie)).body.username).toBe('exp20');
+    expect((await login('EXP ۲۰', '4815', '', cookie)).status).toBe(200);
+    // The old name is not an alias.
+    expect((await login('parts.legacy')).status).toBe(401);
+    // Same code again changes nothing.
+    expect((await admin.put(`/staff/technicians/${clerk!.id}/expert-code`, { personnelCode: '20' })).status).toBe(200);
+    expect((await h.db.db.select().from(auditEvents)).filter(e => e.action === 'user.username_changed')).toHaveLength(1);
+  });
 });

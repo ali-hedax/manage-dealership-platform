@@ -97,6 +97,12 @@ export type TechnicianAccountInput = z.infer<typeof technicianAccountSchema>;
 export const technicianPinSchema = z
   .object({ pin: pinSchema.optional(), devicePassword: devicePasswordSchema.optional(), reason: z.string().trim().max(300).optional() })
   .refine((v) => v.pin || v.devicePassword, { message: 'رمز ۴ رقمی یا رمز ثبت دستگاه را وارد کنید', path: ['pin'] });
+/** Owner/system admin gives an existing non-technician staff account its EXP + two-digit code. */
+export const staffExpertCodeSchema = z.object({
+  personnelCode: z.string().trim().transform(asciiDigits).pipe(z.string().regex(/^[0-9]{2}$/, 'کد کارشناس باید دو رقم باشد')),
+  reason: z.string().trim().max(300).optional(),
+});
+export type StaffExpertCodeInput = z.infer<typeof staffExpertCodeSchema>;
 export const technicianSignOutSchema = z.object({ reason: z.string().trim().max(300).optional() });
 export const technicianActiveSchema = z.object({ active: z.boolean(), reason: z.string().trim().max(300).optional() });
 export type TechnicianActiveInput = z.infer<typeof technicianActiveSchema>;

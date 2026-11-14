@@ -231,6 +231,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
 | PUT | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/active` | [source](../apps/api/src/auth/technicians.controller.ts) |
+| PUT | `/api/v1/staff/technicians/:id/expert-code` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/pin` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | PUT | `/api/v1/tasks/:id/wage` | [source](../apps/api/src/people/people.controllers.ts) |
 <!-- routes:end -->
