@@ -1,5 +1,16 @@
 # Backup and restore
 
+**Latest release (2026-11-14, 08:52 UTC):** PIN-only staff login `1ba8d70` (PR #88 with #87), no migration.
+- The pre-install backup `operational/20261114T084941Z` was restored into a scratch database. All 53 table fingerprints and the 24-row migration journal matched live, and the new API image started on that copy with health ok/db ok.
+- The final backup `operational/20261114T085127Z` (taken with API/web stopped) was restored and matched the pre-switch state. Both scratch databases were removed.
+- Technician username alignment was rehearsed on a restore of `operational/20261114T085348Z`: only `users` and `audit_events` changed, and credentials, sessions and devices stayed equal. The scratch DB was removed. The backup taken just before the production apply is `operational/20261114T085508Z`.
+- Off-server copy for this release: not made (not verified).
+
+**Earlier release (2026-11-14, 07:29 UTC):** staff sign-in and station identifiers `a170340`, no migration.
+- The pre-install backup `operational/20261114T072706Z` was restored into a scratch database, and all 53 table fingerprints and the 24-row migration journal matched live. The new API image started on that copy with health ok/db ok.
+- The final backup `operational/20261114T072857Z` (taken with API/web stopped) was restored, and all fingerprints matched the pre-switch state. Both scratch databases were removed.
+- Off-server copy for this release: not made (not verified).
+
 **Latest release (2026-11-07, 16:34 Tehran):** smart planning suggestions `813fcc4`, no migration.
 - The pre-install backup `operational/20261107T130255Z` was restored into a scratch database, and all 50 table fingerprints matched live.
 - The final backup `operational/20261107T130547Z` was restored, and all fingerprints matched. Both scratch databases were removed.
@@ -67,6 +78,11 @@ Record date, dump file, row counts and result in the table below. The `audit_eve
 
 | Date | Environment | Dump | Rows (cases / audit) | Result |
 | --- | --- | --- | --- | --- |
+| 2026-11-14 | Isolated copy of Manage Production | operational/20261114T085348Z | 21 cases; 53 tables, 24 migrations | Technician username plan rehearsed: 11 names changed, all other tables equal, credentials/sessions/devices unchanged; scratch DB removed. |
+| 2026-11-14 | Isolated copy of Manage Production | operational/20261114T085127Z | 21 / 54836; 53 tables, 24 migrations | Final backup for `1ba8d70` (API/web stopped) restored; matched the pre-switch state; scratch DB removed. |
+| 2026-11-14 | Isolated copy of Manage Production | operational/20261114T084941Z | 21 / 54836; 53 tables, 24 migrations | Pre-install backup for `1ba8d70` (no migration); all fingerprints matched live; new images healthy on the copy; scratch DB removed. |
+| 2026-11-14 | Isolated copy of Manage Production | operational/20261114T072706Z | 21 / 54817; 53 tables, 24 migrations | Pre-install backup for `a170340` (no migration); all fingerprints matched live; new images healthy on the copy; scratch DB removed. |
+| 2026-11-14 | Isolated copy of Manage Production | operational/20261114T072857Z | 21 / 54817; 53 tables, 24 migrations | Final backup (API/web stopped) restored; fingerprints matched the pre-switch state; scratch DB removed. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T130255Z | 18 / 54211; 50 tables, 19 migrations | Pre-install backup for `813fcc4` (no migration); all fingerprints matched live. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T130547Z | 18 / 54211; 50 tables, 19 migrations | Final smart-planning release backup restored; both scratch DBs removed, encrypted off-server recovery verified. |
 | 2026-11-07 | Isolated copy of Manage Production | operational/20261107T074828Z | 18 / 54175; 50 tables, 19 migrations | Pre-install backup for `5cf9c72` (no migration); all fingerprints matched live. |
