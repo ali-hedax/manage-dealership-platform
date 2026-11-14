@@ -153,7 +153,7 @@ The live VM also uses deploy/preview/docker-compose.form-gate.yml after the orig
 
 ## Current authentication and safe update boundary
 
-Personal mode supersedes the legacy shared gate described above: TOTP_AUTH_ENABLED=true on API and gate, HTTPS PUBLIC_APP_URL and a persistent AUTH_TOKEN_SECRET are required. The login page is public; private routes require a TOTP-verified session. Follow [personal-auth settings](PERSONAL_AUTH_FA.md). Local default demo mode is different.
+Personal mode supersedes the legacy shared gate described above: TOTP_AUTH_ENABLED=true on API and gate, HTTPS PUBLIC_APP_URL and a persistent AUTH_TOKEN_SECRET are required. The login page is public; private routes require a TOTP-verified session or a staff PIN session (the gate accepts `authentication` of `totp` or `pin` from `/auth/me`; a password-only session stays outside). `gate.mjs` is mounted from the checkout, so a gate change needs the file updated on the server and the gate container restarted, not new images. Follow [personal-auth settings](PERSONAL_AUTH_FA.md). Local default demo mode is different.
 
 This audit only read the Manage VM Git/container state: deployed 58ad08c, clean worktree, healthy services. No deployment was performed. Historical setup commands are not instructions to provision again.
 
