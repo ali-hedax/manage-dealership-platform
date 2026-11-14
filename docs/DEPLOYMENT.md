@@ -1,3 +1,21 @@
+## 2026-11-14 - PR #90 resumed rollout: stopped at server GitHub fetch
+
+- Continued from report commit `60179a7d2a43f88711d8470e777da9d2b2df7935` on `docs/release-20261114c` ([PR #89](https://github.com/ali-hedax/manage-dealership-platform/pull/89)). Read current AGENTS, PROGRESS and product specification section 3. Owner authorized Node validation in the existing gate container, only the pinned gate file, and only gate recreation.
+- **Result: stopped before installation.** Server `git fetch origin main` exited **128** after **135056 ms**, unable to connect to GitHub port 443. Per the explicit stop-on-failure boundary, no candidate extraction, candidate `node --check`, candidate grep, target checkout or service recreation followed. Previous live grep count was 0; it was not rerun in this attempt. The host Node limitation has an authorized container-based solution, but this attempt did not reach that step.
+- Final read-only baseline at **2026-11-14T13:01:32Z**: user `manage`, canonical checkout `/opt/manage`; worktree clean; live gate blob and preserved backup both `8beef78f397fa6e873e96276276df9f86b13abec`; `cmp` passed. Backup `/home/manage/incoming/gate.mjs.before-20261114` was not overwritten. Intended gate MAIN_SHA remains `2d77271c62489e171acca06e966e8994641e5def`.
+- **Application provenance confirmed independently of health:** `/home/manage/incoming/deploy-20261114c/images/preview-image-source.txt` records `1ba8d708d939a0d2f36672e10143d48b5fcfc0ed`; adjacent `preview-image-ids.txt` exactly lists both running image IDs below. Both images also carry tags with that full SHA. OCI revision labels are absent. This is the existing CI artifact release evidence, not a health-reported commit.
+
+| Service | Container ID (before = after) | Image ID (before = after) |
+| --- | --- | --- |
+| API | `b0c19ef4dd8b2fe99d9f6981d2bc780b00001ace16ae9eaf0b3f7fc19d31c55a` | `sha256:dab2a54296e51a6fcd9674ef4354995faa716b491d997fa639af00b357c6a909` |
+| web | `ffd2bd564c93550ff4fe3e139fbb489c11c4d54a362de1157f4d7d53bf493cb8` | `sha256:24e4d5eba52dbfe51635fe32f9beee3767d799362f26149ef70719476a514a1d` |
+
+- Gate remained `978924ac0a95a9700ae6d385e6486750a99d8ce75d7a6d4970a97595b73d918a`, **healthy**, StartedAt **2026-11-05T09:07:35.046952829Z**. API/web also stayed healthy. No restart occurred; no new-start log inspection applies. Historical logs were not read.
+- Fresh sessionless/cookieless GETs without following redirects: `/login` **200**; `/` **302**, Location `/login`; `/api/v1/dashboard` **401**, JSON `error: LOGIN_REQUIRED`. Internal documented API health via existing gate container: **200**, `status: ok`, `db: ok`, **commit: null**. These remain baseline tests, not proof of PIN access after rollout.
+- Rollback **not needed**: live file, containers and images stayed unchanged. No account report ran (installation success is its prerequisite): active staff without PIN **not checked**; locked staff **not checked**. No account login, creation, PIN/hash/password/name/email/phone read, or mutation. No Source, DNS, Caddy, firewall, .env, API/web image or migration changes.
+- Documentation checks: `node scripts/check-docs.mjs` passed (70 Markdown files, 176 API routes), and `git diff --check` passed. CI for the new report must be checked after push.
+- **Exact next step:** once server-to-GitHub connectivity is available, rerun the authorized fetch with a bounded timeout; preserve and verify the same backup; validate a temporary pinned candidate using `docker exec -i "$gate_id" node --check - < "$candidate"` and grep count 1; recheck artifact/image correspondence; install only gate and complete the requested checks and tenant-scoped READ ONLY staff report. No connection configuration changes were attempted.
+
 ## 2026-11-14 - PR #90 gate rollout stopped before installation
 
 - Owner authorized only the gate file from MAIN_SHA `2d77271c62489e171acca06e966e8994641e5def`, for release reporting in [PR #89](https://github.com/ali-hedax/manage-dealership-platform/pull/89). Documentation branch began at `74a1ee01c0998995ec8ea276a2e68ff7817d373b`.
