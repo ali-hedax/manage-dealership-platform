@@ -1,6 +1,30 @@
 # Test report
 
-## Staff login and station identifiers — 2026-11-14 — branch only
+## Production release — 2026-11-14 — `1ba8d70` (PR #88, includes #87) — **done**
+
+- PR #87 merged 07:53 UTC (6/6); its main run 43573193652 was 6/6, but it was not installed separately. PR #88 merged 08:20 UTC (head `c482faf`, 6/6). Main CI run [43575370737](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43575370737): 6/6.
+- Artifact `preview-images-1ba8d708d939a0d2f36672e10143d48b5fcfc0ed`: `sha256sum -c` OK, source = MAIN_SHA, loaded IDs = artifact IDs. Nothing built on the server. Migration files 24 → 24; no deploy or schema change.
+- Rehearsal 08:49:23–08:51:08 UTC on backup `20261114T084941Z`: 53 table fingerprints and 24 migrations equal to live; new API health ok/db ok on the copy; new web `/login` 200; scratch DB dropped.
+- Install: rollback tags `manage-{api,web}:rollback-deploy-20261114c`. API/web stopped 08:51:27, final backup `20261114T085127Z`, up 08:52:02, verified 08:52:04. No migration; rollback not needed. The final backup was restored and matched.
+- Live checks: containers healthy; running image IDs = artifact IDs; checkout = MAIN_SHA; health ok/db ok/production (`commit: null`, checked inside the container); `/login` 200, private APIs 401; `.env` hash unchanged; 0 API errors (one expected warning from the synthetic login below).
+- PIN-only login: POST `/api/v1/auth/technician-login` with synthetic `TECH 99` / `1234` returns 401 `INVALID_CREDENTIALS`; before the install the same request returned `DEVICE_NOT_REGISTERED`. Chrome at 1440/390 px: «ورود کارکنان» shows only username + 4-digit PIN, with no «رمز ثبت دستگاه» anywhere; the admin door opens; RTL; no console errors; no overflow. No real credentials used.
+- Read-only account check: 0 locked accounts. Of 14 active non-owner accounts, 1 has no PIN (a system administrator who signs in with email/password/Authenticator). The parts clerk account is inactive (owner action, 07:47 UTC).
+- Technician username alignment (owner approved): the fresh preview was identical to the reviewed one (11 changes). The rehearsal on a restored copy passed: only `users`/`audit_events` changed, and credentials, sessions and devices stayed equal. Production apply ran 08:55:16–08:55:19 UTC after backup `20261114T085508Z`: `applied: true`, 11 usernames changed exactly as planned, ids and credentials unchanged, 11 `user.username_aligned` audit rows, and a new preview returns an empty plan.
+- Not verified: signed-in journeys with real accounts; off-server copies of these backups.
+
+## Production release — 2026-11-14 — `a170340` (PR #85) — **done**
+
+- PR #85 merged 06:39 UTC (head `a9883a1`, 6/6). Main CI run [43567383358](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43567383358): 6/6.
+- Artifact `preview-images-a170340b3c1c62098346406a6d9945b688b18a60`: `sha256sum -c` OK on the server, source file = MAIN_SHA, loaded image IDs = artifact IDs. Nothing built on the server. Migration files 24 → 24; no deploy/compose/schema change.
+- Rehearsal 07:26:48–07:28:35 UTC: backup `20261114T072706Z` restored to a scratch DB; 53 table fingerprints and the migration journal (24) equal to live (cases 21, audit 54817). New API image booted on the copy: health ok, db ok, production. New web image: `/login` 200. Scratch DB dropped; production untouched.
+- Install: rollback tags `manage-{api,web}:rollback-deploy-20261114` (= previous running IDs). API/web stopped 07:28:57, final backup `20261114T072857Z`, services up 07:29:31, checks passed 07:29:33. No migration run; journal still 24. Rollback not needed.
+- Live checks: containers healthy; running image IDs = artifact IDs; server checkout = MAIN_SHA; health ok/db ok/production; `/login` 200, `/api/v1/auth/me` and `/api/v1/dashboard` 401, manifest 200; 0 API/web error lines; `.env` hash unchanged. Final backup restored to a scratch DB and matched the pre-switch fingerprint, then dropped.
+- Health deviation (owner approved before merge): public `/api/v1/health` is behind the form gate (401) and health returns `commit: null` because `GIT_COMMIT` is not set; health was checked inside the container and the version by image IDs.
+- Chrome at 1440 and 390 px: RTL (`dir=rtl`, `lang=fa`), both doors visible and switchable («ورود کارکنان» with username + PIN, «ورود مدیر سیستم» with email + password + Authenticator), no console errors, horizontal overflow 0. No real credentials used.
+- Technician identifier conversion: **preview only**. Script run without a plan, `applied: false`; 11 active technicians, 11 proposed changes (TECH + station code), 0 ambiguous/rejected/occupied. No account changed (0 `user.username_aligned` audit rows). Plan kept privately on the server (mode 600).
+- Not verified: signed-in journeys with real accounts; an off-server copy of these backups.
+
+## Staff login and station identifiers — 2026-11-14 — merged in PR #85, released as `a170340`
 
 - Shared 53/53: TECH preserves assigned station code and leading zeros, EXP accepts two selected digits, display spacing and Persian digits normalize without changing legacy punctuation.
 - API: technician-pin 11/11; staff-usernames 3/3. Synthetic EXP00 first-device registration, wrong device password, PIN-only second login, role restrictions, duplicate rejection; atomic username swaps, stable identity/PIN/session/owner, audit, stale-preview rejection, non-owner refusal, ambiguous bay and occupied destination with no partial changes.
