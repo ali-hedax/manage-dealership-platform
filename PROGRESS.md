@@ -1,3 +1,8 @@
+## 2026-11-15 — Release browser test
+
+- Base `200190e` (#92). The main release run `43695527238` passed five jobs. The service-manager browser test reached the staff dashboard, then timed out trying to sign the administrator in again in the same browser context.
+- The test now signs the staff account in from a separate fresh browser context and keeps the administrator session for the archive check. Browser verification is pending CI. Next: review all checks on the follow-up PR, then verify the release commit before deployment; preserve the production gate override.
+
 ## 2026-11-15 — تطبیق گزارش امداد ویژه با شاسی و کد فنی
 
 - شاخهٔ `fix/emdad-vin-part-status` از `main` در `2d77271`. گزارش‌های جدید و فایل‌های دوباره اعمال‌شده ابتدا با شاسی و کد فنی به قطعهٔ پروندهٔ باز وصل می‌شوند. شمارهٔ درخواست متفاوت یا خالی مانع این تطبیق نیست.
