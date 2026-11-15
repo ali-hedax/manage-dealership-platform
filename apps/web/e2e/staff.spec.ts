@@ -111,7 +111,7 @@ test('a technician is created with name, role, username, PIN, unit and bay, and 
   await expect(page).toHaveURL(/\/workshop\/technician$/);
 });
 
-test('a service manager is created the same way without unit or bay, signs in with the PIN, and deactivation archives him',async({page})=>{
+test('a service manager is created the same way without unit or bay, signs in with the PIN, and deactivation archives him',async({page,browser,baseURL})=>{
   await login(page,'admin');
   await page.goto('/users');
   const panel=page.getByRole('tabpanel');
@@ -125,12 +125,15 @@ test('a service manager is created the same way without unit or bay, signs in wi
   await expect(panel.locator('.technician-created')).toContainText('مدیر خدمات آزمون ساخته شد');
   await expect(panel.getByRole('row',{name:/مدیر خدمات آزمون/})).toContainText('مدیر خدمات');
 
-  await pinSignIn(page,'EXP 20','2580');
-  await expect(page).toHaveURL(/\/launch$/);
-
-  await page.context().clearCookies();
-  await login(page,'admin');
-  await page.goto('/users');
+  // Use a fresh device for staff sign-in and keep the administrator session intact.
+  const staffContext=await browser.newContext({baseURL});
+  try{
+    const staffPage=await staffContext.newPage();
+    await pinSignIn(staffPage,'EXP 20','2580');
+    await expect(staffPage).toHaveURL(/\/launch$/);
+  }finally{
+    await staffContext.close();
+  }
   await page.getByRole('row',{name:/مدیر خدمات آزمون/}).getByRole('button',{name:'غیرفعال کردن',exact:true}).click();
   // The system administrator (not the owner) must give a reason for the owner's report.
   await page.getByLabel('دلیل (در گزارش مالک دیده می‌شود)',{exact:true}).fill('بایگانی حساب آزمون');
