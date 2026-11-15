@@ -1,3 +1,23 @@
+## 2026-11-15 — `dadab06` production deployment: PASS
+
+- Owner-approved target: `dadab06bdd133dd6f9b62c6da37518696e1b531d`; [CI run 43700208072](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43700208072), six checks passed per owner-provided status (not independently rerun).
+- SSH verified hostname `manage-preview`, user `manage`, canonical project `/opt/manage`. Used the existing Manage identity and `StrictHostKeyChecking=yes`; no credentials printed. VS Code UI capture/input failed; local OpenSSH successfully connected. Initial `docker ps --format` quoting failed after hostname output; a read-only repeat successfully listed the healthy baseline containers.
+- Existing `/home/manage/incoming/manage-dadab06.zip` SHA-256 **`37e6b4226ba0425803f4667b97ffa1b1c6e88ef818852583e307d5ba4fa0e96e`**: PASS. Extracted with `python3 -m zipfile -e` into fresh `/home/manage/incoming/verified-dadab06.VcQMFi/`; full `preview-image-source.txt` target SHA matched. `preview-images.sha256` matched archive SHA-256 **`1bd3e6e378cbe57489bce6062ea28d39d7bb8596ffd57444906aeb2c3bd15300`**. Archive manifest contained only the expected API/web latest tags.
+- CI manifest stores IDs in API, web order (workflow invokes `docker image inspect manage-api manage-web`). Both loaded and actual running IDs matched these respective entries:
+
+| Service | Running image ID | New container ID |
+| --- | --- | --- |
+| API | `sha256:0d389511a0455e036445ab7d6784474dbd858b401fc63886281fbf9f59f93d54` | `37f221e2d8848c238aa8f374ae4c8248be44545fd5dd828231592d9e07fd96ab` |
+| web | `sha256:8c3ae37ba2429825cac3f6e5542b8e0daebb58a4877c07487824f75ff3159382` | `e6db40d5229116dc857df0c892c1e925241787d0e5494c3c833e20def9d0bb26` |
+
+- Before `docker load`, recorded old running IDs and created rollback tags `manage-api:rollback-dadab06-20261115T143004Z` → `sha256:dab2a54296e51a6fcd9674ef4354995faa716b491d997fa639af00b357c6a909`; `manage-web:rollback-dadab06-20261115T143004Z` → `sha256:24e4d5eba52dbfe51635fe32f9beee3767d799362f26149ef70719476a514a1d`.
+- Executed exactly `bash deploy/operational/operational-compose.sh up -d --no-build --pull never --no-deps --force-recreate --wait --wait-timeout 120 api web`. Both services healthy. StartedAt: API `2026-11-15T14:30:21.480702049Z`, web `2026-11-15T14:30:21.798566441Z`.
+- Internal health fetched from existing `manage-gate-1`: **HTTP 200, `status=ok`, `db=ok`**. HTTPS GET `https://managebyhedax.ir/login`, TLS verification enabled, no redirect following: **200**. Completed at **2026-11-15T14:30:28Z**; result `DEPLOYED_DADAB06_HEALTHY`.
+- Gate preserved: container `68d6d05353519f780240b55c8f67a1e23f1edbf9af3c84bfb2c5e06bd6817916`, StartedAt `2026-11-14T13:06:02.819377834Z`, file SHA-256 `09e653793efb4a6ed89c9f27b89c6ab415b758cd58ba0f3a943a736e4db5a57a` all unchanged, healthy. Existing gate backup untouched.
+- Rollback prepared with tag restoration before any recovery recreation; **not triggered or exercised**. No migration, server Git change, Source access, DNS/firewall/SSH configuration change, data query, account login or authenticated feature test. Logs, baseline, rollback tags, deployment script and result are preserved under the fresh stage directory above. Feature behavior is covered by the supplied CI status; this run verifies installed image provenance and service health.
+
+- Local documentation checks: `node scripts/check-docs.mjs` passed (70 Markdown files, 176 API routes); `git diff --check` passed. Initial sandbox check failed with `spawnSync git EPERM`; elevated repeat passed.
+
 ## 2026-11-14 - PR #90 PIN gate fix installed successfully
 
 - Supersedes the two stopped-rollout reports below. Continued from `1ad06595deafa3248b4f0cd0846914edec1d636d` on `docs/release-20261114c`, [PR #89](https://github.com/ali-hedax/manage-dealership-platform/pull/89). Read AGENTS, PROGRESS and product specification section 3; owner explicitly authorized laptop Git/SCP transport and only gate installation/recreation.

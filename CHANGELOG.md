@@ -1,3 +1,7 @@
+## 2026-11-15 — Special-assistance correction deployed (`dadab06`)
+
+- Owner-approved special-assistance release installed on Production at 14:30 UTC; API/web images verified against the CI artifact, internal API/database health and public login checks passed. Existing staff PIN gate fix preserved. No migration; rollback not needed.
+
 ## 2026-11-14 - Staff PIN gate fix (PR #90; deployed 2026-11-14 13:06 UTC)
 
 - Production gate now accepts staff PIN sessions alongside TOTP. Only the gate file/service changed; API/web remain on 1ba8d70. Sessionless checks passed; signed-in staff verification remains for staff in their own sessions.

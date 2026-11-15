@@ -1,3 +1,14 @@
+## 2026-11-15 — Production: `dadab06` installed and healthy
+
+- Supersedes the older Production version entries below. Owner explicitly approved installing **`dadab06bdd133dd6f9b62c6da37518696e1b531d`**, without migrations. CI [43700208072](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/43700208072): six checks passed, as supplied by the owner.
+- Installed on `manage-preview`, `/opt/manage`, at **2026-11-15 14:30:28 UTC (18:00:28 Tehran)**. Only API and web were recreated. Exact running image IDs match the verified artifact; API and database health passed; HTTPS `/login` returned 200. Details: [TEST_REPORT](docs/TEST_REPORT.md).
+- Existing ZIP SHA-256, full source SHA and Docker archive checksum all verified before loading. Evidence and deployment log: `/home/manage/incoming/verified-dadab06.VcQMFi/`. No transfer/download, server Git checkout/pull/reset, migration, gate change, or network configuration change occurred.
+- Rollback was not needed. Preserved previous running images as `manage-api:rollback-dadab06-20261115T143004Z` and `manage-web:rollback-dadab06-20261115T143004Z`.
+- Local report base/last commit: `6f82a98037239653acdd978fb0e45968a2bffc64`, branch `docs/release-20261114c`, open PR #89 targeting main. Owner requested committing and pushing this report; no merge authorized. VS Code UI automation had capture/input errors; deployment used the local OpenSSH executable with the supplied key and `StrictHostKeyChecking=yes`.
+- Exact next step: staff verify the special-assistance workflow during normal use; no authenticated workflow or real-data mutation was performed for this health check. Preserve the gate override/backup and rollback tags. No deployment work remains pending.
+
+- Local documentation checks: `node scripts/check-docs.mjs` passed (70 Markdown files, 176 API routes); `git diff --check` passed. Initial sandbox check failed with `spawnSync git EPERM`; elevated repeat passed.
+
 ## 2026-11-14 - PR #90 PIN gate fix installed successfully
 
 - Supersedes the two stopped-rollout reports below. Continued from `1ad06595deafa3248b4f0cd0846914edec1d636d` on `docs/release-20261114c`, [PR #89](https://github.com/ali-hedax/manage-dealership-platform/pull/89). Read AGENTS, PROGRESS and product specification section 3; owner explicitly authorized laptop Git/SCP transport and only gate installation/recreation.
