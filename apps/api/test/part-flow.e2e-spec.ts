@@ -143,7 +143,7 @@ describe('daily Emdad report moves the line automatically', () => {
       await new Promise((r) => setTimeout(r, 50));
       job = (await admin.get(`/daily-reports/imports/${u.body.id}`)).body;
     }
-    const applied = await admin.post(`/daily-reports/imports/${job.id}/apply`, { declaration: true, ...soon(min) });
+    const applied = await admin.post(`/daily-reports/imports/${job.id}/apply`, { declaration: true, declaredToday: true, ...soon(min) });
     expect(applied.status).toBe(201);
     return applied.body;
   }
@@ -186,6 +186,32 @@ describe('daily Emdad report moves the line automatically', () => {
   const row = (i: number, requestNo: string, code: string, status = 'در حال تامین', chassis = `C${String(i).padStart(7, '0')}`) =>
     emdadRow(i, { 'شماره کارت پذيرش': `X-REQ-${i}`, 'شماره درخواست': requestNo, 'کد قطعه': code, 'کد اختصاصی اولیه': code, 'كد تداركاتي كالا': `${code}01`, 'شماره شاسی': chassis, 'وضعیت امداد ویژه': status });
   const requestOf = async (partId: string) => (await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.partRequestId, partId)))[0];
+
+  it('reapplies an already imported file by VIN and technical code despite a different request number', async () => {
+    const c = await newCase('960101');
+    const [vehicle] = await h.db.db.select({ vin: vehicles.vin }).from(vehicles)
+      .innerJoin(cases, eq(cases.vehicleId, vehicles.id)).where(eq(cases.id, c.id));
+    const rows = [
+      row(101, '610101', '77778891', 'وارد موجودی شده است', vehicle!.vin!),
+      row(103, '', '77778893', 'در حال تامین', vehicle!.vin!),
+    ];
+    await publish(rows, -35);
+
+    const otherCase = await newCase('960102');
+    const other = await newPart(otherCase.id, '77778891');
+    await flow(other, { action: 'emdad', requestNo: '610102' });
+    const part = await newPart(c.id, '77778891');
+    await flow(part, { action: 'emdad', requestNo: '610199' });
+    const withoutRequest = await newPart(c.id, '77778893');
+
+    await publish(rows, -35);
+    expect(await one(part)).toMatchObject({
+      flowState: 'ready',
+      emdad: { requestNo: '610101', category: 'in_dealer_stock', statusText: 'وارد موجودی شده است' },
+    });
+    expect(await one(withoutRequest)).toMatchObject({ emdad: { requestNo: null, statusText: 'در حال تامین' } });
+    expect(await one(other)).toMatchObject({ flowState: 'emdad', emdad: null });
+  });
 
   it('links each line of one vehicle request by request number + technical code, with Persian digits and leading zeros', async () => {
     const c = await newCase('960051');

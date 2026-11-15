@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNull, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, isNotNull, ne, gt, notExists } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { EMDAD_ARRIVED_CATEGORIES, EMDAD_DEALER_SUPPLY_CATEGORY, normalizePersian, parseBasePartNumber, parseStockCode } from '@manage/shared';
 import type { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -68,7 +69,7 @@ export async function applyEmdadToParts(tx: DbOrTx, audit: AuditService, actor: 
   const unlinked = await tx
     .select()
     .from(emdadRequests)
-    .where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.lastImportId, importId), isNull(emdadRequests.partRequestId), isNotNull(emdadRequests.requestNo), eq(emdadRequests.matchSource, 'auto')));
+    .where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.lastImportId, importId), isNull(emdadRequests.partRequestId), isNotNull(emdadRequests.requestNo), eq(emdadRequests.matchSource, 'auto'), ne(emdadRequests.matchStatus, 'ambiguous')));
   if (unlinked.length) {
     const open = await tx
       .select({ id: partRequests.id, caseId: partRequests.caseId, orderRef: partRequests.orderRef, partNumber: partRequests.partNumber, vin: vehicles.vin, chassisRef: vehicles.chassisRef })
@@ -114,12 +115,26 @@ export async function applyEmdadToParts(tx: DbOrTx, audit: AuditService, actor: 
   }
 
   // 2 and 3. Status of every linked line in this report.
+  const newer = alias(emdadRequests, 'newer_emdad');
   const linked = await tx
     .select({ e: emdadRequests, p: partRequests })
     .from(emdadRequests)
     .innerJoin(partRequests, eq(partRequests.id, emdadRequests.partRequestId))
     .innerJoin(cases, eq(cases.id, partRequests.caseId))
-    .where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.lastImportId, importId), eq(partRequests.status, 'ordered'), eq(partRequests.source, 'company'), eq(cases.status, 'open')));
+    .where(and(
+      eq(emdadRequests.tenantId, tenantId),
+      eq(emdadRequests.lastImportId, importId),
+      eq(partRequests.tenantId, tenantId),
+      eq(partRequests.status, 'ordered'),
+      eq(partRequests.source, 'company'),
+      eq(cases.tenantId, tenantId),
+      eq(cases.status, 'open'),
+      notExists(tx.select({ id: newer.id }).from(newer).where(and(
+        eq(newer.tenantId, tenantId),
+        eq(newer.partRequestId, partRequests.id),
+        gt(newer.lastReportAt, emdadRequests.lastReportAt),
+      ))),
+    ));
   const clerks = linked.some((l) => l.e.statusCategory === EMDAD_DEALER_SUPPLY_CATEGORY) ? await usersWithRole(tx, tenantId, ['parts_clerk']) : [];
   for (const { e, p } of linked) {
     const official = (e.official ?? {}) as { emdadStatus?: string };
