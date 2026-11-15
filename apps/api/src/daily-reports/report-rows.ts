@@ -178,9 +178,13 @@ export function emdadStatusCategory(raw: string): string {
 
 const idPart = (s: string) => toLatinDigits(s).replace(/\s+/g, '').toUpperCase();
 /** Stable key candidate: admission + chassis + Emdad number + request number + initial code. */
-export function emdadKey(o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'emdadNo' | 'requestNo' | 'initialCode'>): string | null {
+export function emdadKey(o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'emdadNo' | 'requestNo' | 'initialCode' | 'partCode'>): string | null {
   const parts = [o.admissionNo, o.chassis, o.emdadNo, o.requestNo, o.initialCode].map(idPart);
-  return parts.slice(0, 4).every(Boolean) ? parts.join('|') : null;
+  if (parts.slice(0, 4).every(Boolean)) return parts.join('|');
+  const [admission, chassis, emdad, request, initial] = parts;
+  const code = idPart(o.partCode);
+  if (!request && chassis && code) return [admission, chassis, emdad, '', initial || code].join('|');
+  return null;
 }
 
 export function parseEmdadSheet(rows: string[][]) {

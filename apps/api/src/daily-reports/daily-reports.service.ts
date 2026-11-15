@@ -577,7 +577,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
     };
     const rematch = rows.filter((r) => {
       const p = prev.get(r.rowKey!);
-      return !p || retryMatch(p);
+      return !p || p.matchSource === 'auto';
     });
     const match = await this.emdad.matcher(tx, tenantId, rematch.map(officialOf));
     const counts = { inserted: 0, updated: 0, unchanged: 0, older: 0, matched: 0 };
@@ -607,7 +607,10 @@ export class DailyReportsService implements OnApplicationBootstrap {
           firstImportId: job.id,
           lastImportId: job.id,
           lastReportAt: reportAt,
-          ...m,
+          caseId: m.caseId,
+          partRequestId: m.partRequestId,
+          matchStatus: m.matchStatus,
+          matchNote: m.matchNote,
           isTest: actor.user.isTestTenant,
         });
         events.push({ id: newId(), requestId: rid, tenantId, importId: job.id, reportAt, changes: { created: true, emdadStatus: o.emdadStatus, sendStatus: o.sendStatus } });
@@ -621,8 +624,11 @@ export class DailyReportsService implements OnApplicationBootstrap {
         continue;
       }
       const base = { lastImportId: job.id, lastReportAt: reportAt, updatedAt: new Date() };
-      const m = retryMatch(p) ? match(o) : null;
-      const matchPatch = m && (m.caseId !== p.caseId || m.matchStatus !== p.matchStatus || m.partRequestId !== p.partRequestId) ? m : null;
+      const candidate = p.matchSource === 'auto' ? match(o) : null;
+      const m = candidate && (candidate.byChassisAndCode || retryMatch(p)) ? candidate : null;
+      const matchPatch = m && (m.caseId !== p.caseId || m.matchStatus !== p.matchStatus || m.partRequestId !== p.partRequestId || m.matchNote !== p.matchNote)
+        ? { caseId: m.caseId, partRequestId: m.partRequestId, matchStatus: m.matchStatus, matchNote: m.matchNote }
+        : null;
       const before = p.official as Record<string, unknown>;
       const changed = changedFields(before, o as unknown as Record<string, unknown>);
       if (changed.length || matchPatch) {

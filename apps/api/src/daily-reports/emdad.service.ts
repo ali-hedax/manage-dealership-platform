@@ -27,6 +27,7 @@ export interface MatchResult {
   partRequestId: string | null;
   matchStatus: EmdadMatchStatus;
   matchNote: string;
+  byChassisAndCode?: true;
 }
 
 /** Categories after which there is nothing more to chase at the company. */
@@ -71,11 +72,10 @@ export class EmdadService {
   }
 
   /**
-   * Prepares exact matching for many report rows at once: tenant + valid
-   * admission number + exact chassis, then the confirmed base code for the
-   * part need. Names, row numbers or text similarity are never used.
+   * Matches open cases by chassis and technical code first.
+   * The admission lookup remains available for report follow-up.
    */
-  async matcher(tx: DbOrTx, tenantId: string, officials: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase'>[]) {
+  async matcher(tx: DbOrTx, tenantId: string, officials: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'>[]) {
     const keys = [...new Set(officials.map((o) => admissionKeyOf(o.admissionNo)).filter((k): k is string => !!k))];
     const found: { id: string; caseNumber: string; admissionNoKey: string | null; vin: string | null; chassisRef: string | null }[] = [];
     for (let i = 0; i < keys.length; i += 1000) {
@@ -87,27 +87,51 @@ export class EmdadService {
           .where(and(eq(cases.tenantId, tenantId), inArray(cases.admissionNoKey, keys.slice(i, i + 1000))))),
       );
     }
+    const chassisKeys = new Set(officials.map((o) => idKey(o.chassis ?? '')).filter(Boolean));
+    const byChassis = new Map<string, typeof found>();
+    if (chassisKeys.size) {
+      const open = await tx
+        .select({ id: cases.id, caseNumber: cases.caseNumber, admissionNoKey: cases.admissionNoKey, vin: vehicles.vin, chassisRef: vehicles.chassisRef })
+        .from(cases)
+        .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
+        .where(and(eq(cases.tenantId, tenantId), eq(cases.status, 'open')));
+      for (const c of open) {
+        for (const key of new Set([idKey(c.vin ?? ''), idKey(c.chassisRef ?? '')])) {
+          if (chassisKeys.has(key)) byChassis.set(key, [...(byChassis.get(key) ?? []), c]);
+        }
+      }
+    }
     const byAdmission = new Map<string, typeof found>();
     for (const c of found) byAdmission.set(c.admissionNoKey!, [...(byAdmission.get(c.admissionNoKey!) ?? []), c]);
-    const caseIds = found.map((c) => c.id);
-    const parts: { id: string; caseId: string; partNumber: string | null }[] = [];
+    const caseIds = [...new Set([...found, ...[...byChassis.values()].flat()].map((c) => c.id))];
+    type Need = { id: string; caseId: string; partNumber: string | null };
+    const partsByCase = new Map<string, Need[]>();
     for (let i = 0; i < caseIds.length; i += 1000) {
-      parts.push(
-        ...(await tx
-          .select({ id: partRequests.id, caseId: partRequests.caseId, partNumber: partRequests.partNumber })
-          .from(partRequests)
-          .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, caseIds.slice(i, i + 1000)), ne(partRequests.status, 'cancelled')))),
-      );
+      const parts = await tx
+        .select({ id: partRequests.id, caseId: partRequests.caseId, partNumber: partRequests.partNumber })
+        .from(partRequests)
+        .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, caseIds.slice(i, i + 1000)), ne(partRequests.status, 'cancelled')));
+      for (const p of parts) partsByCase.set(p.caseId, [...(partsByCase.get(p.caseId) ?? []), p]);
     }
     const partBase = (n: string | null) => (n ? (parseStockCode(n)?.basePartNumber ?? parseBasePartNumber(n)) : null);
 
-    return (o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase'>): MatchResult => {
+    return (o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'>): MatchResult => {
       const none = (matchStatus: EmdadMatchStatus, matchNote: string, caseId: string | null = null): MatchResult => ({ caseId, partRequestId: null, matchStatus, matchNote });
+      const chassis = idKey(o.chassis ?? '');
+      const needsByChassis = (byChassis.get(chassis) ?? []).flatMap((c) =>
+        (partsByCase.get(c.id) ?? []).filter((p) => p.partNumber && emdadMatchesNeed(o, p.partNumber)),
+      );
+      if (needsByChassis.length === 1) {
+        const p = needsByChassis[0]!;
+        return { caseId: p.caseId, partRequestId: p.id, matchStatus: 'matched', matchNote: 'شاسی و کد فنی یکسان است', byChassisAndCode: true };
+      }
+      if (needsByChassis.length > 1) {
+        return { ...none('ambiguous', 'چند قطعه با همین شاسی و کد فنی ثبت شده است؛ دستی تطبیق دهید'), byChassisAndCode: true };
+      }
       const adm = admissionKeyOf(o.admissionNo);
       if (!adm) return none('unmatched', 'شماره پذیرش معتبر ندارد (مثلاً «برگشتی» یا خالی)؛ اتصال خودکار انجام نشد');
       const candidates = byAdmission.get(adm) ?? [];
       if (!candidates.length) return none('unmatched', 'پرونده‌ای با این شماره پذیرش در منیج نیست؛ پرونده‌ای ساخته نشد');
-      const chassis = idKey(o.chassis ?? '');
       // A short chassis number is compared with the recorded chassis, never with a VIN.
       const vehicleChassis = (c: (typeof found)[number]) => (chassis.length === 17 ? idKey(c.vin ?? '') : idKey(c.chassisRef ?? ''));
       const exact = chassis ? candidates.filter((c) => vehicleChassis(c) === chassis) : [];
@@ -120,7 +144,7 @@ export class EmdadService {
       const kase = exact[0]!;
       const base = confirmedBase(o);
       if (!base) return { caseId: kase.id, partRequestId: null, matchStatus: 'matched', matchNote: 'متصل به پرونده؛ کدها یکسان نیستند، پس اتصال به نیاز قطعه دستی است' };
-      const needs = parts.filter((p) => p.caseId === kase.id && partBase(p.partNumber) === base);
+      const needs = (partsByCase.get(kase.id) ?? []).filter((p) => partBase(p.partNumber) === base);
       if (needs.length === 1) return { caseId: kase.id, partRequestId: needs[0]!.id, matchStatus: 'matched', matchNote: 'پذیرش، شاسی و کد پایه یکسان است' };
       if (needs.length > 1) return { caseId: kase.id, partRequestId: null, matchStatus: 'needs_review', matchNote: 'چند نیاز قطعه با همین کد پایه در پرونده هست؛ یکی را دستی انتخاب کنید' };
       return { caseId: kase.id, partRequestId: null, matchStatus: 'matched', matchNote: 'متصل به پرونده؛ نیاز قطعه‌ای با این کد پایه ثبت نشده است' };
