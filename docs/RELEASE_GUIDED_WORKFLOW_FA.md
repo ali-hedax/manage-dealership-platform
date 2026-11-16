@@ -1,6 +1,6 @@
 # آماده‌سازی انتشار مسیر هدایت‌شده
 
-وضعیت: آماده‌سازی؛ نسخهٔ Production همچنان `dadab06bdd133dd6f9b62c6da37518696e1b531d` است. شاخهٔ کار `fix/guided-accident-workflow` از همین `origin/main` ساخته شده است. مجوز قبلی مالک فقط برای نصب dadab06 بود؛ ادغام این PR و نصب نسخهٔ تازه هنوز مجوز ندارند. SHA آزموده‌شده و نتیجهٔ CI در PROGRESS و PR ثبت می‌شوند.
+وضعیت: **نصب شد** در 2026-11-16 14:09 UTC؛ Production روی `656c6d283df0adf611c4adc2172f2f15a8beba91` است. جزئیات در PROGRESS.
 
 کد نامزد بررسی: `25ca5b71931498e83495d545bfd22bafea782163`؛ [PR #94](https://github.com/ali-hedax/manage-dealership-platform/pull/94). SHA نهایی گزارش‌ها/CI و مشخصات artifact آزمایشی در PR ثبت می‌شوند. artifact یک PR از merge آزمایشی ساخته می‌شود و مجوز یا جایگزین artifact نسخهٔ نهایی main نیست.
 
