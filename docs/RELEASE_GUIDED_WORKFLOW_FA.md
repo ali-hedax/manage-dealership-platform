@@ -2,6 +2,8 @@
 
 وضعیت: آماده‌سازی؛ نسخهٔ Production همچنان `dadab06bdd133dd6f9b62c6da37518696e1b531d` است. شاخهٔ کار `fix/guided-accident-workflow` از همین `origin/main` ساخته شده است. مجوز قبلی مالک فقط برای نصب dadab06 بود؛ ادغام این PR و نصب نسخهٔ تازه هنوز مجوز ندارند. SHA آزموده‌شده و نتیجهٔ CI در PROGRESS و PR ثبت می‌شوند.
 
+کد نامزد بررسی: `25ca5b71931498e83495d545bfd22bafea782163`؛ [PR #94](https://github.com/ali-hedax/manage-dealership-platform/pull/94). SHA نهایی گزارش‌ها/CI و مشخصات artifact آزمایشی در PR ثبت می‌شوند. artifact یک PR از merge آزمایشی ساخته می‌شود و مجوز یا جایگزین artifact نسخهٔ نهایی main نیست.
+
 ## نسخه و artifact
 
 نسخهٔ قابل نصب فقط SHA نهایی ادغام‌شده در main است، بعد از موفقیت هر شش بررسی CI همان SHA. پیش از ادغام، SHA و شناسهٔ تصویر آن اجرای آینده وجود ندارند؛ تصویر آزمایش PR جایگزین تصویر main نیست.
@@ -14,7 +16,7 @@
 2. حفظ فایل اصلاح‌شدهٔ gate و بکاپش و `/home/manage/operations/operational.yml`. فایل gate باید همان SHA-256 `09e653793efb4a6ed89c9f27b89c6ab415b758cd58ba0f3a943a736e4db5a57a` را داشته باشد. روی checkout سرور pull/reset/checkout اجرا نشود؛ هیچ بخشی از Source دست نخورد.
 3. پشتیبان PostgreSQL و بازیابی تمرینی طبق [BACKUP_RESTORE](BACKUP_RESTORE.md). migrationهای 0024 و 0025 روی نسخهٔ بازیابی‌شده تمرین شوند؛ تعداد migrationها ۲۴ ← ۲۶ و جدول‌ها ۵۳ ← ۵۴، ردیف‌های قدیمی تغییر نکنند. مدرک و فرانشیز واقعی به محیط تست کپی نشوند.
 4. ZIP همان اجرای CI در stage تازه باز شود (`python3 -m zipfile -e` اگر unzip موجود نیست). از شناسهٔ ایمیج‌های واقعاً در حال اجرای API و وب تگ rollback یکتا ساخته شود؛ سپس docker load و تطبیق هر شناسه با سرویس متناظر انجام شود. در شکست تطبیق، تگ‌ها برگردند و هیچ سرویسی بازسازی نشود.
-5. migration از ایمیج تأییدشده با `bash deploy/operational/operational-compose.sh run --rm --no-deps api node dist/scripts/migrate.js` اجرا شود. فقط بعد از موفقیت migration، از /opt/manage دستور زیر اجرا شود:
+5. migration از ایمیج تأییدشده با `bash deploy/operational/operational-compose.sh run --rm --no-deps --pull never api node dist/scripts/migrate.js` اجرا شود. فقط بعد از موفقیت migration، از /opt/manage دستور زیر اجرا شود:
 
 ```bash
 bash deploy/operational/operational-compose.sh up -d --no-build --pull never --no-deps --force-recreate --wait --wait-timeout 120 api web
