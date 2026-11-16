@@ -13,7 +13,7 @@ import { Plate } from './Plate';
 
 // Case folder (spec §12; owner reference «پوشهٔ پرونده خودرو»): a physical folder with
 // the coverage tab and a binder clip; the car, customer, plate, identifiers and days in
-// the shop; the five-step journey as chevrons; folder tabs; and the role's «قدم بعدی شما».
+// the shop; the six-step journey as chevrons; folder tabs; and the role's «قدم بعدی شما».
 
 export const CASE_TABS = ['intake', 'assessment', 'plan', 'execution', 'quality', 'completion', 'parts', 'docs', 'history'] as const;
 export type CaseTab = (typeof CASE_TABS)[number];

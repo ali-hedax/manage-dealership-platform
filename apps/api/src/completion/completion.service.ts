@@ -50,6 +50,7 @@ interface Evaluation {
   finance: CaseFinance;
   financialIssues: CompletionIssue[];
   financialValid: boolean;
+  invoiceVersion: number | null;
   deliveryIssues: CompletionIssue[];
 }
 
@@ -263,6 +264,7 @@ export class CompletionService {
           financialCloseNote: input.note ?? null,
           financialCloseEstimateRial: ev.finance.estimateRial,
           financialCloseShareRial: ev.finance.customerShareRial,
+          ...(kase.workflow?.invoiceRequestedAt ? { workflow: { ...kase.workflow, financialClosedStatementVersion: ev.invoiceVersion! } } : {}),
           // No balance gate any more (spec decision 3); kept for the column's history.
           financialCloseWaivedRial: 0,
         },
@@ -460,11 +462,13 @@ export class CompletionService {
     // ---- financial
     // Spec decision 3: the official invoice and payments live in the accounting
     // system. Manage only checks that the final statement is settled on the
-    // current assessment; payer shares and the customer balance never block.
+    // current assessment and final invoice version. Payment balances stay in accounting.
     const finance = await this.finance.summaryOn(db, tenantId, caseId);
     const financialIssues: CompletionIssue[] = [];
+    let invoiceVersion: number | null = null;
     if (kase.workflow?.invoiceRequestedAt) {
       const statement = await this.operations.statement(actor, caseId, db);
+      invoiceVersion = statement.versions.at(-1)?.number ?? null;
       const current = statement.versions.at(-1)?.snapshot;
       if (!kase.workflow.invoiceCompletedAt || !current || !isDeepStrictEqual(current, statement.live)) financialIssues.push(issue('invoice_pending'));
     }
@@ -473,14 +477,14 @@ export class CompletionService {
     const financialValid =
       !!kase.financialClosedAt &&
       finance.estimateRial === kase.financialCloseEstimateRial &&
-      (!kase.workflow?.invoiceRequestedAt || finance.customerShareRial === kase.financialCloseShareRial) &&
+      (!kase.workflow?.invoiceRequestedAt || (finance.customerShareRial === kase.financialCloseShareRial && kase.workflow.financialClosedStatementVersion === invoiceVersion)) &&
       blocking(financialIssues).length === 0;
 
     const deliveryIssues: CompletionIssue[] = [];
     if (!technicalValid) deliveryIssues.push(issue('technical_not_closed'));
     if (!financialValid) deliveryIssues.push(issue('financial_not_closed'));
 
-    return { kase, qc, technicalIssues, technicalValid, finance, financialIssues, financialValid, deliveryIssues };
+    return { kase, qc, technicalIssues, technicalValid, finance, financialIssues, financialValid, invoiceVersion, deliveryIssues };
   }
 }
 

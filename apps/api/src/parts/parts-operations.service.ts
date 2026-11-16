@@ -199,7 +199,7 @@ export class PartsOperationsService {
     const difference = changes(live, current);
     return { live, unconfirmed, consumed,
       readyToSend: qcReady && (!kase.c.workflow?.invoiceRequestedAt || (!!live.deductible && live.deductible.percent !== null)) && kase.c.status === 'open' && repair.length > 0 && repair.every(t => t.status === 'approved') && !unconfirmed.length
-        && (!current || difference.added.length + difference.removed.length + difference.changed.length > 0 || !isDeepStrictEqual(current, live)),
+        && ((!kase.c.workflow?.invoiceCompletedAt && !!kase.c.workflow?.invoiceRequestedAt) || !current || difference.added.length + difference.removed.length + difference.changed.length > 0 || !isDeepStrictEqual(current, live)),
       versions: versions.map((v, i) => ({ number: v.version, sentAt: v.sentAt.toISOString(), snapshot: v.snapshot,
         ...changes(v.snapshot, versions[i - 1]?.snapshot) })) };
   }
@@ -208,6 +208,7 @@ export class PartsOperationsService {
     if (!actor.user.permissions.has('part.manage')) throw forbidden();
     await this.db.transaction(async tx => {
       const c = await this.cases.loadForWrite(tx, actor.user.tenantId, caseId, expectedVersion);
+      if (c.workflow?.deductible?.source === 'manual' && c.workflow.deductible.percent === percent) return;
       await this.cases.applyPatch(tx, actor, c, { workflow: { ...c.workflow, invoiceCompletedAt: undefined, deductible: { percent, source: 'manual' } } }, 'case.deductible_recorded', null);
     });
     return this.statement(actor, caseId);

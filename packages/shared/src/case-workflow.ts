@@ -12,6 +12,7 @@ export interface WorkflowRecord {
   invoiceRequestedAt?: string;
   invoiceCompletedAt?: string;
   invoiceAssigneeId?: string | null;
+  financialClosedStatementVersion?: number;
   deductible?: { percent: number; source: 'assessment' | 'manual'; assessmentId?: string };
 }
 export interface CaseWorkflow {

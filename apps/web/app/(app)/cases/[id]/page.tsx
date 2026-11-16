@@ -70,6 +70,18 @@ export default function CaseDetailPage() {
     setTab(hashTab ?? (partsOnly ? (workflow.invoicePending ? 'completion' : 'parts') : workflow.current));
   }, [tab, workflow, me, can]);
 
+  useEffect(() => {
+    if (!kase) return;
+    const anchor = window.location.hash.slice(1);
+    if (SECTION_TAB[anchor] !== tab) return;
+    const frame = requestAnimationFrame(() => {
+      const element = document.getElementById(anchor);
+      if (element instanceof HTMLDetailsElement) element.open = true;
+      element?.scrollIntoView({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [kase?.id, tab]);
+
   if (error) {
     return (
       <div className="callout callout-red">
@@ -153,7 +165,7 @@ export default function CaseDetailPage() {
       {!printing && workflow && activeTab !== 'parts' && activeTab !== 'history' && activeTab !== 'docs' && <WorkflowAction kase={kase} workflow={workflow} tab={activeTab} onTab={goTab} onChange={refresh} />}
       {(printing || activeTab === 'assessment') && <CaseSection id="case-assessment" title="کارشناسی و الحاقیه" note="اقلام، فایل اکسل و ارسال به قطعات" initialOpen><AssessmentPanel kase={kase} onChange={refresh} />{!printing && <CaseDocuments kase={kase} onChange={refresh} />}</CaseSection>}
 
-      {(printing || activeTab === 'intake') && <section className="panel panel-body"><h2>پذیرش ثبت شده</h2><p>{kase.damageDescription ?? 'شرح خسارت ثبت نشده است'}</p>{active && can('case.update') && <Link href={`/cases/${id}/edit`} className="btn">ویرایش اطلاعات پذیرش</Link>}</section>}
+      {(printing || activeTab === 'intake') && <section id="case-intake" className="panel panel-body"><h2>پذیرش ثبت شده</h2><p>{kase.damageDescription ?? 'شرح خسارت ثبت نشده است'}</p>{active && can('case.update') && <Link href={`/cases/${id}/edit`} className="btn">ویرایش اطلاعات پذیرش</Link>}</section>}
       {(printing || activeTab === 'plan') && <CaseSection id="case-plan" title="برنامهٔ تعمیر" initialOpen><TasksPanel kase={kase} mode="plan" onChange={refresh} /></CaseSection>}
       {(printing || activeTab === 'quality') && <CaseSection id="case-quality" title="کنترل کیفیت" initialOpen><CompletionPanel kase={kase} mode="quality" onChange={refresh} /></CaseSection>}
       {(printing || activeTab === 'completion') && <CaseSection id="case-completion" title="تکمیل پرونده و تحویل" initialOpen><div id="case-invoice"><PartsStatementPanel kase={kase} /></div><CaseWagesPanel kase={kase} /><CompletionPanel kase={kase} mode="completion" onChange={refresh} /><div id="case-finance"><FinancePanel kase={kase} onChange={refresh} /></div></CaseSection>}

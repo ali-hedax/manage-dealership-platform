@@ -62,6 +62,14 @@ it('enforces the guided journey, corrective QC, one invoice handoff, allocation,
   expect(summary.live.deductible).toMatchObject({ percent: 10, source: 'manual', customerShareRial: 100000 });
   expect((await parts.post(`/cases/${c.id}/parts-statement`, { expectedVersion: 0 })).status).toBe(201);
   expect((await parts.get('/parts/workbench/notices')).body.filter((n: { key: string }) => n.key === `invoice-${c.id}`)).toHaveLength(0);
+  c = await getCase(c.id); const completedVersion = c.version;
+  expect((await parts.post(`/cases/${c.id}/parts-statement/deductible`, { expectedVersion: c.version, percent: 10 })).status).toBe(201);
+  expect((await getCase(c.id)).version).toBe(completedVersion);
+  expect((await expert.get(`/cases/${c.id}/workflow`)).body.invoicePending).toBe(false);
+  await qc(false);
+  expect((await parts.get(`/cases/${c.id}/parts-statement`)).body.readyToSend).toBe(true);
+  expect((await parts.post(`/cases/${c.id}/parts-statement`, { expectedVersion: 1 })).status).toBe(201);
+
   expect((await expert.get(`/cases/${c.id}/finance`)).body.customerShareRial).toBe(100000);
   for (const action of ['technical-close', 'financial-close']) { c = await getCase(c.id); const result = await expert.post(`/cases/${c.id}/${action}`, { expectedVersion: c.version }); expect({ status: result.status, body: result.status === 201 ? null : result.body }).toMatchObject({ status: 201 }); }
   c = await getCase(c.id);

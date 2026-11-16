@@ -12,7 +12,7 @@ test('coded station, schedule, technician mobile start/end and coordinator hando
  await page.goto('/workshop/settings');await expect(page.getByRole('heading',{name:'تقویم و جایگاه‌ها',exact:true})).toBeVisible();await expect(page.getByText('TEST-MOBILE-01',{exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('calendar-desktop.png'),fullPage:true});
  await login(page,'expert');
- const created=await page.request.post('/api/v1/cases',{headers,data:{customer:{fullName:'مشتری ساختگی موبایل',phone:'09000007777'},vehicle:{model:'دنا آزمون',plate:'۱۲ ب ۳۴۵ - ۶۷',vin:'TESTVIN000MOBILE1'},admittedAt:new Date().toISOString(),coverageType:'golden_card'}});expect(created.ok()).toBe(true);const kase=await created.json();
+ const created=await page.request.post('/api/v1/cases',{headers,data:{isLegacyEntry:true,customer:{fullName:'مشتری ساختگی موبایل',phone:'09000007777'},vehicle:{model:'دنا آزمون',plate:'۱۲ ب ۳۴۵ - ۶۷',vin:'TESTVIN000MOBILE1'},admittedAt:new Date().toISOString(),coverageType:'golden_card'}});expect(created.ok()).toBe(true);const kase=await created.json();
  const taskRes=await page.request.post(`/api/v1/cases/${kase.id}/tasks`,{headers,data:{departmentId:body.id,stationId:station.id,assignedUserId:technician.id,title:'صافکاری درب آزمون',plannedStartAt:new Date().toISOString(),durationMinutes:180}});expect(taskRes.ok()).toBe(true);const task=await taskRes.json();
  await page.goto('/workshop');await expect(page.getByRole('heading',{name:'برنامه و پیگیری تعمیرات'})).toBeVisible();await expect(page.getByRole('cell',{name:/TEST-MOBILE-01/})).toBeVisible();
  await page.screenshot({path:info.outputPath('coordinator-desktop.png'),fullPage:true});
