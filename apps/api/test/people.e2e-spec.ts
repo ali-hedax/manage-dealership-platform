@@ -220,7 +220,7 @@ describe('technician wage and monthly work', () => {
     for (const [id, amount] of [[b.id, 30_000_000], [c.id, 20_000_000], [pending, 70_000_000], [otherTech, 11_000_000]] as const) {
       expect((await coordA.put(`/tasks/${id}/wage`, { amountRial: amount, expectedVersion: 0 })).status).toBe(200);
     }
-    expect((await parts.put(`/tasks/${b.id}/wage`, { amountRial: 1, expectedVersion: 1 })).status).toBe(403);
+    expect((await parts.put(`/tasks/${b.id}/wage`, { amountRial: 1, expectedVersion: 1 })).body.code).toBe('WAGE_REASON_REQUIRED');
   });
 
   it('counts in the monthly work only after the coordinator approved the job, with totals per coverage', async () => {

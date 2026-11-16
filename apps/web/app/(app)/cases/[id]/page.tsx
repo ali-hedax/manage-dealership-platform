@@ -78,11 +78,11 @@ export default function CaseDetailPage() {
   const active = kase.status === 'open' && kase.stage !== 'delivered';
   const commitment = kase.officialDeadlineAt ?? kase.forecastDeliveryAt;
   const tone = deadlineTone(commitment, active);
-  const refresh = () => {
-    void mutate();
+  const refresh = async () => {
+    await mutate();
     // Assessment, parts and finance depend on each other and do not touch the
     // case version: refresh every view of this case (timeline included).
-    void mutateKey((key) => (typeof key === 'string' && key.startsWith(`/cases/${id}/`)) ||
+    await mutateKey((key) => (typeof key === 'string' && key.startsWith(`/cases/${id}/`)) ||
       (Array.isArray(key) && key[0] === '/emdad/requests/search' && key[1] === id));
   };
 

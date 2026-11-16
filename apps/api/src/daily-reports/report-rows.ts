@@ -223,7 +223,7 @@ export function parseEmdadSheet(rows: string[][]) {
     if (initial && part && initial !== part) official.codeNotes.push('«کد اختصاصی اولیه» با «کد قطعه» فرق دارد (تفسیر نشده)');
     if (official.fullCode) official.fullCode = full?.fullStockCode ?? official.fullCode;
     let key = emdadKey(official);
-    const unreliable = [official.chassis, official.requestNo, official.partCode, official.initialCode].some(v => /[eE][+-]?\d/.test(v));
+    const unreliable = [official.chassis, official.requestNo, official.partCode, official.initialCode].some(v => /^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(v.trim()));
     if (unreliable) { key = null; messages.push('شناسه با نمایش علمی قابل اتکا نیست؛ مقدار اصلی را به صورت متن بررسی کنید'); }
     let outcome: RowOutcome = 'valid';
     if (!key) {

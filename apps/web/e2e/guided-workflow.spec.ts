@@ -48,6 +48,7 @@ test('expert and parts: guided admission to delivery and archive with RTL review
   await row.getByRole('combobox', { name: 'جایگاه', exact: true }).selectOption(station.id);
   await row.getByRole('combobox', { name: 'تکنسین مسئول *', exact: true }).selectOption(tech.id);
   await row.getByRole('textbox', { name: 'روز کاری *', exact: true }).fill('1');
+  await row.getByRole('textbox', { name: 'شرح', exact: true }).fill('صافکاری');
   await page.getByRole('button', { name: 'ثبت مسیر', exact: true }).click();
   await page.getByRole('button', { name: /تأیید برنامه و شروع اجرا/ }).click();
   const task = page.getByTestId('task').filter({ hasText: 'صافکاری' }).first();
@@ -62,9 +63,9 @@ test('expert and parts: guided admission to delivery and archive with RTL review
   await parts.getByRole('link', { name: 'باز کردن صورت فاکتورها', exact: true }).click();
   await expect(parts.getByRole('region', { name: 'خلاصه فاکتور و فرانشیز' })).toContainText('۱,۰۰۰,۰۰۰');
   await parts.getByLabel('فرانشیز (درصد)', { exact: true }).fill('۰'); await parts.getByRole('button', { name: 'ثبت فرانشیز', exact: true }).click();
-  await parts.getByRole('button', { name: 'نهایی و ارسال', exact: true }).click();
+  await Promise.all([parts.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/cases/${id}/parts-statement`) && r.status() === 201), parts.getByRole('button', { name: 'نهایی و ارسال', exact: true }).click()]);
   await page.goto(`/cases/${id}`);
-  for (const name of ['بستن فنی', 'بستن مالی']) { await page.getByRole('button', { name, exact: true }).click(); await dialog.getByRole('button', { name: 'ثبت', exact: true }).click(); }
+  for (const name of ['بستن فنی', 'بستن مالی']) { await page.getByRole('button', { name, exact: true }).click(); await dialog.getByRole('button', { name: 'ثبت', exact: true }).click(); await expect(dialog).toBeHidden(); await expect(page.getByTestId('completion-panel').getByText('انجام شد', { exact: true })).toHaveCount(name === 'بستن فنی' ? 1 : 2); }
   await page.getByRole('button', { name: 'تحویل خودرو', exact: true }).click();
   await dialog.getByLabel('تحویل‌گیرنده خودرو را بازدید کرد و برگه تحویل را امضا کرد *').check(); await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
   await expect(page.getByTestId('delivery-done')).toContainText('بایگانی');
@@ -92,8 +93,8 @@ test('historical Emdad part visibly takes two official daily statuses and ignore
     expect(uploaded.status()).toBe(201); let job = await uploaded.json();
     await expect.poll(async () => { job = await (await admin.request.get(`/api/v1/daily-reports/imports/${job.id}`)).json(); return job.status; }).not.toMatch(/uploaded|parsing/);
     const at = new Date(Date.now() - minutes * 60000);
-    const applied = await admin.request.post(`/api/v1/daily-reports/imports/${job.id}/apply`, { headers, data: { declaration: true, declaredToday: true, reportDate: formatJalaliDateInput(at), reportTime: formatTimeInput(at) } });
-    expect(applied.status()).toBe(201);
+    const applied = await admin.request.post(`/api/v1/daily-reports/imports/${job.id}/apply`, { headers, data: { declaration: true, declaredToday: true, acceptTemplate: true, reportDate: formatJalaliDateInput(at), reportTime: formatTimeInput(at) } });
+    expect(applied.status(), await applied.text()).toBe(201);
   }
   await publish('در مرحلهٔ خرید', 50);
   await page.goto(`/cases/${c.id}#case-parts`);

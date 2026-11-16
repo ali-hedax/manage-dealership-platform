@@ -293,7 +293,7 @@ describe('initial assessment', () => {
 
 describe('acceptance 5: supplement after hidden damage', () => {
   it('keeps the approved version, re-prices, moves the forecast and waits for new authorization', async () => {
-    const c = await newCase({ forecastDeliveryAt: daysAhead(5) });
+    const c = await newCase({ isLegacyEntry: true, forecastDeliveryAt: daysAhead(5) });
     const v1 = await approvedInitial(c.id);
     expect(v1.totals.totalRial).toBe(53_000_000);
 

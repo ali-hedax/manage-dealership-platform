@@ -74,7 +74,7 @@ function CloseLine({ label, state }: { label: string; state: CloseState }) {
 }
 
 /** QC rounds with corrective work, technical and financial close, and the vehicle handover. */
-export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: { kase: CaseDetail; onChange: () => void; mode?: 'quality' | 'completion' }) {
+export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: { kase: CaseDetail; onChange: () => void | Promise<void>; mode?: 'quality' | 'completion' }) {
   const { can } = useAuth();
   const toast = useToast();
   const { data: c, mutate } = useSWR<CaseCompletion>(`/cases/${kase.id}/completion`, fetcher);
@@ -167,9 +167,7 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
     } catch (err) {
       toast(errorMessage(err), 'error');
     } finally {
-      setBusy(false);
-      void mutate();
-      onChange();
+      try { await Promise.all([mutate(), onChange()]); } finally { setBusy(false); }
     }
   }
 
@@ -190,26 +188,26 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
         {open && (
           <div className="row" style={{ gap: 6 }}>
             {view === 'quality' && can('qc.inspect') && (
-              <button className="btn btn-sm" disabled={!workDone} onClick={() => start('qc')}>
+              <button className="btn btn-sm" disabled={busy || !workDone} onClick={() => start('qc')}>
                 ثبت کنترل کیفیت
               </button>
             )}
             {view === 'completion' && can('case.technical_close') && !c.technical.valid && (
-              <button className="btn btn-sm" disabled={technicalBlocking.length > 0} onClick={() => start('technical')}>
+              <button className="btn btn-sm" disabled={busy || technicalBlocking.length > 0} onClick={() => start('technical')}>
                 بستن فنی
               </button>
             )}
             {view === 'completion' && can('finance.close') && !c.financial.valid && (
               <button
                 className="btn btn-sm"
-                disabled={financialOthers.length > 0 || (!!balance && !can('finance.approve') && !can('case.release_authorize'))}
+                disabled={busy || financialOthers.length > 0 || (!!balance && !can('finance.approve') && !can('case.release_authorize'))}
                 onClick={() => start('financial')}
               >
                 بستن مالی
               </button>
             )}
             {view === 'completion' && can('case.deliver') && (
-              <button className="btn btn-sm btn-primary" disabled={c.deliveryIssues.length > 0} onClick={() => start('delivery')}>
+              <button className="btn btn-sm btn-primary" disabled={busy || c.deliveryIssues.length > 0} onClick={() => start('delivery')}>
                 تحویل خودرو
               </button>
             )}
