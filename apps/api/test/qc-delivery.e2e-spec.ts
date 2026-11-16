@@ -39,6 +39,7 @@ function checks(overrides: Partial<Record<QcCheckItem, object>> = {}) {
 
 async function newCase(body: object): Promise<CaseDetail> {
   const res = await expert.post('/cases', {
+    isLegacyEntry: true,
     customer: { fullName: 'مشتری آزمون تحویل', phone: '09000005555' },
     vehicle: { brand: 'ایران‌خودرو', model: 'سورن', vin: `TESTVIN${Math.random().toString().slice(2, 12)}` },
     odometerKm: 12000,
@@ -109,7 +110,15 @@ async function addApprovedTask(caseId: string, code = 'body'): Promise<Task> {
 
 async function recordQc(caseId: string, overrides: Partial<Record<QcCheckItem, object>> = {}, who: Client = qc) {
   const kase = await caseOf(caseId);
-  return who.post(`/cases/${caseId}/qc`, { expectedVersion: kase.version, checks: checks(overrides) });
+  const res = await who.post(`/cases/${caseId}/qc`, { expectedVersion: kase.version, checks: checks(overrides) });
+  if (res.status === 201 && res.body.qc.at(-1)?.outcome === 'passed') {
+    const current = await caseOf(caseId);
+    await parts.post(`/cases/${caseId}/parts-statement/deductible`, { percent: 0, expectedVersion: current.version });
+    const statement = (await parts.get(`/cases/${caseId}/parts-statement`)).body;
+    for (const p of statement.unconfirmed) await parts.post(`/cases/${caseId}/parts-statement/${p.id}/consume`, { expectedVersion: p.version, salePriceRial: p.priceRial ?? 0 });
+    await parts.post(`/cases/${caseId}/parts-statement`, { expectedVersion: statement.versions.at(-1)?.number ?? 0 });
+  }
+  return res;
 }
 
 async function closeTechnically(caseId: string) {
@@ -295,8 +304,8 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
     });
     expect(shares.status).toBe(200);
     state = await completionOf(c.id);
-    expect(state.financial.valid).toBe(true);
-    expect(state.deliveryIssues).toEqual([]);
+    expect(state.financial.valid).toBe(false); // The new QC requires a fresh invoice summary before financial re-closing.
+    expect(state.deliveryIssues.map(i => i.code)).toContain('financial_not_closed');
   });
 
   it('a personal case closes financially without a settlement in Manage (spec decision 3)', async () => {
@@ -311,7 +320,7 @@ describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
     const res = await expert.post(`/cases/${c.id}/financial-close`, { expectedVersion: v, note: 'فاکتور در سامانهٔ حسابداری صادر شد' });
     expect(res.status).toBe(201);
     expect((res.body as CaseCompletion).financial).toMatchObject({ valid: true, waivedRial: 0 });
-    expect((await financeOf(c.id)).balanceRial).toBe(11_000_000);
+    expect((await financeOf(c.id)).balanceRial).toBe(0);
     expect((res.body as CaseCompletion).deliveryIssues).toEqual([]);
   });
 

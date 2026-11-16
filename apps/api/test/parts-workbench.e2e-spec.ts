@@ -48,7 +48,7 @@ beforeAll(async () => {
 afterAll(async () => { await h?.close(); });
 
 async function kase(): Promise<CaseDetail> {
-  const r = await coordinator.post('/cases', { admittedAt: daysAgo(5), coverageType: 'personal',
+  const r = await coordinator.post('/cases', { isLegacyEntry: true, admittedAt: daysAgo(5), coverageType: 'personal',
     customer: { fullName: 'مشتری آزمون فاز قطعات', phone: '09000001111' },
     vehicle: { brand: 'ایران خودرو', model: 'دنا', vin: `TESTVIN${randomUUID().replaceAll('-', '').slice(0, 10)}` } });
   expect(r.status).toBe(201);

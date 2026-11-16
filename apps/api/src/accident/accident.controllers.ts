@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Patch, Post, Query } from '@nestjs/common';
 import {
+  workflowActionSchema,
   blockerFollowUpSchema,
   caseListQuerySchema,
   changeStageSchema,
@@ -68,6 +69,17 @@ export class CasesController {
     @Body(new ZodPipe(updateCaseSchema)) body: UpdateCaseInput,
   ) {
     return this.cases.update(actor, id, body);
+  }
+
+  @Get(':id/workflow')
+  @RequirePermissions('case.read')
+  workflow(@CurrentActor() actor: Actor, @IdParam() id: string) { return this.cases.workflow(actor, id); }
+
+  @Post(':id/workflow')
+  @RequirePermissions('case.update', 'task.manage')
+  confirmPlan(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(workflowActionSchema)) body: { action: 'confirm_plan'; expectedVersion: number }) {
+    return this.cases.confirmPlan(actor, id, body.expectedVersion);
   }
 
   @Post(':id/stage')

@@ -33,19 +33,16 @@ type RequestDecision = { kind: 'link'; part: RequestCandidate; note: string } | 
  */
 export function decideByRequest(o: Pick<EmdadOfficial, 'partCode' | 'initialCode' | 'fullCodeBase'>, chassis: string | null, candidates: RequestCandidate[]): RequestDecision {
   const reportBases = new Set([o.partCode, o.initialCode, o.fullCodeBase].map((c) => baseOf(c)).filter((b): b is string => !!b));
+  if (reportBases.size > 1) return { kind: 'review', note: 'کدهای فنی گزارش با هم متناقض‌اند؛ بررسی دستی لازم است' };
   const shortChassis = idKey(chassis ?? '');
-  const chassisOk = (c: RequestCandidate) => !!shortChassis && (shortChassis.length === 17 ? idKey(c.vin ?? '') === shortChassis : idKey(c.chassisRef ?? '') === shortChassis);
+  const chassisOk = (c: RequestCandidate) => !!shortChassis && (idKey(c.vin ?? '') === shortChassis || idKey(c.chassisRef ?? '') === shortChassis);
   const byCode = candidates.filter((c) => {
     const b = baseOf(c.partNumber);
     return !!b && reportBases.has(b);
   });
-  if (byCode.length === 1) {
-    return { kind: 'link', part: byCode[0]!, note: chassisOk(byCode[0]!) ? 'شمارهٔ درخواست، کد فنی و شاسی یکسان است' : 'شمارهٔ درخواست و کد فنی یکسان است' };
-  }
-  if (byCode.length > 1) return { kind: 'review', note: 'چند قطعهٔ باز با همین شمارهٔ درخواست و کد فنی هست؛ یکی را دستی انتخاب کنید' };
-  if (candidates.length === 1 && chassisOk(candidates[0]!)) {
-    return { kind: 'link', part: candidates[0]!, note: 'شمارهٔ درخواست و شاسی یکسان است؛ کد فنی گزارش با قطعه فرق دارد' };
-  }
+  const valid = shortChassis ? byCode.filter(chassisOk) : byCode;
+  if (valid.length === 1) return { kind: 'link', part: valid[0]!, note: shortChassis ? 'شمارهٔ درخواست، کد فنی و شاسی یکسان است' : 'شمارهٔ درخواست و کد فنی یکسان است' };
+  if (valid.length > 1) return { kind: 'review', note: 'چند قطعه با همین شمارهٔ درخواست، کد فنی و شاسی هست؛ دستی بررسی کنید' };
   return { kind: 'review', note: 'شمارهٔ درخواست در منیج ثبت شده ولی کد فنی و شاسی با گزارش یکسان نیست؛ دستی تطبیق دهید' };
 }
 
@@ -69,7 +66,7 @@ export async function applyEmdadToParts(tx: DbOrTx, audit: AuditService, actor: 
   const unlinked = await tx
     .select()
     .from(emdadRequests)
-    .where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.lastImportId, importId), isNull(emdadRequests.partRequestId), isNotNull(emdadRequests.requestNo), eq(emdadRequests.matchSource, 'auto'), ne(emdadRequests.matchStatus, 'ambiguous')));
+    .where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.lastImportId, importId), isNull(emdadRequests.partRequestId), isNotNull(emdadRequests.requestNo), eq(emdadRequests.matchSource, 'auto'), ne(emdadRequests.matchStatus, 'ambiguous'), ne(emdadRequests.matchStatus, 'needs_review')));
   if (unlinked.length) {
     const open = await tx
       .select({ id: partRequests.id, caseId: partRequests.caseId, orderRef: partRequests.orderRef, partNumber: partRequests.partNumber, vin: vehicles.vin, chassisRef: vehicles.chassisRef })

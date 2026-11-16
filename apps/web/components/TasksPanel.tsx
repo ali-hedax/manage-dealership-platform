@@ -39,7 +39,7 @@ type Pending =
   | { kind: 'block'; task: Task }
   | null;
 
-export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () => void }) {
+export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseDetail; onChange: () => void; mode?: 'plan' | 'execution' }) {
   const plannedMinutes=kase.repairPlan?unionWorkingMinutes(kase.tasks.filter(t=>t.plannedStartAt&&t.plannedEndAt).map(t=>({start:t.plannedStartAt!,end:t.plannedEndAt!})),kase.repairPlan.calendar.calendar):null;
   const { can } = useAuth();
   const toast = useToast();
@@ -141,7 +141,7 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
             </Link>
           )}
         </h2>
-        {manage && editable && <div className="row">
+        {mode === 'plan' && manage && editable && <div className="row">
           <button className="btn btn-sm" type="button" aria-expanded={advisorOpen} onClick={() => setAdvisorOpen(v => !v)}><AppIcon name="sparkles" /> دستیار منیج</button>
           <button className="btn btn-sm btn-primary" type="button" aria-expanded={planning} onClick={() => setPlanning(v => !v)}>{planning ? 'بستن مسیر' : 'ساخت مسیر تعمیر'}</button>
           <button className="btn btn-sm" type="button" onClick={() => { setAdvisorPicked(null); setAdding(!adding); }}>
@@ -221,8 +221,8 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
             </div>
             {manage && editable && (
               <div className="actions">
-                <button className="btn btn-sm" disabled={busy} onClick={()=>{setAdding(false);setEditing(t);}}>ویرایش برنامه و ارجاع</button>
-                {t.status === 'pending' && (
+                {mode === 'plan' && <button className="btn btn-sm" disabled={busy} onClick={()=>{setAdding(false);setEditing(t);}}>ویرایش برنامه و ارجاع</button>}
+                {mode === 'execution' && t.status === 'pending' && (
                   <button
                     className="btn btn-primary btn-sm"
                     disabled={busy || waiting.length > 0}
@@ -232,22 +232,22 @@ export function TasksPanel({ kase, onChange }: { kase: CaseDetail; onChange: () 
                     شروع
                   </button>
                 )}
-                {t.status === 'in_progress' && (
+                {mode === 'execution' && t.status === 'in_progress' && (
                   <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => quick(t, 'complete')}>
                     اتمام
                   </button>
                 )}
-                {t.status === 'done' && can('task.approve') && (
+                {mode === 'execution' && t.status === 'done' && can('task.approve') && (
                   <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => quick(t, 'approve')}>
                     تأیید تحویل
                   </button>
                 )}
-                {(t.status === 'pending' || t.status === 'in_progress' || t.status === 'blocked') && (
+                {mode === 'execution' && (t.status === 'pending' || t.status === 'in_progress' || t.status === 'blocked') && (
                   <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => open({ kind: 'block', task: t })}>
                     ثبت مانع
                   </button>
                 )}
-                {(t.status === 'done' || t.status === 'approved') && (
+                {mode === 'execution' && (t.status === 'done' || t.status === 'approved') && (
                   <button className="btn btn-sm" disabled={busy} onClick={() => open({ kind: 'action', task: t, action: 'reopen' })}>
                     بازگشایی
                   </button>

@@ -17,7 +17,7 @@ const idOf = async (username: string) => (await h.db.db.select({ id: users.id })
 
 async function newCase(by: Client, coverageType: string, responsibleUserId?: string, admittedAt = new Date().toISOString()) {
   vin += 1;
-  const res = await by.post('/cases', {
+  const res = await by.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'خودرو آزمون فاز سه', plate: `۱${vin} ب ۳۴۵ - ۶۷`, vin: `TESTVIN3000${String(vin).padStart(6, '0')}` },
     customer: { fullName: 'مشتری آزمون فاز سه', phone: `0900300${String(vin).padStart(4, '0')}` },
     admittedAt,
@@ -220,7 +220,7 @@ describe('technician wage and monthly work', () => {
     for (const [id, amount] of [[b.id, 30_000_000], [c.id, 20_000_000], [pending, 70_000_000], [otherTech, 11_000_000]] as const) {
       expect((await coordA.put(`/tasks/${id}/wage`, { amountRial: amount, expectedVersion: 0 })).status).toBe(200);
     }
-    expect((await parts.put(`/tasks/${b.id}/wage`, { amountRial: 1, expectedVersion: 1 })).status).toBe(403);
+    expect((await parts.put(`/tasks/${b.id}/wage`, { amountRial: 1, expectedVersion: 1 })).body.code).toBe('WAGE_REASON_REQUIRED');
   });
 
   it('counts in the monthly work only after the coordinator approved the job, with totals per coverage', async () => {

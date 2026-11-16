@@ -71,3 +71,15 @@ describe('Emdad report rows', () => {
     expect(emdadStatusCategory('وضعیت تازه ساختگی')).toBe('needs_interpretation');
   });
 });
+
+it('preserves alphanumeric chassis with E digits and flags only numeric scientific identifiers', () => {
+  const parsed = emdadRows([
+    emdadRow(31, { 'شماره شاسی': 'TESTVIN99900E2E22', 'شماره درخواست': '000022' }),
+    emdadRow(32, { 'شماره درخواست': '1.2345E+18' }),
+  ]);
+  expect(parsed.rows[0]!.outcome).toBe('valid');
+  expect(parsed.rows[0]!.data.chassis).toBe('TESTVIN99900E2E22');
+  expect(parsed.rows[0]!.data.requestNo).toBe('000022');
+  expect(parsed.rows[1]!.outcome).toBe('ambiguous');
+  expect(parsed.rows[1]!.messages.join()).toContain('علمی');
+});

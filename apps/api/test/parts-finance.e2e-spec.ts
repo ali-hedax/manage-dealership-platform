@@ -23,7 +23,7 @@ const partsOf = async (id: string): Promise<Part[]> => (await expert.get(`/cases
 const financeOf = async (id: string): Promise<CaseFinance> => (await expert.get(`/cases/${id}/finance`)).body;
 
 async function newCase(body: object): Promise<CaseDetail> {
-  const res = await expert.post('/cases', {
+  const res = await expert.post('/cases', { isLegacyEntry: true,
     customer: { fullName: 'مشتری آزمون قطعات', phone: '09000004444' },
     vehicle: { brand: 'ایران‌خودرو', model: 'دنا', vin: `TESTVIN${Math.random().toString().slice(2, 12)}` },
     odometerKm: 9000,

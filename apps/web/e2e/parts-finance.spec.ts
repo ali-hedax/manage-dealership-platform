@@ -29,7 +29,7 @@ test('expert records customer price approval; parts orders and hands over', asyn
   await expect(page.getByRole('button', { name: 'ثبت دریافت از مشتری', exact: true })).toHaveCount(0);
   // Market purchase: parts quotes, the coordinator records customer consent.
   await openCase3(page, 'parts');
-  const currentParts=await (await page.request.get('/api/v1/cases/'+page.url().split('/cases/')[1]+'/parts')).json();
+  const currentParts=await (await page.request.get('/api/v1/cases/'+page.url().split('/cases/')[1].split('#')[0]+'/parts')).json();
   const need=currentParts.find((p:{description:string})=>p.description==='آینه بغل چپ');
   const proposal=await page.request.post(`/api/v1/workshop/parts/${need.id}/quotes`,{headers:{'x-manage-client':'test'},data:{expectedVersion:need.version,unitPriceRial:14000000,supplier:'فروشگاه آزمون',validUntil:new Date(Date.now()+86400000).toISOString()}});
   expect(proposal.ok()).toBe(true);const quote=(await proposal.json()).find((q:{partId:string;status:string})=>q.partId===need.id&&q.status==='pending');

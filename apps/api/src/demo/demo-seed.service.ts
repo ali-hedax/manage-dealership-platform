@@ -17,6 +17,7 @@ import { DATABASE, type DatabaseHandle } from '../db/database';
 import { departments, tenants, users, workshopStations } from '../db/schema';
 import { RemindersService } from '../people/reminders.service';
 import { seedFleet } from './demo-fleet';
+import { PartsOperationsService } from '../parts/parts-operations.service';
 import { TasksService } from '../tasks/tasks.service';
 
 export const DEMO_TENANT_CODE = 'demo';
@@ -53,6 +54,7 @@ export class DemoSeedService {
     @Inject(APP_CONFIG) private readonly cfg: AppConfig,
     private readonly cases: CasesService,
     private readonly tasks: TasksService,
+    private readonly operations: PartsOperationsService,
     private readonly blockers: BlockersService,
     private readonly assessments: AssessmentsService,
     private readonly parts: PartsService,
@@ -207,7 +209,7 @@ export class DemoSeedService {
       responsibleUserId: supervisor.user.id,
       officialDeadlineAt: ahead(4 * DAY),
       forecastDeliveryAt: ahead(3 * DAY),
-    });
+    }, { historicalProgress: true });
     const body1 = await this.tasks.create(supervisor, c1.id, {
       departmentId: dept('body'),
       title: 'صافکاری گلگیر و سینی جلو',
@@ -305,7 +307,7 @@ export class DemoSeedService {
       responsibleUserId: supervisor.user.id,
       forecastDeliveryAt: ahead(1 * DAY),
       stage: 'awaiting_parts',
-    });
+    }, { historicalProgress: true });
     const t2 = await this.tasks.create(supervisor, c2.id, {
       departmentId: dept('assembly'),
       title: 'تعویض درب صندوق',
@@ -347,7 +349,7 @@ export class DemoSeedService {
       admittedAt: ago(5 * HOUR),
       coverageType: 'personal',
       vehicleLocation: 'پارکینگ پذیرش',
-    });
+    }, { historicalProgress: true });
     let a3 = await this.assessments.create(expert, c3.id, {
       kind: 'initial',
       assessorName: 'کارشناس نمونه',
@@ -399,7 +401,7 @@ export class DemoSeedService {
       officialDeadlineAt: ago(3 * DAY),
       stage: 'in_repair',
       isLegacyEntry: true,
-    });
+    }, { historicalProgress: true });
     const t4 = await this.tasks.create(supervisor, c4.id, {
       departmentId: dept('body'),
       title: 'صافکاری درب‌های چپ',
@@ -421,7 +423,7 @@ export class DemoSeedService {
       coverageType: 'personal',
       responsibleUserId: supervisor.user.id,
       forecastDeliveryAt: ahead(6 * HOUR),
-    });
+    }, { historicalProgress: true });
     let a5 = await this.assessments.create(expert, c5.id, {
       kind: 'initial',
       assessorName: 'کارشناس نمونه',
@@ -476,5 +478,11 @@ export class DemoSeedService {
     await this.completion.recordQc(qc, c5.id, { expectedVersion: k5.version, at: ago(20 * HOUR), checks: allOk });
     k5 = await this.cases.detail(supervisor, c5.id);
     await this.completion.technicalClose(supervisor, c5.id, { expectedVersion: k5.version });
+    k5 = await this.cases.detail(supervisor, c5.id);
+    await this.operations.setDeductible(partsClerk, c5.id, 0, k5.version);
+    const statement = await this.operations.statement(partsClerk, c5.id);
+    for (const p of statement.unconfirmed) await this.operations.consume(partsClerk, c5.id, p.id, { expectedVersion: p.version, salePriceRial: p.priceRial ?? 0 });
+    await this.operations.send(partsClerk, c5.id, 0);
+
   }
 }

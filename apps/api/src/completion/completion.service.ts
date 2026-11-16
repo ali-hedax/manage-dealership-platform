@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
@@ -24,7 +25,9 @@ import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { assessments, blockers, cases, departments, partRequests, qcInspections, tasks, users } from '../db/schema';
 import { FinanceService } from '../finance/finance.service';
+import { notifyUsers, usersWithRole } from '../parts/part-notify';
 import { StockService } from '../daily-reports/stock.service';
+import { PartsOperationsService } from '../parts/parts-operations.service';
 import { PartsService } from '../parts/parts.service';
 
 type CaseRow = typeof cases.$inferSelect;
@@ -47,6 +50,7 @@ interface Evaluation {
   finance: CaseFinance;
   financialIssues: CompletionIssue[];
   financialValid: boolean;
+  invoiceVersion: number | null;
   deliveryIssues: CompletionIssue[];
 }
 
@@ -65,6 +69,7 @@ export class CompletionService {
     private readonly parts: PartsService,
     private readonly finance: FinanceService,
     private readonly stock: StockService,
+    private readonly operations: PartsOperationsService,
   ) {}
 
   private get db() {
@@ -81,10 +86,12 @@ export class CompletionService {
     await this.db.transaction(async (tx) => {
       const kase = await this.cases.loadForWrite(tx, tenantId, caseId, input.expectedVersion);
       assertOpen(kase);
+      const workflow = await this.cases.workflow(actor, caseId, tx);
+      if (workflow.requirements.quality.length) throw badRequest('QC_WORK_UNFINISHED', workflow.requirements.quality.join('؛ '));
       const work = await tx
         .select({ status: tasks.status, approvedAt: tasks.approvedAt })
         .from(tasks)
-        .where(eq(tasks.caseId, caseId));
+        .where(and(eq(tasks.caseId, caseId), eq(tasks.tenantId, tenantId)));
       const unfinished = work.filter((t) => t.status !== 'approved').length;
       if (unfinished) {
         throw badRequest('QC_WORK_UNFINISHED', 'کنترل کیفیت پس از تأیید همه فعالیت‌ها توسط سرپرست ثبت می‌شود', {
@@ -190,8 +197,16 @@ export class CompletionService {
           { stage: 'in_repair', technicalClosedAt: null, technicalClosedBy: null, technicalCloseNote: null },
           `خودکار: رد کنترل کیفیت دور ${round} — کار اصلاحی`,
         );
-      } else if (kase.stage !== 'quality_control' && kase.stage !== 'ready_for_delivery') {
-        await this.cases.applyStage(tx, actor, kase, { stage: 'quality_control' }, `خودکار: قبولی کنترل کیفیت دور ${round}`);
+      } else {
+        const recipients = await usersWithRole(tx, tenantId, ['parts_clerk']);
+        const alreadyPending = !!kase.workflow?.invoiceRequestedAt && !kase.workflow.invoiceCompletedAt;
+        const requestedAt = alreadyPending ? kase.workflow!.invoiceRequestedAt! : new Date().toISOString();
+        await this.cases.applyPatch(tx, actor, kase, { stage: 'quality_control', workflow: {
+          ...kase.workflow, invoiceRequestedAt: requestedAt, invoiceCompletedAt: undefined,
+          invoiceAssigneeId: kase.workflow?.invoiceAssigneeId ?? recipients[0] ?? null,
+        } }, 'case.invoice_collection_requested', null);
+        await notifyUsers(tx, tenantId, recipients, { kind: 'invoice_collection', title: `جمع‌آوری فاکتورها · ${kase.caseNumber}`,
+          link: `/cases/${caseId}#case-invoice`, dedupeKey: `invoice_collection:${caseId}:${requestedAt}` });
       }
     });
     return this.get(actor, caseId);
@@ -201,7 +216,7 @@ export class CompletionService {
     await this.db.transaction(async (tx) => {
       const kase = await this.cases.loadForWrite(tx, actor.user.tenantId, caseId, input.expectedVersion);
       assertOpen(kase);
-      const ev = await this.evaluate(tx, kase);
+      const ev = await this.evaluate(tx, kase, actor);
       if (ev.technicalValid) throw badRequest('ALREADY_CLOSED', 'بستن فنی قبلاً انجام شده است');
       const issues = blocking(ev.technicalIssues);
       if (issues.length) {
@@ -234,8 +249,9 @@ export class CompletionService {
     await this.db.transaction(async (tx) => {
       const kase = await this.cases.loadForWrite(tx, actor.user.tenantId, caseId, input.expectedVersion);
       assertOpen(kase);
-      const ev = await this.evaluate(tx, kase);
+      const ev = await this.evaluate(tx, kase, actor);
       if (ev.financialValid) throw badRequest('ALREADY_CLOSED', 'بستن مالی قبلاً انجام شده است');
+      if (kase.workflow?.invoiceRequestedAt && !kase.workflow.invoiceCompletedAt) throw badRequest('INVOICE_COLLECTION_REQUIRED', 'ابتدا مسئول قطعات صورت فاکتورها را تکمیل کند');
       const issues = blocking(ev.financialIssues);
       if (issues.length) throw badRequest('FINANCIAL_CLOSE_BLOCKED', `بستن مالی ممکن نیست: ${listOf(issues)}`, { issues });
       await this.cases.applyPatch(
@@ -248,6 +264,7 @@ export class CompletionService {
           financialCloseNote: input.note ?? null,
           financialCloseEstimateRial: ev.finance.estimateRial,
           financialCloseShareRial: ev.finance.customerShareRial,
+          ...(kase.workflow?.invoiceRequestedAt ? { workflow: { ...kase.workflow, financialClosedStatementVersion: ev.invoiceVersion! } } : {}),
           // No balance gate any more (spec decision 3); kept for the column's history.
           financialCloseWaivedRial: 0,
         },
@@ -265,7 +282,7 @@ export class CompletionService {
     await this.db.transaction(async (tx) => {
       const kase = await this.cases.loadForWrite(tx, actor.user.tenantId, caseId, input.expectedVersion);
       assertOpen(kase);
-      const ev = await this.evaluate(tx, kase);
+      const ev = await this.evaluate(tx, kase, actor);
       if (ev.deliveryIssues.length) {
         throw badRequest('DELIVERY_GATE', `تحویل خودرو ممکن نیست: ${listOf(ev.deliveryIssues)}`, {
           issues: ev.deliveryIssues,
@@ -307,7 +324,7 @@ export class CompletionService {
       .from(cases)
       .where(and(eq(cases.id, caseId), eq(cases.tenantId, actor.user.tenantId)));
     if (!kase) throw notFound('پرونده');
-    const ev = await this.evaluate(this.db, kase);
+    const ev = await this.evaluate(this.db, kase, actor);
     const userIds = [
       ...new Set(
         [kase.technicalClosedBy, kase.financialClosedBy, kase.deliveredBy, ...ev.qc.map((q) => q.inspectedBy)].filter(
@@ -374,7 +391,7 @@ export class CompletionService {
 
   // ------------------------------------------------------------- evaluation
 
-  private async evaluate(db: DbOrTx, kase: CaseRow): Promise<Evaluation> {
+  private async evaluate(db: DbOrTx, kase: CaseRow, actor: Actor): Promise<Evaluation> {
     const tenantId = kase.tenantId;
     const caseId = kase.id;
     const qc = await db
@@ -398,7 +415,7 @@ export class CompletionService {
     const work = await db
       .select({ status: tasks.status, departmentId: tasks.departmentId, updatedAt: tasks.updatedAt })
       .from(tasks)
-      .where(eq(tasks.caseId, caseId));
+      .where(and(eq(tasks.caseId, caseId), eq(tasks.tenantId, tenantId)));
     const unapproved = work.filter((t) => t.status !== 'approved').length;
     if (unapproved) technicalIssues.push(issue('tasks_unapproved', { count: unapproved }));
     const [{ open }] = (await db
@@ -445,21 +462,29 @@ export class CompletionService {
     // ---- financial
     // Spec decision 3: the official invoice and payments live in the accounting
     // system. Manage only checks that the final statement is settled on the
-    // current assessment; payer shares and the customer balance never block.
+    // current assessment and final invoice version. Payment balances stay in accounting.
     const finance = await this.finance.summaryOn(db, tenantId, caseId);
     const financialIssues: CompletionIssue[] = [];
+    let invoiceVersion: number | null = null;
+    if (kase.workflow?.invoiceRequestedAt) {
+      const statement = await this.operations.statement(actor, caseId, db);
+      invoiceVersion = statement.versions.at(-1)?.number ?? null;
+      const current = statement.versions.at(-1)?.snapshot;
+      if (!kase.workflow.invoiceCompletedAt || !current || !isDeepStrictEqual(current, statement.live)) financialIssues.push(issue('invoice_pending'));
+    }
     if (!versions.some((v) => v.status === 'final')) financialIssues.push(issue('no_final_assessment'));
     financialIssues.push(...assessmentIssues);
     const financialValid =
       !!kase.financialClosedAt &&
       finance.estimateRial === kase.financialCloseEstimateRial &&
+      (!kase.workflow?.invoiceRequestedAt || (finance.customerShareRial === kase.financialCloseShareRial && kase.workflow.financialClosedStatementVersion === invoiceVersion)) &&
       blocking(financialIssues).length === 0;
 
     const deliveryIssues: CompletionIssue[] = [];
     if (!technicalValid) deliveryIssues.push(issue('technical_not_closed'));
     if (!financialValid) deliveryIssues.push(issue('financial_not_closed'));
 
-    return { kase, qc, technicalIssues, technicalValid, finance, financialIssues, financialValid, deliveryIssues };
+    return { kase, qc, technicalIssues, technicalValid, finance, financialIssues, financialValid, invoiceVersion, deliveryIssues };
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import type { CaseDetail, CaseWageRow, WageHistoryEntry } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -16,7 +16,8 @@ import { Dialog } from './Dialog';
 export function CaseWagesPanel({ kase }: { kase: CaseDetail }) {
   const { can } = useAuth();
   const toast = useToast();
-  const allowed = can('wage.manage') || can('wage.report');
+  const { mutate: refresh } = useSWRConfig();
+  const allowed = can('wage.manage') || can('wage.report') || can('part.manage');
   const { data, error, mutate } = useSWR<CaseWageRow[]>(allowed ? `/cases/${kase.id}/wages` : null, fetcher);
   const [editing, setEditing] = useState<CaseWageRow | null>(null);
   const [amount, setAmount] = useState('');
@@ -26,7 +27,7 @@ export function CaseWagesPanel({ kase }: { kase: CaseDetail }) {
   const [historyOf, setHistoryOf] = useState<CaseWageRow | null>(null);
   const { data: history } = useSWR<WageHistoryEntry[]>(historyOf ? `/tasks/${historyOf.taskId}/wage-history` : null, fetcher);
   if (!allowed) return null;
-  const manage = can('wage.manage');
+  const manage = (can('wage.manage') || can('part.manage')) && kase.status === 'open';
 
   function edit(row: CaseWageRow) {
     setEditing(row);
@@ -43,6 +44,7 @@ export function CaseWagesPanel({ kase }: { kase: CaseDetail }) {
     setFailure('');
     try {
       await mutate(await api<CaseWageRow[]>(`/tasks/${editing.taskId}/wage`, { method: 'PUT', body: { amountRial: value, expectedVersion: editing.version, ...(reason.trim() ? { reason: reason.trim() } : {}) } }), { revalidate: false });
+      void refresh(`/cases/${kase.id}/parts-statement`);
       toast('اجرت تعمیرکار ثبت شد');
       setEditing(null);
     } catch (e) {

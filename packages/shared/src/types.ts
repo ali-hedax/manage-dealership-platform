@@ -373,6 +373,7 @@ interface AssessmentImportOrigin {
 }
 export interface AssessmentImportCounts { final: number; rejected: number; correction: number; unknown: number }
 export interface AssessmentImportPreview {
+  deductiblePercent?: number | null;
   /** Final rows that can be added to the draft (parts and main labour). */
   rows: (AssessmentImportOrigin & { action: 'replace' | 'repair'; description: string; partNumber: string | null; quantity: number; unitPriceRial: number; labourRial: number; evidence: string; date: string | null; unit: string | null; outcome?: 'new' | 'unchanged' | 'updated' | 'replacement';
     /** The rejected line this row replaces (same technical code): certain when both came in this file, probable otherwise. */

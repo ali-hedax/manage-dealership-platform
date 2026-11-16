@@ -208,7 +208,7 @@ describe('existing-vehicle import: apply and re-import', () => {
       ])
     ).body as VehicleImport;
     expect(p.rows.map((r) => r.outcome)).toEqual(['update', 'needs_review', 'error', 'new']);
-    expect(row(p, 4).changes.map((c) => c.field).sort()).toEqual(['مرحله', 'پلاک'].sort());
+    expect(row(p, 4).changes.map((c) => c.field).sort()).toEqual(['پلاک']);
     expect(row(p, 5).messages.some((m) => m.text.includes('تاریخ پذیرش فایل'))).toBe(true);
     await apply(p.id);
 
@@ -220,7 +220,7 @@ describe('existing-vehicle import: apply and re-import', () => {
     const a2 = (await manager.get(`/cases/${caseA}`)).body as CaseDetail;
     expect(a2.customer?.fullName).toBe('مالک آزمون');
     expect(a2.vehicle.plate).toBe('12 ب 345 - 67'); // stored normalized, as everywhere in Manage
-    expect(a2.stage).toBe('quality_control');
+    expect(a2.stage).toBe('in_repair'); // QC cannot be inferred from a spreadsheet label without approved work.
     expect(((await manager.get(`/cases/${caseB}`)).body as CaseDetail).admittedAt).toBe('2026-10-12T05:45:00.000Z');
 
     // The same plate in Persian digits is not a change.

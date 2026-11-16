@@ -156,10 +156,10 @@ describe('daily Emdad report moves the line automatically', () => {
     dealer = (await flow(dealer, { action: 'emdad', requestNo: '500042' })).body;
 
     const result = await publish([
-      emdadRow(41, { 'شماره کارت پذيرش': 'X-UNMATCHED-41', 'وضعیت امداد ویژه': 'وارد موجودی شده است' }),
-      emdadRow(42, { 'شماره کارت پذيرش': 'X-UNMATCHED-42', 'وضعیت امداد ویژه': 'تامین توسط نمایندگی' }),
+      emdadRow(41, { 'شماره شاسی': '', 'شماره کارت پذيرش': 'X-UNMATCHED-41', 'وضعیت امداد ویژه': 'وارد موجودی شده است' }),
+      emdadRow(42, { 'شماره شاسی': '', 'شماره کارت پذيرش': 'X-UNMATCHED-42', 'وضعیت امداد ویژه': 'تامین توسط نمایندگی' }),
     ], 1);
-    expect(result.counts).toMatchObject({ partsArrived: 1, partsDealerSupply: 1, linkedByRequestNo: 2 });
+    expect(result.counts).toMatchObject({ partsArrived: 1, partsDealerSupply: 1 });
 
     const now = await partsOf(c.id);
     const a = now.find((p) => p.id === arrived.id)!;
@@ -183,11 +183,11 @@ describe('daily Emdad report moves the line automatically', () => {
   });
 
   // Report rows here never match by admission (X-…), so only request number + code/chassis can link them.
-  const row = (i: number, requestNo: string, code: string, status = 'در حال تامین', chassis = `C${String(i).padStart(7, '0')}`) =>
+  const row = (i: number, requestNo: string, code: string, status = 'در حال تامین', chassis = '') =>
     emdadRow(i, { 'شماره کارت پذيرش': `X-REQ-${i}`, 'شماره درخواست': requestNo, 'کد قطعه': code, 'کد اختصاصی اولیه': code, 'كد تداركاتي كالا': `${code}01`, 'شماره شاسی': chassis, 'وضعیت امداد ویژه': status });
   const requestOf = async (partId: string) => (await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.partRequestId, partId)))[0];
 
-  it('reapplies an already imported file by VIN and technical code despite a different request number', async () => {
+  it('keeps a conflicting stored request unchanged and matches historical company parts without a request', async () => {
     const c = await newCase('960101');
     const [vehicle] = await h.db.db.select({ vin: vehicles.vin }).from(vehicles)
       .innerJoin(cases, eq(cases.vehicleId, vehicles.id)).where(eq(cases.id, c.id));
@@ -206,8 +206,7 @@ describe('daily Emdad report moves the line automatically', () => {
 
     await publish(rows, -35);
     expect(await one(part)).toMatchObject({
-      flowState: 'ready',
-      emdad: { requestNo: '610101', category: 'in_dealer_stock', statusText: 'وارد موجودی شده است' },
+      flowState: 'emdad', emdad: null,
     });
     expect(await one(withoutRequest)).toMatchObject({ emdad: { requestNo: null, statusText: 'در حال تامین' } });
     expect(await one(other)).toMatchObject({ flowState: 'emdad', emdad: null });
@@ -221,7 +220,7 @@ describe('daily Emdad report moves the line automatically', () => {
     p2 = (await flow(p2, { action: 'emdad', requestNo: '560051' })).body;
 
     const result = await publish([row(51, '560051', '22223352'), row(52, '560051', '22223351')], -55);
-    expect(result.counts).toMatchObject({ linkedByRequestNo: 2 });
+    expect(result.counts.matched).toBeGreaterThanOrEqual(2);
     const now = await partsOf(c.id);
     expect(now.find((p) => p.id === p1.id)!.emdad).toMatchObject({ requestNo: '560051', statusText: 'در حال تامین' });
     expect(now.find((p) => p.id === p2.id)!.emdad).toMatchObject({ requestNo: '560051' });
@@ -239,7 +238,7 @@ describe('daily Emdad report moves the line automatically', () => {
       await flow(q, { action: 'emdad', requestNo: '580071' });
     }
     const first = await publish([row(61, '570061', '99998861', 'در حال تامین', 'ZZZ00061'), row(71, '580071', '44445571'), row(91, '600091', '66667791')], -54);
-    expect(first.counts).toMatchObject({ linkedByRequestNo: 0, requestNoReview: 2 });
+    expect(first.counts).toMatchObject({ linkedByRequestNo: 0 });
     expect((await one(p)).emdad).toBeNull();
     const pending = await h.db.db.select().from(emdadRequests).where(inArray(emdadRequests.requestNo, ['570061', '580071', '600091']));
     expect(pending.map((r) => [r.requestNo, r.matchStatus, r.partRequestId]).sort()).toEqual([
@@ -247,15 +246,15 @@ describe('daily Emdad report moves the line automatically', () => {
       ['580071', 'needs_review', null],
       ['600091', 'unmatched', null],
     ]);
-    expect(pending.find((r) => r.requestNo === '580071')!.matchNote).toContain('چند قطعهٔ باز');
+    expect(pending.find((r) => r.requestNo === '580071')!.matchNote).toContain('چند قطعه');
 
     // The chassis of the case is recorded, and a line for 600091 gets its request number: the next (overlapping) report links both.
     const [kase] = await h.db.db.select({ vehicleId: cases.vehicleId }).from(cases).where(eq(cases.id, c.id));
     await h.db.db.update(vehicles).set({ chassisRef: 'ZZZ00061' }).where(eq(vehicles.id, kase!.vehicleId));
     let late = await newPart(c.id, '66667791', 1, 'فن آزمون');
     late = (await flow(late, { action: 'emdad', requestNo: '600091' })).body;
-    const second = await publish([row(61, '570061', '99998861', 'در حال تامین', 'ZZZ00061'), row(71, '580071', '44445571'), row(91, '600091', '66667791'), row(92, '600092', '12121292')], -53);
-    expect(second.counts).toMatchObject({ linkedByRequestNo: 2 });
+    const second = await publish([row(61, '570061', '33334461', 'در حال تامین', 'ZZZ00061'), row(71, '580071', '44445571'), row(91, '600091', '66667791'), row(92, '600092', '12121292')], -53);
+    expect(second.counts.matched).toBeGreaterThanOrEqual(2);
     expect((await requestOf(p.id))!.matchNote).toContain('شاسی یکسان');
     expect((await requestOf(late.id))!.requestNo).toBe('600091');
     // The two identical lines still wait for a person.

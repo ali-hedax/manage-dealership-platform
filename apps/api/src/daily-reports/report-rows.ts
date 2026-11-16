@@ -166,6 +166,10 @@ const EMDAD_STATUS_CATEGORY: Record<string, string> = {
   'رسید توسط نمایندگی': 'received_by_dealer',
   'تامین توسط نمایندگی': 'supplied_by_dealer',
   'در حال تامین': 'in_supply',
+  'در مرحله خرید': 'in_supply',
+  'در مرحلهٔ خرید': 'in_supply',
+  'در حال جمع آوری': 'ready_to_collect',
+  'دریافت شده توسط نمایندگی': 'received_by_dealer',
   'آماده جمع آوری': 'ready_to_collect',
   '**پیش نویس قطعه': 'draft',
   'آماده صدور فاکتور': 'invoice_ready',
@@ -182,6 +186,7 @@ export function emdadKey(o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'emd
   const parts = [o.admissionNo, o.chassis, o.emdadNo, o.requestNo, o.initialCode].map(idPart);
   if (parts.slice(0, 4).every(Boolean)) return parts.join('|');
   const [admission, chassis, emdad, request, initial] = parts;
+  if (request && admission && emdad && initial) return parts.join('|');
   const code = idPart(o.partCode);
   if (!request && chassis && code) return [admission, chassis, emdad, '', initial || code].join('|');
   return null;
@@ -217,7 +222,9 @@ export function parseEmdadSheet(rows: string[][]) {
     else if (full.basePartNumber && part && full.basePartNumber !== part) official.codeNotes.push('پایه کد کامل با «کد قطعه» فرق دارد (ممکن است تغییر کد یا تأمین جایگزین باشد؛ تفسیر نشده)');
     if (initial && part && initial !== part) official.codeNotes.push('«کد اختصاصی اولیه» با «کد قطعه» فرق دارد (تفسیر نشده)');
     if (official.fullCode) official.fullCode = full?.fullStockCode ?? official.fullCode;
-    const key = emdadKey(official);
+    let key = emdadKey(official);
+    const unreliable = [official.chassis, official.requestNo, official.partCode, official.initialCode].some(v => /^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(v.trim()));
+    if (unreliable) { key = null; messages.push('شناسه با نمایش علمی قابل اتکا نیست؛ مقدار اصلی را به صورت متن بررسی کنید'); }
     let outcome: RowOutcome = 'valid';
     if (!key) {
       outcome = 'ambiguous';

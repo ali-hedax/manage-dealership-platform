@@ -18,7 +18,7 @@ let depts: { id: string; code: string }[];
 const dept = (code: string) => depts.find((d) => d.code === code)!.id;
 
 async function newCase(): Promise<CaseDetail> {
-  const res = await expert.post('/cases', {
+  const res = await expert.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'دنا', vin: `TESTVIN${Math.random().toString().slice(2, 12)}` },
     admittedAt: daysAgo(2),
     coverageType: 'personal',

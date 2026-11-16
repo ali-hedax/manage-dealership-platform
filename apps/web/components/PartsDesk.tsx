@@ -1,8 +1,9 @@
 'use client';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { parseStockCode, toLatinDigits, toPersianDigits, type CaseDetail, type DeskFolder, type Part, type StockOption, type StockSnapshotInfo } from '@manage/shared';
+import { parseStockCode, toLatinDigits, toPersianDigits, type CaseDetail, type PartsOperationsNotice, type DeskFolder, type Part, type StockOption, type StockSnapshotInfo } from '@manage/shared';
 import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum } from '@/lib/format';
@@ -19,6 +20,7 @@ export function PartsDesk() {
   const { can } = useAuth();
   const params = useSearchParams();
   const { data: folders, error, mutate: reload } = useSWR<DeskFolder[]>('/desk/folders', fetcher, { refreshInterval: 60_000 });
+  const { data: notices } = useSWR<PartsOperationsNotice[]>(can('part.manage') ? '/parts/workbench/notices' : null, fetcher, { refreshInterval: 15000 });
   const [picked, setPicked] = useState<string | null>(params.get('case'));
   const [focus, setFocus] = useState<Part | null>(null);
   const [q, setQ] = useState('');
@@ -41,6 +43,7 @@ export function PartsDesk() {
           <p>مدیریت تأمین، موجودی و تحویل قطعات خودروهای تصادفی</p>
         </div>
       </header>
+      {notices?.filter(n => n.key.startsWith('invoice-')).map(n => <div key={n.key} className="panel panel-body invoice-pending"><strong>● جمع‌آوری فاکتورها · <bdi>{n.caseNumber}</bdi></strong> <Link className="btn" href={`/cases/${n.caseId}#case-invoice`}>باز کردن صورت فاکتورها</Link></div>)}
       {error && <p role="alert" className="m-error">فهرست خودروها خوانده نشد. <button type="button" className="m-btn-s" onClick={() => void reload()}>تلاش دوباره</button></p>}
       <div className="pdesk-grid">
         <aside className="pdesk-side" aria-label="خودروها و وضعیت">

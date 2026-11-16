@@ -89,7 +89,7 @@ const DELETES: [table: string, where: string][] = [
 ];
 
 /** Case columns emptied or reset; everything else of the case is kept. */
-const CASE_RESET_COLUMNS = ['stage', 'status', 'forecast_delivery_at', 'repair_plan', 'actual_delivery_at', 'technical_closed_at', 'technical_closed_by', 'technical_close_note',
+const CASE_RESET_COLUMNS = ['workflow', 'stage', 'status', 'forecast_delivery_at', 'repair_plan', 'actual_delivery_at', 'technical_closed_at', 'technical_closed_by', 'technical_close_note',
   'financial_closed_at', 'financial_closed_by', 'financial_close_note', 'financial_close_estimate_rial', 'financial_close_share_rial', 'financial_close_waived_rial',
   'delivered_by', 'recipient_name', 'recipient_relation', 'delivery_note', 'updated_at', 'updated_by', 'version'];
 const EMDAD_LINK_COLUMNS = ['case_id', 'part_request_id', 'match_status', 'match_source', 'match_note', 'updated_at', 'version'];
@@ -174,7 +174,7 @@ export async function resetTestStages(db: SqlClient, o: ResetOptions): Promise<R
     reset.notifications_marked_read = await count(
       `update notifications n set read_at = now() where n.tenant_id = $2 and n.read_at is null and exists (select 1 from unnest($1::uuid[]) c(id) where n.link like '/cases/' || c.id::text || '%')`, [scope, tenantId]);
     reset.cases = await count(
-      `update cases set stage = 'reception', status = 'open', forecast_delivery_at = null, repair_plan = null, actual_delivery_at = null,
+      `update cases set workflow = '{"guided":true}'::jsonb, stage = 'reception', status = 'open', forecast_delivery_at = null, repair_plan = null, actual_delivery_at = null,
         technical_closed_at = null, technical_closed_by = null, technical_close_note = null, financial_closed_at = null, financial_closed_by = null, financial_close_note = null,
         financial_close_estimate_rial = null, financial_close_share_rial = null, financial_close_waived_rial = null,
         delivered_by = null, recipient_name = null, recipient_relation = null, delivery_note = null,

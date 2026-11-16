@@ -68,6 +68,7 @@ export function AssessmentImport({ assessment, onClose, onDone }: { assessment: 
       {!!r.rejectedExisting?.length && <div className="callout callout-amber" data-testid="import-rejected-existing">این اقلام قبلی در فایل «رد» شده‌اند؛ حذف نمی‌شوند، با نشان «رد شده» می‌مانند و دیگر نیاز تأمین حساب نمی‌شوند:<ul>{r.rejectedExisting.map((x) => <li key={x.itemId}>{x.description}{x.code ? <> · <bdi>{toPersianDigits(x.code)}</bdi></> : null} ({origin(x)})</li>)}</ul></div>}
       {!!r.errors.length && <div className="callout callout-red" role="alert">فایل خطا دارد؛ هیچ ردیفی ثبت نمی‌شود.<ul>{r.errors.map((x, i) => <li key={i}>{origin(x)}: {x.message}</li>)}</ul></div>}
       {!!r.warnings.length && <div className="callout callout-amber" data-testid="import-warnings">پیش از ثبت بررسی کنید:<ul>{r.warnings.map((x, i) => <li key={i}>{origin(x)}: {x.message}</li>)}</ul></div>}
+      <p className="callout">فرانشیز فایل: {r.deductiblePercent === null || r.deductiblePercent === undefined ? 'نامشخص؛ مسئول قطعات تکمیل کند' : `${faNum(r.deductiblePercent)}٪`}</p>
       <dl className="dl import-summary" data-testid="import-summary">
         <dt>صفحه و برگه</dt><dd>{r.summary.pages ? `${faNum(r.summary.pages)} صفحه چاپی` : 'بدون شماره صفحه'}{many ? `، ${faNum(r.summary.sheets)} برگه` : ''}</dd>
         <dt>قطعات</dt><dd>{faNum(r.summary.parts.final)} نهایی، {faNum(r.summary.parts.rejected)} ردشده{r.summary.parts.correction ? `، ${faNum(r.summary.parts.correction)} درخواست اصلاح` : ''}</dd>

@@ -258,7 +258,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         }
         toast(`پرونده ${saved.caseNumber} ثبت شد`);
       }
-      router.push(`/cases/${saved.id}`);
+      router.push(`/cases/${saved.id}${editing ? '' : '#case-assessment'}`);
     } catch (err) {
       idempotencyKey.current = newKey();
       setError(errorMessage(err));
@@ -401,6 +401,9 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
             </select>
           )}
         </div>
+        <div className="field span-all"><fieldset className="damage-choices"><legend>انتخاب سریع شرح خسارت</legend>
+          {['صافکاری', 'نقاشی', 'صافکاری و نقاشی', 'تعویض اتاق'].map(choice => <button key={choice} type="button" className="btn btn-sm" aria-pressed={f.damageDescription === choice || f.damageDescription.startsWith(`${choice}؛`)} onClick={() => { const old = ['صافکاری و نقاشی', 'صافکاری', 'نقاشی', 'تعویض اتاق'].find(x => f.damageDescription === x || f.damageDescription.startsWith(`${x}؛`)); const detail = old ? f.damageDescription.slice(old.length).replace(/^؛\s*/, '') : f.damageDescription; set('damageDescription', detail.trim() ? `${choice}؛ ${detail.trim()}` : choice); }}>{choice}</button>)}
+        </fieldset></div>
         <label className="field span-all">
           <span>شرح خسارت</span>
           <textarea className="input" name="damageDescription" {...text('damageDescription')} />

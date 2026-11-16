@@ -36,8 +36,8 @@ test('accident expert: folder desk → case folder → tabs and «قدم بعد�
   // A folder opens only through its own «باز کردن پرونده» link (one clear action per card).
   await folders.first().getByRole('link', { name: /باز کردن پرونده/ }).click();
   await expect(page.locator('.case-hero')).toBeVisible();
-  await expect(page.getByRole('list', { name: 'مسیر خودرو' }).getByRole('listitem')).toHaveCount(5);
-  for (const tab of ['کار امروز', 'کارشناسی', 'قطعات', 'مدارک', 'تاریخچه']) await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'مسیر خودرو' }).getByRole('listitem')).toHaveCount(6);
+  for (const tab of ['قطعات', 'مدارک', 'تاریخچه']) await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible();
   await openCaseTab(page, 'کار امروز');
   await expect(page.getByRole('button', { name: 'ساخت مسیر تعمیر' })).toBeVisible();
   await shots(page, 'case-folder', (n) => info.outputPath(n));

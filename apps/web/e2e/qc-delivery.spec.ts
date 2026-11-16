@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, openCaseSections } from './helpers';
+import { login, openCaseSections, openCaseTab } from './helpers';
 
 // Issue #12 in the browser, on demo case 5 (personal): QC failed once, the
 // corrective activity was approved, round 2 passed and the case is technically
@@ -11,7 +11,7 @@ async function openCase5(page: Page, user: string) {
   await login(page, user);
   await page.goto('/cases?q=' + encodeURIComponent('مشتری نمونه پنج'));
   await page.locator('tbody tr').filter({ hasText: 'مشتری نمونه پنج' }).click();
-  await openCaseSections(page,'quality','tasks','finance','history');
+  await openCaseSections(page,'completion','tasks','finance','history');
   await expect(page.getByTestId('completion-panel')).toBeVisible();
 }
 
@@ -24,7 +24,9 @@ test('QC history, settlement, financial close and handover archive the case', as
   await expect(page.getByTestId('qc-round')).toHaveCount(2);
   await expect(panel).toContainText('دور ۲: قبول');
   await expect(panel).toContainText('پوست‌پرتقالی روی لبه درب');
+  await openCaseTab(page, 'اجرای تعمیر');
   await expect(page.getByTestId('task').filter({ hasText: 'کار اصلاحی کنترل کیفیت' })).toHaveCount(1);
+  await openCaseTab(page, 'تکمیل پرونده و تحویل');
   await expect(panel.getByRole('button', { name: 'تحویل خودرو' })).toBeDisabled();
 
   // A second accident expert closes financially: the invoice is issued in the

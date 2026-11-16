@@ -18,7 +18,7 @@ import type { Actor } from '../auth/auth.types';
 import { CasesService } from '../cases/cases.service';
 import { AppError, notFound, versionConflict } from '../common/errors';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessments, caseFinance, casePayments, cases, financialApprovals, partRequests, users } from '../db/schema';
+import { assessments, caseFinance, casePayments, cases, financialApprovals, partRequests, partsStatements, users } from '../db/schema';
 
 
 const proposedByUser = alias(users, 'finance_proposed_by');
@@ -237,7 +237,9 @@ export class FinanceService {
     const inputs = await this.gateInputs(db, tenantId, caseId);
     const gate = evaluateGate(inputs, 0);
     const [shares] = await db.select().from(caseFinance).where(eq(caseFinance.caseId, caseId));
-    const share = customerShareOf(kase.coverageType, shares?.customerShareRial, inputs.estimateRial);
+    const [invoice] = await db.select({ snapshot: partsStatements.snapshot }).from(partsStatements).where(and(eq(partsStatements.tenantId, tenantId), eq(partsStatements.caseId, caseId))).orderBy(desc(partsStatements.version)).limit(1);
+    const invoiceShare = invoice?.snapshot.deductible?.customerShareRial;
+    const share = invoiceShare !== null && invoiceShare !== undefined ? { value: invoiceShare, derived: false } : customerShareOf(kase.coverageType, shares?.customerShareRial, inputs.estimateRial);
 
     const rows = await db
       .select({

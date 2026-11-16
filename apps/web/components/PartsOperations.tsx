@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import {
-  EXTERNAL_STATUS_LABELS, type CaseDetail, type Contractor, type Department, type ExternalWork,
+  parseDeductible, EXTERNAL_STATUS_LABELS, type CaseDetail, type Contractor, type Department, type ExternalWork,
   type PartsOperationsNotice, type PartsStatement, type StatementLine,
 } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
@@ -19,7 +19,7 @@ export function PartsOperationNotices({ parts = false }: { parts?: boolean }) {
   const { data } = useSWR<PartsOperationsNotice[]>(can(parts ? 'part.manage' : 'case.update') ? endpoint : null, fetcher, { refreshInterval: 30_000 });
   if (!data?.length) return null;
   return <section className="stack" aria-label="پیگیری قطعات">
-    {data.map(item => <Link className="callout callout-amber row" href={`/cases/${item.caseId}#case-parts`} key={item.key}>
+    {data.map(item => <Link className="callout callout-amber row" href={`/cases/${item.caseId}#${item.key.startsWith('invoice-') ? 'case-invoice' : 'case-parts'}`} key={item.key}>
       <Plate value={item.plate ?? ''}/><span>{item.message} · <bdi>{item.caseNumber}</bdi></span>
     </Link>)}
   </section>;
@@ -151,13 +151,15 @@ function ContractorForm({ item, done }: { item?: Contractor; done: () => void })
 
 export function PartsStatementPanel({ kase }: { kase: CaseDetail }) {
   const { can } = useAuth();
+  const { mutate: refresh } = useSWRConfig();
+  const [percent, setPercent] = useState('');
   const endpoint = `/cases/${kase.id}/parts-statement`;
   const { data, error, mutate } = useSWR<PartsStatement>(endpoint, fetcher, { refreshInterval: 30_000 });
   const [assessment, setAssessment] = useState(false), [version, setVersion] = useState(0);
   const [failure, setFailure] = useState(''), [busy, setBusy] = useState(false);
   async function save(path: string, body: object) {
     setBusy(true);setFailure('');
-    try { await api(path, { body });await mutate(); }
+    try { await api(path, { body });await mutate(); await refresh(`/cases/${kase.id}`); void refresh((key) => typeof key === 'string' && (key.includes(`/cases/${kase.id}/workflow`) || key === `/cases/${kase.id}/completion` || key === '/parts/workbench/notices')); }
     catch (e) { setFailure(errorMessage(e)); } finally { setBusy(false); }
   }
   const selected = data?.versions.find(v => v.number === version);
@@ -173,6 +175,15 @@ export function PartsStatementPanel({ kase }: { kase: CaseDetail }) {
           <option value={0}>صورت زنده</option>{data.versions.map(v => <option key={v.number} value={v.number}>نسخهٔ {faNum(v.number)} · {formatJalali(v.sentAt)}</option>)}</select></label>
         <label><input type="checkbox" checked={assessment} onChange={e => setAssessment(e.target.checked)}/> نمایش مبلغ کارشناسی کنار قیمت</label>
         {selected && selected.number > 1 && <p className="callout">اضافه شده {selected.added.join('، ') || '—'} · حذف شده {selected.removed.join('، ') || '—'} · تغییر کرده {selected.changed.join('، ') || '—'}</p>}
+        <section className="stack" aria-label="خلاصه فاکتور و فرانشیز"><h3>اجرت کارشناسی و تخصیص تعمیرکار</h3>
+          {(snapshot.labour ?? []).map(l => <p key={l.category}>{l.category}: {rial(l.assessedRial)}</p>)}
+          <p>جمع کارشناسی: {rial(snapshot.assessedLabourRial ?? 0)} · تخصیص به تعمیرکار: {rial(snapshot.allocatedLabourRial ?? 0)} · تفاوت: {rial((snapshot.allocatedLabourRial ?? 0) - (snapshot.assessedLabourRial ?? 0))}</p>
+          <p>جمع کل فاکتور (قطعه، خدمات بیرون و اجرت): <strong>{rial(snapshot.invoiceTotalRial ?? 0)}</strong></p>
+          {snapshot.deductible?.percent !== null && snapshot.deductible?.percent !== undefined ? <p>فرانشیز: {faNum(snapshot.deductible.percent)}٪ · منبع: {snapshot.deductible.source === 'assessment' ? 'کارشناسی' : 'ثبت مسئول قطعات'} · مبنا: {rial(snapshot.deductible.basisRial)} · سهم مشتری: <strong>{rial(snapshot.deductible.customerShareRial ?? 0)}</strong></p> : <p className="callout callout-amber">فرانشیز مشخص نیست؛ مسئول قطعات درصد را وارد کند. صفر معتبر است.</p>}
+          {manage && !selected && <form className="row" onSubmit={e => { e.preventDefault(); const value = parseDeductible(percent); if (value === null) { setFailure('درصدی بین صفر تا صد وارد کنید'); return; } void save(`${endpoint}/deductible`, { percent: value, expectedVersion: kase.version }); }}>
+            <label className="field">فرانشیز (درصد)<input className="input" inputMode="decimal" value={percent} onChange={e => setPercent(e.target.value)} required /></label><button className="btn" disabled={busy}>ثبت فرانشیز</button>
+          </form>}
+        </section>
         <StatementRows rows={snapshot.parts} assessment={assessment}/>
         {!!snapshot.external.length && <><h3>کار بیرون از نمایندگی</h3><StatementRows rows={snapshot.external} assessment={false}/></>}
         {manage && !selected && data.unconfirmed.map(p => <ConsumptionForm key={`${p.id}:${p.version}`} part={p} busy={busy}

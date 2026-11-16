@@ -21,9 +21,9 @@ describe('request number + code + chassis', () => {
     expect(d).toMatchObject({ kind: 'link', part: { id: 'p2' }, note: 'شمارهٔ درخواست و کد فنی یکسان است' });
   });
 
-  it('notes a matching chassis and accepts a single candidate whose code differs only when the chassis agrees', () => {
+  it('accepts matching chassis and code but rejects a different technical code', () => {
     expect(decideByRequest(report('22223351'), 'zzz-00061', [part('p1', '22223351', 'ZZZ00061')])).toMatchObject({ kind: 'link', note: 'شمارهٔ درخواست، کد فنی و شاسی یکسان است' });
-    expect(decideByRequest(report('99998861'), 'ZZZ00061', [part('p1', '33334461', 'ZZZ00061')])).toMatchObject({ kind: 'link', note: expect.stringContaining('کد فنی گزارش با قطعه فرق دارد') });
+    expect(decideByRequest(report('99998861'), 'ZZZ00061', [part('p1', '33334461', 'ZZZ00061')])).toMatchObject({ kind: 'review' });
   });
 
   it('never guesses: two lines with the same code, or neither code nor chassis agreeing, go to review', () => {
@@ -34,3 +34,7 @@ describe('request number + code + chassis', () => {
     expect(decideByRequest(report('99998861'), 'ZZZ00061', [part('p1', '11110001', 'ZZZ00061'), part('p2', '11110002', 'ZZZ00061')])).toMatchObject({ kind: 'review' });
   });
 });
+
+ it('rejects a report chassis that contradicts a matching request and code', () => {
+  expect(decideByRequest(report('22223351'), 'OTHER001', [part('p1', '22223351', 'ZZZ00061')])).toMatchObject({kind: 'review'});
+ });

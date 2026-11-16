@@ -94,6 +94,12 @@ export interface StatementLine {
 export interface StatementSnapshot {
   caseNumber: string; plate: string | null; admissionNo: string | null; coverage: CoverageType;
   dealership: string; parts: StatementLine[]; external: StatementLine[];
+  labour?: { category: string; assessedRial: number }[];
+  assessedLabourRial?: number;
+  allocatedLabourRial?: number;
+  invoiceTotalRial?: number;
+  deductible?: { percent: number | null; source: 'assessment' | 'manual' | null; basisRial: number; customerShareRial: number | null };
+
 }
 export interface PartsStatement {
   live: StatementSnapshot;

@@ -23,6 +23,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await page.getByLabel('نام و نام خانوادگی').fill('مشتری آزمون خودکار');
   await page.getByLabel('تلفن همراه').fill('۰۹۰۰۰۰۰۹۹۹۹');
   await page.getByLabel('شرح خسارت').fill('ضربه به گلگیر جلو چپ');
+  await page.getByLabel('خودرو از قبل در تعمیرگاه است').check();
   await page.getByRole('button', { name: 'کارت طلایی / امداد خودرو' }).click();
   await page.getByLabel('شماره پرونده کارت طلایی / امداد').fill('GC-E2E-1');
   await page.getByText('موعد رسمی یا پیش‌بینی ثبت‌شده از قبل',{exact:true}).click();
@@ -42,10 +43,12 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
 
   // Add a body-shop activity and record start.
   await openCaseSections(page,'tasks','blockers','history');
+  await openCaseTab(page, 'برنامهٔ تعمیر');
   await page.getByRole('button', { name: 'افزودن فعالیت' }).click();
   await page.locator('select[name="departmentId"]').selectOption({ label: 'صافکاری' });
   await page.locator('input[name="technicianName"]').fill('تکنسین آزمون');
   await page.getByRole('button', { name: 'ذخیره فعالیت' }).click();
+  await openCaseTab(page, 'اجرای تعمیر');
   const task = page.getByTestId('task').first();
   await expect(task).toContainText('شروع‌نشده');
   await task.getByRole('button', { name: 'شروع', exact: true }).click();
