@@ -1,3 +1,4 @@
+import { CaseDocumentsController } from '../cases/case-documents.controller';
 import { Module } from '@nestjs/common';
 import { DailyReportsModule } from '../daily-reports/daily-reports.module';
 import { AlertsController } from '../alerts/alerts.controller';
@@ -42,6 +43,7 @@ import {
 @Module({
   imports: [DailyReportsModule],
   controllers: [
+    CaseDocumentsController,
     AlertsController,
     DeskController,
     ControlRoomController,
@@ -80,6 +82,6 @@ import {
     ReportsService,
     DiscrepanciesService,
   ],
-  exports: [CasesService, TasksService, BlockersService, AssessmentsService, PartsService, FinanceService, CompletionService],
+  exports: [PartsOperationsService, CasesService, TasksService, BlockersService, AssessmentsService, PartsService, FinanceService, CompletionService],
 })
 export class AccidentModule {}

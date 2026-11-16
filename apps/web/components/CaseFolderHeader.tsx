@@ -1,7 +1,7 @@
 'use client';
 import { useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { COVERAGE_LABELS, JOURNEY_LABELS, JOURNEY_STEPS, coverageTab, type CaseDetail, type DeskFolder, type NextActor, type Task } from '@manage/shared';
+import { CASE_STEPS, CASE_STEP_LABELS, type CaseWorkflow, COVERAGE_LABELS, coverageTab, type CaseDetail, type DeskFolder, type NextActor, type Task } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali, toPersianDigits } from '@/lib/format';
@@ -15,17 +15,14 @@ import { Plate } from './Plate';
 // the coverage tab and a binder clip; the car, customer, plate, identifiers and days in
 // the shop; the five-step journey as chevrons; folder tabs; and the role's «قدم بعدی شما».
 
-export const CASE_TABS = ['today', 'assessment', 'parts', 'docs', 'history'] as const;
+export const CASE_TABS = ['intake', 'assessment', 'plan', 'execution', 'quality', 'completion', 'parts', 'docs', 'history'] as const;
 export type CaseTab = (typeof CASE_TABS)[number];
-export const CASE_TAB_LABELS: Record<CaseTab, string> = { today: 'کار امروز', assessment: 'کارشناسی', parts: 'قطعات', docs: 'مدارک', history: 'تاریخچه' };
-const TAB_ICON: Record<CaseTab, IconName> = { today: 'calendar', assessment: 'clipboard', parts: 'box', docs: 'doc', history: 'history' };
-/** The tab that holds each section, so «#case-…» links keep working. */
+export const CASE_TAB_LABELS: Record<CaseTab, string> = { ...CASE_STEP_LABELS, parts: 'قطعات', docs: 'مدارک', history: 'تاریخچه' };
+const TAB_ICON: Record<CaseTab, IconName> = { intake: 'folder', assessment: 'clipboard', plan: 'list', execution: 'wrench', quality: 'check', completion: 'flag', parts: 'box', docs: 'doc', history: 'history' };
 export const SECTION_TAB: Record<string, CaseTab> = {
-  'case-tasks': 'today', 'case-blockers': 'today', 'case-quality': 'today', 'case-responsibility': 'today',
-  'case-assessment': 'assessment',
-  'case-parts': 'parts',
-  'case-info': 'docs', 'case-finance': 'docs', 'case-provenance': 'docs',
-  'case-history': 'history',
+  'case-plan': 'plan', 'case-tasks': 'execution', 'case-blockers': 'execution', 'case-quality': 'quality', 'case-responsibility': 'execution',
+  'case-completion': 'completion', 'case-invoice': 'completion', 'case-assessment': 'assessment', 'case-parts': 'parts',
+  'case-info': 'docs', 'case-finance': 'completion', 'case-provenance': 'docs', 'case-history': 'history',
 };
 
 export function myActors(roles: readonly string[]): NextActor[] {
@@ -44,7 +41,9 @@ export function useFolder(caseId: string) {
 export function CaseFolderHeader({ kase, tab, onTab, actions, chips, children }: { kase: CaseDetail; tab: CaseTab; onTab: (t: CaseTab, anchor?: string) => void; actions?: ReactNode; chips?: ReactNode; children: ReactNode }) {
   const { data: f } = useFolder(kase.id);
   const cov = coverageTab(kase.coverageType);
-  const doneIdx = f ? JOURNEY_STEPS.indexOf(f.journey) : -1;
+  const { data: workflow } = useSWR<CaseWorkflow>(`/cases/${kase.id}/workflow?v=${kase.version}`, fetcher);
+  const current = workflow?.current ?? 'assessment';
+  const doneIdx = CASE_STEPS.indexOf(current);
   return (
     <div className={`cf cov-${cov.key}`}>
       <span className="cf-cover-tab" title={COVERAGE_LABELS[kase.coverageType]}>{cov.label}</span>
@@ -65,21 +64,23 @@ export function CaseFolderHeader({ kase, tab, onTab, actions, chips, children }:
             {f && <span className="cf-days"><b>{faNum(f.daysInShop)}</b> روز در تعمیرگاه</span>}
             {kase.isTest && <span className="m-tag">آزمایشی</span>}
           </div>
-          <ol className="journey" aria-label="مسیر خودرو">
-            {JOURNEY_STEPS.map((s, i) => {
-              const state = kase.stage === 'delivered' || i < doneIdx ? 'done' : i === doneIdx ? 'now' : 'next';
-              return (
-                <li key={s} className={`jstep ${state}`} aria-current={state === 'now' ? 'step' : undefined}>
-                  {state === 'done' && <AppIcon name="check" />}
-                  <span>{JOURNEY_LABELS[s]}{s === 'repair' && f?.place && state === 'now' && f.place !== JOURNEY_LABELS[s] && <small>{f.place}</small>}</span>
-                </li>
-              );
+          <ol className="journey guided-journey" aria-label="مسیر خودرو">
+            {CASE_STEPS.map((step, i) => {
+              const locked = i > doneIdx;
+              const reason = step === 'plan' || step === 'execution' || step === 'quality' ? workflow?.requirements[step].join('؛ ') : '';
+              return <li key={step} className={`jstep ${i < doneIdx ? 'done' : i === doneIdx ? 'now' : 'next'}`} aria-current={i === doneIdx ? 'step' : undefined}>
+                <button type="button" disabled={locked} aria-pressed={tab === step} onClick={() => onTab(step)} title={locked ? reason || 'ابتدا مرحلهٔ فعلی را تکمیل کنید' : undefined}>
+                  <span>{faNum(i + 1)} · {CASE_STEP_LABELS[step]}</span>
+                  {locked && <small>{reason || 'پس از تکمیل مرحلهٔ قبل'}</small>}
+                </button>
+                {i < CASE_STEPS.length - 1 && <span className="step-arrow" aria-hidden="true">←</span>}
+              </li>;
             })}
           </ol>
           {(chips || actions) && <div className="cf-status">{chips}{actions && <div className="cf-actions no-print">{actions}</div>}</div>}
         </header>
         <nav className="cf-tabs" role="tablist" aria-label="بخش‌های پرونده">
-          {CASE_TABS.map((t) => (
+          {(['parts', 'docs', 'history'] as const).map((t) => (
             <button key={t} type="button" role="tab" id={`tab-${t}`} aria-controls="case-tabpanel" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => onTab(t)}>
               <AppIcon name={TAB_ICON[t]} />{CASE_TAB_LABELS[t]}
             </button>
@@ -95,14 +96,14 @@ const ACTOR_LABEL: Record<NextActor, string> = { accident_expert: 'کارشنا�
 
 /** What happens after the step, and where it is done. */
 function help(text: string, actor: NextActor): { why: string; tab: CaseTab; anchor: string; cta: string } {
-  if (text.includes('تمام شد —')) return { why: 'با تأیید شما، کار روی گوشی تکنسین بعدی ظاهر می‌شود و اجرت این قدم قطعی می‌شود.', tab: 'today', anchor: 'case-tasks', cta: 'بررسی و تأیید' };
+  if (text.includes('تمام شد —')) return { why: 'با تأیید شما، کار روی گوشی تکنسین بعدی ظاهر می‌شود و اجرت این قدم قطعی می‌شود.', tab: 'execution', anchor: 'case-tasks', cta: 'بررسی و تأیید' };
   if (text.startsWith('برآورد')) return { why: 'با ورود برآورد (تکی یا اکسل)، فهرست قطعات ساخته می‌شود و مسئول قطعات تعیین تکلیف می‌کند.', tab: 'assessment', anchor: 'case-assessment', cta: 'ورود برآورد کارشناسی' };
-  if (text.startsWith('مسیر تعمیر')) return { why: 'قدم‌ها را به ترتیب بنویسید؛ کار هر قدم روی گوشی تکنسین همان جایگاه می‌آید.', tab: 'today', anchor: 'case-tasks', cta: 'ساخت مسیر تعمیر' };
-  if (text.includes('آمادهٔ تحویل —') || text.includes('کنترل نهایی')) return { why: 'پس از کنترل نهایی و «پایان کار»، پرونده بسته می‌شود و قطعاتش دیگر از موجودی کم نمی‌شوند.', tab: 'today', anchor: 'case-quality', cta: 'کنترل نهایی و پایان کار' };
-  if (text.startsWith('تکنسین:') || text.includes('متوقف')) return { why: 'پاسخ بدهید یا علت توقف را ثبت کنید؛ مدت انتظار در اتاق کنترل دیده می‌شود.', tab: 'today', anchor: 'case-blockers', cta: 'موانع و پیگیری' };
+  if (text.startsWith('مسیر تعمیر')) return { why: 'قدم‌ها را به ترتیب بنویسید؛ کار هر قدم روی گوشی تکنسین همان جایگاه می‌آید.', tab: 'plan', anchor: 'case-plan', cta: 'ساخت مسیر تعمیر' };
+  if (text.includes('آمادهٔ تحویل —') || text.includes('کنترل نهایی')) return { why: 'پس از کنترل نهایی و «پایان کار»، پرونده بسته می‌شود و قطعاتش دیگر از موجودی کم نمی‌شوند.', tab: 'quality', anchor: 'case-quality', cta: 'کنترل نهایی و پایان کار' };
+  if (text.startsWith('تکنسین:') || text.includes('متوقف')) return { why: 'پاسخ بدهید یا علت توقف را ثبت کنید؛ مدت انتظار در اتاق کنترل دیده می‌شود.', tab: 'execution', anchor: 'case-blockers', cta: 'موانع و پیگیری' };
   if (actor === 'parts_clerk') return { why: 'هر قلم را در فهرست قطعات تعیین تکلیف کنید؛ آمادهٔ تحویل که شد، کارشناس و جایگاه خبر می‌گیرند.', tab: 'parts', anchor: 'case-parts', cta: 'فهرست قطعات' };
-  if (actor === 'technician') return { why: 'این قدم را تکنسین جایگاه روی گوشی خود پیش می‌برد؛ شروع، پایان و تأخیر هر قدم در جدول «برنامهٔ تعمیرات» دیده می‌شود.', tab: 'today', anchor: 'case-tasks', cta: 'برنامهٔ تعمیر' };
-  return { why: 'برنامه و وضعیت هر قدم در جدول «برنامهٔ تعمیرات» است.', tab: 'today', anchor: 'case-tasks', cta: 'برنامهٔ تعمیر' };
+  if (actor === 'technician') return { why: 'این قدم را تکنسین جایگاه روی گوشی خود پیش می‌برد؛ شروع، پایان و تأخیر هر قدم در جدول «برنامهٔ تعمیرات» دیده می‌شود.', tab: 'execution', anchor: 'case-tasks', cta: 'برنامهٔ تعمیر' };
+  return { why: 'برنامه و وضعیت هر قدم در جدول «برنامهٔ تعمیرات» است.', tab: 'execution', anchor: 'case-tasks', cta: 'برنامهٔ تعمیر' };
 }
 
 /** A reminder about someone else's step: the technician of the running step, the parts clerk or the case's expert. */

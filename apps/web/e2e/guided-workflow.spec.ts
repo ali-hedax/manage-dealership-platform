@@ -1,0 +1,106 @@
+import { test, expect } from '@playwright/test';
+import { formatJalaliDateInput, formatTimeInput } from '@manage/shared';
+import { login } from './helpers';
+test.use({ actionTimeout: 15000 });
+
+test('expert and parts: guided admission to delivery and archive with RTL review', async ({ page, browser }, info) => {
+  test.setTimeout(180000);
+  const adminContext = await browser.newContext(); const admin = await adminContext.newPage(); await login(admin, 'admin');
+  const headers = { 'x-manage-client': 'e2e' };
+  const departments = await (await admin.request.get('/api/v1/departments')).json();
+  const body = departments.find((d: { code: string }) => d.code === 'body').id;
+  const staff = await (await admin.request.get('/api/v1/workshop/staff')).json();
+  const tech = staff.find((u: { displayName: string }) => u.displayName === 'تکنسین نمونه');
+  const stationResponse = await admin.request.post('/api/v1/workshop/stations', { headers, data: { code: 'E2E-GUIDED-B', name: 'جایگاه مسیر ساختگی', trade: 'body', departmentId: body, responsibleUserId: tech.id } });
+  expect(stationResponse.status()).toBe(201);
+  const station = (await stationResponse.json()).find((s: { code: string }) => s.code === 'E2E-GUIDED-B');
+  await login(page, 'supervisor'); await page.goto('/cases/new');
+  await page.getByLabel('VIN (شماره شاسی)', { exact: true }).fill('TESTVIN99900E2E21');
+  await page.getByLabel('مدل', { exact: true }).fill('ریرا');
+  await page.getByLabel('نام و نام خانوادگی', { exact: true }).fill('مشتری ساختگی مسیر');
+  await page.getByLabel('تلفن همراه', { exact: true }).fill('09000009921');
+  await page.getByRole('button', { name: 'صافکاری و نقاشی', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'شرح خسارت', exact: true })).toHaveValue('صافکاری و نقاشی');
+  await page.getByRole('textbox', { name: 'شرح خسارت', exact: true }).fill('صافکاری و نقاشی؛ جزئیات ساختگی');
+  await page.getByRole('group', { name: 'نوع پوشش' }).getByRole('button', { name: /^شخصی/ }).click();
+  await page.getByRole('button', { name: 'ثبت پرونده', exact: true }).click();
+  await expect(page).toHaveURL(/\/cases\/[0-9a-f-]+#case-assessment/);
+  const id = page.url().split('/cases/')[1]!.split('#')[0]!;
+  const journey = page.getByRole('list', { name: 'مسیر خودرو' });
+  await expect(journey.getByRole('listitem')).toHaveCount(6);
+  await expect(journey.getByRole('button').nth(4)).toBeDisabled();
+  await expect(page.getByLabel('تغییر مرحله')).toHaveCount(0);
+  const assessment = page.getByTestId('assessment-panel'), dialog = page.getByRole('dialog');
+  await assessment.getByRole('button', { name: 'شروع کارشناسی' }).click();
+  await dialog.getByLabel('نام کارشناس *').fill('کارشناس ساختگی'); await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await assessment.getByRole('button', { name: 'افزودن قلم', exact: true }).click();
+  await dialog.getByRole('group', { name: 'نوع قلم' }).getByRole('button').nth(1).click();
+  await dialog.getByLabel('شرح *', { exact: true }).fill('اجرت صافکاری');
+  await dialog.getByLabel('اجرت (ریال)', { exact: true }).fill('1000000');
+  await dialog.getByLabel('واحد اجرت').selectOption(body);
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await assessment.getByRole('button', { name: 'نهایی کردن', exact: true }).click(); await dialog.getByRole('button', { name: 'نهایی کردن', exact: true }).click();
+  await page.getByRole('button', { name: /رفتن به برنامهٔ تعمیر/ }).click();
+  await page.getByRole('button', { name: 'ساخت مسیر تعمیر', exact: true }).click();
+  // The established plan editor is the only place for route order, days and assignees.
+  const row = page.getByRole('region', { name: 'ساخت مسیر تعمیر' }).getByRole('listitem').first();
+  await row.getByRole('combobox', { name: 'واحد *', exact: true }).selectOption(body);
+  await row.getByRole('combobox', { name: 'جایگاه', exact: true }).selectOption(station.id);
+  await row.getByRole('combobox', { name: 'تکنسین مسئول *', exact: true }).selectOption(tech.id);
+  await row.getByRole('textbox', { name: 'روز کاری *', exact: true }).fill('1');
+  await page.getByRole('button', { name: 'ثبت مسیر', exact: true }).click();
+  await page.getByRole('button', { name: /تأیید برنامه و شروع اجرا/ }).click();
+  const task = page.getByTestId('task').filter({ hasText: 'صافکاری' }).first();
+  await task.getByRole('button', { name: 'شروع', exact: true }).click();
+  await task.getByRole('button', { name: 'اتمام', exact: true }).click();
+  await task.getByRole('button', { name: 'تأیید تحویل', exact: true }).click();
+  await page.getByRole('button', { name: /رفتن به کنترل کیفیت/ }).click();
+  await page.getByRole('button', { name: 'ثبت کنترل کیفیت', exact: true }).click();
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await expect(page.getByText(/جمع‌آوری فاکتورها با مسئول قطعات/)).toBeVisible();
+  const partsContext = await browser.newContext(); const parts = await partsContext.newPage(); await login(parts, 'parts'); await parts.goto('/parts');
+  await parts.getByRole('link', { name: 'باز کردن صورت فاکتورها', exact: true }).click();
+  await expect(parts.getByRole('region', { name: 'خلاصه فاکتور و فرانشیز' })).toContainText('۱,۰۰۰,۰۰۰');
+  await parts.getByLabel('فرانشیز (درصد)', { exact: true }).fill('۰'); await parts.getByRole('button', { name: 'ثبت فرانشیز', exact: true }).click();
+  await parts.getByRole('button', { name: 'نهایی و ارسال', exact: true }).click();
+  await page.goto(`/cases/${id}`);
+  for (const name of ['بستن فنی', 'بستن مالی']) { await page.getByRole('button', { name, exact: true }).click(); await dialog.getByRole('button', { name: 'ثبت', exact: true }).click(); }
+  await page.getByRole('button', { name: 'تحویل خودرو', exact: true }).click();
+  await dialog.getByLabel('تحویل‌گیرنده خودرو را بازدید کرد و برگه تحویل را امضا کرد *').check(); await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await expect(page.getByTestId('delivery-done')).toContainText('بایگانی');
+  for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 900 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: info.outputPath(`guided-${width}.png`), fullPage: true }); }
+  await page.goto('/cases'); await page.getByRole('link', { name: 'بایگانی', exact: true }).click();
+  await page.getByLabel('جست‌وجوی پرونده', { exact: true }).fill('TESTVIN99900E2E21');
+  await expect(page.locator('tbody')).toContainText('مشتری ساختگی مسیر');
+  await partsContext.close(); await adminContext.close();
+});
+
+test('historical Emdad part visibly takes two official daily statuses and ignores an older file', async ({ page, browser }) => {
+  test.setTimeout(120000);
+  await login(page, 'expert');
+  const headers = { 'x-manage-client': 'e2e' };
+  const created = await page.request.post('/api/v1/cases', { headers, data: { vehicle: { model: 'خودرو امداد ساختگی', vin: 'TESTVIN99900E2E22' }, coverageType: 'personal', admittedAt: new Date().toISOString() } });
+  const c = await created.json(); expect(created.status()).toBe(201);
+  const part = await page.request.post(`/api/v1/cases/${c.id}/parts`, { headers, data: { description: 'قطعه امداد ساختگی', partNumber: '00123456', quantity: 1, source: 'company' } }); expect(part.status()).toBe(201);
+  const context = await browser.newContext(); const admin = await context.newPage(); await login(admin, 'admin');
+  async function publish(status: string, minutes: number) {
+    const fields = ['شماره کارت پذيرش', 'شماره شاسی', 'شماره امداد ویژه', 'شماره درخواست', 'کد اختصاصی اولیه', 'کد قطعه', 'كد تداركاتي كالا', 'وضعیت امداد ویژه'];
+    const values = ['TEST-ADM-E2E22', 'TESTVIN99900E2E22', 'TEST-EMDAD22', '000022', '00123456', '00123456', '0012345601', status];
+    const row = (cells: string[]) => `<Row>${cells.map(v => `<Cell><Data ss:Type="String">${v}</Data></Cell>`).join('')}</Row>`;
+    const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="ساختگی"><Table>${row(fields)}${row(values)}</Table></Worksheet></Workbook>`;
+    const uploaded = await admin.request.post('/api/v1/daily-reports/uploads?kind=emdad&fileName=synthetic.xml', { headers: { ...headers, 'content-type': 'application/octet-stream' }, data: Buffer.from(xml) });
+    expect(uploaded.status()).toBe(201); let job = await uploaded.json();
+    await expect.poll(async () => { job = await (await admin.request.get(`/api/v1/daily-reports/imports/${job.id}`)).json(); return job.status; }).not.toMatch(/uploaded|parsing/);
+    const at = new Date(Date.now() - minutes * 60000);
+    const applied = await admin.request.post(`/api/v1/daily-reports/imports/${job.id}/apply`, { headers, data: { declaration: true, declaredToday: true, reportDate: formatJalaliDateInput(at), reportTime: formatTimeInput(at) } });
+    expect(applied.status()).toBe(201);
+  }
+  await publish('در مرحلهٔ خرید', 50);
+  await page.goto(`/cases/${c.id}#case-parts`);
+  await expect(page.getByTestId('part')).toContainText('در مرحلهٔ خرید');
+  await publish('در حال جمع‌آوری', 30); await page.reload();
+  await expect(page.getByTestId('part')).toContainText('در حال جمع‌آوری');
+  await publish('در مرحلهٔ خرید', 60); await page.reload();
+  await expect(page.getByTestId('part')).toContainText('در حال جمع‌آوری');
+  await context.close();
+});

@@ -239,6 +239,12 @@ export class AssessmentsService {
           summary: result.summary, setAside: result.setAside, equivalents: result.equivalents }, snapshot: { version: saved.version, row: saved } });
         if (rejections.length) await this.syncRejectedParts(tx, actor, saved);
       }
+      if (result.deductiblePercent !== null && result.deductiblePercent !== undefined) {
+        const c = await this.cases.loadForWrite(tx, tenantId, a.caseId);
+        if (c.workflow?.deductible?.source !== 'manual' && (c.workflow?.deductible?.percent !== result.deductiblePercent || c.workflow?.deductible?.assessmentId !== a.id)) {
+          await this.cases.applyPatch(tx, actor, c, { workflow: { ...c.workflow, deductible: { percent: result.deductiblePercent, source: 'assessment', assessmentId: a.id } } }, 'case.deductible_imported', null);
+        }
+      }
       result.applied = true;
     });
     return result;

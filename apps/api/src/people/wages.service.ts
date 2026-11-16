@@ -46,7 +46,7 @@ export class WagesService {
   }
 
   private assertCanRead(actor: Actor) {
-    if (!actor.user.permissions.has('wage.manage') && !actor.user.permissions.has('wage.report')) throw forbidden();
+    if (!actor.user.permissions.has('wage.manage') && !actor.user.permissions.has('wage.report') && !actor.user.permissions.has('part.manage')) throw forbidden();
   }
 
   /**
@@ -107,12 +107,15 @@ export class WagesService {
   }
 
   async setWage(actor: Actor, taskId: string, input: WageSetInput): Promise<CaseWageRow[]> {
+    if (!actor.user.permissions.has('wage.manage') && !actor.user.permissions.has('part.manage')) throw forbidden();
     const tenantId = actor.user.tenantId;
     let caseId = '';
     await this.db.transaction(async (tx) => {
       const [task] = await tx.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId))).for('update');
       if (!task) throw notFound('کار');
       caseId = task.caseId;
+      const [kase] = await tx.select().from(cases).where(and(eq(cases.id, caseId), eq(cases.tenantId, tenantId))).for('update');
+      if (!kase || kase.status !== 'open') throw badRequest('CASE_CLOSED', 'اجرت پروندهٔ بسته قابل تغییر نیست');
       if (!task.assignedUserId) throw badRequest('WAGE_NO_TECHNICIAN', 'ابتدا حساب تعمیرکار این کار را مشخص کنید');
       const [existing] = await tx.select().from(technicianWages).where(and(eq(technicianWages.taskId, taskId), eq(technicianWages.tenantId, tenantId))).for('update');
       const current = existing?.version ?? 0;

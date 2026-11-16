@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { DESK_FILTER_LABELS, deskFilterMatch, greeting, toLatinDigits, type DeskFilter, type DeskFolder, type NextActor } from '@manage/shared';
@@ -67,6 +68,9 @@ export function DeskBoard({ title, actors, intro, filters = ['all', 'own', 'mine
           <b>پیگیری‌های امروز:</b> {followUps.length ? followUps.join(' · ') : 'فعلاً چیزی منتظر شما نیست.'}
         </p>
       )}
+      {actors.includes('accident_expert') && <section className="panel panel-body" aria-label="کار امروز"><h2>کار امروز</h2><ul className="today-work">
+        {own.filter(f => f.responsibleUserId === me.id || !f.responsibleUserId).map(f => <li key={f.caseId}><Link href={`/cases/${f.caseId}#${f.tasks.some(t => t.status === 'done') ? 'case-tasks' : f.journey === 'delivery' ? 'case-completion' : f.stage === 'quality_control' ? 'case-quality' : f.next.text.startsWith('مسیر تعمیر') ? 'case-plan' : f.tasks.length ? 'case-tasks' : 'case-assessment'}`}><bdi>{f.caseNumber}</bdi> · {f.vehicle} · {f.next.text}</Link></li>)}
+      </ul>{!own.length && <p>کاری برای پیگیری نیست.</p>}</section>}
       {error && <p role="alert" className="m-error">پوشه‌ها خوانده نشد. <button type="button" className="m-btn-s" onClick={() => void mutate()}>تلاش دوباره</button></p>}
       {data && !shown.length && <p className="m-empty">{own.length ? 'در این صافی خودرویی نیست.' : 'هنوز خودرویی در تعمیرگاه ثبت نشده است.'}</p>}
       {!data && !error && <p className="sr-only" role="status">در حال خواندن پوشه‌ها…</p>}

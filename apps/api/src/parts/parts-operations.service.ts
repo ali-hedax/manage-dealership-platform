@@ -1,7 +1,8 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import {
-  COVERAGE_LABELS, PART_SOURCE_LABELS,
+  COVERAGE_LABELS, PART_SOURCE_LABELS, deductibleShare,
   type Contractor, type ExternalWork, type PartsOperationsNotice, type PartsStatement, type StatementLine, type StatementSnapshot,
   type contractorSchema, type externalWorkActionSchema, type externalWorkCreateSchema, type partConsumptionSchema,
 } from '@manage/shared';
@@ -13,7 +14,7 @@ import { badRequest, forbidden, notFound, versionConflict } from '../common/erro
 import { newId } from '../common/ids';
 import { safeCell } from '../daily-reports/safe-cell';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { cases, externalContractors, externalWork, partRequests, partsStatements, tasks, vehicles } from '../db/schema';
+import { assessments, assessmentItems, departments, technicianWages, cases, externalContractors, externalWork, partRequests, partsStatements, tasks, vehicles } from '../db/schema';
 import { renderPersianListPdf } from '../reports/pdf';
 import { TasksService } from '../tasks/tasks.service';
 import { PartsWorkbenchService } from './parts-workbench.service';
@@ -170,18 +171,46 @@ export class PartsOperationsService {
       external: outside.filter(p => p.status === 'approved').map(p => ({ id: p.id, code: null, description: p.title,
         quantity: 1, source: 'خدمات بیرون', priceRial: p.priceRial, assessmentRial: null, reference: p.contractorName })),
     };
+    const [final] = await tx.select().from(assessments).where(and(eq(assessments.tenantId, tenantId), eq(assessments.caseId, caseId), eq(assessments.status, 'final'))).orderBy(desc(assessments.versionNo)).limit(1);
+    const assessed = final ? await tx.select({ amount: assessmentItems.labourRial, description: assessmentItems.description, department: departments.name }).from(assessmentItems)
+      .leftJoin(departments, and(eq(departments.id, assessmentItems.labourDepartmentId), eq(departments.tenantId, tenantId)))
+      .where(and(eq(assessmentItems.tenantId, tenantId), eq(assessmentItems.assessmentId, final.id), ne(assessmentItems.approvalStatus, 'rejected'))) : [];
+    const categories = new Map<string, number>();
+    for (const l of assessed) if (l.amount) {
+      const category = l.department ?? l.description;
+      categories.set(category, (categories.get(category) ?? 0) + l.amount);
+    }
+    live.labour = [...categories].map(([category, assessedRial]) => ({ category, assessedRial }));
+    live.assessedLabourRial = assessed.reduce((n, l) => n + l.amount, 0);
+    const wages = await tx.select({ amount: technicianWages.amountRial }).from(technicianWages).where(and(eq(technicianWages.tenantId, tenantId), eq(technicianWages.caseId, caseId)));
+    live.allocatedLabourRial = wages.reduce((n, w) => n + w.amount, 0);
+    live.invoiceTotalRial = [...live.parts, ...live.external].reduce((n, p) => n + (p.priceRial ?? 0) * p.quantity, 0) + live.assessedLabourRial;
+    if (!Number.isSafeInteger(live.invoiceTotalRial)) throw badRequest('INVOICE_TOTAL_TOO_LARGE', 'جمع مبلغ فاکتور بیش از حد قابل محاسبه است؛ ردیف‌ها را بررسی کنید');
+    const d = kase.c.workflow?.deductible;
+    live.deductible = { percent: d?.percent ?? null, source: d?.source ?? null, basisRial: live.invoiceTotalRial, customerShareRial: d ? deductibleShare(live.invoiceTotalRial, d.percent) : null };
     const editable = (p: (typeof parts)[number]) => ({
       id: p.id, description: p.description, version: p.version, priceRial: p.salePriceRial ?? p.unitPriceRial,
     });
     const unconfirmed = parts.filter(p => !p.consumedAt).map(editable);
     const consumed = parts.filter(p => p.consumedAt).map(editable);
     const current = versions.at(-1)?.snapshot;
+    const workflow = await this.cases.workflow(actor, caseId, tx);
+    const qcReady = !kase.c.workflow?.guided && !kase.c.workflow?.invoiceRequestedAt || workflow.current === 'completion';
     const difference = changes(live, current);
     return { live, unconfirmed, consumed,
-      readyToSend: kase.c.status === 'open' && repair.length > 0 && repair.every(t => t.status === 'approved') && !unconfirmed.length
-        && (!current || difference.added.length + difference.removed.length + difference.changed.length > 0),
+      readyToSend: qcReady && (!kase.c.workflow?.invoiceRequestedAt || (!!live.deductible && live.deductible.percent !== null)) && kase.c.status === 'open' && repair.length > 0 && repair.every(t => t.status === 'approved') && !unconfirmed.length
+        && (!current || difference.added.length + difference.removed.length + difference.changed.length > 0 || !isDeepStrictEqual(current, live)),
       versions: versions.map((v, i) => ({ number: v.version, sentAt: v.sentAt.toISOString(), snapshot: v.snapshot,
         ...changes(v.snapshot, versions[i - 1]?.snapshot) })) };
+  }
+
+  async setDeductible(actor: Actor, caseId: string, percent: number, expectedVersion: number) {
+    if (!actor.user.permissions.has('part.manage')) throw forbidden();
+    await this.db.transaction(async tx => {
+      const c = await this.cases.loadForWrite(tx, actor.user.tenantId, caseId, expectedVersion);
+      await this.cases.applyPatch(tx, actor, c, { workflow: { ...c.workflow, invoiceCompletedAt: undefined, deductible: { percent, source: 'manual' } } }, 'case.deductible_recorded', null);
+    });
+    return this.statement(actor, caseId);
   }
 
   async consume(actor: Actor, caseId: string, id: string, input: z.infer<typeof partConsumptionSchema>) {
@@ -209,7 +238,7 @@ export class PartsOperationsService {
   async send(actor: Actor, caseId: string, expectedVersion: number) {
     const tenantId = actor.user.tenantId;
     return this.db.transaction(async tx => {
-      await this.cases.loadForWrite(tx, tenantId, caseId);
+      const kase = await this.cases.loadForWrite(tx, tenantId, caseId);
       const statement = await this.statement(actor, caseId, tx);
       const current = statement.versions.at(-1)?.number ?? 0;
       if (current !== expectedVersion) throw versionConflict(current);
@@ -222,6 +251,7 @@ export class PartsOperationsService {
         snapshot: statement.live, sentBy: actor.user.id, isTest: actor.user.isTestTenant }).returning();
       await this.audit.record(tx, actor, { entityType: 'parts_statement', entityId: id, caseId,
         action: 'parts_statement.sent', after: { version: current + 1 }, snapshot: { version: current + 1, row: row! } });
+      await this.cases.applyPatch(tx, actor, kase, { workflow: { ...kase.workflow, invoiceCompletedAt: new Date().toISOString() } }, 'case.invoice_collection_completed', null);
       return { number: current + 1 };
     });
   }
@@ -238,7 +268,8 @@ export class PartsOperationsService {
       i + 1, safeCell(r.code ?? ''), safeCell(r.description), r.quantity, r.source, r.priceRial ?? '',
       r.priceRial === null ? '' : r.priceRial * r.quantity, safeCell(r.reference ?? ''), ...(showAssessment ? [r.assessmentRial ?? ''] : []),
     ];
-    const sheets = [{ name: 'صورت قطعات', items: snapshot.parts }, { name: 'کار بیرون', items: snapshot.external }];
+    const sheets = [{ name: 'صورت قطعات', items: snapshot.parts }, { name: 'کار بیرون', items: snapshot.external }, { name: 'اجرت کارشناسی', items: (snapshot.labour ?? []).map((l, i) => ({ id: String(i), code: null, description: l.category, quantity: 1, source: 'کارشناسی', priceRial: l.assessedRial, assessmentRial: l.assessedRial, reference: null })) }];
+    if (snapshot.deductible) meta.push(`فرانشیز ${snapshot.deductible.percent ?? 'نامشخص'}٪ · مبنای کل فاکتور ${snapshot.deductible.basisRial} ریال · سهم مشتری ${snapshot.deductible.customerShareRial ?? 'نامشخص'} ریال`);
     if (format === 'xlsx') return Buffer.from(writeWorkbook(sheets.map(s => ({
       name: s.name, rows: [meta.map(safeCell), header, ...s.items.map(cells)],
     }))));
@@ -253,6 +284,17 @@ export class PartsOperationsService {
     const outside = await this.external(actor);
     const out = outside.filter(p => p.overdue).map(p => ({ key: p.id, caseId: p.caseId, caseNumber: p.caseNumber,
       plate: p.plate, message: `وعدهٔ کار بیرون گذشته است · ${p.title}` }));
+    if (forParts) {
+      const pending = await this.db.select({ c: cases, plate: vehicles.plate }).from(cases)
+        .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
+        .where(and(eq(cases.tenantId, tenantId), eq(cases.status, 'open')));
+      for (const { c, plate } of pending) if (c.workflow?.invoiceRequestedAt) {
+        const w = await this.cases.workflow(actor, c.id);
+        const statement = await this.statement(actor, c.id);
+        const stale = !isDeepStrictEqual(statement.live, statement.versions.at(-1)?.snapshot);
+        if (w.current === 'completion' && (w.invoicePending || stale)) out.push({ key: `invoice-${c.id}`, caseId: c.id, caseNumber: c.caseNumber, plate, message: 'جمع‌آوری فاکتورها' });
+      }
+    }
     if (!forParts) {
       const cards = (await this.workbench.list(actor)).cards;
       for (const card of cards) for (const p of card.items.filter(p => p.overdueHandover)) {

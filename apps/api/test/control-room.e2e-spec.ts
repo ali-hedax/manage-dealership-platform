@@ -19,7 +19,7 @@ beforeAll(async () => {
 afterAll(async () => h?.close());
 
 it('shows four numbers, the funnel, the map, analysis, people and unanswered alerts, read-only', async () => {
-  const created = await expert.post('/cases', {
+  const created = await expert.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'دنا پلاس', plate: '۵۲ م ۹۰۷ - ۱۶', vin: 'TESTVIN7000000001' },
     customer: { fullName: 'مشتری آزمون اتاق کنترل', phone: '09007000001' },
     admittedAt: new Date(Date.now() - 4 * 86_400_000).toISOString(),
@@ -57,7 +57,7 @@ it('shows four numbers, the funnel, the map, analysis, people and unanswered ale
 });
 
 it('sends «عقب‌تر از برنامه» once to the expert and the technician', async () => {
-  const created = await expert.post('/cases', {
+  const created = await expert.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'تارا', plate: '۶۸ د ۱۹۳ - ۱۶', vin: 'TESTVIN7000000002' },
     customer: { fullName: 'مشتری آزمون تأخیر', phone: '09007000002' },
     admittedAt: new Date(Date.now() - 6 * 86_400_000).toISOString(),
@@ -78,7 +78,7 @@ it('sends «عقب‌تر از برنامه» once to the expert and the technic
 });
 
 it('a reminder can point to one part line of its own car only', async () => {
-  const created = await expert.post('/cases', {
+  const created = await expert.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'سورن پلاس', plate: '۴۷ ج ۸۱۲ - ۱۶', vin: 'TESTVIN7000000003' },
     customer: { fullName: 'مشتری آزمون تذکر قطعه', phone: '09007000003' },
     admittedAt: new Date().toISOString(),
@@ -92,7 +92,7 @@ it('a reminder can point to one part line of its own car only', async () => {
   const card = (await expert.get('/reminders/inbox')).body.find((r: { reminderId: string }) => r.reminderId === sent.body.id);
   expect(card.part).toEqual({ id: part.body.id, description: 'گلگیر جلو آزمون' });
   expect((await manager.post('/reminders', { userIds: [expertId], partId: part.body.id, body: 'بدون خودرو' })).status).toBe(400);
-  const other = await expert.post('/cases', {
+  const other = await expert.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'تارا', plate: '۱۱ ب ۱۱۱ - ۱۱', vin: 'TESTVIN7000000004' },
     customer: { fullName: 'مشتری آزمون دیگر', phone: '09007000004' },
     admittedAt: new Date().toISOString(),

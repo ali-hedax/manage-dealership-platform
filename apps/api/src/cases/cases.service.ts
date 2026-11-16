@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, like, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   CASE_STAGES,
+  type CaseWorkflow,
   currentJalaliYear,
   repairDayPlan,
   maskPhone,
@@ -33,6 +35,7 @@ import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import {calendarAt} from '../workshop/work-calendar';
 import {
+  assessments, qcInspections,
   blockers,
   caseCounters,
   cases,
@@ -48,10 +51,12 @@ import { recordInitialResponsibility, recordResponsibilityChange } from './respo
 import { requireSupportReason } from '../auth/support-reason';
 import {idKey,isNonUniqueAdmission} from '../vehicle-import/vehicle-sheet';
 
+export const planSignature = (work: (typeof tasks.$inferSelect)[]) => createHash('sha256').update(JSON.stringify(work.map(t => [t.id, t.stationId, t.assignedUserId, t.plannedStartAt, t.plannedEndAt, t.sortOrder]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))))).digest('hex');
 type CaseRow = typeof cases.$inferSelect;
 
 /** Fields only the vehicle import sets (not part of the public case contract). */
 export interface CaseImportFields {
+  historicalProgress?: boolean;
   admissionNo?: string | null;
   admissionNoKey?: string | null;
   admittedAtPrecision?: 'minute' | 'date';
@@ -182,6 +187,7 @@ export class CasesService {
         coverageNotes: input.coverageNotes ?? null,
         responsibleUserId: input.responsibleUserId ?? null,
         stage: input.stage ?? 'reception',
+        workflow: input.isLegacyEntry || extra.historicalProgress ? null : { guided: true },
         officialDeadlineAt: toDate(input.officialDeadlineAt),
         forecastDeliveryAt: repairPlan?new Date(repairPlan.endAt):toDate(input.forecastDeliveryAt),
         repairPlan,
@@ -348,6 +354,57 @@ export class CasesService {
     return this.detail(actor, id);
   }
 
+  async workflow(actor: Actor, id: string, db: DbOrTx = this.db): Promise<CaseWorkflow> {
+    const tenantId = actor.user.tenantId;
+    const [c] = await db.select().from(cases).where(and(eq(cases.id, id), eq(cases.tenantId, tenantId)));
+    if (!c) throw notFound('پرونده');
+    const [versions, work, qc] = await Promise.all([
+      db.select().from(assessments).where(and(eq(assessments.tenantId, tenantId), eq(assessments.caseId, id))).orderBy(desc(assessments.versionNo)),
+      db.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, id))),
+      db.select().from(qcInspections).where(and(eq(qcInspections.tenantId, tenantId), eq(qcInspections.caseId, id))).orderBy(desc(qcInspections.round)),
+    ]);
+    const record = c.workflow ?? {};
+    const final = versions.find(a => a.status === 'final');
+    const plan: string[] = [];
+    if (!final || versions.some(a => a.status === 'draft')) plan.push('کارشناسی و الحاقیه‌های باز را نهایی کنید');
+    if (c.coverageType === 'unknown') plan.push('نوع پوشش پرونده را مشخص کنید');
+    const execution = [...plan];
+    if (!work.length) execution.push('مسیر تعمیر را با دست‌کم یک فعالیت ثبت کنید');
+    if (work.some(t => !t.assignedUserId || !t.stationId || !t.plannedStartAt || !t.plannedEndAt)) execution.push('جایگاه، تکنسین و مدت همهٔ فعالیت‌ها را مشخص کنید');
+    const started = work.some(t => t.status !== 'pending');
+    const confirmed = !!record.planConfirmedAt && record.planSignature === planSignature(work);
+    const quality = [...plan];
+    if (!work.length || work.some(t => t.status !== 'approved')) quality.push('همهٔ فعالیت‌ها و کارهای اصلاحی باید تأیید شوند');
+    const latest = qc[0];
+    const passed = latest?.outcome === 'passed' && work.every(t => t.updatedAt <= latest.createdAt);
+    // Historical cases resume from actual work/QC, not a guessed stage number.
+    const current = c.stage === 'delivered' || (passed && !quality.length) || c.technicalClosedAt ? 'completion'
+      : work.length && work.every(t => t.status === 'approved') && !plan.length ? 'quality'
+      : started || confirmed ? 'execution' : !plan.length ? 'plan' : 'assessment';
+    return { current, record, requirements: { plan, execution, quality },
+      invoicePending: !!record.invoiceRequestedAt && !record.invoiceCompletedAt && !!passed && c.status === 'open' };
+  }
+
+  /** Seed restoration only. Never exposed by a controller, and impossible on a real tenant. */
+  async restoreSyntheticStage(actor: Actor, id: string, stage: CaseStage, expectedVersion: number) {
+    if (!actor.user.isTestTenant) throw badRequest('SYNTHETIC_ONLY', 'بازسازی نمونه فقط برای دادهٔ آزمایشی است');
+    await this.db.transaction(async tx => {
+      const current = await this.loadForWrite(tx, actor.user.tenantId, id, expectedVersion);
+      await this.applyStage(tx, actor, current, { stage }, 'بازسازی سابقهٔ ساختگی');
+    });
+  }
+
+  async confirmPlan(actor: Actor, id: string, expectedVersion: number) {
+    await this.db.transaction(async tx => {
+      const c = await this.loadForWrite(tx, actor.user.tenantId, id, expectedVersion);
+      const progress = await this.workflow(actor, id, tx);
+      if (progress.requirements.execution.length) throw badRequest('REPAIR_PLAN_INCOMPLETE', progress.requirements.execution.join('؛ '));
+      const work = await tx.select().from(tasks).where(and(eq(tasks.tenantId, actor.user.tenantId), eq(tasks.caseId, id)));
+      await this.applyPatch(tx, actor, c, { workflow: { ...c.workflow, guided: true, planConfirmedAt: new Date().toISOString(), planTaskIds: work.map(t => t.id), planSignature: planSignature(work) }, stage: 'in_repair' }, 'case.plan_confirmed', null);
+    });
+    return this.workflow(actor, id);
+  }
+
   async changeStage(actor: Actor, id: string, input: ChangeStageInput): Promise<CaseDetail> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
@@ -366,6 +423,11 @@ export class CasesService {
       if (input.stage === 'ready_for_delivery') {
         throw badRequest('TECHNICAL_CLOSE_REQUIRED', 'پرونده با «بستن فنی» پس از قبولی کنترل کیفیت آماده تحویل می‌شود');
       }
+      const progress = await this.workflow(actor, id, tx);
+      if (input.stage === 'quality_control' && progress.requirements.quality.length) throw badRequest('QC_WORK_UNFINISHED', progress.requirements.quality.join('؛ '));
+      if (input.stage === 'in_repair') throw badRequest('PLAN_CONFIRM_REQUIRED', 'اجرای تعمیر را پس از تکمیل برنامه با «تأیید برنامه و شروع اجرا» فعال کنید');
+      if (['awaiting_parts', 'awaiting_approval'].includes(input.stage) && progress.requirements.plan.length) throw badRequest('ASSESSMENT_REQUIRED', progress.requirements.plan.join('؛ '));
+      if (CASE_STAGES.indexOf(input.stage) < CASE_STAGES.indexOf(current.stage as CaseStage) && !actor.user.isOwner && !actor.user.roles.includes('system_admin')) throw badRequest('WORKFLOW_RECOVERY_REQUIRED', 'بازگشت مرحله با ثبت کار اصلاحی یا توسط مدیر سیستم انجام می‌شود');
       // Moving a case back to an earlier stage reopens recorded progress.
       if (CASE_STAGES.indexOf(input.stage) < CASE_STAGES.indexOf(current.stage as CaseStage)) requireSupportReason(actor, input.note);
       const patch: Partial<CaseRow> & { stage: CaseStage } = { stage: input.stage };

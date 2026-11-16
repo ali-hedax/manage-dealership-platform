@@ -49,11 +49,11 @@ export async function seedFleet(a: FleetActors, s: FleetServices, p: FleetPlaces
       responsibleUserId: by.user.id,
       damageDescription: 'خسارت نمونه برای نمایش (ساختگی).',
       ...(coverageType === 'golden_card' ? { goldenCardFileNo: `GC-TEST-${i}` } : coverageType === 'insurance' ? { insurerName: 'بیمهٔ نمونه', insuranceClaimNo: `INS-TEST-${i}` } : {}),
-    } as never);
+    } as never, { historicalProgress: true });
   };
   const stage = async (id: string, by: Actor, to: 'assessment' | 'awaiting_parts' | 'quality_control') => {
     const k = await s.cases.detail(by, id);
-    await s.cases.changeStage(by, id, { stage: to, expectedVersion: k.version } as never);
+    await s.cases.restoreSyntheticStage(by, id, to, k.version);
   };
   const part = (caseId: string, description: string, code: string, extra: Record<string, unknown> = {}) =>
     s.parts.create(a.expert, caseId, { description, partNumber: code, quantity: 1, source: 'company', ...extra } as never);

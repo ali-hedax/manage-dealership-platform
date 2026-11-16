@@ -15,7 +15,7 @@ test('compact case, PDF-style assessment preview and safe repeat-admission prefi
   expect(created.ok()).toBe(true); const c = await created.json();
   await page.goto(`/cases/${c.id}`);
   await expect(page.locator('#case-assessment')).toHaveAttribute('open','');
-  await expect(page.getByRole('tab',{name:'کارشناسی',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByRole('list',{name:'مسیر خودرو'}).getByRole('button').nth(1)).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('#case-parts')).toHaveCount(0);
   await expect(page.getByTestId('finance-panel')).not.toBeVisible();
   await page.getByRole('button',{name:'شروع کارشناسی',exact:true}).click();

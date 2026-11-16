@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch, Post, Query, StreamableFile } from '@nestjs/common';
-import { contractorSchema, externalWorkActionSchema, externalWorkCreateSchema, partConsumptionSchema, statementSendSchema } from '@manage/shared';
+import { deductibleSchema, contractorSchema, externalWorkActionSchema, externalWorkCreateSchema, partConsumptionSchema, statementSendSchema } from '@manage/shared';
 import { z } from 'zod';
 import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
@@ -61,6 +61,13 @@ export class PartsOperationsController {
   externalAction(@CurrentActor() actor: Actor, @IdParam() id: string,
     @Body(new ZodPipe(externalWorkActionSchema)) input: z.infer<typeof externalWorkActionSchema>) {
     return this.parts.externalAction(actor, id, input);
+  }
+
+  @Post('cases/:id/parts-statement/deductible')
+  @RequirePermissions('part.manage')
+  deductible(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(deductibleSchema)) input: z.infer<typeof deductibleSchema>) {
+    return this.parts.setDeductible(actor, id, input.percent, input.expectedVersion);
   }
 
   @Get('cases/:id/parts-statement')

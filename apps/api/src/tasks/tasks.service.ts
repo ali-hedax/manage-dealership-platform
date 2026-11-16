@@ -5,7 +5,7 @@ import { calendarAt } from '../workshop/work-calendar';
 import { stepDependencies, type CreateTaskInput, type RepairPlanStepsInput, type Task, type TaskActionInput, type TaskStatus, type UpdateTaskInput } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
-import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
+import { assertNotFuture, planSignature, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { requireSupportReason } from '../auth/support-reason';
 import { newId } from '../common/ids';
@@ -162,7 +162,7 @@ export class TasksService {
       caseId = task.caseId;
       // Any change of a recorded job by a system administrator is a correction with a reason.
       requireSupportReason(actor, input.scheduleReason);
-      await this.cases.loadForWrite(tx, tenantId, task.caseId);
+      const kase = await this.cases.loadForWrite(tx, tenantId, task.caseId);
       if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
 
       const scheduleChanged=['departmentId','plannedStartAt','plannedEndAt','durationMinutes','durationDays','stationId','assignedUserId','dependsOn'].some(k=>k in input);
@@ -198,6 +198,9 @@ export class TasksService {
         depsChange = { before, after: next };
       }
 
+      if (scheduleChanged && kase.workflow?.planConfirmedAt) {
+        await this.cases.applyPatch(tx, actor, kase, { workflow: { ...kase.workflow, planConfirmedAt: undefined, planSignature: undefined } }, 'case.plan_confirmation_invalidated', input.scheduleReason ?? null);
+      }
       const updated = await this.save(tx, task, patch);
       const fields = Object.keys(patch);
       const changes = diff(pickRow(task, fields), pickRow(updated, fields));
@@ -244,6 +247,11 @@ export class TasksService {
     }
     const kase = await this.cases.loadForWrite(tx, tenantId, task.caseId);
     if(kase.stage==='delivered')throw badRequest('CASE_DELIVERED','خودرو تحویل شده است');
+    if (input.action === 'start' && kase.workflow?.guided) {
+      const w = await this.cases.workflow(actor, kase.id, tx);
+      const plan = await tx.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, kase.id)));
+      if (w.requirements.execution.length || !w.record.planConfirmedAt || w.record.planSignature !== planSignature(plan) || !w.record.planTaskIds?.includes(taskId)) throw badRequest('PLAN_CONFIRM_REQUIRED', 'پیش از شروع فعالیت، کارشناسی و برنامهٔ تعمیر را کامل و تأیید کنید');
+    }
     const status = task.status as TaskStatus;
     let patch: Partial<TaskRow>;
     let action: string;

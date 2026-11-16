@@ -125,7 +125,7 @@ export class TaskWagesController {
   constructor(private readonly wages: WagesService) {}
 
   @Put(':id/wage')
-  @RequirePermissions('wage.manage')
+  @RequirePermissions('case.read')
   setWage(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(wageSetSchema)) body: WageSetInput) {
     return this.wages.setWage(actor, id, body);
   }

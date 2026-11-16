@@ -1,17 +1,17 @@
 'use client';
 
 import Link from 'next/link';
+import { CaseDocuments } from '@/components/CaseDocuments';
 import { ExternalWorkPanel, PartsStatementPanel } from '@/components/PartsOperations';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import {
-  CASE_STAGES,
   MISSING_FIELD_LABELS,
   STAGE_LABELS,
   type CaseDetail,
-  type CaseStage,
+  type CaseWorkflow,
 } from '@manage/shared';
 import { AssessmentPanel } from '@/components/AssessmentPanel';
 import { BlockersPanel } from '@/components/BlockersPanel';
@@ -30,7 +30,7 @@ import { CaseFolderHeader, NextStepCard, SECTION_TAB, type CaseTab } from '@/com
 import { CaseHistoryCard, RepairPlanTable } from '@/components/CaseToday';
 import { AppIcon } from '@/components/AppIcon';
 import { ReminderComposer } from '@/components/ReminderComposer';
-import { Dialog } from '@/components/Dialog';
+import { WorkflowAction } from '@/components/WorkflowAction';
 import { Timeline } from '@/components/Timeline';
 import { api, ApiError, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -45,15 +45,13 @@ function Missing() {
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { can, me } = useAuth();
-  const supportAccount = !me.isOwner && me.roles.includes('system_admin');
   const toast = useToast();
   const { data: kase, error, mutate } = useSWR<CaseDetail>(`/cases/${id}`, fetcher);
   const { mutate: mutateKey } = useSWRConfig();
-  const [stageBusy, setStageBusy] = useState(false);
   const [reminding, setReminding] = useState(false);
-  const [stageBack, setStageBack] = useState<{ stage: CaseStage; note: string } | null>(null);
   const [tab, setTab] = useState<CaseTab | null>(null);
   const [printing, setPrinting] = useState(false);
+  const { data: workflow } = useSWR<CaseWorkflow>(`/cases/${id}/workflow?v=${kase?.version ?? 0}`, fetcher);
   // «#case-…» links (cards, desks, alerts, tests) open the tab that holds the section.
   useEffect(() => {
     const sync = () => { const t = SECTION_TAB[window.location.hash.slice(1)]; if (t) setTab(t); };
@@ -88,29 +86,11 @@ export default function CaseDetailPage() {
       (Array.isArray(key) && key[0] === '/emdad/requests/search' && key[1] === id));
   };
 
-  async function changeStage(stage: CaseStage, note?: string) {
-    if (!kase || stage === kase.stage) return;
-    // A system administrator moving a case back writes a reason first (owner report).
-    if (note === undefined && supportAccount && CASE_STAGES.indexOf(stage) < CASE_STAGES.indexOf(kase.stage)) {
-      setStageBack({ stage, note: '' });
-      return;
-    }
-    setStageBusy(true);
-    try {
-      await api(`/cases/${kase.id}/stage`, { body: { stage, expectedVersion: kase.version, ...(note ? { note } : {}) } });
-      toast(`مرحله به «${STAGE_LABELS[stage]}» تغییر کرد`);
-    } catch (err) {
-      toast(errorMessage(err), 'error');
-    }
-    setStageBusy(false);
-    refresh();
-  }
-
   const v = kase.vehicle;
   // Default tab by role and stage: the parts clerk opens the parts list; the expert opens
   // the assessment while there is no repair plan yet; everyone else opens «کار امروز».
   const partsOnly = can('part.manage') && !can('assessment.manage');
-  const defaultTab: CaseTab = partsOnly ? 'parts' : can('assessment.manage') && kase.tasks.length === 0 && ['reception', 'assessment', 'awaiting_approval'].includes(kase.stage) ? 'assessment' : 'today';
+  const defaultTab: CaseTab = partsOnly ? (workflow?.invoicePending ? 'completion' : 'parts') : workflow?.current ?? 'assessment';
   const activeTab = tab ?? defaultTab;
   function goTab(t: CaseTab, anchor?: string) {
     setTab(t);
@@ -125,23 +105,6 @@ export default function CaseDetailPage() {
   }
   const actions = (
     <>
-      {can('case.update') && active && (
-        <select
-          className="input"
-          style={{ width: 'auto' }}
-          aria-label="تغییر مرحله"
-          value={kase.stage}
-          disabled={stageBusy}
-          onChange={(e) => changeStage(e.target.value as CaseStage)}
-        >
-          {CASE_STAGES.map((s) => (
-            // Ready for delivery and delivered come from the technical close and the handover.
-            <option key={s} value={s} disabled={s !== kase.stage && (s === 'ready_for_delivery' || s === 'delivered')}>
-              مرحله: {STAGE_LABELS[s]}
-            </option>
-          ))}
-        </select>
-      )}
       {can('case.update') && kase.status === 'open' && <Link className="m-btn2-s" href={`/cases/${kase.id}/edit`}>ویرایش پرونده</Link>}
       <button className="m-btn2-s" type="button" onClick={() => setReminding(true)}>تذکر</button>
       <button className="m-btn2-s" type="button" onClick={() => window.print()}>چاپ</button>
@@ -154,7 +117,6 @@ export default function CaseDetailPage() {
       <CoverageChip coverage={kase.coverageType} />
       {kase.openBlockers > 0 && <span className="chip chip-red">{faNum(kase.openBlockers)} مانع باز</span>}
       {kase.isLegacyEntry && <span className="chip">ثبت‌شده از قبل از Manage</span>}
-      {kase.isTest && <span className="chip chip-amber">داده آزمایشی</span>}
     </>
   );
   return (
@@ -164,8 +126,7 @@ export default function CaseDetailPage() {
         <BackLink href={workspaceHome(me)} label="بازگشت به میز کار" />
       </div>
       <CaseFolderHeader kase={kase} tab={activeTab} onTab={goTab} actions={actions} chips={chips}>
-      <div id="case-tabpanel" role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="stack cf-panel">
-      {(printing || activeTab === 'today') && <>
+      <div id="case-tabpanel" role="tabpanel" aria-label={activeTab} className="stack cf-panel">
       {kase.missingFields.length > 0 && (
         <div className="callout callout-amber row" style={{ justifyContent: 'space-between' }}>
           <span>
@@ -178,28 +139,23 @@ export default function CaseDetailPage() {
           )}
         </div>
       )}
-      <div className="cf-today">
-        <div className="cf-main">
-          <div className="cf-cards">
-            <NextStepCard kase={kase} onTab={goTab} onChange={refresh} />
-            {active && <AlertsPanel caseId={kase.id} onAnswered={refresh} />}
-          </div>
-          <RepairPlanTable kase={kase} />
-        </div>
-        <CaseHistoryCard kase={kase} onAll={() => goTab('history', 'case-history')} />
-      </div>
-      <CaseSection id="case-tasks" title="برنامهٔ تعمیر" note="قدم‌ها، جایگاه، نفر، روز و اجرت؛ شروع، پایان و تأیید" initialOpen><TasksPanel kase={kase} onChange={refresh} /><ExternalWorkPanel kase={kase} onChange={refresh} /><CaseWagesPanel kase={kase} /></CaseSection>
-      <CaseSection id="case-blockers" title="موانع و پیگیری" note={`${faNum(kase.openBlockers)} مانع باز`} initialOpen={kase.openBlockers > 0}><BlockersPanel kase={kase} onChange={refresh} /></CaseSection>
-      <CaseSection id="case-quality" title="کنترل نهایی و پایان کار" initialOpen={['quality_control', 'ready_for_delivery', 'delivered'].includes(kase.stage)}><CompletionPanel kase={kase} onChange={refresh} /></CaseSection>
+      {(printing || activeTab === 'execution') && <>
+      <CaseSection id="case-tasks" title="اجرای تعمیر" note="شروع، پایان و تأیید فعالیت‌ها" initialOpen><TasksPanel kase={kase} mode="execution" onChange={refresh} /><ExternalWorkPanel kase={kase} onChange={refresh} /></CaseSection>
+      <CaseSection id="case-blockers" title="موانع و پیگیری" initialOpen={kase.openBlockers > 0}><BlockersPanel kase={kase} onChange={refresh} /></CaseSection>
       <ResponsibilityBar kase={kase} onChange={refresh} />
       </>}
 
-      {!printing && (activeTab === 'assessment' || activeTab === 'parts') && <NextStepCard kase={kase} onTab={goTab} onChange={refresh} />}
-      {(printing || activeTab === 'assessment') && <CaseSection id="case-assessment" title="کارشناسی و الحاقیه" note="اقلام، فایل اکسل و ارسال به قطعات" initialOpen><AssessmentPanel kase={kase} onChange={refresh} /></CaseSection>}
+      {!printing && workflow && activeTab !== 'parts' && activeTab !== 'history' && activeTab !== 'docs' && <WorkflowAction kase={kase} workflow={workflow} tab={activeTab} onTab={goTab} onChange={refresh} />}
+      {(printing || activeTab === 'assessment') && <CaseSection id="case-assessment" title="کارشناسی و الحاقیه" note="اقلام، فایل اکسل و ارسال به قطعات" initialOpen><AssessmentPanel kase={kase} onChange={refresh} />{!printing && <CaseDocuments kase={kase} onChange={refresh} />}</CaseSection>}
 
-      {(printing || activeTab === 'parts') && <CaseSection id="case-parts" title="قطعات" note="یک فهرست: تعیین تکلیف، تأمین، قیمت و تحویل" initialOpen><PartsLedger kase={kase} title="قطعات این خودرو" onChange={refresh} /><PartsStatementPanel kase={kase} /></CaseSection>}
+      {(printing || activeTab === 'intake') && <section className="panel panel-body"><h2>پذیرش ثبت شده</h2><p>{kase.damageDescription ?? 'شرح خسارت ثبت نشده است'}</p>{active && can('case.update') && <Link href={`/cases/${id}/edit`} className="btn">ویرایش اطلاعات پذیرش</Link>}</section>}
+      {(printing || activeTab === 'plan') && <CaseSection id="case-plan" title="برنامهٔ تعمیر" initialOpen><TasksPanel kase={kase} mode="plan" onChange={refresh} /></CaseSection>}
+      {(printing || activeTab === 'quality') && <CaseSection id="case-quality" title="کنترل کیفیت" initialOpen><CompletionPanel kase={kase} mode="quality" onChange={refresh} /></CaseSection>}
+      {(printing || activeTab === 'completion') && <CaseSection id="case-completion" title="تکمیل پرونده و تحویل" initialOpen><div id="case-invoice"><PartsStatementPanel kase={kase} /></div><CaseWagesPanel kase={kase} /><CompletionPanel kase={kase} mode="completion" onChange={refresh} /><div id="case-finance"><FinancePanel kase={kase} onChange={refresh} /></div></CaseSection>}
+      {(printing || activeTab === 'parts') && <CaseSection id="case-parts" title="قطعات" note="یک فهرست: تعیین تکلیف، تأمین، قیمت و تحویل" initialOpen><PartsLedger kase={kase} title="قطعات این خودرو" onChange={refresh} /></CaseSection>}
 
       {(printing || activeTab === 'docs') && <>
+      <CaseDocuments kase={kase} onChange={refresh} />
       <section className="panel times" aria-label="زمان‌ها">
         <div>
           <div className="k">پذیرش واقعی</div>
@@ -300,8 +256,6 @@ export default function CaseDetailPage() {
           </section>
           </CaseSection>
 
-          <CaseSection id="case-finance" title="مالی و تسویه" initialOpen={!can('assessment.manage') && !can('part.manage') && can('finance.payment')}><FinancePanel kase={kase} onChange={refresh} /></CaseSection>
-
           <CaseSection id="case-provenance" title="منبع و سابقه ورود اطلاعات"><ProvenancePanel kase={kase} /></CaseSection>
 
       </>}
@@ -322,17 +276,6 @@ export default function CaseDetailPage() {
       </>}
       </div>
       </CaseFolderHeader>
-      <Dialog
-        open={!!stageBack}
-        title="برگرداندن پرونده به مرحلهٔ قبل"
-        onClose={() => setStageBack(null)}
-        footer={<><button type="button" className="btn" onClick={() => setStageBack(null)}>انصراف</button><button type="button" className="btn btn-primary" disabled={!stageBack?.note.trim()} onClick={() => { const next = stageBack; setStageBack(null); if (next) void changeStage(next.stage, next.note.trim()); }}>ثبت</button></>}
-      >
-        <label className="field">
-          <span>دلیل (برای مدیر سیستم الزامی)</span>
-          <input className="input" maxLength={500} value={stageBack?.note ?? ''} onChange={(e) => setStageBack((x) => (x ? { ...x, note: e.target.value } : x))} />
-        </label>
-      </Dialog>
       <ReminderComposer
         open={reminding}
         onClose={() => setReminding(false)}

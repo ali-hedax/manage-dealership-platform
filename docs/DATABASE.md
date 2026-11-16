@@ -1,5 +1,13 @@
 # Database
 
+## 0024–0025: guided workflow and case evidence
+
+- `0024_fat_zaran.sql` adds nullable `cases.workflow` JSONB. It holds plan confirmation (task IDs and a signature of planning fields), the single pending invoice handoff, and deductible percentage/source. Existing rows remain NULL: no historical dates, assignments, percentages or account changes are invented. The guided view resumes from actual assessments, tasks and QC.
+- `0025_freezing_alex_power.sql` adds `case_documents`: tenant/case/user foreign keys, immutable bytes encoded as base64, file metadata/hash, UTC creation time, `is_test` and version. Unique `(tenant_id, case_id, sha256)` makes retries idempotent. Maximum upload: 3 MiB, PDF/JPEG/PNG signatures; downloads are attachments and tenant-scoped. Synthetic purge deletes evidence before cases; stage reset preserves evidence but resets workflow progress.
+- Both migrations are additive; the previous application can still read its existing columns. No real rows are rewritten. Down files with matching names are in `apps/api/src/db/down/` and are for isolated rehearsal only; dropping evidence or workflow data in Production requires explicit owner approval and preservation.
+- Writes use the existing case transaction/row lock, expected version, audit and change log. Labour allocations reuse `technician_wages`; original assessment amounts and immutable statement versions remain intact. No duplicate labour or financial-approval model is introduced.
+- Production currently has migrations 0000–0023; these two bring the ledger to 26 migrations and 54 application tables. They have **not** been applied to Production. See [release preparation](RELEASE_GUIDED_WORKFLOW_FA.md).
+
 ## 0017: parts workbench
 
 `0017_parts_workbench.sql` adds nullable sale price, handover actor, confirmed consumption and return details to `part_requests`. It creates tenant-scoped `external_contractors`, `external_work` (one per existing planned task) and immutable application snapshots in `parts_statements` (unique case/version per tenant). Existing deliveries remain intact and consumption is confirmed explicitly. The shared official Emdad import and existing exact-stock reservation tables keep their history. All new writes record audit/change-log entries in the same transaction.

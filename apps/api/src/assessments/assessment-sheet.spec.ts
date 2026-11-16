@@ -193,3 +193,12 @@ const real = process.env.ASSESSMENT_REAL_XLSX;
   expect(r.summary.declared).toEqual({ partsRial: 2_698_562_228, labourRial: 871_500_000, totalRial: 3_570_062_228 });
   expect(r.summary.dates.length).toBeGreaterThan(1);
 });
+
+it.each(['10', '10%', '۱۰٪', '٠'])('reads deductible %s from assessment metadata', value => {
+  const r = parse([['فرانشیز', value], ['قطعات'], header, line()]);
+  expect(r.deductiblePercent).toBe(value === '٠' ? 0 : 10);
+});
+it('keeps conflicting or invalid assessment deductible values unresolved', () => {
+  const r = parse([['فرانشیز', '۱۰'], ['فرانشیز', '۱۵٪'], ['قطعات'], header, line()]);
+  expect(r.deductiblePercent).toBeNull(); expect(r.warnings.length).toBeGreaterThan(0);
+});

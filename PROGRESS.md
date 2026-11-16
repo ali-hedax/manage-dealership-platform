@@ -1,3 +1,10 @@
+## 2026-11-16 — ادامهٔ مسیر هدایت‌شدهٔ تصادفات، در حال آزمون
+
+- مبنا و آخرین commit شاخه: `dadab06bdd133dd6f9b62c6da37518696e1b531d`؛ شاخهٔ جدید `fix/guided-accident-workflow`. تغییرات قبلی شاخه‌های گزارش انتشار محفوظ‌اند. این اصلاح هنوز commit/push نشده است.
+- شش گام پرونده، کنترل سرور، بایگانی، خسارت سریع، تطبیق امداد، صف فاکتورها، اجرت/فرانشیز و مدارک پیاده شده‌اند. جزئیات در [راهنمای گردش](docs/GUIDED_WORKFLOW_FA.md) و نتیجهٔ واقعی آزمون‌ها در [TEST_REPORT](docs/TEST_REPORT.md).
+- lint، typecheck و build پاس؛ بازاجرای کل API با مدیریت حافظه و مرورگر در جریان است. مجوز قبلی انتشار فقط dadab06 بود؛ این نسخه ادغام یا نصب نشده و مجوز تازه ندارد.
+- قدم بعد: رفع شکست‌های آزمون، تکمیل گزارش، commit/push، PR به main و پیگیری هر شش job CI. سپس SHA و artifact نهایی با مجوز جداگانهٔ مالک قابل انتشار می‌شود؛ [آماده‌سازی انتشار](docs/RELEASE_GUIDED_WORKFLOW_FA.md) باید پیش از نصب تکمیل شود.
+
 ## 2026-11-15 — Release browser test
 
 - Base `200190e` (#92). The main release run `43695527238` passed five jobs. The service-manager browser test reached the staff dashboard, then timed out trying to sign the administrator in again in the same browser context.

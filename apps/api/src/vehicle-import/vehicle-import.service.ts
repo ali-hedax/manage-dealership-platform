@@ -609,7 +609,7 @@ export class VehicleImportService {
     }
     let stageChange: CaseStage | undefined;
     if (stage && stage !== target.stage) {
-      if (WORKFLOW_ONLY.includes(stage)) {
+      if (WORKFLOW_ONLY.includes(stage) || stage === 'quality_control' || stage === 'in_repair') {
         p.messages.push({ level: 'warning', text: `تغییر مرحله به «${v.stage}» فقط از روند کنترل کیفیت، بستن فنی و تحویل ممکن است؛ مرحله تغییر نکرد` });
       } else {
         stageChange = stage;

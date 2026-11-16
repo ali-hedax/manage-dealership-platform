@@ -70,6 +70,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/cases/:id/alerts/history` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | GET | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | GET | `/api/v1/cases/:id/completion` | [source](../apps/api/src/completion/completion.controller.ts) |
+| GET | `/api/v1/cases/:id/documents/:documentId` | [source](../apps/api/src/cases/case-documents.controller.ts) |
+| GET | `/api/v1/cases/:id/documents` | [source](../apps/api/src/cases/case-documents.controller.ts) |
 | GET | `/api/v1/cases/:id/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/cases/:id/finance` | [source](../apps/api/src/finance/finance.controller.ts) |
 | GET | `/api/v1/cases/:id/parts-statement/export` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
@@ -79,6 +81,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/cases/:id/responsibility` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/cases/:id/timeline` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/cases/:id/wages` | [source](../apps/api/src/people/people.controllers.ts) |
+| GET | `/api/v1/cases/:id/workflow` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/cases/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/control-room` | [source](../apps/api/src/control-room/control-room.controller.ts) |
@@ -167,11 +170,13 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/cases/:id/blockers` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/delivery` | [source](../apps/api/src/completion/completion.controller.ts) |
+| POST | `/api/v1/cases/:id/documents` | [source](../apps/api/src/cases/case-documents.controller.ts) |
 | POST | `/api/v1/cases/:id/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/cases/:id/finance/approvals` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/cases/:id/finance/payments` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/cases/:id/financial-close` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/parts-statement/:partId/consume` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| POST | `/api/v1/cases/:id/parts-statement/deductible` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/cases/:id/parts-statement` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/cases/:id/parts/from-assessment` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/cases/:id/parts/import` | [source](../apps/api/src/parts/parts.controller.ts) |
@@ -182,6 +187,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/tasks` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/technical-close` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/transfer` | [source](../apps/api/src/people/people.controllers.ts) |
+| POST | `/api/v1/cases/:id/workflow` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/apply` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/discard` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |

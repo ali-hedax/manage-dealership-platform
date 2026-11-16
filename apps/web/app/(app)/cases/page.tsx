@@ -71,10 +71,11 @@ function CasesList() {
     <div className="stack">
       <div className="page-head">
         <div>
-          <h1>پرونده‌های تصادفی</h1>
+          <h1>{params.get('stage') === 'delivered' ? 'بایگانی پرونده‌ها' : 'پرونده‌های تصادفی'}</h1>
           <p className="muted small">{data ? `${faNum(data.total)} پرونده` : ' '}</p>
         </div>
         <div className="row" style={{ gap: 6 }}>
+          <Link className="btn" href={params.get('stage') === 'delivered' ? '/cases' : '/cases?status=closed&stage=delivered'}>{params.get('stage') === 'delivered' ? 'پرونده‌های جاری' : 'بایگانی'}</Link>
           {can('case.update') && (
             <Link className="btn" href="/reports?view=accident">
               گزارش تصادفات

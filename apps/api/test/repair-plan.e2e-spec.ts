@@ -20,7 +20,7 @@ beforeAll(async () => {
 afterAll(async () => h?.close());
 
 async function newCase() {
-  const res = await expert.post('/cases', {
+  const res = await expert.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'خودرو آزمون مسیر تعمیر', plate: '۱۲ ب ۵۵۵ - ۶۷', vin: 'TESTVIN5000000001' },
     customer: { fullName: 'مشتری آزمون مسیر', phone: '09005000001' },
     admittedAt: new Date().toISOString(),

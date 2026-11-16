@@ -24,3 +24,5 @@ export * from './part-flow';
 export * from './repair-plan';
 export * from './desk';
 export * from './control-room';
+
+export * from './case-workflow';

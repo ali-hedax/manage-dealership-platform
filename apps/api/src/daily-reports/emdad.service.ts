@@ -15,6 +15,7 @@ import { AuditService, diff } from '../audit/audit.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { assessmentItems, assessments, cases, dailyReportImports, emdadRequestEvents, emdadRequests, partRequests, users, vehicles } from '../db/schema';
+import { decideByRequest, requestNoKey } from './emdad-parts';
 import { idKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 import { writeSheet } from '../parts/xlsx';
 import type { EmdadOfficial } from './report-rows';
@@ -75,7 +76,7 @@ export class EmdadService {
    * Matches open cases by chassis and technical code first.
    * The admission lookup remains available for report follow-up.
    */
-  async matcher(tx: DbOrTx, tenantId: string, officials: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'>[]) {
+  async matcher(tx: DbOrTx, tenantId: string, officials: (Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'> & { requestNo?: string })[]) {
     const keys = [...new Set(officials.map((o) => admissionKeyOf(o.admissionNo)).filter((k): k is string => !!k))];
     const found: { id: string; caseNumber: string; admissionNoKey: string | null; vin: string | null; chassisRef: string | null }[] = [];
     for (let i = 0; i < keys.length; i += 1000) {
@@ -104,25 +105,38 @@ export class EmdadService {
     const byAdmission = new Map<string, typeof found>();
     for (const c of found) byAdmission.set(c.admissionNoKey!, [...(byAdmission.get(c.admissionNoKey!) ?? []), c]);
     const caseIds = [...new Set([...found, ...[...byChassis.values()].flat()].map((c) => c.id))];
-    type Need = { id: string; caseId: string; partNumber: string | null };
+    type Need = { id: string; caseId: string; partNumber: string | null; orderRef: string | null; source: string };
     const partsByCase = new Map<string, Need[]>();
     for (let i = 0; i < caseIds.length; i += 1000) {
       const parts = await tx
-        .select({ id: partRequests.id, caseId: partRequests.caseId, partNumber: partRequests.partNumber })
+        .select({ id: partRequests.id, caseId: partRequests.caseId, partNumber: partRequests.partNumber, orderRef: partRequests.orderRef, source: partRequests.source })
         .from(partRequests)
         .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, caseIds.slice(i, i + 1000)), ne(partRequests.status, 'cancelled')));
       for (const p of parts) partsByCase.set(p.caseId, [...(partsByCase.get(p.caseId) ?? []), p]);
     }
     const partBase = (n: string | null) => (n ? (parseStockCode(n)?.basePartNumber ?? parseBasePartNumber(n)) : null);
 
-    return (o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'>): MatchResult => {
+    const requested = await tx.select({ id: partRequests.id, caseId: partRequests.caseId, partNumber: partRequests.partNumber, orderRef: partRequests.orderRef, vin: vehicles.vin, chassisRef: vehicles.chassisRef })
+      .from(partRequests).innerJoin(cases, and(eq(cases.id, partRequests.caseId), eq(cases.tenantId, tenantId)))
+      .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
+      .where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.source, 'company'), ne(partRequests.status, 'cancelled'), eq(cases.status, 'open')));
+    return (o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'> & { requestNo?: string }): MatchResult => {
       const none = (matchStatus: EmdadMatchStatus, matchNote: string, caseId: string | null = null): MatchResult => ({ caseId, partRequestId: null, matchStatus, matchNote });
       const chassis = idKey(o.chassis ?? '');
+      const request = requestNoKey(o.requestNo);
+      const requestCandidates = request ? requested.filter(p => requestNoKey(p.orderRef) === request) : [];
+      if (requestCandidates.length) {
+        const d = decideByRequest(o, o.chassis ?? null, requestCandidates);
+        return d.kind === 'link' ? { caseId: d.part.caseId, partRequestId: d.part.id, matchStatus: 'matched', matchNote: d.note, byChassisAndCode: true }
+          : { ...none('needs_review', d.note), byChassisAndCode: true };
+      }
+
       const needsByChassis = (byChassis.get(chassis) ?? []).flatMap((c) =>
-        (partsByCase.get(c.id) ?? []).filter((p) => p.partNumber && emdadMatchesNeed(o, p.partNumber)),
+        (partsByCase.get(c.id) ?? []).filter((p) => p.source === 'company' && p.partNumber && emdadMatchesNeed(o, p.partNumber)),
       );
       if (needsByChassis.length === 1) {
         const p = needsByChassis[0]!;
+        if (request && requestNoKey(p.orderRef) && request !== requestNoKey(p.orderRef)) return { ...none('needs_review', 'شمارهٔ درخواست گزارش با قطعهٔ این شاسی متفاوت است'), byChassisAndCode: true };
         return { caseId: p.caseId, partRequestId: p.id, matchStatus: 'matched', matchNote: 'شاسی و کد فنی یکسان است', byChassisAndCode: true };
       }
       if (needsByChassis.length > 1) {

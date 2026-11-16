@@ -22,7 +22,7 @@ test('department menu exposes only the desks of the six roles, on desktop and ph
  await expect(page.locator('#case-quality')).toBeInViewport();
  // The folder opens the tab that holds the linked section; the tabs switch without reloading.
  await page.getByRole('tab',{name:'تاریخچه',exact:true}).click();await expect(page.locator('#case-quality')).toHaveCount(0);
- await page.getByRole('tab',{name:'کار امروز',exact:true}).click();await expect(page.locator('#case-quality')).toBeAttached();
+ await page.goto(page.url().split('#')[0]+'#case-quality');await expect(page.locator('#case-quality')).toBeAttached();
 });
 test('owner edits individual exceptions and role defaults with review and an intact phone layout',async({page},info)=>{
  await login(page,'manager');

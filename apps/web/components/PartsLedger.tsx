@@ -203,6 +203,7 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
         <div className="m-row-state c-state">
           <span className={`m-tag ${STATE_TONE[p.flowState]}`}>{PART_FLOW_STATE_LABELS[p.flowState]}</span>
           {detail && <small>{detail}</small>}
+          {p.emdad && !['emdad', 'dealer_supply'].includes(p.flowState) && <small className="official-emdad">{p.emdad.statusText ?? 'بدون متن وضعیت'} · {dayText(p.emdad.reportAt)}</small>}
         </div>
         <div className="m-row-action c-act" onClick={(e) => e.stopPropagation()}>
           {primary === 'decide' && <button type="button" className="m-btn2-s" aria-expanded={expanded} onClick={onToggle}>انتخاب مسیر تأمین <AppIcon name="chevron-down" /></button>}

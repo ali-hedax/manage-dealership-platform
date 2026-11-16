@@ -17,7 +17,7 @@ const idOf = async (username: string) => (await h.db.db.select({ id: users.id })
 
 async function newCase(by: Client, coverageType: string, responsibleUserId?: string, admittedAt = new Date().toISOString()) {
   vin += 1;
-  const res = await by.post('/cases', {
+  const res = await by.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'خودرو آزمون فاز سه', plate: `۱${vin} ب ۳۴۵ - ۶۷`, vin: `TESTVIN3000${String(vin).padStart(6, '0')}` },
     customer: { fullName: 'مشتری آزمون فاز سه', phone: `0900300${String(vin).padStart(4, '0')}` },
     admittedAt,

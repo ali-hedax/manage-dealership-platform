@@ -19,7 +19,7 @@ beforeAll(async () => {
 afterAll(async () => h?.close());
 
 it('a folder follows the car: assessment, plan, finished step waiting for the expert', async () => {
-  const created = await expert.post('/cases', {
+  const created = await expert.post('/cases', { isLegacyEntry: true,
     vehicle: { model: 'ریرا', plate: '۲۳ ب ۴۵۶ - ۱۶', vin: 'TESTVIN6000000001' },
     customer: { fullName: 'مشتری آزمون پوشه', phone: '09006000001' },
     admittedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),

@@ -193,6 +193,15 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
 };
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  'case.plan_confirmation_invalidated': 'نیاز به تأیید دوبارهٔ برنامهٔ تعمیر',
+  'case.plan_confirmed': 'برنامهٔ تعمیر تأیید شد',
+  'case.invoice_collection_requested': 'جمع‌آوری فاکتورها به قطعات سپرده شد',
+  'case.invoice_collection_completed': 'صورت فاکتورها تکمیل شد',
+  'case.deductible_recorded': 'فرانشیز توسط مسئول قطعات ثبت شد',
+  'case.deductible_imported': 'فرانشیز از کارشناسی وارد شد',
+  'case.document_added': 'مدرک به پرونده اضافه شد',
+  'case.document_uploaded': 'مدرک بارگذاری شد',
+
   'part_quote.proposed':'ثبت قیمت بازار برای تأیید','part_quote.approved':'ثبت تأیید قیمت از پرداخت‌کننده','part_quote.rejected':'ثبت رد قیمت','part_quote.superseded':'جایگزینی پیشنهاد قیمت','part.quote_version_changed':'به‌روزرسانی نسخه نیاز قطعه پس از قیمت‌گیری','work_calendar.created':'ثبت نسخه تقویم کاری','workshop_station.created':'تعریف جایگاه','workshop_station.updated':'ویرایش جایگاه',
   'case.created': 'ایجاد پرونده',
   'case.updated': 'ویرایش پرونده',
@@ -315,6 +324,7 @@ export const QC_OUTCOME_LABELS: Record<QcOutcome, string> = {
 };
 
 export const COMPLETION_ISSUE_LABELS: Record<CompletionIssueCode, string> = {
+  invoice_pending: 'جمع‌آوری فاکتورها توسط مسئول قطعات تکمیل نشده است',
   tasks_unapproved: 'فعالیت‌هایی هنوز تأیید سرپرست نگرفته‌اند',
   open_blockers: 'مانع باز روی پرونده وجود دارد',
   assessment_draft: 'پیش‌نویس کارشناسی یا الحاقیه هنوز نهایی نشده است',

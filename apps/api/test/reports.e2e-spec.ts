@@ -31,7 +31,7 @@ const kpi = (r: ReportResult, key: string) => r.kpis.find((k) => k.key === key)!
 const listTotal = async (query: string) => ((await manager.get(`/cases?${query}`)).body as Paged<CaseListItem>).total;
 
 async function newCase(body: object = {}): Promise<CaseDetail> {
-  const res = await expert.post('/cases', {
+  const res = await expert.post('/cases', { isLegacyEntry: true,
     customer: { fullName: 'مالک آزمون گزارش', phone: '09000007777' },
     vehicle: { brand: 'ایران‌خودرو', model: 'دنا', vin: `TESTVIN${Math.random().toString().slice(2, 12)}` },
     odometerKm: 1000,

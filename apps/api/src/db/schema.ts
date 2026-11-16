@@ -259,6 +259,7 @@ export const cases = pgTable(
     // Three independent times: official commitment, internal forecast, actual.
     officialDeadlineAt: ts('official_deadline_at'),
     forecastDeliveryAt: ts('forecast_delivery_at'),
+    workflow: jsonb('workflow').$type<import('@manage/shared').WorkflowRecord>(),
     repairPlan: jsonb('repair_plan').$type<import('@manage/shared').RepairPlan>(),
     actualDeliveryAt: ts('actual_delivery_at'),
     technicalClosedAt: ts('technical_closed_at'),
@@ -1381,3 +1382,13 @@ export const partPriceNotices = pgTable('part_price_notices', {
   index('part_price_notices_case_idx').on(t.tenantId, t.caseId),
   index('part_price_notices_part_idx').on(t.partRequestId),
 ]);
+
+/** Case evidence; bytes stay tenant-scoped in PostgreSQL and are downloaded as attachments. */
+export const caseDocuments = pgTable('case_documents', {
+  id: uuid('id').primaryKey(), tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  caseId: uuid('case_id').notNull().references(() => cases.id),
+  fileName: text('file_name').notNull(), mime: text('mime').notNull(), sha256: text('sha256').notNull(),
+  dataBase64: text('data_base64').notNull(), size: integer('size').notNull(),
+  createdBy: uuid('created_by').notNull().references(() => users.id), createdAt: ts('created_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false), version: integer('version').notNull().default(1),
+}, t => [uniqueIndex('case_documents_hash_uq').on(t.tenantId, t.caseId, t.sha256)]);

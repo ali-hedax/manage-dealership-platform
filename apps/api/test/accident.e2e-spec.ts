@@ -19,7 +19,7 @@ let supervisorId: string;
 const dept = (code: string) => depts.find((d) => d.code === code)!.id;
 
 async function newCase(body: object = {}): Promise<CaseDetail> {
-  const res = await expert.post('/cases', {
+  const res = await expert.post('/cases', { isLegacyEntry: true,
     customer: { fullName: 'مشتری آزمون', phone: '09000001111' },
     vehicle: { brand: 'ایران‌خودرو', model: 'دنا', plate: '۱۲ ب ۳۴۵ - ۶۷', vin: `TESTVIN${Date.now()}`.slice(0, 17) },
     odometerKm: 1000,

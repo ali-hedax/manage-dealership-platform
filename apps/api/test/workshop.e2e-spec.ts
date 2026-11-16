@@ -8,7 +8,7 @@ let caseId:string,departmentId:string,stationId:string,techId:string,taskId:stri
 beforeAll(async()=>{h=await createHarness();c=await h.loginAs('coordinator-new',['accident_expert']);p=await h.login('parts');admin=await h.login('admin');tech=await h.loginAs('tech-new',['technician']);other=await h.loginAs('tech-other',['technician']);manager=await h.login('manager');
  const [u]=await h.db.db.select().from(users).where(eq(users.username,'tech-new'));techId=u.id;
  const ds=await c.get('/departments');departmentId=ds.body[0].id;
- const res=await c.post('/cases',{vehicle:{model:'خودرو آزمون',vin:'TESTVIN0000099001'},customer:{fullName:'مشتری آزمون',phone:'09000009900'},admittedAt:new Date().toISOString(),coverageType:'golden_card'});expect(res.status).toBe(201);caseId=res.body.id;
+ const res=await c.post('/cases',{isLegacyEntry:true,vehicle:{model:'خودرو آزمون',vin:'TESTVIN0000099001'},customer:{fullName:'مشتری آزمون',phone:'09000009900'},admittedAt:new Date().toISOString(),coverageType:'golden_card'});expect(res.status).toBe(201);caseId=res.body.id;
 });
 afterAll(async()=>{await h?.close();});
 it('holiday suggestions require calendar authority and never create a calendar revision',async()=>{

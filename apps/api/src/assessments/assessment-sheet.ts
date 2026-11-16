@@ -1,4 +1,4 @@
-import { assessmentItemSchema, assessmentPartKey, normalizePersian, toLatinDigits, type AssessmentImportCounts, type AssessmentImportPreview, type AssessmentImportStatus } from '@manage/shared';
+import { parseDeductible, assessmentItemSchema, assessmentPartKey, normalizePersian, toLatinDigits, type AssessmentImportCounts, type AssessmentImportPreview, type AssessmentImportStatus } from '@manage/shared';
 import { readWorkbook, XlsxError } from '../parts/xlsx';
 
 const key = (s: string) => normalizePersian(toLatinDigits(s)).replace(/[\s‌:()«»]/g, '').trim();
@@ -65,6 +65,23 @@ export function parseAssessmentSheet(data: Uint8Array, currency: 'rial' | 'toman
   try { sheets = readWorkbook(data); }
   catch (e) { result.errors.push({ sheet: '', row: 0, page: null, message: e instanceof XlsxError ? e.message : 'فایل خوانده نشد' }); return result; }
   s.sheets = sheets.length;
+  const percentages: number[] = [];
+  for (const sheet of sheets) for (const cells of sheet.rows) {
+    for (let i = 0; i < cells.length; i++) {
+      const label = key(String(cells[i] ?? ''));
+      if (!['فرانشیز', 'درصدفرانشیز', 'سهممشتریدرصد'].includes(label)) continue;
+      const after = cells.slice(i + 1).find(c => String(c ?? '').trim());
+      const before = cells.slice(0, i).reverse().find(c => String(c ?? '').trim());
+      const value = after ?? before;
+      const percent = parseDeductible(value);
+      if (percent !== null) percentages.push(percent);
+      else result.warnings.push({ sheet: sheet.name, row: 0, page: null, message: 'فرانشیز فایل قابل خواندن نیست؛ مسئول قطعات درصد را وارد کند' });
+    }
+  }
+  const unique = [...new Set(percentages)];
+  result.deductiblePercent = unique.length === 1 ? unique[0]! : null;
+  if (unique.length > 1) result.warnings.push({ sheet: '', row: 0, page: null, message: 'درصدهای فرانشیز فایل متناقض است؛ مسئول قطعات بررسی کند' });
+
   const seen = new Set<string>(), seenEquivalent = new Set<string>(), dates = new Set<string>();
   let pages = 0, anyPage = false;
   for (const sheet of sheets) {

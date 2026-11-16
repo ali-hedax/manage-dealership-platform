@@ -18,13 +18,25 @@ export async function login(page: Page, username: string) {
 
 /** Tab of the case folder that holds each section (components/CaseFolderHeader.tsx). */
 const SECTION_TAB: Record<string, string> = {
-  tasks: 'کار امروز', blockers: 'کار امروز', quality: 'کار امروز',
+  tasks: 'اجرای تعمیر', blockers: 'اجرای تعمیر', quality: 'کنترل کیفیت', completion: 'تکمیل پرونده و تحویل',
   assessment: 'کارشناسی', parts: 'قطعات',
-  info: 'مدارک', finance: 'مدارک', provenance: 'مدارک', history: 'تاریخچه',
+  info: 'مدارک', finance: 'تکمیل پرونده و تحویل', provenance: 'مدارک', history: 'تاریخچه',
 };
 
 export async function openCaseTab(page: Page, name: string) {
-  const tab = page.getByRole('tab', { name, exact: true });
+  const actual = name === 'کار امروز' ? 'برنامهٔ تعمیر' : name;
+  const steps = ['پذیرش', 'کارشناسی', 'برنامهٔ تعمیر', 'اجرای تعمیر', 'کنترل کیفیت', 'تکمیل پرونده و تحویل'];
+  if (steps.includes(actual)) {
+    const index = steps.indexOf(actual);
+    const button = page.getByRole('list', { name: 'مسیر خودرو' }).getByRole('button').nth(index);
+    // Existing diagnostic deep links are review links; they do not perform a transition.
+    if (await button.isDisabled()) {
+      const anchors = ['case-info', 'case-assessment', 'case-plan', 'case-tasks', 'case-quality', 'case-completion'];
+      await page.goto(page.url().split('#')[0] + '#' + anchors[index]);
+    } else await button.click();
+    return;
+  }
+  const tab = page.getByRole('tab', { name: actual, exact: true });
   if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
   await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
@@ -34,7 +46,7 @@ export async function openCaseSections(page: Page, ...ids: string[]) {
   for (const id of ids) {
     if (SECTION_TAB[id]) await openCaseTab(page, SECTION_TAB[id]!);
     const section = page.locator(`#case-${id}`);
-    if (await section.count() && await section.getAttribute('open') === null) await section.locator(':scope > summary').click();
+    if (await section.count() && await section.evaluate(el => el.tagName === 'DETAILS') && await section.getAttribute('open') === null) await section.locator(':scope > summary').click();
   }
   // Sections now live on separate folder tabs. Leave the first requested
   // section visible; callers switch tabs explicitly before later operations.

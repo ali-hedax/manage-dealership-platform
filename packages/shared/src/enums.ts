@@ -206,6 +206,7 @@ export type QcOutcome = (typeof QC_OUTCOMES)[number];
 
 // Why a technical or financial close (or the delivery) is not possible yet.
 export const COMPLETION_ISSUES = [
+  'invoice_pending',
   'tasks_unapproved',
   'open_blockers',
   'assessment_draft',

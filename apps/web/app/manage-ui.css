@@ -880,3 +880,16 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
   .lg-root .lg-card { margin: 28px 0 36px; inline-size: calc(100% - 40px); }
   .door-list .login-tabs button { min-block-size: 40px; } .door-row { min-block-size: 44px; }
 }
+
+/* Guided case navigation follows Persian reading and keyboard order. */
+.guided-journey { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:6px; }
+.guided-journey .jstep { position:relative; display:flex; flex-direction:row; align-items:center; }
+.guided-journey button { font:inherit; text-align:start; color:inherit; background:none; border:0; padding:10px 6px; min-height:48px; width:100%; }
+.guided-journey button[aria-pressed=true] { box-shadow:inset 0 -3px var(--teal,#0e5f66); }
+.guided-journey small { display:block; font-size:11px; line-height:1.7; }
+.guided-journey .step-arrow { margin-inline-start:auto; }
+.damage-choices { border:0; padding:0; display:flex; flex-wrap:wrap; gap:8px; }
+.damage-choices legend { margin-block-end:8px; }
+.invoice-pending { border-inline-start:4px solid #a12727; padding-inline-start:12px; color:#8c1b1b; }
+@media(max-width:700px) { .guided-journey { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media print { .guided-journey button { border:0; } }
