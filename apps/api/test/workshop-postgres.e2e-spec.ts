@@ -8,7 +8,7 @@ suite('repair workflow on real PostgreSQL connections',()=>{
   h=await createHarness({config:{DB_DRIVER:'postgres',DATABASE_URL:url!}});
   c=await h.login('expert');p=await h.login('parts');a=await h.login('admin');t=await h.loginAs('concurrent-technician',['technician']);
   techId=(await t.get('/auth/me')).body.id;departmentId=(await c.get('/departments')).body[0].id;
-  const r=await c.post('/cases',{admittedAt:new Date().toISOString(),coverageType:'golden_card',vehicle:{model:'خودرو هم‌زمانی آزمون',vin:'TESTVIN000PG00001'}});expect(r.status).toBe(201);caseId=r.body.id;
+  const r=await c.post('/cases',{isLegacyEntry:true,admittedAt:new Date().toISOString(),coverageType:'golden_card',vehicle:{model:'خودرو هم‌زمانی آزمون',vin:'TESTVIN000PG00001'}});expect(r.status).toBe(201);caseId=r.body.id;
  });
  afterAll(async()=>{await h?.close();});
  it('serializes competing calendar revisions with the same expected version',async()=>{

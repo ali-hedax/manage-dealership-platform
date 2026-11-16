@@ -17,7 +17,7 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   const body = departments.find((d: { code: string }) => d.code === 'body');
   const created = await page.request.post('/api/v1/cases', {
     headers,
-    data: { customer: { fullName: 'مشتری ساختگی فاز سه', phone: '09000003131' }, vehicle: { model: 'دنا آزمون فاز سه', plate: '۲۲ ج ۲۲۲ - ۱۶', vin: 'TESTVIN000PHASE31' }, admittedAt: new Date().toISOString(), coverageType: 'golden_card', responsibleUserId: me.id },
+    data: { isLegacyEntry: true, customer: { fullName: 'مشتری ساختگی فاز سه', phone: '09000003131' }, vehicle: { model: 'دنا آزمون فاز سه', plate: '۲۲ ج ۲۲۲ - ۱۶', vin: 'TESTVIN000PHASE31' }, admittedAt: new Date().toISOString(), coverageType: 'golden_card', responsibleUserId: me.id },
   });
   expect(created.ok()).toBe(true);
   const kase = await created.json();
@@ -27,13 +27,14 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
 
   // Coordinator: wage of the job on the case page, then a reminder to the technician.
   await page.goto(`/cases/${kase.id}`);
-  await openCaseSections(page, 'tasks');
+  await openCaseSections(page, 'completion');
   const wages = page.getByTestId('case-wages');
   await wages.getByRole('button', { name: 'ثبت اجرت', exact: true }).click();
   const wageDialog = page.getByRole('dialog');
   await wageDialog.getByLabel('اجرت تعمیرکار (ریال)').fill('45000000');
   await wageDialog.getByRole('button', { name: 'ثبت اجرت', exact: true }).click();
   await expect(wages).toContainText('۴۵,۰۰۰,۰۰۰ ریال');
+  await openCaseSections(page, 'tasks');
   await expect(page.getByTestId('responsibility-bar')).toContainText('کارشناس تصادفات نمونه');
   await page.getByRole('button', { name: 'تذکر', exact: true }).click();
   const compose = page.getByRole('dialog', { name: 'فرستادن تذکر' });

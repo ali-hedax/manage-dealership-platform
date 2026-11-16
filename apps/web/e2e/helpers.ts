@@ -19,7 +19,7 @@ export async function login(page: Page, username: string) {
 /** Tab of the case folder that holds each section (components/CaseFolderHeader.tsx). */
 const SECTION_TAB: Record<string, string> = {
   tasks: 'اجرای تعمیر', blockers: 'اجرای تعمیر', quality: 'کنترل کیفیت', completion: 'تکمیل پرونده و تحویل',
-  assessment: 'کارشناسی', parts: 'قطعات',
+  assessment: 'کارشناسی', plan: 'برنامهٔ تعمیر', parts: 'قطعات',
   info: 'مدارک', finance: 'تکمیل پرونده و تحویل', provenance: 'مدارک', history: 'تاریخچه',
 };
 

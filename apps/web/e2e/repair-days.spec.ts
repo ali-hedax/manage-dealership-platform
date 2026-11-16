@@ -9,7 +9,7 @@ test('day-only intake feeds sequential station allocations and keeps dates and o
  await expect(page.getByText('پایان محاسبه‌شده:',{exact:false})).toBeVisible();await page.getByRole('button',{name:'ثبت پرونده',exact:true}).click();
  await expect(page.locator('.case-hero')).toBeVisible();const id=page.url().split('/cases/')[1].split(/[?#]/)[0];
  let kase=await(await page.request.get(`/api/v1/cases/${id}`)).json();expect(kase.repairPlan.days).toBe(10);expect(kase.repairPlan.durationMinutes).toBeGreaterThan(0);expect(kase.forecastDeliveryAt).toBe(kase.repairPlan.endAt);
- await openCaseSections(page,'tasks');await page.getByRole('button',{name:'افزودن فعالیت',exact:true}).click();await page.locator('select[name="departmentId"]').selectOption({label:'صافکاری'});
+ await openCaseSections(page,'plan');await page.getByRole('button',{name:'افزودن فعالیت',exact:true}).click();await page.locator('select[name="departmentId"]').selectOption({label:'صافکاری'});
  await page.getByLabel('سهم این جایگاه (روز کاری)',{exact:true}).fill('2');await page.getByRole('button',{name:'ذخیره فعالیت',exact:true}).click();await expect(page.getByTestId('task')).toHaveCount(1);
  kase=await(await page.request.get(`/api/v1/cases/${id}`)).json();const first=kase.tasks[0];expect(first.plannedStartAt).toBe(kase.repairPlan.startAt);expect(first.plannedEndAt).toBeTruthy();
  await page.getByRole('button',{name:'افزودن فعالیت',exact:true}).click();await page.locator('select[name="departmentId"]').selectOption({label:'نقاشی'});await page.getByLabel('سهم این جایگاه (روز کاری)',{exact:true}).fill('1');

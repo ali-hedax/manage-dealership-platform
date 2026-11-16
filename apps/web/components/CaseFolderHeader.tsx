@@ -20,7 +20,7 @@ export type CaseTab = (typeof CASE_TABS)[number];
 export const CASE_TAB_LABELS: Record<CaseTab, string> = { ...CASE_STEP_LABELS, parts: 'قطعات', docs: 'مدارک', history: 'تاریخچه' };
 const TAB_ICON: Record<CaseTab, IconName> = { intake: 'folder', assessment: 'clipboard', plan: 'list', execution: 'wrench', quality: 'check', completion: 'flag', parts: 'box', docs: 'doc', history: 'history' };
 export const SECTION_TAB: Record<string, CaseTab> = {
-  'case-plan': 'plan', 'case-tasks': 'execution', 'case-blockers': 'execution', 'case-quality': 'quality', 'case-responsibility': 'execution',
+  'case-intake': 'intake', 'case-plan': 'plan', 'case-tasks': 'execution', 'case-blockers': 'execution', 'case-quality': 'quality', 'case-responsibility': 'execution',
   'case-completion': 'completion', 'case-invoice': 'completion', 'case-assessment': 'assessment', 'case-parts': 'parts',
   'case-info': 'docs', 'case-finance': 'completion', 'case-provenance': 'docs', 'case-history': 'history',
 };

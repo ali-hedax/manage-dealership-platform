@@ -69,7 +69,7 @@ test('expert and parts: guided admission to delivery and archive with RTL review
   await page.getByRole('button', { name: 'تحویل خودرو', exact: true }).click();
   await dialog.getByLabel('تحویل‌گیرنده خودرو را بازدید کرد و برگه تحویل را امضا کرد *').check(); await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
   await expect(page.getByTestId('delivery-done')).toContainText('بایگانی');
-  for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 900 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: info.outputPath(`guided-${width}.png`), fullPage: true }); }
+  for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 900 }); await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' })); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: info.outputPath(`guided-${width}.png`), fullPage: true }); }
   await page.goto('/cases'); await page.getByRole('link', { name: 'بایگانی', exact: true }).click();
   await page.getByLabel('جست‌وجوی پرونده', { exact: true }).fill('TESTVIN99900E2E21');
   await expect(page.locator('tbody')).toContainText('مشتری ساختگی مسیر');

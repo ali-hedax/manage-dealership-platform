@@ -26,13 +26,12 @@ import { TasksPanel } from '@/components/TasksPanel';
 import { ResponsibilityBar } from '@/components/ResponsibilityBar';
 import { CaseWagesPanel } from '@/components/CaseWagesPanel';
 import { BackLink } from '@/components/BackLink';
-import { CaseFolderHeader, NextStepCard, SECTION_TAB, type CaseTab } from '@/components/CaseFolderHeader';
-import { CaseHistoryCard, RepairPlanTable } from '@/components/CaseToday';
+import { CaseFolderHeader, SECTION_TAB, type CaseTab } from '@/components/CaseFolderHeader';
 import { AppIcon } from '@/components/AppIcon';
 import { ReminderComposer } from '@/components/ReminderComposer';
 import { WorkflowAction } from '@/components/WorkflowAction';
 import { Timeline } from '@/components/Timeline';
-import { api, ApiError, errorMessage, fetcher } from '@/lib/api';
+import { ApiError, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { workspaceHome } from '@/lib/workspaces';
 import { deadlineTone, faNum, formatJalali, relativeDays, toPersianDigits } from '@/lib/format';
@@ -55,7 +54,7 @@ export default function CaseDetailPage() {
   // «#case-…» links (cards, desks, alerts, tests) open the tab that holds the section.
   useEffect(() => {
     const sync = () => { const t = SECTION_TAB[window.location.hash.slice(1)]; if (t) setTab(t); };
-    sync();
+    setTab(SECTION_TAB[window.location.hash.slice(1)] ?? null);
     window.addEventListener('hashchange', sync);
     // Printing the folder prints every tab, rendered synchronously before the dialog opens.
     const before = () => flushSync(() => setPrinting(true));
@@ -63,7 +62,13 @@ export default function CaseDetailPage() {
     window.addEventListener('beforeprint', before);
     window.addEventListener('afterprint', after);
     return () => { window.removeEventListener('hashchange', sync); window.removeEventListener('beforeprint', before); window.removeEventListener('afterprint', after); };
-  }, []);
+  }, [id]);
+  useEffect(() => {
+    if (tab !== null || !workflow || !me) return;
+    const hashTab = SECTION_TAB[window.location.hash.slice(1)];
+    const partsOnly = can('part.manage') && !can('assessment.manage');
+    setTab(hashTab ?? (partsOnly ? (workflow.invoicePending ? 'completion' : 'parts') : workflow.current));
+  }, [tab, workflow, me, can]);
 
   if (error) {
     return (
@@ -87,15 +92,15 @@ export default function CaseDetailPage() {
   };
 
   const v = kase.vehicle;
-  // Default tab by role and stage: the parts clerk opens the parts list; the expert opens
-  // the assessment while there is no repair plan yet; everyone else opens «کار امروز».
+  // Resume once on entry. Saving a form keeps the current section until the operator advances.
   const partsOnly = can('part.manage') && !can('assessment.manage');
   const defaultTab: CaseTab = partsOnly ? (workflow?.invoicePending ? 'completion' : 'parts') : workflow?.current ?? 'assessment';
   const activeTab = tab ?? defaultTab;
   function goTab(t: CaseTab, anchor?: string) {
     setTab(t);
+    const hash = anchor ?? Object.keys(SECTION_TAB).find(key => SECTION_TAB[key] === t);
+    if (hash) window.history.replaceState(null, '', `#${hash}`);
     if (anchor) {
-      window.history.replaceState(null, '', `#${anchor}`);
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const el = document.getElementById(anchor);
         if (el instanceof HTMLDetailsElement) el.open = true;
