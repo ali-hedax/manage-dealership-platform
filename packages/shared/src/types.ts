@@ -243,12 +243,32 @@ export interface Part {
   consumedAt: string | null;
   returnedAt: string | null;
   returnReason: string | null;
-  /** Latest official Emdad Vijeh status linked to this line (text and date of the report). */
+  /** 8-digit assessment identifier («کد اختصاصی»), kept separate from the procurement code. */
+  assessmentCode: string | null;
+  /** 10-digit procurement identifier («کد تدارکاتی»): recorded, chosen by the clerk or read from the special-aid report. */
+  procurementCode: string | null;
+  /** Code shown on the row: the full procurement code of a special-aid line when known, else the stored technical code. */
+  displayCode: string | null;
+  /** «شمارهٔ امداد ویژه» of this line: entered at registration or filled from the report after an unambiguous match. */
+  emdadNo: string | null;
+  /** Actual warehouse receipt date of the special-aid part, read from the report; never the report or import date. */
+  emdadReceivedAt: string | null;
+  /** Quantity reserved for this vehicle (active reservations and issues) and what is still outstanding. */
+  reservedQuantity: number;
+  outstandingQuantity: number;
+  /** Why an arrived special-aid line is not (fully) reserved, with the next step. */
+  emdadReserveNote: string | null;
+  /** Latest official Emdad Vijeh status linked to this line. The row shows the stage, never the report date. */
   emdad: {
-    requestNo: string | null;
+    emdadNo: string | null;
     category: string;
     statusText: string | null;
+    /** Date of the report that carried this status (details only). */
     reportAt: string;
+    /** The report confirmed warehouse arrival («وارد موجودی شده» / «رسید توسط نمایندگی»). */
+    arrived: boolean;
+    /** Actual warehouse receipt date from the report, when present. */
+    receivedAt: string | null;
     /** Status changes read from the daily reports, newest first (on the case's parts list). */
     history?: { at: string; statusText: string | null }[];
   } | null;

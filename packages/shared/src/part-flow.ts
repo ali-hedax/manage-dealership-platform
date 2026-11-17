@@ -8,6 +8,7 @@ export const PART_FLOW_STATES = [
   'needed',
   'reserved',
   'emdad',
+  'emdad_arrived',
   'dealer_supply',
   'market',
   'ready',
@@ -22,6 +23,7 @@ export const PART_FLOW_STATE_LABELS: Record<PartFlowState, string> = {
   needed: 'تعیین تکلیف نشده',
   reserved: 'رزرو از موجودی',
   emdad: 'امداد ویژه · در حال تأمین',
+  emdad_arrived: 'رسیده · در انتظار رزرو',
   dealer_supply: 'امداد ویژه: تأمین توسط نمایندگی',
   market: 'خرید بازار · در راه',
   ready: 'آمادهٔ تحویل',
@@ -52,6 +54,8 @@ export const PART_FLOW_TRANSITIONS: Record<PartFlowState, readonly PartFlowActio
   reserved: ['hand_over', 'cancel'],
   // Status changes only through the daily Emdad report; the clerk may still cancel with a reason.
   emdad: ['cancel'],
+  // Arrived by the report but not (fully) reserved: the clerk chooses the exact 10-digit code.
+  emdad_arrived: ['reserve', 'cancel'],
   dealer_supply: ['market', 'reserve'],
   market: ['receive', 'cancel'],
   ready: ['hand_over', 'cancel'],
@@ -61,7 +65,7 @@ export const PART_FLOW_TRANSITIONS: Record<PartFlowState, readonly PartFlowActio
   returned: [],
 };
 
-export const ACTIVE_PART_FLOW_STATES: readonly PartFlowState[] = ['needed', 'reserved', 'emdad', 'dealer_supply', 'market', 'ready', 'handed_over'];
+export const ACTIVE_PART_FLOW_STATES: readonly PartFlowState[] = ['needed', 'reserved', 'emdad', 'emdad_arrived', 'dealer_supply', 'market', 'ready', 'handed_over'];
 const PRICE_ACTIONS: readonly PartFlowAction[] = ['set_price', 'announce_price'];
 
 /** Emdad categories that mean «arrived»: the part becomes ready for handover automatically. */
@@ -77,6 +81,8 @@ export interface PartFlowRow {
   emdadCategory?: string | null;
 }
 
+export const isEmdadArrived = (category: string | null | undefined) => !!category && (EMDAD_ARRIVED_CATEGORIES as readonly string[]).includes(category);
+
 export function partFlowState(p: PartFlowRow): PartFlowState {
   switch (p.status) {
     case 'cancelled':
@@ -90,7 +96,11 @@ export function partFlowState(p: PartFlowRow): PartFlowState {
     case 'received':
       return 'ready';
     case 'ordered':
-      if (p.source === 'company') return p.emdadCategory === EMDAD_DEALER_SUPPLY_CATEGORY ? 'dealer_supply' : 'emdad';
+      if (p.source === 'company') {
+        if (p.emdadCategory === EMDAD_DEALER_SUPPLY_CATEGORY) return 'dealer_supply';
+        // Receipt is not readiness: the line is ready only once its whole quantity is reserved.
+        return isEmdadArrived(p.emdadCategory) ? 'emdad_arrived' : 'emdad';
+      }
       return 'market';
     // A part rejected at receipt (wrong/defective) needs a new decision.
     case 'rejected':
@@ -112,7 +122,8 @@ export function isPartActionAllowed(state: PartFlowState, action: PartFlowAction
 /** «لغو قطعه» becomes «لغو رزرو» once stock is reserved for it (spec section 2, example). */
 export function partActionLabel(state: PartFlowState, action: PartFlowAction): string {
   if (action === 'cancel' && (state === 'reserved' || state === 'ready')) return 'لغو رزرو';
-  if (action === 'cancel' && state === 'emdad') return 'لغو (با علت)';
+  if (action === 'cancel' && (state === 'emdad' || state === 'emdad_arrived')) return 'لغو (با علت)';
+  if (action === 'reserve' && state === 'emdad_arrived') return 'انتخاب کد و رزرو';
   return PART_FLOW_ACTION_LABELS[action];
 }
 
@@ -127,7 +138,7 @@ export const PART_FLOW_FILTER_LABELS: Record<PartFlowFilter, string> = {
 };
 export function partFlowFilter(state: PartFlowState): PartFlowFilter | null {
   if (state === 'needed') return 'undecided';
-  if (state === 'emdad' || state === 'dealer_supply' || state === 'market') return 'in_progress';
+  if (state === 'emdad' || state === 'emdad_arrived' || state === 'dealer_supply' || state === 'market') return 'in_progress';
   if (state === 'reserved' || state === 'ready') return 'ready';
   if (state === 'handed_over' || state === 'consumed') return 'delivered';
   return null;
@@ -137,7 +148,8 @@ export function partFlowFilter(state: PartFlowState): PartFlowFilter | null {
 export const PART_FLOW_NEXT_STEP: Record<PartFlowState, string> = {
   needed: 'تعیین تکلیف کنید: رزرو از موجودی، امداد ویژه یا خرید بازار.',
   reserved: 'قطعه آماده است؛ با «تحویل به واحد تعمیر» به جایگاه بدهید.',
-  emdad: 'منتظر گزارش روزانهٔ امداد ویژه؛ با «وارد موجودی» یا «رسید نمایندگی» خودکار آمادهٔ تحویل می‌شود.',
+  emdad: 'منتظر گزارش روزانهٔ امداد ویژه؛ با «وارد موجودی» یا «رسید نمایندگی» کد تدارکاتی همین خودرو خودکار رزرو و آمادهٔ تحویل می‌شود.',
+  emdad_arrived: 'امداد ویژه رسیده ولی همهٔ تعداد رزرو نشده است؛ علت زیر قلم را ببینید، کد ۱۰ رقمی درست را انتخاب و رزرو کنید.',
   dealer_supply: 'شرکت موجود ندارد؛ قیمت بدهید و از بازار یا موجودی تأمین کنید.',
   market: 'وقتی پیک آورد، «ثبت رسید» بزنید تا آمادهٔ تحویل شود.',
   ready: 'با «تحویل به واحد تعمیر» به جایگاه بدهید؛ کارشناس و جایگاه خبر دارند.',

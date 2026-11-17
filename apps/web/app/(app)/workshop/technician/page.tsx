@@ -2,13 +2,14 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
-import { TECHNICIAN_PROBLEMS, TECHNICIAN_PROBLEM_LABELS, type MyWorkMonth, type TechnicianProblem, type WorkshopTask } from '@manage/shared';
+import { TECHNICIAN_PROBLEMS, TECHNICIAN_PROBLEM_LABELS, blockersOf, type MyWorkMonth, type TechnicianProblem, type WorkflowBlocker, type WorkshopTask } from '@manage/shared';
 import { useAuth } from '@/lib/auth';
-import { api, errorMessage, fetcher } from '@/lib/api';
+import { ApiError, api, errorMessage, fetcher } from '@/lib/api';
 import { faNum, formatJalali, rial, toPersianDigits } from '@/lib/format';
 import { Plate, PlateText } from '@/components/Plate';
 import { Dialog } from '@/components/Dialog';
 import { ReminderCards } from '@/components/ReminderCards';
+import { WorkflowBlockerDialog } from '@/components/WorkflowBlockerDialog';
 
 // Technician desk (spec §9, mockup Technician.dc.html): this month's wage on top,
 // the current job as one card with a single big button that changes
@@ -33,6 +34,8 @@ export default function TechnicianPage() {
   const { data: month } = useSWR<MyWorkMonth>(can('task.execute') ? '/workshop/my-work' : null, fetcher, { refreshInterval: 120000 });
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [failure, setFailure] = useState('');
   const [problemFor, setProblemFor] = useState<WorkshopTask | null>(null);
+  // A refused «شروع کار» explains each missing prerequisite; «تلاش دوباره» repeats the same action.
+  const [blocked, setBlocked] = useState<{ blockers: WorkflowBlocker[]; retry?: () => void; opener?: HTMLElement | null } | null>(null);
   const confirmed = useRef(new Set<string>());
   // The first time an amount is shown it counts as seen; a later change shows "تغییر کرد" until confirmed.
   useEffect(() => {
@@ -47,14 +50,28 @@ export default function TechnicianPage() {
 
   async function run(fn: () => Promise<unknown>, done: string) {
     if (busy) return;
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     setBusy(true); setFailure(''); setMessage('');
-    try { await fn(); setMessage(done); } catch (e) { setFailure(errorMessage(e)); } finally { await mutate(); setBusy(false); }
+    try { await fn(); setMessage(done); setBlocked(null); } catch (e) {
+      const list = e instanceof ApiError ? blockersOf(e.details) : [];
+      if (list.length) setBlocked({ blockers: list, retry: retryRef.current ?? undefined, opener }); else setFailure(errorMessage(e));
+    } finally { await mutate(); setBusy(false); }
   }
-  const act = (t: WorkshopTask) =>
-    run(() => api(`/workshop/my-tasks/${t.id}/actions`, { body: { action: t.status === 'pending' ? 'start' : 'complete', expectedVersion: t.version } }),
-      t.status === 'pending' ? 'شروع کار ثبت شد.' : 'پایان کار ثبت شد؛ منتظر تأیید کارشناس.');
+  const retryRef = useRef<(() => void) | null>(null);
+  const act = (t: WorkshopTask) => {
+    const start = t.status === 'pending';
+    // Retry reads the newest version of the same assignment after the case was corrected.
+    retryRef.current = () => { void mutate().then((list) => { const fresh = list?.find((x) => x.id === t.id); if (fresh) act(fresh); }); };
+    return run(() => api(`/workshop/my-tasks/${t.id}/actions`, { body: { action: start ? 'start' : 'complete', expectedVersion: t.version } }),
+      start ? 'شروع کار ثبت شد.' : 'پایان کار ثبت شد؛ منتظر تأیید کارشناس.');
+  };
   const pickup = (taskId: string, partId: string, expectedVersion: number) => run(() => api(`/tasks/${taskId}/part-pickup`, { body: { partId, expectedVersion } }), 'تحویل قطعه ثبت شد.');
   const wageSeen = (t: WorkshopTask) => t.wage && run(() => api(`/workshop/my-tasks/${t.id}/wage-seen`, { body: { expectedVersion: t.wage!.version } }), '');
+  /** Explanation of a blocked start; «تلاش دوباره» starts this same assignment once it is allowed. */
+  const why = (t: WorkshopTask) => {
+    retryRef.current = () => { void mutate().then((list) => { const fresh = list?.find((x) => x.id === t.id); if (fresh) act(fresh); }); };
+    setBlocked({ blockers: t.startBlockers ?? [], retry: retryRef.current });
+  };
   const report = (t: WorkshopTask, problem: TechnicianProblem) =>
     run(async () => { await api(`/workshop/my-tasks/${t.id}/problem`, { body: { problem } }); setProblemFor(null); },
       `«${TECHNICIAN_PROBLEM_LABELS[problem]}» برای کارشناس این خودرو و انباردار فرستاده شد.`);
@@ -84,7 +101,8 @@ export default function TechnicianPage() {
       {error && <p role="alert" className="m-error">کارها دریافت نشد. <button className="m-btn-s" onClick={() => void mutate()}>تلاش دوباره</button></p>}
       {!data && !error && <p className="m-empty">در حال دریافت کارها…</p>}
 
-      {current && <CurrentJob t={current} busy={busy} onAct={act} onPickup={pickup} onWageSeen={wageSeen} onNoPart={(t) => report(t, 'no_part')} onProblem={setProblemFor} />}
+      {current && <CurrentJob t={current} busy={busy} onAct={act} onPickup={pickup} onWageSeen={wageSeen} onNoPart={(t) => report(t, 'no_part')} onProblem={setProblemFor} onWhy={why} />}
+      <WorkflowBlockerDialog blockers={blocked?.blockers ?? null} title="شروع کار هنوز ممکن نیست" busy={busy} returnFocus={blocked?.opener ?? null} onClose={() => setBlocked(null)} onRetry={blocked?.retry ? () => { const r = blocked.retry!; setBlocked(null); r(); } : undefined} />
       {data && !open.length && <div className="tc-card tc-empty"><h2>کار بازی ندارید</h2><p>وقتی کاری به شما ارجاع شود، همین‌جا می‌آید.</p></div>}
 
       {next.length > 0 && (
@@ -96,6 +114,7 @@ export default function TechnicianPage() {
                 <div>
                   <strong>{t.vehicleLabel}</strong>
                   <span><PlateText value={t.plate} /> · {t.title || t.departmentName}{t.status === 'done' ? ' · منتظر تأیید کارشناس' : ''}</span>
+                  {t.status === 'pending' && !t.canStart && !!t.startBlockers?.length && <span className="tc-note">{t.startBlockers[0]!.message} <button type="button" className="m-btn-s" onClick={() => why(t)}>چرا و چه باید کرد؟</button></span>}
                 </div>
                 {t.wage && <b>{faNum(t.wage.amountRial)}</b>}
               </li>
@@ -118,8 +137,8 @@ export default function TechnicianPage() {
   );
 }
 
-function CurrentJob({ t, busy, onAct, onPickup, onWageSeen, onNoPart, onProblem }: {
-  t: WorkshopTask; busy: boolean;
+function CurrentJob({ t, busy, onAct, onPickup, onWageSeen, onNoPart, onProblem, onWhy }: {
+  t: WorkshopTask; busy: boolean; onWhy: (t: WorkshopTask) => void;
   onAct: (t: WorkshopTask) => void; onPickup: (taskId: string, partId: string, v: number) => void; onWageSeen: (t: WorkshopTask) => void;
   onNoPart: (t: WorkshopTask) => void; onProblem: (t: WorkshopTask) => void;
 }) {
@@ -159,10 +178,15 @@ function CurrentJob({ t, busy, onAct, onPickup, onWageSeen, onNoPart, onProblem 
       {t.status === 'pending' && (
         <button type="button" className="tc-big tc-go" disabled={busy || waiting} onClick={() => onAct(t)}>{busy ? 'در حال ثبت…' : 'شروع کار'}</button>
       )}
-      {waiting && <p className="tc-note">منتظر تأیید کار قبلی توسط کارشناس.</p>}
+      {waiting && (
+        <p className="tc-note">
+          {t.startBlockers?.[0]?.message ?? 'منتظر تأیید کار قبلی توسط کارشناس.'}{' '}
+          {!!t.startBlockers?.length && <button type="button" className="m-btn-s" onClick={() => onWhy(t)}>چرا و چه باید کرد؟</button>}
+        </p>
+      )}
       {t.status === 'in_progress' && (
         <>
-          {t.actualStartAt && <p className="tc-note">در حال کار از ساعت {clock(t.actualStartAt)}</p>}
+          {t.actualStartAt ? <p className="tc-note">در حال کار از ساعت {clock(t.actualStartAt)}{t.workDays != null ? ` · ${toPersianDigits(t.workDays)} روز کاری` : ''}{t.delayDays ? ` · تأخیر ${toPersianDigits(t.delayDays)} روز کاری` : ''}</p> : <p className="tc-note">زمان شروع ثبت نشده</p>}
           <button type="button" className="tc-big tc-stop" disabled={busy} onClick={() => onAct(t)}>{busy ? 'در حال ثبت…' : 'پایان کار'}</button>
         </>
       )}

@@ -19,6 +19,11 @@ import {
   assessmentDispatchLines,
   assessmentPartKey,
   toLatinDigits,
+  assessmentCodeOf,
+  isEmdadArrived,
+  parseProcurementCode,
+  partIdentifiers,
+  specialAidCodeProblem,
   type CreatePartInput,
   type ImportPartsInput,
   type Part,
@@ -37,6 +42,8 @@ import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { assessmentItems, assessments, blockers, cases, customers, departments, emdadRequestEvents, emdadRequests, partPriceNotices, partRequests, partQuotes, stockReservations, tasks, users, vehicles } from '../db/schema';
 import { caseAndBayRecipients, notifyUsers, partLink } from './part-notify';
+import { parseReportDate } from '../daily-reports/emdad-parts';
+import { sql } from 'drizzle-orm';
 import { StockService } from '../daily-reports/stock.service';
 import { FinanceService, PURCHASE_SOURCES } from '../finance/finance.service';
 import { readFirstSheet, XlsxError } from './xlsx';
@@ -358,7 +365,7 @@ export class PartsService {
     const out = new Map<string, NonNullable<Part['emdad']>>();
     if (!partIds.length) return out;
     const rows = await db
-      .select({ id: emdadRequests.id, partId: emdadRequests.partRequestId, requestNo: emdadRequests.requestNo, category: emdadRequests.statusCategory, official: emdadRequests.official, at: emdadRequests.lastReportAt })
+      .select({ id: emdadRequests.id, partId: emdadRequests.partRequestId, emdadNo: emdadRequests.emdadNo, category: emdadRequests.statusCategory, official: emdadRequests.official, at: emdadRequests.lastReportAt })
       .from(emdadRequests)
       .where(and(eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.partRequestId, partIds)))
       .orderBy(asc(emdadRequests.lastReportAt));
@@ -380,8 +387,9 @@ export class PartsService {
       }
     }
     for (const r of rows) {
-      const official = (r.official ?? {}) as { emdadStatus?: string };
-      out.set(r.partId!, { requestNo: r.requestNo, category: r.category, statusText: official.emdadStatus ?? null, reportAt: r.at.toISOString(), ...(withHistory ? { history: (history.get(r.id) ?? []).reverse() } : {}) });
+      const official = (r.official ?? {}) as { emdadStatus?: string; receivedInWarehouseAt?: string };
+      const arrived = isEmdadArrived(r.category);
+      out.set(r.partId!, { emdadNo: r.emdadNo, category: r.category, statusText: official.emdadStatus ?? null, reportAt: r.at.toISOString(), arrived, receivedAt: arrived ? (parseReportDate(official.receivedInWarehouseAt)?.toISOString() ?? null) : null, ...(withHistory ? { history: (history.get(r.id) ?? []).reverse() } : {}) });
     }
     return out;
   }
@@ -409,6 +417,10 @@ export class PartsService {
       let action = `part.${input.action}`;
       switch (input.action) {
         case 'reserve': {
+          if (state === 'emdad_arrived') {
+            await this.reserveArrived(tx, actor, p, input, state);
+            return;
+          }
           // From «تأمین توسط نمایندگی» the line first returns to an open need.
           let row = p;
           if (state === 'dealer_supply') row = await this.save(tx, p, { status: 'needed' });
@@ -421,11 +433,16 @@ export class PartsService {
           await this.notifyReady(tx, actor, row);
           return;
         }
-        case 'emdad':
-          patch = { status: 'ordered', source: 'company', orderRef: input.requestNo, orderedAt: input.requestedAt ? new Date(input.requestedAt) : now, supplier: null, etaAt: null, firstEtaAt: null };
+        case 'emdad': {
+          // «شمارهٔ امداد ویژه» is optional; the legacy request number (order_ref) is left as it was, for audit.
+          const problem = specialAidCodeProblem(p.partNumber, input.requestedCode ?? null);
+          if (problem) throw badRequest('SPECIAL_AID_CODE_INVALID', problem);
+          const requested = parseProcurementCode(input.requestedCode);
+          patch = { status: 'ordered', source: 'company', emdadNo: input.emdadNo ?? null, procurementCode: requested ?? p.procurementCode ?? null, emdadReceivedAt: null, emdadReceivedQuantity: null, emdadReserveNote: null, orderedAt: input.requestedAt ? new Date(input.requestedAt) : now, supplier: null, etaAt: null, firstEtaAt: null };
           action = 'part.emdad_requested';
-          await this.finishFlow(tx, actor, p, patch, action, input.requestedCode ? `کد اختصاصی درخواستی: ${input.requestedCode}` : null, state);
+          await this.finishFlow(tx, actor, p, patch, action, requested ? `کد تدارکاتی درخواستی: ${requested}` : null, state);
           return;
+        }
         case 'market': {
           // Payer authorization (golden card / insurance) is recorded by the expert; it never blocks (spec principle 7).
           const gate = await this.finance.gate(tx, tenantId, p.caseId, input.purchaseUnitRial * p.quantity);
@@ -490,6 +507,45 @@ export class PartsService {
       }
     });
     return this.get(actor, id);
+  }
+
+  /**
+   * Reservation of an arrived special-aid line: the clerk chose the exact 10-digit
+   * manufacturer variant. Never more than the confirmed receipt and the usable
+   * stock; the rest stays outstanding and visible. The choice is recorded.
+   */
+  private async reserveArrived(tx: DbOrTx, actor: Actor, p: PartRow, input: Extract<PartFlowActionInput, { action: 'reserve' }>, state: PartFlowState) {
+    const tenantId = actor.user.tenantId;
+    const assessment = assessmentCodeOf(p.procurementCode) ?? assessmentCodeOf(p.partNumber);
+    const chosen = parseProcurementCode(input.fullStockCode);
+    if (!chosen) throw badRequest('PROCUREMENT_CODE_REQUIRED', 'برای قطعهٔ امداد ویژه یک کد تدارکاتی ۱۰ رقمی را انتخاب کنید');
+    if (assessment && chosen.slice(0, 8) !== assessment) throw badRequest('PROCUREMENT_CODE_MISMATCH', `۸ رقم اول کد انتخاب‌شده با کد اختصاصی قطعه (${assessment}) یکی نیست`);
+    const sums = (await tx.execute(sql`
+      select
+        coalesce((select sum(quantity) from stock_reservations where tenant_id = ${tenantId} and part_request_id = ${p.id} and status in ('reserved','issued')), 0)::text as held,
+        coalesce((select quantity from stock_snapshot_items where tenant_id = ${tenantId} and snapshot_id = ${input.snapshotId} and full_stock_code = ${chosen} and location_address = ${input.locationAddress}), 0)
+          - coalesce((select sum(quantity) from stock_reservations where tenant_id = ${tenantId} and full_stock_code = ${chosen} and location_address = ${input.locationAddress} and (status = 'reserved' or (status = 'issued' and reflected_at is null))), 0) as free
+    `)) as unknown as { rows: { held: string; free: string }[] };
+    const held = Number(sums.rows[0]?.held ?? 0);
+    const confirmed = Math.min(p.quantity, p.emdadReceivedQuantity ?? p.quantity);
+    const want = confirmed - held;
+    if (want <= 0) throw badRequest('NOTHING_TO_RESERVE', `تعداد رسیدهٔ تأییدشده (${confirmed}) قبلاً رزرو شده است؛ باقی‌مانده پس از رسید بعدی در گزارش امداد ویژه رزرو می‌شود`);
+    const free = Math.floor(Number(sums.rows[0]?.free ?? 0));
+    if (free <= 0) throw badRequest('INSUFFICIENT_STOCK', `کد ${chosen} در این محل موجودی قابل رزرو ندارد؛ کد یا محل دیگری را انتخاب کنید یا پس از ثبت رسید در گزارش موجودی دوباره رزرو کنید`);
+    const take = Math.min(want, free);
+    const reservationId = await this.stock.reserveIn(tx, actor, { partRequestId: p.id, snapshotId: input.snapshotId, fullStockCode: chosen, locationAddress: input.locationAddress, quantity: String(take), confirm: true });
+    const reserved = held + take;
+    const full = reserved >= p.quantity;
+    const [r] = await tx.select({ unitSalePrice: stockReservations.unitSalePrice }).from(stockReservations).where(eq(stockReservations.id, reservationId));
+    const fromStock = r?.unitSalePrice != null ? Math.round(Number(r.unitSalePrice)) : null;
+    const patch: Partial<PartRow> = {
+      procurementCode: chosen,
+      emdadReserveNote: full ? null : `${reserved} از ${p.quantity} عدد رزرو شد؛ ${p.quantity - reserved} عدد هنوز باقی است.`,
+      ...(full ? { status: 'reserved', reservedAt: new Date(), inStock: true } : {}),
+      salePriceRial: input.saleUnitRial ?? p.salePriceRial ?? fromStock,
+    };
+    await this.finishFlow(tx, actor, p, patch, 'part.variant_selected', null, state, { status: p.status, flowState: state, procurementCode: p.procurementCode, reservedQuantity: held });
+    if (full) await this.notifyReady(tx, actor, p);
   }
 
   private async finishFlow(tx: DbOrTx, actor: Actor, p: PartRow, patch: Partial<PartRow>, action: string, reason: string | null, state: PartFlowState, before?: Record<string, unknown>) {
@@ -637,11 +693,17 @@ export class PartsService {
       .orderBy(asc(partRequests.createdAt), asc(partRequests.id));
     const now = Date.now();
     const ids = rows.map((r) => r.p.id);
-    const [emdad, openNotices, roots] = await Promise.all([
+    const [emdad, openNotices, roots, held] = await Promise.all([
       this.emdadByPart(this.db, tenantId, ids, true),
       this.notices(this.db, tenantId, { partIds: ids, openOnly: true }),
       this.rootVersions(tenantId, rows.map((r) => r.p.assessmentItemId).filter((x): x is string => !!x)),
+      ids.length
+        ? this.db.select({ partId: stockReservations.partRequestId, q: sql<string>`coalesce(sum(${stockReservations.quantity}), 0)::text` }).from(stockReservations)
+          .where(and(eq(stockReservations.tenantId, tenantId), inArray(stockReservations.partRequestId, ids), inArray(stockReservations.status, ['reserved', 'issued'])))
+          .groupBy(stockReservations.partRequestId)
+        : Promise.resolve([] as { partId: string; q: string }[]),
     ]);
+    const heldOf = new Map(held.map((h) => [h.partId, Number(h.q)]));
     // «الحاقیه»: the root line was first written in a supplement, or an earlier row of the same root exists.
     const firstOfRoot = new Map<string, string>();
     for (const { p } of rows) if (p.assessmentItemId && !firstOfRoot.has(p.assessmentItemId)) firstOfRoot.set(p.assessmentItemId, p.id);
@@ -656,7 +718,16 @@ export class PartsService {
       const e = emdad.get(p.id) ?? null;
       const flowState = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: e?.category });
       const root = p.assessmentItemId ? roots.get(p.assessmentItemId) : undefined;
+      const reservedQuantity = Math.min(p.quantity, Math.floor(heldOf.get(p.id) ?? 0));
+      const ids = partIdentifiers({ partNumber: p.partNumber, procurementCode: p.procurementCode, source: p.source });
+      const done = ['handed_over', 'cancelled', 'returned'].includes(p.status);
       return {
+      ...ids,
+      emdadNo: p.emdadNo,
+      emdadReceivedAt: iso(p.emdadReceivedAt),
+      reservedQuantity,
+      outstandingQuantity: done ? 0 : Math.max(0, p.quantity - (p.status === 'reserved' || p.status === 'received' ? p.quantity : reservedQuantity)),
+      emdadReserveNote: p.status === 'ordered' ? p.emdadReserveNote : null,
       flowState,
       allowedActions: rejectedNeedActions(p, allowedPartActions(flowState)),
       fromSupplement: !!p.assessmentItemId && ((root?.versionNo ?? 1) > 1 || firstOfRoot.get(p.assessmentItemId) !== p.id),
@@ -752,6 +823,7 @@ export class PartsService {
       source,
       supplier: input.supplier ?? null,
       orderRef: input.orderRef ?? null,
+      ...(source === 'company' ? { emdadNo: input.emdadNo ?? p.emdadNo ?? null, emdadReceivedAt: null, emdadReceivedQuantity: null, emdadReserveNote: null } : {}),
       orderedAt: at,
       etaAt,
       firstEtaAt: p.firstEtaAt ?? etaAt,

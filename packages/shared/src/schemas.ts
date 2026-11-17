@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ALERT_KINDS, ALERT_RESPONSES } from './alerts';
 import { REPAIR_TRADES } from './workshop';
 import { PIN_LOGIN_ROLES } from './permissions';
+import { toLatinDigits } from './text';
 import {
   ASSESSMENT_ITEM_ACTIONS,
   ASSESSMENT_KINDS,
@@ -42,6 +43,15 @@ const optionalText = (max: number) =>
 const isoDate = z.iso.datetime({ offset: true });
 const optionalIsoDate = isoDate.nullish();
 const uuid = z.uuid();
+/** «شمارهٔ امداد ویژه»: digits (Persian or Latin), kept as text so leading zeros stay. */
+export const emdadNoField = z
+  .string()
+  .trim()
+  .max(32)
+  .transform((v) => toLatinDigits(v).replace(/\s+/g, ''))
+  .refine((v) => v === '' || /^\d+$/.test(v), 'شمارهٔ امداد ویژه فقط رقم است')
+  .transform((v) => (v === '' ? null : v))
+  .nullish();
 
 export const loginSchema = z.object({
   // Needed only when the same username exists in more than one dealership.
@@ -424,6 +434,8 @@ export const partActionSchema = z
     source: z.enum(PART_SOURCES).optional(),
     supplier: optionalText(120),
     orderRef: optionalText(64),
+    // company source: «شمارهٔ امداد ویژه» (optional; the report fills it after an unambiguous match)
+    emdadNo: emdadNoField,
     unitPriceRial: rial.optional(),
     etaAt: optionalIsoDate,
     priceApprovalRef: optionalText(64),
@@ -461,8 +473,9 @@ const reason = z.string().trim().min(3, 'علت را بنویسید').max(500);
 const flowBase = { expectedVersion: z.number().int().min(1) };
 export const partFlowActionSchema = z.discriminatedUnion('action', [
   z.object({ ...flowBase, action: z.literal('reserve'), snapshotId: uuid, fullStockCode: z.string().trim().min(1).max(32), locationAddress: z.string().max(120).default(''), saleUnitRial: rial.optional() }),
-  // The Emdad Vijeh request number is mandatory (per vehicle: VIN + admission number).
-  z.object({ ...flowBase, action: z.literal('emdad'), requestNo: z.string().trim().min(1, 'شمارهٔ درخواست امداد ویژه را وارد کنید').max(64), requestedAt: optionalIsoDate, requestedCode: optionalText(32) }),
+  // «شمارهٔ امداد ویژه» is optional here: when it is not known yet, the daily report fills it after an
+  // unambiguous match (VIN/chassis + 8-digit assessment code). The old request number is no longer asked.
+  z.object({ ...flowBase, action: z.literal('emdad'), emdadNo: emdadNoField, requestedAt: optionalIsoDate, requestedCode: optionalText(32) }),
   z.object({ ...flowBase, action: z.literal('market'), supplier: z.string().trim().min(1, 'نام فروشنده را وارد کنید').max(120), purchaseUnitRial: rial, saleUnitRial: rial, etaAt: optionalIsoDate }),
   z.object({ ...flowBase, action: z.literal('receive'), receiptDocNo: optionalText(64) }),
   z.object({ ...flowBase, action: z.literal('hand_over'), recipientName: z.string().trim().min(1, 'نام تحویل‌گیرنده را وارد کنید').max(120), taskId: uuid.nullish(), departmentId: uuid.nullish(), saleUnitRial: rial.optional() }),

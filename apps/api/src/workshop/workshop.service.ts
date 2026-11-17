@@ -1,15 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import { REPAIR_TRADES, REPAIR_TRADE_LABELS, unionElapsedMinutes, unionWorkingMinutes, workingDayMinutes, workingMinutesBetween, type PartQuote, type PlanSuggestion, type RepairTrade, type WorkshopOverview, type WorkshopStation, type WorkshopTask, type saveCalendarSchema, type stationSchema, type quoteSchema, type quoteDecisionSchema } from '@manage/shared';
+import { REPAIR_TRADES, REPAIR_TRADE_LABELS, technicianTiming, type CaseWorkflow, unionElapsedMinutes, unionWorkingMinutes, workingDayMinutes, workingMinutesBetween, type PartQuote, type PlanSuggestion, type RepairTrade, type WorkshopOverview, type WorkshopStation, type WorkshopTask, type saveCalendarSchema, type stationSchema, type quoteSchema, type quoteDecisionSchema } from '@manage/shared';
 import type { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle,type DbOrTx } from '../db/database';
-import { blockers, cases, departments, partQuotes, partRequests, taskDependencies, tasks, technicianWages, tenants, users, vehicles, workCalendars, workshopStations } from '../db/schema';
+import { auditEvents, blockers, cases, departments, partQuotes, partRequests, taskDependencies, tasks, technicianWages, tenants, users, vehicles, workCalendars, workshopStations } from '../db/schema';
 import { ownWage } from '../people/wage-view';
-import { CasesService } from '../cases/cases.service';
+import { CasesService, taskStartBlockers } from '../cases/cases.service';
 
 export {calendarAt} from './work-calendar';
 import {calendarAt} from './work-calendar';
@@ -98,10 +98,27 @@ export class WorkshopService {
     const waitingOf=(caseId:string)=>partRows.filter(p=>p.caseId===caseId&&(p.status==='ordered'||p.status==='needed')).length;
     // Own cards carry only the technician's own wage; the coordinator view never adds it here.
     const wages=own&&rows.length?new Map((await this.db.select().from(technicianWages).where(and(eq(technicianWages.tenantId,tid),inArray(technicianWages.taskId,rows.map(r=>r.t.id))))).map(w=>[w.taskId,ownWage(w)])):null;
+    // Legacy assignments without actual_start_at: a recorded «task.started» event is verifiable evidence; nothing else is guessed.
+    const legacy=rows.filter(r=>!r.t.actualStartAt&&r.t.status!=='pending').map(r=>r.t.id);
+    const startEvents=new Map<string,Date>();
+    for(let i=0;i<legacy.length;i+=500){for(const e of await this.db.select({id:auditEvents.entityId,at:sql<Date>`max(${auditEvents.occurredAt})`}).from(auditEvents).where(and(eq(auditEvents.tenantId,tid),eq(auditEvents.entityType,'task'),eq(auditEvents.action,'task.started'),inArray(auditEvents.entityId,legacy.slice(i,i+500)))).groupBy(auditEvents.entityId))if(e.at)startEvents.set(e.id,new Date(e.at));}
+    // Start blockers of pending assignments, with the same codes the start action refuses with.
+    const pendingCases=[...new Set(rows.filter(r=>r.t.status==='pending'&&r.c.status==='open').map(r=>r.c.id))];
+    const workflows=new Map<string,CaseWorkflow|null>();
+    for(const id of pendingCases){const kase=rows.find(r=>r.c.id===id)!.c;workflows.set(id,kase.workflow?.guided?await this.cases.workflow(actor,id):null);}
+    const caseWork=pendingCases.length?await this.db.select().from(tasks).where(and(eq(tasks.tenantId,tid),inArray(tasks.caseId,pendingCases))):[];
+    const workOf=(caseId:string)=>caseWork.filter(w=>w.caseId===caseId);
     return rows.map(({t,c,v,d})=>{
       const calendar=t.calendarSnapshot?.calendar;
       const end=iso(t.actualEndAt)??now,deadline=iso(t.baselineEndAt),snapshot=t.stationSnapshot;
-      return {...(wages?{wage:wages.get(t.id)??null}:{}),partsReady:readyOf(c.id),partsWaiting:waitingOf(c.id),dayMinutes:calendar?workingDayMinutes(calendar):null,plannedWorkMinutes:calendar&&t.baselineStartAt&&t.baselineEndAt?workingMinutesBetween(t.baselineStartAt.toISOString(),t.baselineEndAt.toISOString(),calendar):null,id:t.id,caseId:c.id,caseNumber:c.caseNumber,vehicleLabel:[v.brand,v.model,v.trim].filter(Boolean).join(' '),plate:v.plate,title:t.title,stationCode:snapshot?.code??null,stationName:snapshot?.name??null,departmentName:d.name,technicianName:t.technicianName,status:t.status,version:t.version,plannedStartAt:iso(t.plannedStartAt),plannedEndAt:iso(t.plannedEndAt),baselineEndAt:deadline,actualStartAt:iso(t.actualStartAt),actualEndAt:iso(t.actualEndAt),approvedAt:iso(t.approvedAt),canStart:t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'&&!deps.some(e=>e.id===t.id&&e.status!=='approved'),workMinutes:calendar&&t.actualStartAt?workingMinutesBetween(t.actualStartAt.toISOString(),end,calendar):null,lateMinutes:calendar&&deadline?workingMinutesBetween(deadline,end,calendar):null,transferMinutes:calendar&&t.actualEndAt?workingMinutesBetween(t.actualEndAt.toISOString(),iso(t.approvedAt)??now,calendar):null,calendarConfirmed:!!calendar?.holidaysVerifiedThrough&&calendar.holidaysVerifiedThrough>=new Date(Date.parse(end)+210*60000).toISOString().slice(0,10)};
+      const startedAt=t.actualStartAt??startEvents.get(t.id)??null;
+      const plannedMinutes=calendar&&t.baselineStartAt&&t.baselineEndAt?workingMinutesBetween(t.baselineStartAt.toISOString(),t.baselineEndAt.toISOString(),calendar):calendar&&t.plannedStartAt&&t.plannedEndAt?workingMinutesBetween(t.plannedStartAt.toISOString(),t.plannedEndAt.toISOString(),calendar):null;
+      const timing=technicianTiming({actualStartAt:iso(startedAt),actualEndAt:iso(t.actualEndAt),plannedMinutes,now,calendar});
+      const unfinished=deps.filter(e=>e.id===t.id&&e.status!=='approved').length;
+      const startBlockers=t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'?taskStartBlockers(c.id,workflows.get(c.id)??null,workOf(c.id),t.id,unfinished):[];
+      return {...(wages?{wage:wages.get(t.id)??null}:{}),partsReady:readyOf(c.id),partsWaiting:waitingOf(c.id),dayMinutes:calendar?workingDayMinutes(calendar):null,plannedWorkMinutes:calendar&&t.baselineStartAt&&t.baselineEndAt?workingMinutesBetween(t.baselineStartAt.toISOString(),t.baselineEndAt.toISOString(),calendar):null,id:t.id,caseId:c.id,caseNumber:c.caseNumber,vehicleLabel:[v.brand,v.model,v.trim].filter(Boolean).join(' '),plate:v.plate,title:t.title,stationCode:snapshot?.code??null,stationName:snapshot?.name??null,departmentName:d.name,technicianName:t.technicianName,status:t.status,version:t.version,plannedStartAt:iso(t.plannedStartAt),plannedEndAt:iso(t.plannedEndAt),baselineEndAt:deadline,actualStartAt:iso(t.actualStartAt),actualEndAt:iso(t.actualEndAt),approvedAt:iso(t.approvedAt),canStart:t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'&&!startBlockers.length,startBlockers,startSource:t.actualStartAt?'recorded':startedAt?'event':null,workDays:timing.workDays,delayDays:timing.delayDays,
+        // Technician time: from the actual start of THIS assignment; delay = beyond its planned duration. No start → not calculated.
+        workMinutes:timing.workMinutes,lateMinutes:timing.delayMinutes,transferMinutes:calendar&&t.actualEndAt?workingMinutesBetween(t.actualEndAt.toISOString(),iso(t.approvedAt)??now,calendar):null,calendarConfirmed:!!calendar?.holidaysVerifiedThrough&&calendar.holidaysVerifiedThrough>=new Date(Date.parse(end)+210*60000).toISOString().slice(0,10)};
     });
   }
   async quotes(actor:Actor,caseId?:string):Promise<PartQuote[]> {

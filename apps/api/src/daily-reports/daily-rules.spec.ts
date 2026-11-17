@@ -32,7 +32,7 @@ describe('Emdad rules', () => {
 
   it('suggests a next step with its reason and never decides', () => {
     const base = { caseId: 'c', partRequestId: null, matchStatus: 'matched', official: {} };
-    expect(emdadSuggestion({ ...base, statusCategory: 'in_dealer_stock' })).toContain('رسید فیزیکی');
+    expect(emdadSuggestion({ ...base, statusCategory: 'in_dealer_stock' })).toContain('رزرو خودکار');
     expect(emdadSuggestion({ ...base, statusCategory: 'in_supply', matchStatus: 'ambiguous' })).toContain('دستی');
     expect(emdadSuggestion({ ...base, statusCategory: 'needs_interpretation' })).toContain('معنای');
     expect(emdadSuggestion({ ...base, statusCategory: 'in_supply' })).toBeNull();

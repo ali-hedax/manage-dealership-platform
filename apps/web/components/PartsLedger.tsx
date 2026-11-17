@@ -35,6 +35,7 @@ const STATE_TONE: Record<PartFlowState, string> = {
   needed: 'wait',
   reserved: 'ok',
   emdad: 'em',
+  emdad_arrived: 'wait',
   dealer_supply: 'stop',
   market: 'em',
   ready: 'ok',
@@ -48,18 +49,21 @@ const rialText = (n: number | null | undefined) => (n == null ? '—' : `${faNum
 const dayText = (iso: string | null | undefined) => (iso ? formatJalaliDay(iso) : '');
 const keyOf = (s: string) => toLatinDigits(s).replace(/[\s\-‌_./]/g, '').toUpperCase();
 
-/** One-line status under the state tag: official Emdad text and report date, ETA, handover… */
+/** One-line readiness detail under the state tag (ETA, reservation, handover…). The special-aid stage has its own line. */
 function stateDetail(p: Part): string {
   switch (p.flowState) {
     case 'emdad':
     case 'dealer_supply':
-      return p.emdad ? `${p.emdad.statusText ?? 'بدون متن وضعیت'} · ${dayText(p.emdad.reportAt)}` : `درخواست ${toPersianDigits(p.orderRef ?? '—')} · ${dayText(p.orderedAt)}`;
+      return p.emdad ? '' : `ثبت امداد ویژه ${dayText(p.orderedAt)} · منتظر گزارش روزانه`;
+    case 'emdad_arrived':
+      return p.reservedQuantity > 0 ? `${faNum(p.reservedQuantity)} از ${faNum(p.quantity)} عدد رزرو شد؛ ${faNum(p.outstandingQuantity)} عدد باقی است` : 'هنوز رزرو نشده است';
     case 'market':
       return `${p.supplier ?? 'بازار'}${p.etaAt ? ` · رسیدن ${dayText(p.etaAt)}` : ''}`;
     case 'reserved':
-      return `رزرو ${dayText(p.reservedAt)}`;
+      return p.source === 'company' ? 'رزرو برای همین خودرو · آمادهٔ تحویل' : `رزرو ${dayText(p.reservedAt)}`;
     case 'ready':
-      return p.source === 'company' ? `امداد ویژه رسید · ${dayText(p.receivedAt)}` : `رسید ${dayText(p.receivedAt)}`;
+      // A legacy special-aid receipt date was the report date: it is not shown as a receipt date.
+      return p.source === 'company' ? '' : `رسید ${dayText(p.receivedAt)}`;
     case 'handed_over':
     case 'consumed':
       return `${p.recipientName ?? ''}${p.handedOverDepartment ? ` (${p.handedOverDepartment.name})` : ''} · ${dayText(p.handedOverAt)}`;
@@ -72,12 +76,32 @@ function stateDetail(p: Part): string {
   }
 }
 
+/**
+ * Special-aid stage on the visible row (owner, 2026-11-17): the current stage from
+ * the latest report, including stages before warehouse arrival. On a confirmed
+ * arrival «امداد ویژه رسیده» with the actual warehouse receipt date right under
+ * it; never the report or import date. Readiness stays on the state tag.
+ */
+function EmdadStage({ part: p }: { part: Part }) {
+  if (!p.emdad) return null;
+  if (p.emdad.arrived) {
+    const received = p.emdad.receivedAt ?? p.emdadReceivedAt;
+    return (
+      <span className="emdad-stage" data-testid="emdad-stage">
+        <b>امداد ویژه رسیده</b>
+        {received && <span className="emdad-received" data-testid="emdad-received">{dayText(received)}</span>}
+      </span>
+    );
+  }
+  return <span className="emdad-stage" data-testid="emdad-stage"><b>{p.emdad.statusText ?? 'بدون متن وضعیت'}</b></span>;
+}
+
 /** The one button shown on the closed row; the rest live inside the row. */
 function primaryAction(p: Part): PartFlowAction | 'decide' | null {
   // Rejected in the assessment and not supplied: no supply route to choose; only «لغو قطعه» stays in the details.
   if (p.assessmentRejection && p.flowState === 'needed') return null;
   if (p.flowState === 'needed' || p.flowState === 'dealer_supply') return 'decide';
-  for (const a of ['hand_over', 'receive', 'return'] as const) if (p.allowedActions.includes(a)) return a;
+  for (const a of ['hand_over', 'receive', 'return', 'reserve'] as const) if (p.allowedActions.includes(a)) return a;
   return null;
 }
 
@@ -115,7 +139,7 @@ export function PartsLedger({ kase, onChange, title = 'فهرست قطعات', o
       if (filter !== 'all' && f !== filter) return false;
       if (!q.trim()) return true;
       const hay = `${p.description} ${p.notes ?? ''} ${p.supplier ?? ''}`;
-      return (!!term && (keyOf(p.partNumber ?? '').includes(term) || keyOf(p.orderRef ?? '').includes(term) || keyOf(p.emdad?.requestNo ?? '').includes(term))) || words.every((w) => hay.includes(w));
+      return (!!term && [p.partNumber, p.procurementCode, p.assessmentCode, p.emdadNo, p.emdad?.emdadNo].some((v) => keyOf(v ?? '').includes(term))) || words.every((w) => hay.includes(w));
     });
   }, [parts, q, filter, showClosed]);
 
@@ -153,7 +177,7 @@ export function PartsLedger({ kase, onChange, title = 'فهرست قطعات', o
           </div>
           <label className="srch ledger-search">
             <AppIcon name="search" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجوی قطعه، کد فنی یا شمارهٔ درخواست…" aria-label="جست‌وجو در قطعات" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجوی قطعه، کد فنی یا شمارهٔ امداد ویژه…" aria-label="جست‌وجو در قطعات" />
           </label>
           {editable && can('part.request') && <AddPart caseId={kase.id} onDone={refresh} />}
         </div>
@@ -197,17 +221,18 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
           {p.assessmentRejection && <span className="m-badge stop" title="این قلم در کارشناسی رد شده است؛ نیاز تأمین حساب نمی‌شود">رد شده{p.assessmentRejection.versionNo > 1 ? ` · الحاقیه ${toPersianDigits(p.assessmentRejection.versionNo)}` : ""}</span>}
           {p.replaces && <span className="m-badge" title={p.replaces.probable ? "پیوند از روی کد فنی یکسان؛ قطعی نیست" : undefined}>جایگزین «{p.replaces.description}»{p.replaces.probable ? " · احتمالی" : ""}</span>}
           {p.priceNotice && <span className="m-tag wait">اعلام قیمت</span>}
+          {p.displayCode && <small className="m-num m-muted" data-testid="part-code"><bdi dir="ltr">{toPersianDigits(p.displayCode)}</bdi></small>}
         </div>
         <span className="c-qty m-num"><span className="sr-only">تعداد </span>{faNum(p.quantity)}</span>
         <span className="c-price m-num"><span className="sr-only">قیمت فروش </span>{p.salePriceRial != null ? faNum(p.salePriceRial) : p.approvedUnitPriceRial != null ? faNum(p.approvedUnitPriceRial) : '—'}</span>
         <div className="m-row-state c-state">
           <span className={`m-tag ${STATE_TONE[p.flowState]}`}>{PART_FLOW_STATE_LABELS[p.flowState]}</span>
           {detail && <small>{detail}</small>}
-          {p.emdad && !['emdad', 'dealer_supply'].includes(p.flowState) && <small className="official-emdad">{p.emdad.statusText ?? 'بدون متن وضعیت'} · {dayText(p.emdad.reportAt)}</small>}
+          <EmdadStage part={p} />
         </div>
         <div className="m-row-action c-act" onClick={(e) => e.stopPropagation()}>
           {primary === 'decide' && <button type="button" className="m-btn2-s" aria-expanded={expanded} onClick={onToggle}>انتخاب مسیر تأمین <AppIcon name="chevron-down" /></button>}
-          {primary && primary !== 'decide' && <button type="button" className="m-btn2-s" onClick={() => choose(primary)}>{partActionLabel(p.flowState, primary)} <AppIcon name={primary === 'hand_over' ? 'arrow-left' : primary === 'receive' ? 'receipt' : 'return'} /></button>}
+          {primary && primary !== 'decide' && <button type="button" className="m-btn2-s" onClick={() => choose(primary)}>{partActionLabel(p.flowState, primary)} <AppIcon name={primary === 'hand_over' ? 'arrow-left' : primary === 'receive' ? 'receipt' : primary === 'reserve' ? 'box' : 'return'} /></button>}
           <AppIcon name="chevron-down" className={`ledger-caret${expanded ? ' up' : ''}`} />
         </div>
       </div>
@@ -216,10 +241,12 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
           {manage && <div className="m-next"><b>قدم بعدی</b>{PART_FLOW_NEXT_STEP[p.flowState]}</div>}
           <h3 className="ledger-detail-title">جزئیات تأمین</h3>
           <dl className="m-dl ledger-dl">
-            <dt>کد فنی</dt>
-            <dd><bdi className="m-num">{toPersianDigits(p.partNumber ?? '—')}</bdi></dd>
-            {(p.orderRef || p.emdad?.requestNo) && (<><dt>شمارهٔ درخواست امداد ویژه</dt><dd><bdi>{toPersianDigits(p.emdad?.requestNo ?? p.orderRef ?? '')}</bdi>{p.orderedAt ? ` · ${dayText(p.orderedAt)}` : ''}</dd></>)}
-            {p.emdad && (<><dt>گزارش امداد ویژه</dt><dd>{p.emdad.statusText ?? '—'} · {dayText(p.emdad.reportAt)}</dd></>)}
+            {p.procurementCode && (<><dt>کد تدارکاتی (۱۰ رقم)</dt><dd><bdi className="m-num" dir="ltr">{toPersianDigits(p.procurementCode)}</bdi></dd></>)}
+            {p.assessmentCode && (<><dt>کد اختصاصی (کارشناسی، ۸ رقم)</dt><dd><bdi className="m-num" dir="ltr">{toPersianDigits(p.assessmentCode)}</bdi></dd></>)}
+            {(!p.assessmentCode || (p.partNumber && p.partNumber !== p.assessmentCode && p.partNumber !== p.procurementCode)) && (<><dt>کد فنی</dt><dd><bdi className="m-num" dir="ltr">{toPersianDigits(p.partNumber ?? '—')}</bdi></dd></>)}
+            {(p.emdadNo || p.emdad?.emdadNo) && (<><dt>شمارهٔ امداد ویژه</dt><dd data-testid="emdad-no"><bdi className="m-num">{toPersianDigits(p.emdadNo ?? p.emdad?.emdadNo ?? '')}</bdi></dd></>)}
+            {p.emdad && (<><dt>آخرین وضعیت امداد ویژه</dt><dd>{p.emdad.statusText ?? '—'} <small className="m-muted">(تاریخ گزارش {dayText(p.emdad.reportAt)})</small></dd></>)}
+            {p.emdadReserveNote && (<><dt>رزرو امداد ویژه</dt><dd className="emdad-ready-note">{p.emdadReserveNote}</dd></>)}
             {p.emdad?.history && p.emdad.history.length > 1 && (
               <>
                 <dt>تاریخچهٔ وضعیت امداد ویژه</dt>
@@ -282,7 +309,7 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
         body = { ...base, action, snapshotId: option.snapshot.id, fullStockCode: option.o.fullStockCode, locationAddress: option.o.locationAddress, saleUnitRial: amount('sale') };
         break;
       case 'emdad':
-        body = { ...base, action, requestNo: toLatinDigits(v.requestNo ?? '').trim(), requestedCode: v.code?.trim() ? toLatinDigits(v.code) : undefined };
+        body = { ...base, action, emdadNo: v.emdadNo?.trim() ? toLatinDigits(v.emdadNo).trim() : undefined, requestedCode: v.code?.trim() ? toLatinDigits(v.code).trim() : undefined };
         break;
       case 'market':
         body = { ...base, action, supplier: v.supplier ?? '', purchaseUnitRial: amount('purchase') ?? 0, saleUnitRial: amount('sale') ?? 0 };
@@ -324,8 +351,9 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
       {action === 'reserve' && <StockChoice part={p} value={option} onChange={setOption} />}
       {action === 'emdad' && (
         <>
-          <label className="m-field">شمارهٔ درخواست امداد ویژه *<input required inputMode="numeric" dir="ltr" value={v.requestNo ?? ''} onChange={set('requestNo')} /></label>
-          <label className="m-field">کد اختصاصی درخواست‌شده<input dir="ltr" value={v.code ?? ''} onChange={set('code')} placeholder={p.partNumber ?? ''} /></label>
+          <label className="m-field">شمارهٔ امداد ویژه<input inputMode="numeric" dir="ltr" value={v.emdadNo ?? ''} onChange={set('emdadNo')} /></label>
+          <label className="m-field">کد تدارکاتی ۱۰ رقمی (اگر سازنده معلوم است)<input inputMode="numeric" dir="ltr" value={v.code ?? ''} onChange={set('code')} placeholder={p.procurementCode ?? ''} /></label>
+          <p className="m-lbl" style={{ flexBasis: '100%', margin: 0 }}>اگر شمارهٔ امداد ویژه را هنوز ندارید خالی بگذارید؛ گزارش روزانه پس از تطبیق قطعی با شاسی و کد اختصاصی آن را پر می‌کند.</p>
         </>
       )}
       {action === 'market' && (
@@ -376,19 +404,21 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
  * when it is the only one. A code held by another open case shows who holds it.
  */
 function StockChoice({ part, value, onChange }: { part: Part; value: { o: StockOption; snapshot: StockSnapshotInfo } | null; onChange: (v: { o: StockOption; snapshot: StockSnapshotInfo } | null) => void }) {
-  const base = part.partNumber ? parseStockCode(toLatinDigits(part.partNumber))?.basePartNumber ?? (/^\d{8}/.test(toLatinDigits(part.partNumber)) ? toLatinDigits(part.partNumber).slice(0, 8) : null) : null;
+  // An arrived special-aid line may reserve what is available now; the rest stays outstanding.
+  const minimum = part.flowState === 'emdad_arrived' ? 1 : part.quantity;
+  const base = part.assessmentCode ?? (part.partNumber ? parseStockCode(toLatinDigits(part.partNumber))?.basePartNumber ?? (/^\d{8}/.test(toLatinDigits(part.partNumber)) ? toLatinDigits(part.partNumber).slice(0, 8) : null) : null);
   const [q, setQ] = useState(base ? '' : part.description);
   const url = base ? `/stock/options?base=${base}&pageSize=50` : q.trim().length >= 2 ? `/stock/options?q=${encodeURIComponent(q.trim())}&pageSize=30` : null;
   const { data, error } = useSWR<{ snapshot: StockSnapshotInfo | null; items: StockOption[] }>(url, fetcher, {
     onSuccess: (d) => {
-      const usable = d.items.filter((o) => Number(o.available) >= part.quantity);
+      const usable = d.items.filter((o) => Number(o.available) >= minimum);
       if (!value && d.snapshot && usable.length === 1) onChange({ o: usable[0]!, snapshot: d.snapshot });
     },
   });
   return (
     <div style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
       {base ? (
-        <span className="m-lbl">کدهای موجود با ۸ رقم اول <bdi>{toPersianDigits(base)}</bdi> (کد اختصاصی سازنده‌های مختلف)</span>
+        <span className="m-lbl">کدهای تدارکاتی ۱۰ رقمی با کد اختصاصی <bdi>{toPersianDigits(base)}</bdi> (هر دو رقم آخر = یک سازنده). کد دقیق را انتخاب کنید؛ همان کد برای این خودرو رزرو و ثبت می‌شود.</span>
       ) : (
         <label className="m-field">جست‌وجوی موجودی (کد یا نام)<input value={q} onChange={(e) => setQ(e.target.value)} /></label>
       )}
@@ -396,7 +426,7 @@ function StockChoice({ part, value, onChange }: { part: Part; value: { o: StockO
       {data && !data.snapshot && <p className="m-warn">گزارش موجودی امروز بارگذاری نشده است.</p>}
       {data?.snapshot && data.items.length === 0 && <p className="m-empty">موجودی قابل‌استفاده‌ای برای این کد نیست.</p>}
       {data?.snapshot && data.items.map((o) => {
-        const enough = Number(o.available) >= part.quantity;
+        const enough = Number(o.available) >= minimum;
         const held = (o.reservedFor ?? []).filter((h) => h.caseId !== part.caseId);
         const selected = !!value && value.o.fullStockCode === o.fullStockCode && value.o.locationAddress === o.locationAddress;
         return (

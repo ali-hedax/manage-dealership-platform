@@ -101,14 +101,16 @@ test('batches Emdad with separate prices, suggests matched receipts and keeps ma
   const p3 = await need(c.id, '11113333', 'external');
   expect(await line(p3)).toMatchObject({ action: 'emdad' });
   expect((await workAction(p3.id, { action: 'market', expectedVersion: p3.version, supplier: 'فروشنده آزمون', purchasePriceRial: 3000 })).status).toBe(201);
-  const req = await workAction(c.id, { action: 'emdad', requestNo: 'TEST-EMDAD-3', requestedAt: daysAgo(3),
+  const req = await workAction(c.id, { action: 'emdad', emdadNo: '0030003', requestedAt: daysAgo(3),
     parts: [{ id: p1.id, expectedVersion: p1.version, companyPriceRial: 2500 },
       { id: p2.id, expectedVersion: p2.version, companyPriceRial: 3200 }] });
   expect(req.status).toBe(201);
   const ordered = (await parts.get(`/cases/${c.id}/parts`)).body as Part[];
-  expect(ordered.filter(p => p.orderRef === 'TEST-EMDAD-3').map(p => p.salePriceRial).sort()).toEqual([2500, 3200]);
+  // The special-aid number is stored as text (leading zeros kept); no request number is written.
+  expect(ordered.filter(p => p.emdadNo === '0030003').map(p => p.salePriceRial).sort()).toEqual([2500, 3200]);
+  expect(ordered.filter(p => p.emdadNo === '0030003').every(p => p.orderRef === null)).toBe(true);
   const id = randomUUID();
-  await h.db.db.insert(emdadRequests).values({ id, tenantId, externalKey: 'TEST-EMDAD-3/1', requestNo: 'TEST-EMDAD-3',
+  await h.db.db.insert(emdadRequests).values({ id, tenantId, externalKey: 'TEST-EMDAD-3/1', emdadNo: '0030003',
     official: { fullCodeBase: '88887777', emdadRegisteredAt: formatJalaliDateInput(new Date(daysAgo(3))),
       receivedInWarehouseAt: formatJalaliDateInput(new Date(daysAgo(1))) }, statusCategory: 'received_by_dealer',
     firstImportId: emdadImportId, lastImportId: emdadImportId, lastReportAt: new Date(),

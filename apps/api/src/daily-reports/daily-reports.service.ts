@@ -39,7 +39,7 @@ import { applyEmdadToParts } from './emdad-parts';
 import { PARSER_VERSION, emdadStatusCategory, parseEmdadSheet, parseStockSheet, type EmdadOfficial, type ParsedRow, type StockRowData } from './report-rows';
 import { safeCell } from './safe-cell';
 import { detectFormat, FORMAT_ERRORS, readHtmlTable, readSpreadsheetML, SpreadsheetError } from './spreadsheet-formats';
-import { StockService } from './stock.service';
+import { StockService, snapshotInfo } from './stock.service';
 
 type ImportRow = typeof dailyReportImports.$inferSelect;
 type Profile = typeof dailyReportProfiles.$inferSelect;
@@ -236,6 +236,8 @@ export class DailyReportsService implements OnApplicationBootstrap {
         const parsed = parseEmdadSheet(grid);
         ({ headerRow, signature } = parsed);
         diagnostics.missingColumns = parsed.missingColumns;
+        // Columns the special-aid workflow needs and could not be found: shown in the import result.
+        diagnostics.mappingIssues = parsed.mappingIssues;
         Object.assign(counts, await this.classifyEmdad(job.tenantId, parsed.rows));
         rows = parsed.rows;
         diagnostics.sameContent = rows.some((r) => r.key) && rows.every((r) => !r.key || !['new', 'changed'].includes(r.outcome));
@@ -656,8 +658,10 @@ export class DailyReportsService implements OnApplicationBootstrap {
         .where(and(eq(dailyReportRows.importId, job.id), inArray(dailyReportRows.rowNo, b)));
     }
     // Spec section 7: the report moves the linked part lines automatically.
-    const parts = await applyEmdadToParts(tx, this.audit, actor, job.id, reportAt);
-    return { counts: { ...counts, partsArrived: parts.arrived, partsDealerSupply: parts.dealerSupply, linkedByRequestNo: parts.linkedByRequestNo, requestNoReview: parts.needsReview } };
+    const parts = await applyEmdadToParts(tx, this.audit, actor, job.id, reportAt,
+      (t, a, input) => this.stock.reserveIn(t, a, input),
+      async (t, tenant) => { const snap = await this.stock.active(t, tenant); return snap ? { id: snap.id, reservable: snapshotInfo(snap).reservable } : null; });
+    return { counts: { ...counts, partsArrived: parts.arrived, partsReserved: parts.reserved, partsPartial: parts.partial, partsDealerSupply: parts.dealerSupply, emdadNoFilled: parts.emdadNoFilled, emdadReview: parts.needsReview } };
   }
 
   // -------------------------------------------------------------- profiles
