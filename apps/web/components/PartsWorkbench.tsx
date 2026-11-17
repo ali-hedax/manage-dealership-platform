@@ -255,7 +255,7 @@ function PartLine({ item, card, refresh, preparation, accepted, onManualChange }
             orderRef: data.get('reference') || undefined } });
         }
       } else if (action === 'emdad') {
-        await api(endpoint, { body: { action, requestNo: data.get('reference'), requestedAt, etaAt: eta ?? undefined,
+        await api(endpoint, { body: { action, emdadNo: String(data.get('emdadNo') ?? '').trim() || undefined, requestedAt, etaAt: eta ?? undefined,
           parts: [{ id: item.id, expectedVersion: item.version,
             companyPriceRial: parseRials(data.get('companyPrice')),
             ...(data.get('marketPrice') ? { salePriceRial: parseRials(data.get('marketPrice')) } : {}) }] } });
@@ -346,7 +346,7 @@ function PartLine({ item, card, refresh, preparation, accepted, onManualChange }
           <span className="hint">{item.companyPriceRial === null ? 'قیمت در موجودی پیدا نشد یا متفاوت است؛ دستی ثبت کنید.' : 'از موجودی خوانده شده؛ قابل اصلاح است.'}</span>
         </label>
         <label className="field">قیمت فروش بازار (ریال)، فقط در صورت تفاوت<input className="input" name="marketPrice" inputMode="numeric" /></label>
-        <label className="field">شماره درخواست امداد<input className="input" name="reference" maxLength={64} required/></label>
+        <label className="field">شمارهٔ امداد ویژه (اگر دارید)<input className="input" name="emdadNo" inputMode="numeric" dir="ltr" maxLength={32}/><span className="hint">خالی بماند، گزارش روزانه پس از تطبیق قطعی با شاسی و کد اختصاصی آن را پر می‌کند.</span></label>
         <JalaliInput label="تاریخ درخواست" value={requestedAt} onChange={setRequestedAt} withTime required/>
         <JalaliInput label="موعد پیش‌بینی رسیدن" value={eta} onChange={setEta} withTime/>
       </>}

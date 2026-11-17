@@ -3,7 +3,7 @@ import {useSearchParams} from 'next/navigation';
 import {Suspense,useEffect,useRef,useState} from 'react';
 import useSWR,{mutate as refreshCache} from 'swr';
 import {
- DAILY_IMPORT_STATUS_LABELS,DAILY_REPORT_KIND_LABELS,DAILY_ROW_OUTCOME_LABELS,DAILY_ROW_OUTCOMES,STOCK_COMPLETENESS_LABELS,STOCK_CURRENCY_LABELS,STOCK_QUANTITY_MEANING_LABELS,
+ DAILY_IMPORT_STATUS_LABELS,DAILY_REPORT_KIND_LABELS,DAILY_ROW_OUTCOME_LABELS,DAILY_ROW_OUTCOMES,STOCK_COMPLETENESS_LABELS,STOCK_CURRENCY_LABELS,STOCK_QUANTITY_MEANING_LABELS,EMDAD_RECEIVED_QUANTITY_LABELS,
  formatJalaliDateInput,formatTimeInput,toLatinDigits,toPersianDigits,type DailyImport,type DailyReportKind,type DailyRowOutcome,type UserRef,
 } from '@manage/shared';
 import {ApiError,api,errorMessage,fetcher} from '@/lib/api';
@@ -15,7 +15,7 @@ import {DailyStatusPanel} from '@/components/DailyStatusPanel';
 const MAX_BYTES=32*1024*1024;
 const WORKING:DailyImport['status'][]=['uploaded','parsing','applying'];
 type Rows={items:{rowNo:number;outcome:DailyRowOutcome;rowKey:string|null;data:Record<string,unknown>;messages:string[]}[];total:number;page:number;pageSize:number};
-type Profile={kind:DailyReportKind;settings:{currency?:string|null;taxIncluded?:boolean|null;completeness?:string|null;scope?:string|null;quantityMeaning?:string|null;confirmedAt?:string};reminderTime:string;reminderUserId:string|null;headerConfirmed:boolean;version:number};
+type Profile={kind:DailyReportKind;settings:{currency?:string|null;taxIncluded?:boolean|null;completeness?:string|null;scope?:string|null;quantityMeaning?:string|null;receivedQuantityField?:string|null;confirmedAt?:string};reminderTime:string;reminderUserId:string|null;headerConfirmed:boolean;version:number};
 
 /** Raw bytes through XHR for a real progress bar; never base64 in JSON. */
 function sendFile(kind:DailyReportKind,file:File,onProgress:(percent:number)=>void){
@@ -74,6 +74,7 @@ function Job({job,canApply,canUpload,refresh,closed}:{job:DailyImport;canApply:b
  useEffect(()=>{setPage(1);},[outcome]);
  const counts=job.counts as Record<string,number|undefined>;
  const missing=(job.diagnostics.missingColumns as string[]|undefined)??[];
+ const mappingIssues=(job.diagnostics.mappingIssues as {field:string;header:string;message:string}[]|undefined)??[];
  async function act(path:string,body:object|undefined,done:string,after?:()=>Promise<void>){setBusy(true);setError('');try{await api(`/daily-reports/imports/${job.id}/${path}`,{method:'POST',body:body??{}});toast(done);if(after)await after();else refresh();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
  const body={reportDate:toLatinDigits(date.trim()),reportTime:time.trim()?toLatinDigits(time.trim()):null,declaration:declared,...(job.templateChanged?{acceptTemplate:accept}:{}),...(job.sameContent?{declaredToday:today}:{})};
  const ready=declared&&!!date.trim()&&(!job.templateChanged||accept);
@@ -81,6 +82,7 @@ function Job({job,canApply,canUpload,refresh,closed}:{job:DailyImport;canApply:b
  <div className="panel-body stack">
   {WORKING.includes(job.status)&&<div role="status"><progress max={100} value={job.progress} aria-label="پیشرفت پردازش"/> <span className="small">در حال پردازش: {faNum(job.progress)}٪ — می‌توانید این صفحه را ببندید و بعد برگردید.</span></div>}
   {job.status==='failed'&&<div className="callout callout-red small" role="alert">{job.error??'پردازش ناموفق بود'}{canUpload&&<div className="row"><button className="btn btn-sm" disabled={busy} onClick={()=>void act('retry',undefined,'پردازش دوباره آغاز شد')}>تلاش دوباره</button></div>}</div>}
+  {!!mappingIssues.length&&<div className="callout callout-amber small" role="alert" data-testid="mapping-issues"><strong>ستون‌های لازم امداد ویژه پیدا نشد</strong><ul>{mappingIssues.map(m=><li key={m.field}>{m.message}</li>)}</ul></div>}
   {showRows&&<><div className="chips-row" data-testid="daily-counts"><span className="chip">کل ردیف: {faNum(counts.total??0)}</span>{DAILY_ROW_OUTCOMES.filter(o=>counts[o]).map(o=><span key={o} className={`chip${['invalid','duplicate','ambiguous','needs_mapping'].includes(o)?' chip-amber':''}`}>{DAILY_ROW_OUTCOME_LABELS[o]}: {faNum(counts[o]!)}</span>)}{counts.missing?<span className="chip chip-amber">در فایل نیست: {faNum(counts.missing)}</span>:null}{counts.matched!==undefined&&<span className="chip chip-green">متصل به پرونده: {faNum(counts.matched)}</span>}{counts.unmatched!==undefined&&<span className="chip">بدون اتصال قطعی: {faNum(counts.unmatched)}</span>}</div>
    {!!job.diagnostics.unescapedAmpersands&&<p className="xs muted">اصلاح محدود خروجی سامانه: {faNum(job.diagnostics.unescapedAmpersands as number)} نویسه «&» و {faNum((job.diagnostics.leadingWhitespace as number)??0)} نویسه فاصله ابتدای فایل. اصل فایل تغییر نکرد.</p>}
    {counts.missing?<p className="callout callout-blue small">{faNum(counts.missing)} ردیف فعال در این فایل نیست. تا مالک گزارش را «کامل» تأیید نکرده باشد، این یعنی صفرشدن موجودی نیست و آخرین مقدار با زمان خودش می‌ماند.</p>:null}
@@ -103,8 +105,8 @@ function Job({job,canApply,canUpload,refresh,closed}:{job:DailyImport;canApply:b
 function RowsTable({kind,rows,setPage}:{kind:DailyReportKind;rows:Rows;setPage:(p:number)=>void}){
  const pages=Math.max(1,Math.ceil(rows.total/rows.pageSize));
  const text=(v:unknown)=>v==null||v===''?'—':<bdi>{toPersianDigits(String(v))}</bdi>;
- return <><div className="table-scroll"><table className="table static" data-testid="daily-rows"><thead><tr><th>ردیف</th><th>نتیجه</th>{kind==='stock'?<><th>کد کامل</th><th>پایه / پسوند</th><th>شرح</th><th>موجودی</th><th>واحد</th></>:<><th>پذیرش / شاسی</th><th>امداد / درخواست</th><th>کد اولیه / قطعه / کامل</th><th>وضعیت امداد (متن رسمی)</th></>}<th>توضیح</th></tr></thead>
- <tbody>{rows.items.map(r=><tr key={r.rowNo}><td>{faNum(r.rowNo)}</td><td className="small">{DAILY_ROW_OUTCOME_LABELS[r.outcome]??r.outcome}</td>{kind==='stock'?<><td>{text(r.data.fullStockCode)}</td><td className="small">{text(r.data.basePartNumber)} / {text(r.data.supplySuffix)}</td><td className="small">{text(r.data.description)}</td><td>{text(r.data.quantity)}</td><td className="small">{text(r.data.unit)}</td></>:<><td className="small">{text(r.data.admissionNo)}<br/>{text(r.data.chassis)}</td><td className="small">{text(r.data.emdadNo)}<br/>{text(r.data.requestNo)}</td><td className="small">{text(r.data.initialCode)}<br/>{text(r.data.partCode)}<br/>{text(r.data.fullCode)}</td><td className="small">{text(r.data.emdadStatus)}</td></>}<td className="xs">{r.messages.join('؛ ')||'—'}</td></tr>)}</tbody></table></div>
+ return <><div className="table-scroll"><table className="table static" data-testid="daily-rows"><thead><tr><th>ردیف</th><th>نتیجه</th>{kind==='stock'?<><th>کد کامل</th><th>پایه / پسوند</th><th>شرح</th><th>موجودی</th><th>واحد</th></>:<><th>پذیرش / شاسی</th><th>شمارهٔ امداد ویژه</th><th>کد اولیه / قطعه / کامل</th><th>وضعیت امداد (متن رسمی)</th></>}<th>توضیح</th></tr></thead>
+ <tbody>{rows.items.map(r=><tr key={r.rowNo}><td>{faNum(r.rowNo)}</td><td className="small">{DAILY_ROW_OUTCOME_LABELS[r.outcome]??r.outcome}</td>{kind==='stock'?<><td>{text(r.data.fullStockCode)}</td><td className="small">{text(r.data.basePartNumber)} / {text(r.data.supplySuffix)}</td><td className="small">{text(r.data.description)}</td><td>{text(r.data.quantity)}</td><td className="small">{text(r.data.unit)}</td></>:<><td className="small">{text(r.data.admissionNo)}<br/>{text(r.data.chassis)}</td><td className="small">{text(r.data.emdadNo)}</td><td className="small">{text(r.data.initialCode)}<br/>{text(r.data.partCode)}<br/>{text(r.data.fullCode)}</td><td className="small">{text(r.data.emdadStatus)}</td></>}<td className="xs">{r.messages.join('؛ ')||'—'}</td></tr>)}</tbody></table></div>
  {!rows.items.length&&<p className="muted small">ردیفی با این فیلتر نیست.</p>}
  <div className="row"><button type="button" className="btn btn-sm" disabled={rows.page<=1} onClick={()=>setPage(rows.page-1)}>صفحه قبل</button><span className="small">صفحه {faNum(rows.page)} از {faNum(pages)} ({faNum(rows.total)} ردیف)</span><button type="button" className="btn btn-sm" disabled={rows.page>=pages} onClick={()=>setPage(rows.page+1)}>صفحه بعد</button></div></>;
 }
@@ -114,13 +116,14 @@ function Settings({kind}:{kind:DailyReportKind}){
  const {data,mutate}=useSWR<Profile>(`/daily-reports/profiles/${kind}`,fetcher);
  const {data:staff}=useSWR<UserRef[]>(can('daily_reports.settings')?'/users/assignable':null,fetcher);
  const [form,setForm]=useState<Record<string,string>>({});const [busy,setBusy]=useState(false);const [error,setError]=useState('');
- useEffect(()=>{if(!data)return;const s=data.settings;setForm({reminderTime:data.reminderTime,reminderUserId:data.reminderUserId??'',currency:s.currency??'',taxIncluded:s.taxIncluded==null?'':String(s.taxIncluded),completeness:s.completeness??'',scope:s.scope??'',quantityMeaning:s.quantityMeaning??''});},[data]);
+ useEffect(()=>{if(!data)return;const s=data.settings;setForm({reminderTime:data.reminderTime,reminderUserId:data.reminderUserId??'',currency:s.currency??'',taxIncluded:s.taxIncluded==null?'':String(s.taxIncluded),completeness:s.completeness??'',scope:s.scope??'',quantityMeaning:s.quantityMeaning??'',receivedQuantityField:s.receivedQuantityField??''});},[data]);
  if(!data)return null;
- const set=(k:string,v:string)=>setForm(f=>({...f,[k]:v}));const owner=!!me.isOwner&&kind==='stock';const edit=can('daily_reports.settings');
+ const set=(k:string,v:string)=>setForm(f=>({...f,[k]:v}));const owner=!!me.isOwner&&kind==='stock';const emdadOwner=!!me.isOwner&&kind==='emdad';const edit=can('daily_reports.settings');
  const confirmed=!!(data.settings.scope&&data.settings.completeness&&data.settings.quantityMeaning);
  async function save(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{
   const body:Record<string,unknown>={expectedVersion:data!.version,reminderTime:toLatinDigits(form.reminderTime??''),reminderUserId:form.reminderUserId||null};
   if(owner)Object.assign(body,{currency:form.currency||null,taxIncluded:form.taxIncluded===''?null:form.taxIncluded==='true',completeness:form.completeness||null,scope:form.scope?.trim()||null,quantityMeaning:form.quantityMeaning||null});
+  if(emdadOwner)Object.assign(body,{receivedQuantityField:form.receivedQuantityField||null});
   await mutate(await api<Profile>(`/daily-reports/profiles/${kind}`,{method:'PATCH',body}),{revalidate:false});toast('تنظیمات ذخیره شد');}catch(err){setError(errorMessage(err));}finally{setBusy(false);}}
  return <section className="panel"><div className="panel-head"><h2>تنظیمات این گزارش</h2></div><form className="panel-body stack" onSubmit={e=>void save(e)}>
   {kind==='stock'&&<>{!confirmed&&<p className="callout callout-amber small">دامنه انبار، کامل‌بودن و معنای ستون موجودی هنوز تأیید نشده؛ تا آن زمان موجودی فقط قابل مشاهده است و رزرو فعال نمی‌شود.</p>}{!data.settings.currency&&<p className="callout callout-amber small">واحد پول قیمت‌ها تأیید نشده است؛ قیمت‌ها با برچسب «واحد پول تأییدنشده» نمایش داده می‌شوند و مبنای مالی نیستند.</p>}
@@ -131,6 +134,10 @@ function Settings({kind}:{kind:DailyReportKind}){
    <label className="field"><span>واحد پول قیمت‌ها</span><select className="input" value={form.currency??''} onChange={e=>set('currency',e.target.value)}><option value="">تأیید نشده</option>{Object.entries(STOCK_CURRENCY_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
    <label className="field"><span>شمول مالیات در قیمت</span><select className="input" value={form.taxIncluded??''} onChange={e=>set('taxIncluded',e.target.value)}><option value="">تأیید نشده</option><option value="true">با مالیات</option><option value="false">بدون مالیات</option></select></label>
   </div></fieldset></>}
+  {kind==='emdad'&&<>{!data.settings.receivedQuantityField&&<p className="callout callout-amber small">معنای ستون تعداد رسیده تأیید نشده است؛ تا آن زمان قطعهٔ رسیده خودکار رزرو نمی‌شود و تعدادش «نیازمند بررسی» نشان داده می‌شود.</p>}
+  <fieldset className="stack" disabled={!emdadOwner}><legend>تأیید مالک {emdadOwner?'':'(فقط مالک سامانه می‌تواند تغییر دهد)'}</legend>
+   <label className="field"><span>ستونی که تعداد رسیده را نشان می‌دهد (پس از تأیید از گزارش یا مستندات منبع)</span><select className="input" value={form.receivedQuantityField??''} onChange={e=>set('receivedQuantityField',e.target.value)}><option value="">تأیید نشده</option>{Object.entries(EMDAD_RECEIVED_QUANTITY_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+  </fieldset></>}
   <fieldset className="stack" disabled={!edit}><legend>یادآوری روزانه داخل منیج</legend><div className="grid-2">
    <label className="field"><span>ساعت یادآوری (تهران)</span><input className="input ltr-input" value={form.reminderTime??''} onChange={e=>set('reminderTime',e.target.value)} placeholder="11:00"/></label>
    <label className="field"><span>مسئول یادآوری</span><select className="input" value={form.reminderUserId??''} onChange={e=>set('reminderUserId',e.target.value)}><option value="">همه دارندگان مجوز بارگذاری</option>{staff?.map(u=><option key={u.id} value={u.id}>{u.displayName}</option>)}</select></label>

@@ -1,5 +1,19 @@
 # Database
 
+## 0026: special-aid number, procurement code and warehouse receipt (owner, 2026-11-17)
+
+`0026_broad_wildside.sql` adds five nullable columns to `part_requests` and one partial index; nothing is rewritten:
+
+- `emdad_no`: «شمارهٔ امداد ویژه» of the line, as text (leading zeros kept). Typed at registration or filled by the daily report only after an unambiguous match (special-aid number, or VIN/chassis + 8-digit assessment code; the verified admission number separates open cases of the same VIN). A different recorded number is never overwritten: the report row goes to review. Index `part_requests_tenant_emdad_no_idx` on `(tenant_id, emdad_no) where emdad_no is not null`.
+- `procurement_code`: the 10-digit «کد تدارکاتی» (8-digit assessment code + 2-digit manufacturer). Recorded at registration, read from the report, or chosen by the parts clerk among the manufacturer variants. `part_number` keeps the original code (8 or 10 digits, or a complete market code with letters).
+- `emdad_received_at`: actual warehouse receipt date from the report column «تاريخ رسيد شدن امداد ويژه در انبار». It is never the report or import date, and stays NULL when the report has none.
+- `emdad_received_quantity`: whole quantity the report confirmed as received; it caps every reservation of an arrived line. It is read only from the column whose meaning the owner verified (`daily_report_profiles.settings.receivedQuantityField` of the special-aid profile, JSON, no schema change). Without a verified column or with an empty cell it stays NULL, the line is flagged for review, and nothing is reserved; the case-line quantity is never used instead.
+- `emdad_reserve_note`: Persian reason why an arrived line is not fully reserved (missing procurement code, no reservable stock report, insufficient stock, partial receipt, conflicting code).
+
+`order_ref` keeps legacy request numbers for audit and compatibility. It is no longer matched on, required or shown, and 0026 never copies it into `emdad_no`. Arrival reservations are ordinary `stock_reservations` rows created through the existing `reserveIn` path (row lock on the line, advisory lock per code and location, audit and change log). Publishing is serialized per dealership and report kind, so repeated or concurrent imports create no second reservation.
+
+Verified with synthetic legacy rows in `apps/api/test/guided-migrations.e2e-spec.ts`: 0025 → 0026 keeps `order_ref` and leaves `emdad_no` NULL; the down file restores the previous row exactly. Rollback: `down/0026_broad_wildside.sql` (drops the columns and index; disposable databases only; on Production restore the pre-release backup).
+
 ## 0024–0025: guided workflow and case evidence
 
 - `0024_fat_zaran.sql` adds nullable `cases.workflow` JSONB. It holds plan confirmation (task IDs and a signature of planning fields), the single pending invoice handoff, and deductible percentage/source. Existing rows remain NULL: no historical dates, assignments, percentages or account changes are invented. The guided view resumes from actual assessments, tasks and QC.

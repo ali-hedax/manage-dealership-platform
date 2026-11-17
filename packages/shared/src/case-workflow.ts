@@ -19,6 +19,8 @@ export interface CaseWorkflow {
   current: CaseStep;
   record: WorkflowRecord;
   requirements: Record<'plan' | 'execution' | 'quality', string[]>;
+  /** The same requirements as stable codes with Persian guidance (who can act, where to go). */
+  blockers?: Record<'plan' | 'execution', import('./workflow-blockers').WorkflowBlocker[]>;
   invoicePending: boolean;
 }
 export const workflowActionSchema = z.object({

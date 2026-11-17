@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import {
-  manageSupplyAdvice, parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
+  manageSupplyAdvice, emdadNoKey, parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
   type PartPickup, type PartsWorkbench, type PartsWorkbenchAction, type PartsWorkbenchLine,
   workingDayMinutes,
 } from '@manage/shared';
@@ -97,7 +97,8 @@ export class PartsWorkbenchService {
     for (const { p, c, v } of rows) {
       if (p.assessmentRejectedAt && p.status === 'needed') continue; // rejected in the assessment, no supply: not a need (task 3)
       const related = (byPart.get(p.id) ?? []).filter(r => r.caseId === c.id && r.matchStatus === 'matched' && r.statusCategory !== 'cancelled');
-      const matching = related.filter(r => !p.orderRef || r.requestNo === p.orderRef || r.emdadNo === p.orderRef);
+      // The special-aid number, never the legacy request number, ties a report row to the line.
+      const matching = related.filter(r => !p.emdadNo || emdadNoKey(r.emdadNo) === emdadNoKey(p.emdadNo));
       const official = matching.length === 1 ? matching[0] : undefined;
       const reportedReceipt = p.source === 'company' && official && RECEIVED.includes(official.statusCategory);
       const ready = p.status === 'received' || p.status === 'reserved';
@@ -143,7 +144,7 @@ export class PartsWorkbenchService {
         : overdue ? 'از موعد رسیدن گذشته؛ امروز با شرکت یا فروشنده پیگیری کنید.'
         : overdueHandover ? 'قطعه آماده است؛ به واحد اطلاع دهید که تحویل بگیرد.'
         : null;
-      if (official) for (const ref of [official.emdadNo, official.requestNo]) {
+      if (official) for (const ref of [official.emdadNo]) {
         if (ref && !card.card.emdadRefs.includes(ref)) card.card.emdadRefs.push(ref);
       }
       if (blocking) card.card.waiting = blockersByPart.get(p.id) || 'تعمیر';
@@ -182,7 +183,7 @@ export class PartsWorkbenchService {
         stockOptions: options.map(o => ({ snapshotId: o.snapshotId, fullStockCode: o.fullStockCode, locationAddress: o.locationAddress, available: o.available })),
         destinations: destinationTasks.map(t => ({ taskId: t.id, departmentId: t.departmentId, label: [t.stationSnapshot?.name || t.stationSnapshot?.code || departmentNames.get(t.departmentId) || 'جایگاه تعیین نشده', t.technicianName].filter(Boolean).join(' · ') })),
         negativeRecommendations, preferredRoute, manageAdvice,
-        emdadId: official?.id ?? null, emdadRef: official?.requestNo ?? official?.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
+        emdadId: official?.id ?? null, emdadRef: official?.emdadNo ?? p.emdadNo ?? null, emdadAverageDays: average, blocking, overdue, overdueHandover, advice,
       });
       cards.set(c.id, card);
     }
@@ -211,7 +212,7 @@ export class PartsWorkbenchService {
           const entry = entries.get(row.id)!;
           await this.parts.actIn(tx, actor, row.id, { action: 'order', expectedVersion: entry.expectedVersion,
             source: 'company', unitPriceRial: entry.companyPriceRial, salePriceRial: entry.salePriceRial,
-            orderRef: input.requestNo, etaAt: input.etaAt }, orderedAt);
+            emdadNo: input.emdadNo ?? undefined, etaAt: input.etaAt }, orderedAt);
         }
         return;
       }
@@ -236,13 +237,13 @@ export class PartsWorkbenchService {
         const [emdad] = await tx.select().from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId),
           eq(emdadRequests.id, input.emdadId), eq(emdadRequests.caseId, p.caseId), eq(emdadRequests.partRequestId, p.id),
           eq(emdadRequests.matchStatus, 'matched'), inArray(emdadRequests.statusCategory, RECEIVED))).for('update');
-        if (!emdad || p.source !== 'company' || (p.orderRef && ![emdad.requestNo, emdad.emdadNo].includes(p.orderRef))) {
+        if (!emdad || p.source !== 'company' || (p.emdadNo && emdadNoKey(emdad.emdadNo) !== emdadNoKey(p.emdadNo))) {
           throw badRequest('EMDAD_NOT_RECEIVED', 'رسید منطبق با این قطعه در گزارش امداد ویژه وجود ندارد');
         }
-        const ref = emdad.requestNo ?? emdad.emdadNo;
-        if (p.status !== 'ordered' && !ref) throw badRequest('EMDAD_REF_REQUIRED', 'شماره درخواست امداد لازم است');
+        const ref = emdad.emdadNo;
+        if (p.status !== 'ordered' && !ref) throw badRequest('EMDAD_REF_REQUIRED', 'شمارهٔ امداد ویژه در گزارش نیامده است');
         const ordered = p.status === 'ordered' ? p : await this.parts.actIn(tx, actor, id, {
-          action: 'order', expectedVersion: p.version, source: 'company', orderRef: ref ?? undefined,
+          action: 'order', expectedVersion: p.version, source: 'company', emdadNo: ref ?? undefined,
           unitPriceRial: input.salePriceRial,
         });
         await this.parts.actIn(tx, actor, id, { action: 'receive', expectedVersion: ordered.version, inspection: 'ok',

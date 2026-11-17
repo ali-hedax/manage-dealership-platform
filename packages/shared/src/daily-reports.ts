@@ -132,6 +132,15 @@ export const dailyRowsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 
+/**
+ * Columns of the special-aid report that could carry the received quantity. None is
+ * used until the owner records its verified meaning (from the source report or its
+ * documentation); without it nothing is reserved automatically.
+ */
+export const EMDAD_RECEIVED_QUANTITY_FIELDS = ['supplyQuantity', 'specialQuantity'] as const;
+export type EmdadReceivedQuantityField = (typeof EMDAD_RECEIVED_QUANTITY_FIELDS)[number];
+export const EMDAD_RECEIVED_QUANTITY_LABELS: Record<EmdadReceivedQuantityField, string> = { supplyQuantity: 'تعداد تداركاتي', specialQuantity: 'تعداد اختصاصي' };
+
 export const stockProfileSchema = z
   .object({
     expectedVersion: z.number().int().positive(),
@@ -140,6 +149,8 @@ export const stockProfileSchema = z
     completeness: z.enum(['full', 'partial']).nullable().optional(),
     scope: text(120).nullable().optional(),
     quantityMeaning: z.enum(['on_hand', 'available']).nullable().optional(),
+    // Special-aid report only: the column whose meaning the owner verified as the received quantity.
+    receivedQuantityField: z.enum(EMDAD_RECEIVED_QUANTITY_FIELDS).nullable().optional(),
     reminderTime: hhmm.optional(),
     reminderUserId: uuid.nullable().optional(),
   })

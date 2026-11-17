@@ -78,7 +78,7 @@ export async function seedFleet(a: FleetActors, s: FleetServices, p: FleetPlaces
     const c = await car(i, model, plate, 'golden_card', daysOrdered + 2, i === 12 ? a.expert2 : a.expert);
     await stage(c.id, a.expert, 'awaiting_parts');
     const line = await part(c.id, 'گلگیر جلو چپ', `13010${i}0001`);
-    await s.parts.flow(a.parts, line.id, { action: 'emdad', expectedVersion: line.version, requestNo: `4027${i}135`, requestedAt: ago(daysOrdered * DAY) } as never);
+    await s.parts.flow(a.parts, line.id, { action: 'emdad', expectedVersion: line.version, emdadNo: `4027${i}135`, requestedAt: ago(daysOrdered * DAY) } as never);
   }
 
   // Market purchase that arrived: «قطعه آماده است» for the expert and the bay.

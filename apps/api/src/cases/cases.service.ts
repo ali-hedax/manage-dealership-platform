@@ -5,6 +5,9 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   CASE_STAGES,
   type CaseWorkflow,
+  type WorkflowBlocker,
+  type WorkflowBlockerCode,
+  workflowBlocker,
   currentJalaliYear,
   repairDayPlan,
   maskPhone,
@@ -53,6 +56,26 @@ import {idKey,isNonUniqueAdmission} from '../vehicle-import/vehicle-sheet';
 
 export const planSignature = (work: (typeof tasks.$inferSelect)[]) => createHash('sha256').update(JSON.stringify(work.map(t => [t.id, t.stationId, t.assignedUserId, t.plannedStartAt, t.plannedEndAt, t.sortOrder]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))))).digest('hex');
 type CaseRow = typeof cases.$inferSelect;
+
+/**
+ * Why «شروع کار» of one assignment cannot be recorded now (stable codes, Persian
+ * guidance). Shared by the start action and the task lists, so a disabled button
+ * explains itself with the same words the API uses when it refuses.
+ */
+export function taskStartBlockers(caseId: string, w: CaseWorkflow | null, work: (typeof tasks.$inferSelect)[], taskId: string, unfinishedDependencies: number): WorkflowBlocker[] {
+  const out: WorkflowBlocker[] = [];
+  if (w?.record.guided) {
+    out.push(...(w.blockers?.execution ?? []));
+    if (!out.length) {
+      const confirmed = !!w.record.planConfirmedAt && w.record.planSignature === planSignature(work);
+      const included = !!w.record.planTaskIds?.includes(taskId);
+      if (w.record.planConfirmedAt && !included) out.push(workflowBlocker('TASK_NOT_IN_PLAN', caseId));
+      else if (!confirmed) out.push(workflowBlocker('REPAIR_PLAN_NOT_CONFIRMED', caseId));
+    }
+  }
+  if (unfinishedDependencies > 0) out.push(workflowBlocker('DEPENDENCY_NOT_DONE', caseId));
+  return out;
+}
 
 /** Fields only the vehicle import sets (not part of the public case contract). */
 export interface CaseImportFields {
@@ -366,11 +389,13 @@ export class CasesService {
     const record = c.workflow ?? {};
     const final = versions.find(a => a.status === 'final');
     const plan: string[] = [];
-    if (!final || versions.some(a => a.status === 'draft')) plan.push('کارشناسی و الحاقیه‌های باز را نهایی کنید');
-    if (c.coverageType === 'unknown') plan.push('نوع پوشش پرونده را مشخص کنید');
+    const planCodes: WorkflowBlockerCode[] = [];
+    if (!final || versions.some(a => a.status === 'draft')) { plan.push('کارشناسی و الحاقیه‌های باز را نهایی کنید'); planCodes.push('ASSESSMENT_NOT_FINAL'); }
+    if (c.coverageType === 'unknown') { plan.push('نوع پوشش پرونده را مشخص کنید'); planCodes.push('COVERAGE_UNKNOWN'); }
     const execution = [...plan];
-    if (!work.length) execution.push('مسیر تعمیر را با دست‌کم یک فعالیت ثبت کنید');
-    if (work.some(t => !t.assignedUserId || !t.stationId || !t.plannedStartAt || !t.plannedEndAt)) execution.push('جایگاه، تکنسین و مدت همهٔ فعالیت‌ها را مشخص کنید');
+    const executionCodes = [...planCodes];
+    if (!work.length) { execution.push('مسیر تعمیر را با دست‌کم یک فعالیت ثبت کنید'); executionCodes.push('REPAIR_ROUTE_MISSING'); }
+    if (work.some(t => !t.assignedUserId || !t.stationId || !t.plannedStartAt || !t.plannedEndAt)) { execution.push('جایگاه، تکنسین و مدت همهٔ فعالیت‌ها را مشخص کنید'); executionCodes.push('REPAIR_ROUTE_INCOMPLETE'); }
     const started = work.some(t => t.status !== 'pending');
     const confirmed = !!record.planConfirmedAt && record.planSignature === planSignature(work);
     const quality = [...plan];
@@ -382,6 +407,7 @@ export class CasesService {
       : work.length && work.every(t => t.status === 'approved') && !plan.length ? 'quality'
       : started || confirmed ? 'execution' : !plan.length ? 'plan' : 'assessment';
     return { current, record, requirements: { plan, execution, quality },
+      blockers: { plan: planCodes.map(code => workflowBlocker(code, id)), execution: executionCodes.map(code => workflowBlocker(code, id)) },
       invoicePending: !!record.invoiceRequestedAt && !record.invoiceCompletedAt && !!passed && c.status === 'open' };
   }
 
@@ -398,7 +424,7 @@ export class CasesService {
     await this.db.transaction(async tx => {
       const c = await this.loadForWrite(tx, actor.user.tenantId, id, expectedVersion);
       const progress = await this.workflow(actor, id, tx);
-      if (progress.requirements.execution.length) throw badRequest('REPAIR_PLAN_INCOMPLETE', progress.requirements.execution.join('؛ '));
+      if (progress.requirements.execution.length) throw badRequest('REPAIR_PLAN_INCOMPLETE', progress.requirements.execution.join('؛ '), { blockers: progress.blockers?.execution ?? [] });
       const work = await tx.select().from(tasks).where(and(eq(tasks.tenantId, actor.user.tenantId), eq(tasks.caseId, id)));
       await this.applyPatch(tx, actor, c, { workflow: { ...c.workflow, guided: true, planConfirmedAt: new Date().toISOString(), planTaskIds: work.map(t => t.id), planSignature: planSignature(work) }, stage: 'in_repair' }, 'case.plan_confirmed', null);
     });

@@ -1,7 +1,7 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import request from 'supertest';
 import { formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part } from '@manage/shared';
-import { cases, emdadRequestEvents, emdadRequests, notifications, partPriceNotices, stockReservations, users, vehicles } from '../src/db/schema';
+import { cases, emdadRequestEvents, emdadRequests, notifications, partPriceNotices, partRequests, stockReservations, users, vehicles } from '../src/db/schema';
 import { buildEmdadXml, emdadRow } from '../src/daily-reports/fixtures';
 import { Client, createHarness, daysAgo, type Harness } from './harness';
 
@@ -52,13 +52,13 @@ describe('state machine on the server', () => {
     expect(refused.body.code).toBe('PART_ACTION_NOT_ALLOWED');
     expect(refused.body.message).toContain('تعیین تکلیف نشده');
     // The accident expert adds needs and reads supply; changing it is the parts clerk's work.
-    expect((await flow(p, { action: 'emdad', requestNo: 'REQ-1' }, expert)).status).toBe(403);
-    // The Emdad request number is mandatory; a cancellation needs a reason.
-    expect((await flow(p, { action: 'emdad', requestNo: '' })).status).toBe(400);
+    expect((await flow(p, { action: 'emdad', emdadNo: '7001' }, expert)).status).toBe(403);
+    // «شمارهٔ امداد ویژه» is digits only (and optional); a cancellation needs a reason.
+    expect((await flow(p, { action: 'emdad', emdadNo: 'REQ-1' })).status).toBe(400);
     expect((await flow(p, { action: 'cancel', reason: '' })).status).toBe(400);
 
-    p = (await flow(p, { action: 'emdad', requestNo: '4027713501', requestedCode: '1111222201' })).body;
-    expect(p).toMatchObject({ flowState: 'emdad', orderRef: '4027713501', allowedActions: ['cancel', 'set_price', 'announce_price'] });
+    p = (await flow(p, { action: 'emdad', emdadNo: '4027713501', requestedCode: '1111222201' })).body;
+    expect(p).toMatchObject({ flowState: 'emdad', emdadNo: '4027713501', orderRef: null, procurementCode: '1111222201', allowedActions: ['cancel', 'set_price', 'announce_price'] });
     // Status changes only through the daily report: no manual receipt.
     expect((await flow(p, { action: 'receive' })).body.code).toBe('PART_ACTION_NOT_ALLOWED');
     expect((await flow(p, { expectedVersion: p.version - 1, action: 'cancel', reason: 'نسخهٔ قدیمی' })).status).toBe(409);
@@ -89,7 +89,7 @@ describe('state machine on the server', () => {
     expect(again.status).toBe(201);
     expect(again.body).toMatchObject({ id: p.id, quantity: 3 });
     expect(await partsOf(c.id)).toHaveLength(1);
-    await flow(await one(p), { action: 'emdad', requestNo: '4027713502' });
+    await flow(await one(p), { action: 'emdad', emdadNo: '4027713502' });
     const third = await expert.post(`/cases/${c.id}/parts`, { description: 'همان قطعه', partNumber: '55556666', quantity: 1, source: 'company' });
     expect(third.body.code).toBe('DUPLICATE_PART_CODE');
     expect(await partsOf(c.id)).toHaveLength(1);
@@ -148,134 +148,91 @@ describe('daily Emdad report moves the line automatically', () => {
     return applied.body;
   }
 
-  it('links by the request number, then «وارد موجودی» makes it ready and «تأمین توسط نمایندگی» tells the clerk', async () => {
+  const vinOf = async (caseId: string) => (await h.db.db.select({ vin: vehicles.vin }).from(vehicles).innerJoin(cases, eq(cases.vehicleId, vehicles.id)).where(eq(cases.id, caseId)))[0]!.vin!;
+  // Report rows here never match by admission (X-…): only the special-aid number or VIN + assessment code can link them.
+  const row = (i: number, code: string, status = 'در حال تامین', chassis = '', emdadNo = '', requestNo = '') =>
+    emdadRow(i, { 'شماره کارت پذيرش': `X-AID-${i}`, 'شماره امداد ویژه': emdadNo, 'شماره درخواست': requestNo, 'کد قطعه': code, 'کد اختصاصی اولیه': code, 'كد تداركاتي كالا': `${code}01`, 'شماره شاسی': chassis, 'وضعیت امداد ویژه': status });
+  const requestOf = async (partId: string) => (await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.partRequestId, partId)))[0];
+
+  it('links by VIN + assessment code, fills the special-aid number, keeps an arrival outstanding without stock, and «تأمین توسط نمایندگی» tells the clerk', async () => {
     const c = await newCase('950041');
+    const vin = await vinOf(c.id);
     let arrived = await newPart(c.id, '12345641', 1, 'سپر جلو آزمون');
     let dealer = await newPart(c.id, '12345642', 1, 'چراغ جلو آزمون');
-    arrived = (await flow(arrived, { action: 'emdad', requestNo: '500041' })).body;
-    dealer = (await flow(dealer, { action: 'emdad', requestNo: '500042' })).body;
+    arrived = (await flow(arrived, { action: 'emdad' })).body;
+    dealer = (await flow(dealer, { action: 'emdad', emdadNo: '500042' })).body;
 
     const result = await publish([
-      emdadRow(41, { 'شماره شاسی': '', 'شماره کارت پذيرش': 'X-UNMATCHED-41', 'وضعیت امداد ویژه': 'وارد موجودی شده است' }),
-      emdadRow(42, { 'شماره شاسی': '', 'شماره کارت پذيرش': 'X-UNMATCHED-42', 'وضعیت امداد ویژه': 'تامین توسط نمایندگی' }),
+      row(41, '12345641', 'وارد موجودی شده است', vin, '500041'),
+      row(42, '12345642', 'تامین توسط نمایندگی', '', '500042'),
     ], 1);
-    expect(result.counts).toMatchObject({ partsArrived: 1, partsDealerSupply: 1 });
+    expect(result.counts).toMatchObject({ partsArrived: 1, partsDealerSupply: 1, emdadNoFilled: 1 });
 
     const now = await partsOf(c.id);
     const a = now.find((p) => p.id === arrived.id)!;
-    expect(a).toMatchObject({ flowState: 'ready', allowedActions: ['hand_over', 'cancel', 'set_price', 'announce_price'] });
-    expect(a.emdad).toMatchObject({ requestNo: '500041', category: 'in_dealer_stock', statusText: 'وارد موجودی شده است' });
+    // Receipt is not readiness: without a verified received quantity nothing is reserved and the quantity is flagged.
+    expect(a).toMatchObject({ flowState: 'emdad_arrived', emdadNo: '500041', allowedActions: ['reserve', 'cancel', 'set_price', 'announce_price'] });
+    expect(a.emdad).toMatchObject({ emdadNo: '500041', category: 'in_dealer_stock', statusText: 'وارد موجودی شده است', arrived: true });
+    expect(a).toMatchObject({ emdadQuantityReview: true, reservedQuantity: 0 });
+    expect(a.emdadReserveNote).toContain('تعداد رسیده تأیید نشده');
     const d = now.find((p) => p.id === dealer.id)!;
     expect(d).toMatchObject({ flowState: 'dealer_supply', allowedActions: ['market', 'reserve', 'set_price', 'announce_price'] });
 
     const [clerk] = await h.db.db.select({ id: users.id }).from(users).where(eq(users.username, 'parts'));
     expect(await h.db.db.select().from(notifications).where(and(eq(notifications.userId, clerk!.id), eq(notifications.kind, 'emdad_dealer_supply')))).toHaveLength(1);
-    // From «تأمین توسط نمایندگی» the clerk buys from the market.
     const bought = await flow(d, { action: 'market', supplier: 'بازار آزمون', purchaseUnitRial: 5_000_000, saleUnitRial: 6_000_000 });
     expect(bought.body).toMatchObject({ flowState: 'market', source: 'external' });
 
-    // The parts desk counts what is still open on this vehicle.
     const card = ((await parts.get('/parts/desk')).body as { caseId: string; counts: Record<string, number> }[]).find((x) => x.caseId === c.id)!;
-    expect(card.counts).toMatchObject({ ready: 1, in_progress: 1 });
+    expect(card.counts).toMatchObject({ in_progress: 2 });
     expect((await expert.get('/parts/desk')).status).toBe(403);
-    // No stock reservation is created by an Emdad arrival.
     expect(await h.db.db.select().from(stockReservations).where(eq(stockReservations.partRequestId, arrived.id))).toHaveLength(0);
   });
 
-  // Report rows here never match by admission (X-…), so only request number + code/chassis can link them.
-  const row = (i: number, requestNo: string, code: string, status = 'در حال تامین', chassis = '') =>
-    emdadRow(i, { 'شماره کارت پذيرش': `X-REQ-${i}`, 'شماره درخواست': requestNo, 'کد قطعه': code, 'کد اختصاصی اولیه': code, 'كد تداركاتي كالا': `${code}01`, 'شماره شاسی': chassis, 'وضعیت امداد ویژه': status });
-  const requestOf = async (partId: string) => (await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.partRequestId, partId)))[0];
-
-  it('keeps a conflicting stored request unchanged and matches historical company parts without a request', async () => {
+  it('never matches on the legacy request number, keeps a conflicting stored number unchanged and matches historical lines by VIN + code', async () => {
     const c = await newCase('960101');
-    const [vehicle] = await h.db.db.select({ vin: vehicles.vin }).from(vehicles)
-      .innerJoin(cases, eq(cases.vehicleId, vehicles.id)).where(eq(cases.id, c.id));
-    const rows = [
-      row(101, '610101', '77778891', 'وارد موجودی شده است', vehicle!.vin!),
-      row(103, '', '77778893', 'در حال تامین', vehicle!.vin!),
-    ];
-    await publish(rows, -35);
-
+    const vin = await vinOf(c.id);
     const otherCase = await newCase('960102');
     const other = await newPart(otherCase.id, '77778891');
-    await flow(other, { action: 'emdad', requestNo: '610102' });
+    await flow(other, { action: 'emdad', emdadNo: '610102' });
+    // The other vehicle's line carries the same legacy request number as the report: still no link.
+    await h.db.db.update(partRequests).set({ orderRef: '610101' }).where(eq(partRequests.id, other.id));
     const part = await newPart(c.id, '77778891');
-    await flow(part, { action: 'emdad', requestNo: '610199' });
-    const withoutRequest = await newPart(c.id, '77778893');
+    await flow(part, { action: 'emdad', emdadNo: '610199' });
+    const historical = await newPart(c.id, '77778893');
+    await h.db.db.update(partRequests).set({ status: 'ordered', source: 'company', orderRef: 'OLD-REQ-1' }).where(eq(partRequests.id, historical.id));
 
-    await publish(rows, -35);
-    expect(await one(part)).toMatchObject({
-      flowState: 'emdad', emdad: null,
-    });
-    expect(await one(withoutRequest)).toMatchObject({ emdad: { requestNo: null, statusText: 'در حال تامین' } });
-    expect(await one(other)).toMatchObject({ flowState: 'emdad', emdad: null });
+    await publish([row(101, '77778891', 'وارد موجودی شده است', vin, '610101', '610101'), row(103, '77778893', 'در حال تامین', vin, '610103')], -35);
+    expect(await one(part)).toMatchObject({ flowState: 'emdad', emdadNo: '610199', emdad: null });
+    expect(await one(historical)).toMatchObject({ emdadNo: '610103', orderRef: 'OLD-REQ-1', emdad: { emdadNo: '610103', statusText: 'در حال تامین' } });
+    expect(await one(other)).toMatchObject({ flowState: 'emdad', emdad: null, emdadNo: '610102' });
+    expect((await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '610101')))[0]).toMatchObject({ matchStatus: 'needs_review', partRequestId: null });
   });
 
-  it('links each line of one vehicle request by request number + technical code, with Persian digits and leading zeros', async () => {
+  it('links by the special-aid number with leading zeros even without a chassis in the report', async () => {
     const c = await newCase('960051');
-    let p1 = await newPart(c.id, '22223351', 1, 'درب جلو آزمون');
-    let p2 = await newPart(c.id, '22223352', 1, 'آینه آزمون');
-    p1 = (await flow(p1, { action: 'emdad', requestNo: '۰۵۶۰۰۵۱' })).body;
-    p2 = (await flow(p2, { action: 'emdad', requestNo: '560051' })).body;
-
-    const result = await publish([row(51, '560051', '22223352'), row(52, '560051', '22223351')], -55);
-    expect(result.counts.matched).toBeGreaterThanOrEqual(2);
-    const now = await partsOf(c.id);
-    expect(now.find((p) => p.id === p1.id)!.emdad).toMatchObject({ requestNo: '560051', statusText: 'در حال تامین' });
-    expect(now.find((p) => p.id === p2.id)!.emdad).toMatchObject({ requestNo: '560051' });
-    expect((await requestOf(p1.id))!.matchNote).toBe('شمارهٔ درخواست و کد فنی یکسان است');
+    const p1 = await newPart(c.id, '22223351', 1, 'درب جلو آزمون');
+    await flow(p1, { action: 'emdad', emdadNo: '۰۵۶۰۰۵۱' });
+    await publish([row(51, '22223351', 'در حال تامین', '', '0560051')], -55);
+    expect((await one(p1)).emdad).toMatchObject({ emdadNo: '0560051', statusText: 'در حال تامین' });
+    expect((await requestOf(p1.id))!.matchNote).toBe('شمارهٔ امداد ویژه و کد اختصاصی یکسان است');
   });
 
-  it('keeps contradicting or ambiguous lines for review and links them on a later report once the evidence agrees', async () => {
-    const c = await newCase('960061');
-    let p = await newPart(c.id, '33334461', 1, 'رادیاتور آزمون');
-    p = (await flow(p, { action: 'emdad', requestNo: '570061' })).body;
-    // The same request number typed on two cars with the same part: never guessed.
-    for (const adm of ['960071', '960072']) {
-      const twin = await newCase(adm);
-      const q = await newPart(twin.id, '44445571', 1, 'سپر عقب آزمون');
-      await flow(q, { action: 'emdad', requestNo: '580071' });
-    }
-    const first = await publish([row(61, '570061', '99998861', 'در حال تامین', 'ZZZ00061'), row(71, '580071', '44445571'), row(91, '600091', '66667791')], -54);
-    expect(first.counts).toMatchObject({ linkedByRequestNo: 0 });
-    expect((await one(p)).emdad).toBeNull();
-    const pending = await h.db.db.select().from(emdadRequests).where(inArray(emdadRequests.requestNo, ['570061', '580071', '600091']));
-    expect(pending.map((r) => [r.requestNo, r.matchStatus, r.partRequestId]).sort()).toEqual([
-      ['570061', 'needs_review', null],
-      ['580071', 'needs_review', null],
-      ['600091', 'unmatched', null],
-    ]);
-    expect(pending.find((r) => r.requestNo === '580071')!.matchNote).toContain('چند قطعه');
-
-    // The chassis of the case is recorded, and a line for 600091 gets its request number: the next (overlapping) report links both.
-    const [kase] = await h.db.db.select({ vehicleId: cases.vehicleId }).from(cases).where(eq(cases.id, c.id));
-    await h.db.db.update(vehicles).set({ chassisRef: 'ZZZ00061' }).where(eq(vehicles.id, kase!.vehicleId));
-    let late = await newPart(c.id, '66667791', 1, 'فن آزمون');
-    late = (await flow(late, { action: 'emdad', requestNo: '600091' })).body;
-    const second = await publish([row(61, '570061', '33334461', 'در حال تامین', 'ZZZ00061'), row(71, '580071', '44445571'), row(91, '600091', '66667791'), row(92, '600092', '12121292')], -53);
-    expect(second.counts.matched).toBeGreaterThanOrEqual(2);
-    expect((await requestOf(p.id))!.matchNote).toContain('شاسی یکسان');
-    expect((await requestOf(late.id))!.requestNo).toBe('600091');
-    // The two identical lines still wait for a person.
-    expect((await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.requestNo, '580071')))[0]).toMatchObject({ matchStatus: 'needs_review', partRequestId: null });
-  });
-
-  it('records one history entry per status change across days, none for repeats or overlapping files, and turns «وارد موجودی» into ready', async () => {
+  it('records one history entry per status change across days, none for repeats or overlapping files, and shows the arrival', async () => {
     const c = await newCase('960081');
+    const vin = await vinOf(c.id);
     let p = await newPart(c.id, '55556681', 1, 'کاپوت آزمون');
-    p = (await flow(p, { action: 'emdad', requestNo: '590081' })).body;
-    await publish([row(81, '590081', '55556681')], -50);
-    await publish([row(81, '590081', '55556681'), row(82, '590082', '12121282')], -40);
+    p = (await flow(p, { action: 'emdad', emdadNo: '590081' })).body;
+    await publish([row(81, '55556681', 'در حال تامین', vin, '590081')], -50);
+    await publish([row(81, '55556681', 'در حال تامین', vin, '590081'), row(82, '12121282', 'در حال تامین', '', '590082')], -40);
     let now = await one(p);
-    // While Emdad is in progress the status is read only from the report: no action changes it.
     expect(now).toMatchObject({ flowState: 'emdad', allowedActions: ['cancel', 'set_price', 'announce_price'] });
     expect(now.emdad!.history).toEqual([{ at: expect.any(String), statusText: 'در حال تامین' }]);
 
-    await publish([row(81, '590081', '55556681', 'وارد موجودی شده است')], -30);
-    await publish([row(81, '590081', '55556681', 'وارد موجودی شده است'), row(83, '590083', '12121283')], -20);
+    await publish([row(81, '55556681', 'وارد موجودی شده است', vin, '590081')], -30);
+    await publish([row(81, '55556681', 'وارد موجودی شده است', vin, '590081'), row(83, '12121283', 'در حال تامین', '', '590083')], -20);
     now = await one(p);
-    expect(now).toMatchObject({ flowState: 'ready' });
+    expect(now).toMatchObject({ flowState: 'emdad_arrived', emdad: { arrived: true } });
     expect(now.emdad!.history!.map((x) => x.statusText)).toEqual(['وارد موجودی شده است', 'در حال تامین']);
     const req = await requestOf(p.id);
     expect(await h.db.db.select().from(emdadRequestEvents).where(eq(emdadRequestEvents.requestId, req!.id))).toHaveLength(2);

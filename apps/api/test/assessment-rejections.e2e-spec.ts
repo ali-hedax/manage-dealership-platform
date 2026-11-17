@@ -45,7 +45,7 @@ it('marks a line rejected in a supplement, adds and links its replacement, warns
   expect((await send(a, a.items.map((i) => i.id))).status).toBe(201);
   let list = await partsOf(kase.id);
   const z = list.find((p) => p.partNumber === '00777003')!;
-  expect((await parts.post(`/parts/${z.id}/flow`, { expectedVersion: z.version, action: 'emdad', requestNo: '777003' })).status).toBe(201);
+  expect((await parts.post(`/parts/${z.id}/flow`, { expectedVersion: z.version, action: 'emdad', emdadNo: '777003' })).status).toBe(201);
 
   // Supplement 1: X rejected and re-added with the same code (another row), W rejected without replacement.
   let s1 = await supplement(kase.id);
@@ -63,7 +63,7 @@ it('marks a line rejected in a supplement, adds and links its replacement, warns
   list = await partsOf(kase.id);
   const oldX = list.find((p) => p.partNumber === '00777001')!;
   expect(oldX).toMatchObject({ status: 'needed', assessmentRejection: { versionNo: 2 }, allowedActions: ['cancel'] });
-  expect((await parts.post(`/parts/${oldX.id}/flow`, { expectedVersion: oldX.version, action: 'emdad', requestNo: '1' })).body.code).toBe('PART_ASSESSMENT_REJECTED');
+  expect((await parts.post(`/parts/${oldX.id}/flow`, { expectedVersion: oldX.version, action: 'emdad', emdadNo: '1' })).body.code).toBe('PART_ASSESSMENT_REJECTED');
   // Not a supply need on the parts desk any more (X and W), while Y and Z still count.
   const card = ((await parts.get('/parts/desk')).body as { caseId: string; counts: Record<string, number> }[]).find((c) => c.caseId === kase.id)!;
   expect(Object.values(card.counts).reduce((n, v) => n + v, 0)).toBe(2);

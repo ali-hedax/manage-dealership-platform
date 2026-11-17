@@ -49,6 +49,36 @@ export interface WorkshopTask {
   status:string; version:number; plannedStartAt:string|null; plannedEndAt:string|null; baselineEndAt:string|null;
   actualStartAt:string|null; actualEndAt:string|null; approvedAt:string|null; canStart:boolean;
   workMinutes:number|null; lateMinutes:number|null; transferMinutes:number|null; calendarConfirmed:boolean;
+  /** Technician work in complete working days (a fraction counts as zero); null while no actual start is recorded. */
+  workDays?:number|null;
+  /** Technician delay against this assignment's planned duration, in complete working days; null without an actual start. */
+  delayDays?:number|null;
+  /** Where the actual start comes from: the task itself, a verifiable start event (legacy), or nothing recorded. */
+  startSource?:'recorded'|'event'|null;
+  /** Why «شروع کار» cannot be recorded now, with the next step and who can resolve it (stable codes). */
+  startBlockers?:import('./workflow-blockers').WorkflowBlocker[];
+}
+
+/** Complete working days of a duration; a fraction of a day counts as zero. */
+export function wholeWorkingDays(minutes:number|null|undefined,dayMinutes:number|null|undefined):number|null {
+  if(minutes==null||!dayMinutes||dayMinutes<=0)return null;
+  return Math.floor(Math.max(0,minutes)/dayMinutes);
+}
+export interface TechnicianTiming { workMinutes:number|null; plannedMinutes:number|null; delayMinutes:number|null; workDays:number|null; delayDays:number|null }
+/**
+ * Technician duration of ONE assignment: from its recorded actual start until its
+ * actual completion (or now while active), in working time. Admission, planned
+ * start, waiting before the start and other assignments never count. Without an
+ * actual start nothing is calculated. Delay = work beyond this assignment's
+ * planned duration.
+ */
+export function technicianTiming(input:{actualStartAt:string|null;actualEndAt:string|null;plannedMinutes:number|null;now:string;calendar:WorkCalendar|null|undefined}):TechnicianTiming {
+  const none:TechnicianTiming={workMinutes:null,plannedMinutes:input.plannedMinutes,delayMinutes:null,workDays:null,delayDays:null};
+  if(!input.actualStartAt||!input.calendar)return none;
+  const workMinutes=workingMinutesBetween(input.actualStartAt,input.actualEndAt??input.now,input.calendar);
+  const dayMinutes=workingDayMinutes(input.calendar);
+  const delayMinutes=input.plannedMinutes==null?null:Math.max(0,workMinutes-input.plannedMinutes);
+  return {workMinutes,plannedMinutes:input.plannedMinutes,delayMinutes,workDays:wholeWorkingDays(workMinutes,dayMinutes),delayDays:wholeWorkingDays(delayMinutes,dayMinutes)};
 }
 export interface WorkshopOverview {
   caseBudgets?:{caseId:string;caseNumber:string;days:number;dayMinutes:number;budgetMinutes:number;plannedMinutes:number;forecastEndAt:string}[];

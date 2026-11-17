@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { reserveSchema } from './daily-reports';
+import { emdadNoField } from './schemas';
 import type { CoverageType } from './enums';
 import type { ManageAdvice } from './manage-advisor';
 
@@ -9,7 +10,7 @@ const ref = z.string().trim().min(1).max(64);
 export const partsWorkbenchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('reserve'), expectedVersion: version, stock: reserveSchema.omit({ partRequestId: true, quantity: true }), salePriceRial: price }),
   z.object({ action: z.literal('market'), expectedVersion: version, supplier: z.string().trim().min(1).max(120), purchasePriceRial: price, salePriceRial: price.optional(), orderRef: ref.optional() }),
-  z.object({ action: z.literal('emdad'), requestNo: ref, requestedAt: z.iso.datetime({ offset: true }), etaAt: z.iso.datetime({ offset: true }).optional(),
+  z.object({ action: z.literal('emdad'), emdadNo: emdadNoField, requestedAt: z.iso.datetime({ offset: true }), etaAt: z.iso.datetime({ offset: true }).optional(),
     parts: z.array(z.object({ id: z.uuid(), expectedVersion: version, companyPriceRial: price, salePriceRial: price.optional() })).min(1).max(100).refine(rows => new Set(rows.map(row => row.id)).size === rows.length) }),
   z.object({ action: z.literal('received'), expectedVersion: version, emdadId: z.uuid(), salePriceRial: price }),
   z.object({ action: z.literal('return'), expectedVersion: version, reason: z.string().trim().min(1).max(300) }),

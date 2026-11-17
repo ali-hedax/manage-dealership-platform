@@ -26,3 +26,4 @@ export * from './desk';
 export * from './control-room';
 
 export * from './case-workflow';
+export * from './workflow-blockers';

@@ -136,6 +136,7 @@ export const EMDAD_FIELDS = {
   hall: 'سالن تعمیرات',
   goldenCardStatus: 'وضعیت کارت طلایی',
   waitingTime: 'زمان انتظار امداد ویژه',
+  // Legacy column: kept for the stable row key and audit only; never matched on or shown.
   requestNo: 'شماره درخواست',
   initialCode: 'کد اختصاصی اولیه',
   partCode: 'کد قطعه',
@@ -189,17 +190,37 @@ export function emdadKey(o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'emd
   if (request && admission && emdad && initial) return parts.join('|');
   const code = idPart(o.partCode);
   if (!request && chassis && code) return [admission, chassis, emdad, '', initial || code].join('|');
+  // Reports without the legacy request column: admission + special-aid number + code (no chassis).
+  if (!request && admission && emdad && (initial || code)) return [admission, chassis, emdad, '', initial || code].join('|');
   return null;
 }
 
+/**
+ * Columns the special-aid workflow relies on (verified against the dealership's
+ * template, see fixtures.ts). A missing one is reported in the import result
+ * instead of being guessed; the other columns keep working.
+ */
+export const EMDAD_CRITICAL_FIELDS: { field: EmdadField; use: string }[] = [
+  { field: 'emdadNo', use: 'ثبت و تطبیق شمارهٔ امداد ویژه' },
+  { field: 'chassis', use: 'تطبیق با شاسی/VIN خودرو' },
+  { field: 'partCode', use: 'تطبیق با کد اختصاصی ۸ رقمی' },
+  { field: 'fullCode', use: 'کد تدارکاتی ۱۰ رقمی برای رزرو' },
+  { field: 'emdadStatus', use: 'مرحلهٔ امداد ویژه و تأیید ورود به انبار' },
+  { field: 'receivedInWarehouseAt', use: 'تاریخ واقعی رسید انبار' },
+  { field: 'supplyQuantity', use: 'تعداد رسیده برای رزرو' },
+];
+
 export function parseEmdadSheet(rows: string[][]) {
-  const h = findHeader(rows, [EMDAD_FIELDS.admissionNo, EMDAD_FIELDS.emdadNo, EMDAD_FIELDS.requestNo]);
-  if (h < 0) throw new Error('سربرگ گزارش امداد ویژه (پذیرش، شماره امداد، شماره درخواست) پیدا نشد');
+  // The special-aid number, not the legacy request number, identifies the header row.
+  let h = findHeader(rows, [EMDAD_FIELDS.admissionNo, EMDAD_FIELDS.emdadNo]);
+  if (h < 0) h = findHeader(rows, [EMDAD_FIELDS.admissionNo, EMDAD_FIELDS.chassis, EMDAD_FIELDS.emdadStatus]);
+  if (h < 0) throw new Error('سربرگ گزارش امداد ویژه (ستون‌های «شماره کارت پذيرش» و «شماره امداد ویژه») پیدا نشد');
   const header = rows[h]!;
   const idx = Object.fromEntries(
     Object.entries(EMDAD_FIELDS).map(([k, v]) => [k, header.findIndex((c) => hkey(c ?? '') === hkey(v))]),
   ) as Record<EmdadField, number>;
   const missingCols = (Object.keys(EMDAD_FIELDS) as EmdadField[]).filter((k) => idx[k] < 0);
+  const mappingIssues = EMDAD_CRITICAL_FIELDS.filter((c) => idx[c.field] < 0).map((c) => ({ field: c.field, header: EMDAD_FIELDS[c.field], message: `ستون «${EMDAD_FIELDS[c.field]}» در سربرگ این فایل پیدا نشد؛ ${c.use} برای این فایل انجام نمی‌شود. یک نمونهٔ بی‌نام از همین گزارش با این ستون لازم است.` }));
   const out: ParsedRow<EmdadOfficial>[] = [];
   for (let i = h + 1; i < rows.length; i++) {
     const r = rows[i] ?? [];
@@ -228,7 +249,7 @@ export function parseEmdadSheet(rows: string[][]) {
     let outcome: RowOutcome = 'valid';
     if (!key) {
       outcome = 'ambiguous';
-      messages.push('شناسه کامل ندارد (پذیرش، شاسی، شماره امداد یا شماره درخواست خالی است)؛ برای بررسی نگه داشته شد');
+      messages.push('شناسه کامل ندارد (پذیرش، شاسی یا شمارهٔ امداد ویژه خالی است)؛ برای بررسی نگه داشته شد');
     }
     if (emdadStatusCategory(official.emdadStatus) === 'needs_interpretation') messages.push(`وضعیت «${official.emdadStatus}» شناخته‌شده نیست؛ متن اصلی نگه داشته شد (نیازمند تفسیر وضعیت)`);
     out.push({ rowNo: i + 1, outcome, key, data: official, messages: [...messages, ...official.codeNotes] });
@@ -242,5 +263,5 @@ export function parseEmdadSheet(rows: string[][]) {
       p.messages.push(`شناسه یکسان در ردیف‌های ${group.map((g) => g.rowNo).join('، ')}؛ هیچ‌کدام خودکار جایگزین دیگری نمی‌شود`);
     }
   }
-  return { headerRow: h + 1, header, signature: headerSignature(header), missingColumns: missingCols, rows: out };
+  return { headerRow: h + 1, header, signature: headerSignature(header), missingColumns: missingCols, mappingIssues, rows: out };
 }

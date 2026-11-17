@@ -21,6 +21,10 @@ test('flow state is derived from the stored row and the linked Emdad report', ()
   assert.equal(partFlowState({ status: 'ordered', source: 'company' }), 'emdad');
   assert.equal(partFlowState({ status: 'ordered', source: 'company', emdadCategory: 'in_supply' }), 'emdad');
   assert.equal(partFlowState({ status: 'ordered', source: 'company', emdadCategory: 'supplied_by_dealer' }), 'dealer_supply');
+  // Arrival by the report is receipt, not readiness: ready only when fully reserved (status reserved).
+  assert.equal(partFlowState({ status: 'ordered', source: 'company', emdadCategory: 'in_dealer_stock' }), 'emdad_arrived');
+  assert.equal(partFlowState({ status: 'ordered', source: 'company', emdadCategory: 'received_by_dealer' }), 'emdad_arrived');
+  assert.equal(partFlowState({ status: 'reserved', source: 'company', emdadCategory: 'received_by_dealer' }), 'reserved');
   assert.equal(partFlowState({ status: 'ordered', source: 'external' }), 'market');
   assert.equal(partFlowState({ status: 'received', source: 'company' }), 'ready');
   assert.equal(partFlowState({ status: 'handed_over', source: 'stock' }), 'handed_over');
@@ -34,6 +38,7 @@ test('state machine of spec section 7: exactly the allowed buttons, every other 
     needed: ['reserve', 'emdad', 'market', 'cancel', 'set_price', 'announce_price'],
     reserved: ['hand_over', 'cancel', 'set_price', 'announce_price'],
     emdad: ['cancel', 'set_price', 'announce_price'],
+    emdad_arrived: ['reserve', 'cancel', 'set_price', 'announce_price'],
     dealer_supply: ['market', 'reserve', 'set_price', 'announce_price'],
     market: ['receive', 'cancel', 'set_price', 'announce_price'],
     ready: ['hand_over', 'cancel', 'set_price', 'announce_price'],

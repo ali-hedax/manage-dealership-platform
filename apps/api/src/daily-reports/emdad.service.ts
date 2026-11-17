@@ -15,7 +15,7 @@ import { AuditService, diff } from '../audit/audit.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { assessmentItems, assessments, cases, dailyReportImports, emdadRequestEvents, emdadRequests, partRequests, users, vehicles } from '../db/schema';
-import { decideByRequest, requestNoKey } from './emdad-parts';
+import { decideEmdadLine, emdadLines } from './emdad-parts';
 import { idKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 import { writeSheet } from '../parts/xlsx';
 import type { EmdadOfficial } from './report-rows';
@@ -54,7 +54,7 @@ export function emdadSuggestion(r: { statusCategory: string; caseId: string | nu
   const notes = (r.official.codeNotes as string[] | undefined) ?? [];
   if (r.matchStatus === 'ambiguous' || r.matchStatus === 'needs_review') return 'اتصال به پرونده را بررسی و دستی تأیید کنید؛ سامانه اولین نتیجه را انتخاب نمی‌کند';
   if (r.statusCategory === 'needs_interpretation') return 'متن وضعیت جدید است؛ معنای آن را با شرکت روشن کنید';
-  if (r.statusCategory === 'in_dealer_stock' && r.caseId) return 'طبق گزارش، قطعه وارد موجودی شده است؛ رسید فیزیکی و رزرو برای این پرونده را بررسی کنید';
+  if (r.statusCategory === 'in_dealer_stock' && r.caseId) return 'طبق گزارش، قطعه وارد موجودی شده است؛ اگر رزرو خودکار کامل نشد، علت را روی قطعهٔ پرونده ببینید';
   if (r.statusCategory === 'ready_to_collect') return 'طبق گزارش، قطعه آماده جمع‌آوری است؛ هماهنگی دریافت را پیگیری کنید';
   if (r.statusCategory === 'cancelled' && r.partRequestId) return 'درخواست در شرکت ابطال شده؛ وضعیت نیاز قطعه پرونده را بررسی کنید';
   if (notes.length) return 'کدهای این ردیف با هم یکسان نیستند؛ پیش از رزرو یا سفارش، کد درست را تأیید کنید';
@@ -73,10 +73,13 @@ export class EmdadService {
   }
 
   /**
-   * Matches open cases by chassis and technical code first.
-   * The admission lookup remains available for report follow-up.
+   * Matches report rows to part lines inside the tenant (owner, 2026-11-17):
+   * special-aid number, VIN/chassis and the 8-digit assessment code; the
+   * verified admission number tells cases of the same VIN apart. Without part
+   * evidence a row may still be tied to its case by admission + chassis.
+   * The legacy request number is never used.
    */
-  async matcher(tx: DbOrTx, tenantId: string, officials: (Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'> & { requestNo?: string })[]) {
+  async matcher(tx: DbOrTx, tenantId: string, officials: (Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'> & { emdadNo?: string })[]) {
     const keys = [...new Set(officials.map((o) => admissionKeyOf(o.admissionNo)).filter((k): k is string => !!k))];
     const found: { id: string; caseNumber: string; admissionNoKey: string | null; vin: string | null; chassisRef: string | null }[] = [];
     for (let i = 0; i < keys.length; i += 1000) {
@@ -84,68 +87,23 @@ export class EmdadService {
         ...(await tx
           .select({ id: cases.id, caseNumber: cases.caseNumber, admissionNoKey: cases.admissionNoKey, vin: vehicles.vin, chassisRef: vehicles.chassisRef })
           .from(cases)
-          .innerJoin(vehicles, eq(vehicles.id, cases.vehicleId))
+          .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
           .where(and(eq(cases.tenantId, tenantId), inArray(cases.admissionNoKey, keys.slice(i, i + 1000))))),
       );
     }
-    const chassisKeys = new Set(officials.map((o) => idKey(o.chassis ?? '')).filter(Boolean));
-    const byChassis = new Map<string, typeof found>();
-    if (chassisKeys.size) {
-      const open = await tx
-        .select({ id: cases.id, caseNumber: cases.caseNumber, admissionNoKey: cases.admissionNoKey, vin: vehicles.vin, chassisRef: vehicles.chassisRef })
-        .from(cases)
-        .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
-        .where(and(eq(cases.tenantId, tenantId), eq(cases.status, 'open')));
-      for (const c of open) {
-        for (const key of new Set([idKey(c.vin ?? ''), idKey(c.chassisRef ?? '')])) {
-          if (chassisKeys.has(key)) byChassis.set(key, [...(byChassis.get(key) ?? []), c]);
-        }
-      }
-    }
     const byAdmission = new Map<string, typeof found>();
     for (const c of found) byAdmission.set(c.admissionNoKey!, [...(byAdmission.get(c.admissionNoKey!) ?? []), c]);
-    const caseIds = [...new Set([...found, ...[...byChassis.values()].flat()].map((c) => c.id))];
-    type Need = { id: string; caseId: string; partNumber: string | null; orderRef: string | null; source: string };
-    const partsByCase = new Map<string, Need[]>();
-    for (let i = 0; i < caseIds.length; i += 1000) {
-      const parts = await tx
-        .select({ id: partRequests.id, caseId: partRequests.caseId, partNumber: partRequests.partNumber, orderRef: partRequests.orderRef, source: partRequests.source })
-        .from(partRequests)
-        .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, caseIds.slice(i, i + 1000)), ne(partRequests.status, 'cancelled')));
-      for (const p of parts) partsByCase.set(p.caseId, [...(partsByCase.get(p.caseId) ?? []), p]);
-    }
-    const partBase = (n: string | null) => (n ? (parseStockCode(n)?.basePartNumber ?? parseBasePartNumber(n)) : null);
-
-    const requested = await tx.select({ id: partRequests.id, caseId: partRequests.caseId, partNumber: partRequests.partNumber, orderRef: partRequests.orderRef, vin: vehicles.vin, chassisRef: vehicles.chassisRef })
-      .from(partRequests).innerJoin(cases, and(eq(cases.id, partRequests.caseId), eq(cases.tenantId, tenantId)))
-      .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
-      .where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.source, 'company'), ne(partRequests.status, 'cancelled'), eq(cases.status, 'open')));
-    return (o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'> & { requestNo?: string }): MatchResult => {
+    const lines = await emdadLines(tx, tenantId);
+    return (o: Pick<EmdadOfficial, 'admissionNo' | 'chassis' | 'partCode' | 'initialCode' | 'fullCodeBase' | 'fullCode'> & { emdadNo?: string }): MatchResult => {
       const none = (matchStatus: EmdadMatchStatus, matchNote: string, caseId: string | null = null): MatchResult => ({ caseId, partRequestId: null, matchStatus, matchNote });
-      const chassis = idKey(o.chassis ?? '');
-      const request = requestNoKey(o.requestNo);
-      const requestCandidates = request ? requested.filter(p => requestNoKey(p.orderRef) === request) : [];
-      if (requestCandidates.length) {
-        const d = decideByRequest(o, o.chassis ?? null, requestCandidates);
-        return d.kind === 'link' ? { caseId: d.part.caseId, partRequestId: d.part.id, matchStatus: 'matched', matchNote: d.note, byChassisAndCode: true }
-          : { ...none('needs_review', d.note), byChassisAndCode: true };
-      }
-
-      const needsByChassis = (byChassis.get(chassis) ?? []).flatMap((c) =>
-        (partsByCase.get(c.id) ?? []).filter((p) => p.source === 'company' && p.partNumber && emdadMatchesNeed(o, p.partNumber)),
-      );
-      if (needsByChassis.length === 1) {
-        const p = needsByChassis[0]!;
-        if (request && requestNoKey(p.orderRef) && request !== requestNoKey(p.orderRef)) return { ...none('needs_review', 'شمارهٔ درخواست گزارش با قطعهٔ این شاسی متفاوت است'), byChassisAndCode: true };
-        return { caseId: p.caseId, partRequestId: p.id, matchStatus: 'matched', matchNote: 'شاسی و کد فنی یکسان است', byChassisAndCode: true };
-      }
-      if (needsByChassis.length > 1) {
-        return { ...none('ambiguous', 'چند قطعه با همین شاسی و کد فنی ثبت شده است؛ دستی تطبیق دهید'), byChassisAndCode: true };
-      }
       const adm = admissionKeyOf(o.admissionNo);
+      const d = decideEmdadLine(o, adm, lines);
+      if (d.kind === 'link') return { caseId: d.line.caseId, partRequestId: d.line.id, matchStatus: 'matched', matchNote: d.note, byChassisAndCode: true };
+      if (d.kind === 'review') return { ...none(d.ambiguous ? 'ambiguous' : 'needs_review', d.note, d.caseId ?? null), byChassisAndCode: true };
       if (!adm) return none('unmatched', 'شماره پذیرش معتبر ندارد (مثلاً «برگشتی» یا خالی)؛ اتصال خودکار انجام نشد');
       const candidates = byAdmission.get(adm) ?? [];
       if (!candidates.length) return none('unmatched', 'پرونده‌ای با این شماره پذیرش در منیج نیست؛ پرونده‌ای ساخته نشد');
+      const chassis = idKey(o.chassis ?? '');
       // A short chassis number is compared with the recorded chassis, never with a VIN.
       const vehicleChassis = (c: (typeof found)[number]) => (chassis.length === 17 ? idKey(c.vin ?? '') : idKey(c.chassisRef ?? ''));
       const exact = chassis ? candidates.filter((c) => vehicleChassis(c) === chassis) : [];
@@ -156,12 +114,8 @@ export class EmdadService {
         return none('needs_review', unknown ? `پذیرش در پرونده(های) ${list} هست ولی شاسی پرونده ثبت نشده است` : `پذیرش در پرونده(های) ${list} هست ولی شاسی با گزارش یکسان نیست`);
       }
       const kase = exact[0]!;
-      const base = confirmedBase(o);
-      if (!base) return { caseId: kase.id, partRequestId: null, matchStatus: 'matched', matchNote: 'متصل به پرونده؛ کدها یکسان نیستند، پس اتصال به نیاز قطعه دستی است' };
-      const needs = (partsByCase.get(kase.id) ?? []).filter((p) => partBase(p.partNumber) === base);
-      if (needs.length === 1) return { caseId: kase.id, partRequestId: needs[0]!.id, matchStatus: 'matched', matchNote: 'پذیرش، شاسی و کد پایه یکسان است' };
-      if (needs.length > 1) return { caseId: kase.id, partRequestId: null, matchStatus: 'needs_review', matchNote: 'چند نیاز قطعه با همین کد پایه در پرونده هست؛ یکی را دستی انتخاب کنید' };
-      return { caseId: kase.id, partRequestId: null, matchStatus: 'matched', matchNote: 'متصل به پرونده؛ نیاز قطعه‌ای با این کد پایه ثبت نشده است' };
+      if (!confirmedBase(o)) return { caseId: kase.id, partRequestId: null, matchStatus: 'matched', matchNote: 'متصل به پرونده؛ کدها یکسان نیستند، پس اتصال به نیاز قطعه دستی است' };
+      return { caseId: kase.id, partRequestId: null, matchStatus: 'matched', matchNote: 'متصل به پرونده؛ قطعهٔ امداد ویژه‌ای با این کد اختصاصی ثبت نشده است' };
     };
   }
 
@@ -176,7 +130,6 @@ export class EmdadService {
           ilike(emdadRequests.admissionNo, like),
           ilike(emdadRequests.chassis, like),
           ilike(emdadRequests.emdadNo, like),
-          ilike(emdadRequests.requestNo, like),
           ilike(emdadRequests.initialCode, like),
           sql`${emdadRequests.official}->>'fullCode' ilike ${like}`,
           sql`${emdadRequests.official}->>'partCode' ilike ${like}`,
@@ -376,13 +329,12 @@ export class EmdadService {
     }
     const o = (r: EmdadRequest, k: string) => safeCell(String(r.official[k] ?? ''));
     return writeSheet('پیگیری امداد ویژه', [
-      ['پرونده منیج', 'پذیرش ایران‌خودرو', 'شاسی', 'شماره امداد', 'شماره درخواست', 'کد اختصاصی اولیه', 'کد قطعه', 'کد کامل تدارکاتی', 'شرح تدارکاتی', 'تعداد تدارکاتی', 'وضعیت امداد (متن رسمی)', 'وضعیت ارسال (متن رسمی)', 'شماره فاکتور', 'تاریخ ترخیص', 'اتصال', 'مسئول', 'اقدام بعدی', 'یادداشت'],
+      ['پرونده منیج', 'پذیرش ایران‌خودرو', 'شاسی', 'شمارهٔ امداد ویژه', 'کد اختصاصی اولیه', 'کد قطعه', 'کد کامل تدارکاتی', 'شرح تدارکاتی', 'تعداد تدارکاتی', 'وضعیت امداد (متن رسمی)', 'وضعیت ارسال (متن رسمی)', 'شماره فاکتور', 'تاریخ ترخیص', 'اتصال', 'مسئول', 'اقدام بعدی', 'یادداشت'],
       ...all.map((r) => [
         safeCell(r.caseNumber ?? ''),
         safeCell(r.admissionNo ?? ''),
         safeCell(r.chassis ?? ''),
         safeCell(r.emdadNo ?? ''),
-        safeCell(r.requestNo ?? ''),
         safeCell(r.initialCode ?? ''),
         o(r, 'partCode'),
         o(r, 'fullCode'),

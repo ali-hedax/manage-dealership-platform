@@ -183,6 +183,13 @@
       "when": 1794757386284,
       "tag": "0025_freezing_alex_power",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794896884499,
+      "tag": "0026_broad_wildside",
+      "breakpoints": true
     }
   ]
 }

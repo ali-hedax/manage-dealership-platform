@@ -17,7 +17,9 @@ import {
   type Task,
   type TaskAction,
 } from '@manage/shared';
-import { api, errorMessage, fetcher } from '@/lib/api';
+import { ApiError, api, errorMessage, fetcher } from '@/lib/api';
+import { WorkflowBlockerDialog } from './WorkflowBlockerDialog';
+import { blockersOf, type WorkflowBlocker } from '@manage/shared';
 import { useAuth } from '@/lib/auth';
 import { duration, formatJalali,faNum } from '@/lib/format';
 import { useToast } from '@/lib/toast';
@@ -58,6 +60,7 @@ export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseD
   // Parts a "not arrived" blocker can wait for; handing one over resolves the blocker.
   const waitingParts = (parts ?? []).filter((p) => p.status !== 'handed_over' && p.status !== 'cancelled');
   const [busy, setBusy] = useState(false);
+  const [blocked, setBlocked] = useState<{ blockers: WorkflowBlocker[]; retry: () => void; opener: HTMLElement | null } | null>(null);
   const manage = can('task.manage');
   const editable = kase.status === 'open' && kase.stage !== 'delivered';
   const byId = new Map(kase.tasks.map((t) => [t.id, t]));
@@ -75,18 +78,24 @@ export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseD
     await run(() =>
       api(`/tasks/${task.id}/actions`, { body: { action, expectedVersion: task.version } }),
       `${ACTION_LABELS[action]} ثبت شد`,
+      // After the case is corrected the same action is repeated on the newest version of the task.
+      async () => { const fresh = (await api<CaseDetail>(`/cases/${kase.id}`)).tasks.find((x) => x.id === task.id); if (fresh) await quick(fresh, action); },
     );
   }
 
-  async function run(fn: () => Promise<unknown>, done: string) {
+  async function run(fn: () => Promise<unknown>, done: string, retry?: () => Promise<void>) {
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     setBusy(true);
     try {
       await fn();
       toast(done);
       setPending(null);
+      setBlocked(null);
       onChange();
     } catch (err) {
-      toast(errorMessage(err), 'error');
+      const list = err instanceof ApiError ? blockersOf(err.details) : [];
+      if (list.length && retry) setBlocked({ blockers: list, retry: () => void retry(), opener });
+      else toast(errorMessage(err), 'error');
       onChange();
     } finally {
       setBusy(false);
@@ -202,7 +211,7 @@ export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseD
                     برنامه: {formatJalali(t.plannedStartAt)} تا {formatJalali(t.plannedEndAt)}
                   </span>
                 )}
-                {t.actualStartAt && <span>شروع واقعی: {formatJalali(t.actualStartAt, { time: true })}</span>}
+                {t.actualStartAt ? <span>شروع واقعی: {formatJalali(t.actualStartAt, { time: true })}</span> : t.status !== 'pending' && <span>زمان شروع ثبت نشده</span>}
                 {t.actualEndAt && (
                   <span>
                     اتمام: {formatJalali(t.actualEndAt, { time: true })} ({duration(t.actualStartAt ?? t.actualEndAt, t.actualEndAt)})
@@ -267,6 +276,7 @@ export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseD
         );
       })}
 
+      <WorkflowBlockerDialog blockers={blocked?.blockers ?? null} title="شروع کار هنوز ممکن نیست" busy={busy} returnFocus={blocked?.opener ?? null} onClose={() => setBlocked(null)} onRetry={blocked ? () => { const r = blocked.retry; setBlocked(null); r(); } : undefined} />
       <Dialog
         open={!!pending}
         title={dialogTitle}

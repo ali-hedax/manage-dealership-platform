@@ -544,7 +544,21 @@ export const partRequests = pgTable(
     priceApprovalRef: text('price_approval_ref'),
     priceApprovedBy: text('price_approved_by'),
     supplier: text('supplier'),
+    // Legacy: the Emdad request number of older registrations lives here. It is
+    // kept for audit only; it is never matched on and never copied into emdad_no.
     orderRef: text('order_ref'),
+    // «شمارهٔ امداد ویژه» (migration 0026): typed at registration or filled from the
+    // daily report after an unambiguous match.
+    emdadNo: text('emdad_no'),
+    // 10-digit «کد تدارکاتی» (8-digit assessment code + 2-digit manufacturer) chosen
+    // by the clerk or read from the report; partNumber keeps the original code.
+    procurementCode: text('procurement_code'),
+    // Actual warehouse receipt date from the special-aid report (never the report or import date).
+    emdadReceivedAt: ts('emdad_received_at'),
+    // Quantity the report confirmed as received; caps the automatic reservation.
+    emdadReceivedQuantity: smallint('emdad_received_quantity'),
+    // Why an arrived special-aid line is not fully reserved (actionable, Persian).
+    emdadReserveNote: text('emdad_reserve_note'),
     orderedAt: ts('ordered_at'),
     etaAt: ts('eta_at'),
     firstEtaAt: ts('first_eta_at'),
@@ -571,6 +585,7 @@ export const partRequests = pgTable(
   (t) => [
     index('part_requests_case_idx').on(t.caseId),
     index('part_requests_tenant_status_idx').on(t.tenantId, t.status),
+    index('part_requests_tenant_emdad_no_idx').on(t.tenantId, t.emdadNo).where(sql`${t.emdadNo} is not null`),
   ],
 );
 

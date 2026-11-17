@@ -49,6 +49,70 @@ export function parseBasePartNumber(raw: string | null | undefined): string | nu
   return /^\d{8}$/.test(v) ? v : null;
 }
 
+// ------------------------------------------------ part identifiers (owner, 2026-11-17)
+// «کد اختصاصی» = the 8-digit assessment identifier of the part used in the
+// assessment. «کد تدارکاتی» = the 10-digit procurement identifier: its first 8
+// digits are the assessment identifier and its last 2 the manufacturer, so
+// several manufacturers share one 8-digit base. Both are text: leading zeros are
+// kept. A market-purchase technical code is kept complete (any length, letters).
+
+const cleanCode = (raw: string | null | undefined) =>
+  raw == null ? '' : toLatinDigits(String(raw).replace(CONTROL_TEXT, '').replace(CONTROL_CHARS, '')).replace(/[\s‌\-_./]/g, '').toUpperCase();
+
+/** 10-digit procurement code («کد تدارکاتی»), or null. */
+export function parseProcurementCode(raw: string | null | undefined): string | null {
+  const v = cleanCode(raw);
+  return /^\d{10}$/.test(v) ? v : null;
+}
+
+/** 8-digit assessment code («کد اختصاصی») of a code that is either 8 or 10 digits, or null. */
+export function assessmentCodeOf(raw: string | null | undefined): string | null {
+  const v = cleanCode(raw);
+  return /^\d{8}$/.test(v) ? v : /^\d{10}$/.test(v) ? v.slice(0, 8) : null;
+}
+
+/** A complete technical code of a market purchase: Latin digits, upper case, no spaces; letters and any length kept. */
+export function normalizeTechnicalCode(raw: string | null | undefined): string | null {
+  const v = cleanCode(raw);
+  return v || null;
+}
+
+export interface PartIdentifiers {
+  /** 8-digit assessment identifier, when the line has one. */
+  assessmentCode: string | null;
+  /** 10-digit procurement identifier, when known (recorded, chosen or read from the special-aid report). */
+  procurementCode: string | null;
+  /** What the parts list shows: the full procurement code of a special-aid line when known, else the stored code. */
+  displayCode: string | null;
+}
+
+export function partIdentifiers(p: { partNumber: string | null; procurementCode?: string | null; source?: string | null }): PartIdentifiers {
+  const procurementCode = parseProcurementCode(p.procurementCode) ?? parseProcurementCode(p.partNumber);
+  const assessmentCode = assessmentCodeOf(p.partNumber) ?? (procurementCode ? procurementCode.slice(0, 8) : null);
+  const displayCode = p.source === 'company' && procurementCode ? procurementCode : p.partNumber;
+  return { assessmentCode, procurementCode, displayCode };
+}
+
+/**
+ * Field-level check of a special-aid registration; null when valid, else the Persian reason.
+ * The stored technical code of the line is kept as it is (older lines may carry other
+ * shapes); the procurement code typed here must be exactly 10 digits with the line's base.
+ */
+export function specialAidCodeProblem(partNumber: string | null, requestedCode: string | null | undefined): string | null {
+  const assessment = assessmentCodeOf(partNumber);
+  if (requestedCode == null || requestedCode === '') return null;
+  const procurement = parseProcurementCode(requestedCode);
+  if (!procurement) return 'کد تدارکاتی باید دقیقاً ۱۰ رقم باشد';
+  if (assessment && procurement.slice(0, 8) !== assessment) return '۸ رقم اول کد تدارکاتی با کد اختصاصی قطعه یکی نیست';
+  return null;
+}
+
+/** Comparison key of a special-aid number («شمارهٔ امداد ویژه»): Latin digits, no spaces; the stored text is never rewritten. */
+export function emdadNoKey(raw: string | null | undefined): string | null {
+  const v = cleanCode(raw);
+  return v || null;
+}
+
 /**
  * Exact decimal as a canonical string ("12.5", "0.888", "3"), or null when not a
  * plain non-negative number. No float conversion, no rounding, no truncation.

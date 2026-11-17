@@ -5,7 +5,7 @@ import { calendarAt } from '../workshop/work-calendar';
 import { stepDependencies, type CreateTaskInput, type RepairPlanStepsInput, type Task, type TaskActionInput, type TaskStatus, type UpdateTaskInput } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
-import { assertNotFuture, planSignature, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
+import { assertNotFuture, taskStartBlockers, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { requireSupportReason } from '../auth/support-reason';
 import { newId } from '../common/ids';
@@ -247,24 +247,24 @@ export class TasksService {
     }
     const kase = await this.cases.loadForWrite(tx, tenantId, task.caseId);
     if(kase.stage==='delivered')throw badRequest('CASE_DELIVERED','خودرو تحویل شده است');
-    if (input.action === 'start' && kase.workflow?.guided) {
-      const w = await this.cases.workflow(actor, kase.id, tx);
-      const plan = await tx.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, kase.id)));
-      if (w.requirements.execution.length || !w.record.planConfirmedAt || w.record.planSignature !== planSignature(plan) || !w.record.planTaskIds?.includes(taskId)) throw badRequest('PLAN_CONFIRM_REQUIRED', 'پیش از شروع فعالیت، کارشناسی و برنامهٔ تعمیر را کامل و تأیید کنید');
-    }
     const status = task.status as TaskStatus;
+    if (input.action === 'start' && status === 'pending') {
+      // Every missing prerequisite is explained with a stable code, the next step and who can act.
+      const w = kase.workflow?.guided ? await this.cases.workflow(actor, kase.id, tx) : null;
+      const plan = w ? await tx.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, kase.id))) : [];
+      const unfinished = await this.unfinishedDependencies(tx, tenantId, taskId);
+      const found = taskStartBlockers(kase.id, w, plan, taskId, unfinished.length);
+      if (found.length) {
+        const onlyDependency = found.every((b) => b.code === 'DEPENDENCY_NOT_DONE');
+        throw badRequest(onlyDependency ? 'DEPENDENCY_NOT_DONE' : 'PLAN_CONFIRM_REQUIRED', onlyDependency ? 'فعالیت‌های پیش‌نیاز هنوز تمام نشده‌اند' : found.map((b) => b.message).join(' '), { blockers: found, taskIds: unfinished });
+      }
+    }
     let patch: Partial<TaskRow>;
     let action: string;
 
     switch (input.action) {
       case 'start': {
         if (status !== 'pending') throw invalidTransition(status, 'شروع');
-        const unfinished = await this.unfinishedDependencies(tx, tenantId, taskId);
-        if (unfinished.length) {
-          throw badRequest('DEPENDENCY_NOT_DONE', 'فعالیت‌های پیش‌نیاز هنوز تمام نشده‌اند', {
-            taskIds: unfinished,
-          });
-        }
         patch = { status: 'in_progress', actualStartAt: at };
         action = 'task.started';
         break;
