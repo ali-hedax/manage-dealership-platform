@@ -50,7 +50,7 @@ test('part row: current special-aid stage before arrival, newer stage after impo
   await expect(row('گلگیر امداد ساختگی').getByTestId('emdad-stage')).toHaveText('در حال جمع آوری');
 
   // Arrival: the receipt date (1405/08/20) differs from the report date (today); only the receipt date is shown.
-  await publish(parts.request, [line('00123456', '0070031', 'وارد موجودی شده است', '1405/08/20'), line('00654321', '0070032', 'رسید توسط نمایندگی', '')], 20);
+  await publish(parts.request, [line('00123456', '0070031', 'وارد موجودی شده است', '1405/08/20 10:30'), line('00654321', '0070032', 'رسید توسط نمایندگی', '')], 20);
   await page.reload();
   const receipt = formatJalaliDay(parseJalali('1405/08/20')!);
   const reportDay = formatJalaliDay(new Date(Date.now() - 20 * 60000));
@@ -59,6 +59,10 @@ test('part row: current special-aid stage before arrival, newer stage after impo
   await expect(stage.locator('b')).toHaveText('امداد ویژه رسیده');
   await expect(stage.getByTestId('emdad-received')).toHaveText(receipt);
   await expect(row('گلگیر امداد ساختگی').locator('.ledger-row')).not.toContainText(reportDay);
+  // The source has a time; only the date is shown. Without a verified received quantity the line is flagged, not ready.
+  await expect(stage.getByTestId('emdad-received')).not.toContainText('۱۰:۳۰');
+  await expect(row('گلگیر امداد ساختگی').getByTestId('emdad-quantity-review')).toHaveText('تعداد رسیده نیازمند بررسی');
+  await expect(row('گلگیر امداد ساختگی')).toHaveAttribute('data-state', 'emdad_arrived');
   // The full 10-digit procurement code read from the report is on the row.
   await expect(row('گلگیر امداد ساختگی').getByTestId('part-code')).toContainText('۰۰۱۲۳۴۵۶۰۲');
   // Arrival without a receipt date: status only, no date; the number shown is «شمارهٔ امداد ویژه» from the report.

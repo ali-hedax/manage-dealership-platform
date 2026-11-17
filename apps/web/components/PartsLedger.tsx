@@ -229,6 +229,7 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
           <span className={`m-tag ${STATE_TONE[p.flowState]}`}>{PART_FLOW_STATE_LABELS[p.flowState]}</span>
           {detail && <small>{detail}</small>}
           <EmdadStage part={p} />
+          {p.emdadQuantityReview && <small className="m-tag wait" data-testid="emdad-quantity-review">تعداد رسیده نیازمند بررسی</small>}
         </div>
         <div className="m-row-action c-act" onClick={(e) => e.stopPropagation()}>
           {primary === 'decide' && <button type="button" className="m-btn2-s" aria-expanded={expanded} onClick={onToggle}>انتخاب مسیر تأمین <AppIcon name="chevron-down" /></button>}

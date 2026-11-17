@@ -100,8 +100,16 @@ describe('report columns', () => {
     expect(parseReportDate('1405/08/20')?.toISOString()).toBe('2026-11-10T20:30:00.000Z');
     expect(parseReportDate('۱۴۰۵/۰۸/۲۰ ۱۰:۳۰')?.toISOString()).toBe('2026-11-11T07:00:00.000Z');
     expect(parseReportDate('')).toBeNull();
-    expect(reportQuantity({ supplyQuantity: '2', specialQuantity: '' })).toBe(2);
-    expect(reportQuantity({ supplyQuantity: '', specialQuantity: '1.00' })).toBe(1);
-    expect(reportQuantity({ supplyQuantity: '', specialQuantity: '' })).toBeNull();
+  });
+
+  it('reads the received quantity only from the owner-verified column, never from another column or the line', () => {
+    // No verified column: nothing counts as received, even when the cells are filled.
+    expect(reportQuantity({ supplyQuantity: '2', specialQuantity: '2' }, null)).toBeNull();
+    expect(reportQuantity({ supplyQuantity: '2', specialQuantity: '' }, 'supplyQuantity')).toBe(2);
+    // The other column is never a fallback.
+    expect(reportQuantity({ supplyQuantity: '', specialQuantity: '1.00' }, 'supplyQuantity')).toBeNull();
+    expect(reportQuantity({ supplyQuantity: '', specialQuantity: '1.00' }, 'specialQuantity')).toBe(1);
+    expect(reportQuantity({ supplyQuantity: '0', specialQuantity: '' }, 'supplyQuantity')).toBeNull();
+    expect(reportQuantity({ supplyQuantity: '1.5', specialQuantity: '' }, 'supplyQuantity')).toBeNull();
   });
 });

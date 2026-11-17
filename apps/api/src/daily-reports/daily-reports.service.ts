@@ -9,6 +9,7 @@ import {
   type DailyApplyInput,
   type DailyImport,
   type DailyReportKind,
+  type EmdadReceivedQuantityField,
   type DailyReportsStatus,
   type DailyRowOutcome,
   type StockProfileInput,
@@ -658,10 +659,12 @@ export class DailyReportsService implements OnApplicationBootstrap {
         .where(and(eq(dailyReportRows.importId, job.id), inArray(dailyReportRows.rowNo, b)));
     }
     // Spec section 7: the report moves the linked part lines automatically.
-    const parts = await applyEmdadToParts(tx, this.audit, actor, job.id, reportAt,
+    const profile = await this.ensureProfile(tx, tenantId, 'emdad');
+    const quantityField = ((profile.settings as Record<string, unknown>).receivedQuantityField as EmdadReceivedQuantityField | null | undefined) ?? null;
+    const parts = await applyEmdadToParts(tx, this.audit, actor, job.id, reportAt, quantityField,
       (t, a, input) => this.stock.reserveIn(t, a, input),
       async (t, tenant) => { const snap = await this.stock.active(t, tenant); return snap ? { id: snap.id, reservable: snapshotInfo(snap).reservable } : null; });
-    return { counts: { ...counts, partsArrived: parts.arrived, partsReserved: parts.reserved, partsPartial: parts.partial, partsDealerSupply: parts.dealerSupply, emdadNoFilled: parts.emdadNoFilled, emdadReview: parts.needsReview } };
+    return { counts: { ...counts, partsArrived: parts.arrived, partsReserved: parts.reserved, partsPartial: parts.partial, quantityReview: parts.quantityReview, partsDealerSupply: parts.dealerSupply, emdadNoFilled: parts.emdadNoFilled, emdadReview: parts.needsReview } };
   }
 
   // -------------------------------------------------------------- profiles
@@ -693,9 +696,12 @@ export class DailyReportsService implements OnApplicationBootstrap {
    */
   async updateProfile(actor: Actor, kind: DailyReportKind, input: StockProfileInput) {
     this.need(actor, 'daily_reports.settings');
-    const ownerFields = (['currency', 'taxIncluded', 'completeness', 'scope', 'quantityMeaning'] as const).filter((k) => input[k] !== undefined);
-    if (ownerFields.length && kind !== 'stock') throw badRequest('DAILY_PROFILE_FIELD', 'این تنظیم فقط برای گزارش موجودی است');
-    if (ownerFields.length && !actor.user.isOwner) throw forbidden('تأیید دامنه انبار، کامل‌بودن، معنای موجودی و واحد پول فقط با مالک سامانه است');
+    const stockFields = (['currency', 'taxIncluded', 'completeness', 'scope', 'quantityMeaning'] as const).filter((k) => input[k] !== undefined);
+    const emdadFields = (['receivedQuantityField'] as const).filter((k) => input[k] !== undefined);
+    if (stockFields.length && kind !== 'stock') throw badRequest('DAILY_PROFILE_FIELD', 'این تنظیم فقط برای گزارش موجودی است');
+    if (emdadFields.length && kind !== 'emdad') throw badRequest('DAILY_PROFILE_FIELD', 'این تنظیم فقط برای گزارش امداد ویژه است');
+    const ownerFields = [...stockFields, ...emdadFields];
+    if (ownerFields.length && !actor.user.isOwner) throw forbidden('تأیید دامنه انبار، کامل‌بودن، معنای موجودی، واحد پول و معنای ستون تعداد رسیدهٔ امداد ویژه فقط با مالک سامانه است');
     await this.db.transaction(async (tx) => {
       const p = await this.ensureProfile(tx, actor.user.tenantId, kind);
       if (p.version !== input.expectedVersion) throw versionConflict(p.version);
@@ -715,10 +721,10 @@ export class DailyReportsService implements OnApplicationBootstrap {
         .update(dailyReportProfiles)
         .set({ ...patch, updatedBy: actor.user.id, updatedAt: new Date(), version: p.version + 1 })
         .where(and(eq(dailyReportProfiles.id, p.id), eq(dailyReportProfiles.version, p.version)));
-      if (ownerFields.length) {
+      if (stockFields.length) {
         await tx
           .update(stockSnapshots)
-          .set(Object.fromEntries(ownerFields.map((k) => [k, settings[k] ?? null])))
+          .set(Object.fromEntries(stockFields.map((k) => [k, settings[k] ?? null])))
           .where(and(eq(stockSnapshots.tenantId, actor.user.tenantId), eq(stockSnapshots.status, 'active')));
       }
       await this.audit.record(tx, actor, {

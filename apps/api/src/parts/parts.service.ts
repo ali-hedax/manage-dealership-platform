@@ -527,7 +527,9 @@ export class PartsService {
           - coalesce((select sum(quantity) from stock_reservations where tenant_id = ${tenantId} and full_stock_code = ${chosen} and location_address = ${input.locationAddress} and (status = 'reserved' or (status = 'issued' and reflected_at is null))), 0) as free
     `)) as unknown as { rows: { held: string; free: string }[] };
     const held = Number(sums.rows[0]?.held ?? 0);
-    const confirmed = Math.min(p.quantity, p.emdadReceivedQuantity ?? p.quantity);
+    // Only a verified received quantity from the report counts; never the case-line quantity.
+    if (p.emdadReceivedQuantity == null) throw badRequest('EMDAD_QUANTITY_UNVERIFIED', 'تعداد رسیدهٔ این قطعه در گزارش امداد ویژه تأیید نشده است؛ تا تعداد رسیده مشخص نشود رزرو ثبت نمی‌شود و قطعه آمادهٔ تحویل نیست');
+    const confirmed = Math.min(p.quantity, p.emdadReceivedQuantity);
     const want = confirmed - held;
     if (want <= 0) throw badRequest('NOTHING_TO_RESERVE', `تعداد رسیدهٔ تأییدشده (${confirmed}) قبلاً رزرو شده است؛ باقی‌مانده پس از رسید بعدی در گزارش امداد ویژه رزرو می‌شود`);
     const free = Math.floor(Number(sums.rows[0]?.free ?? 0));
@@ -728,6 +730,7 @@ export class PartsService {
       reservedQuantity,
       outstandingQuantity: done ? 0 : Math.max(0, p.quantity - (p.status === 'reserved' || p.status === 'received' ? p.quantity : reservedQuantity)),
       emdadReserveNote: p.status === 'ordered' ? p.emdadReserveNote : null,
+      emdadQuantityReview: p.status === 'ordered' && p.source === 'company' && !!e?.arrived && p.emdadReceivedQuantity == null,
       flowState,
       allowedActions: rejectedNeedActions(p, allowedPartActions(flowState)),
       fromSupplement: !!p.assessmentItemId && ((root?.versionNo ?? 1) > 1 || firstOfRoot.get(p.assessmentItemId) !== p.id),

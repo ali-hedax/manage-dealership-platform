@@ -91,6 +91,35 @@ afterAll(async () => {
   await h?.close();
 });
 
+it('without a verified received quantity an arrival shows the stage, flags the quantity and is never reserved or ready; only the owner verifies the column', async () => {
+  const c = await newCase('930010');
+  const p = await companyPart(c, '00123456', 1, '0070010');
+  await publish([row(10, c, '00123456', { 'شماره امداد ویژه': '0070010', 'كد تداركاتي كالا': '0012345602', 'وضعیت امداد ویژه': 'وارد موجودی شده است', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/22 09:15', 'تعداد تداركاتي': '1' })], -400);
+  let now = await one(p);
+  expect(now).toMatchObject({ flowState: 'emdad_arrived', emdadQuantityReview: true, reservedQuantity: 0, outstandingQuantity: 1, emdadNo: '0070010', emdad: { arrived: true, receivedAt: '2026-11-13T05:45:00.000Z' } });
+  expect(now.allowedActions).not.toContain('hand_over');
+  expect(now.emdadReserveNote).toContain('تعداد رسیده تأیید نشده');
+  expect(await reservationsOf(p.id)).toHaveLength(0);
+  // The clerk cannot reserve it by hand either while the quantity is unverified.
+  expect((await parts.post(`/parts/${p.id}/flow`, { expectedVersion: now.version, action: 'reserve', snapshotId, fullStockCode: '0012345602', locationAddress: 'A-02' })).body.code).toBe('EMDAD_QUANTITY_UNVERIFIED');
+
+  // Verifying the column is the owner's decision, recorded on the special-aid report profile.
+  let prof = await owner.get('/daily-reports/profiles/emdad');
+  expect((await parts.patch('/daily-reports/profiles/emdad', { expectedVersion: prof.body.version, receivedQuantityField: 'supplyQuantity' })).status).toBe(403);
+  expect((await owner.patch('/daily-reports/profiles/stock', { expectedVersion: (await owner.get('/daily-reports/profiles/stock')).body.version, receivedQuantityField: 'supplyQuantity' })).body.code).toBe('DAILY_PROFILE_FIELD');
+  prof = await owner.get('/daily-reports/profiles/emdad');
+  expect((await owner.patch('/daily-reports/profiles/emdad', { expectedVersion: prof.body.version, receivedQuantityField: 'supplyQuantity' })).status).toBe(200);
+
+  // Verified column but an empty cell: still flagged, still nothing reserved.
+  await publish([row(10, c, '00123456', { 'شماره امداد ویژه': '0070010', 'كد تداركاتي كالا': '0012345602', 'وضعیت امداد ویژه': 'وارد موجودی شده است', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/22 09:15', 'تعداد تداركاتي': '' })], -380);
+  now = await one(p);
+  expect(now).toMatchObject({ flowState: 'emdad_arrived', emdadQuantityReview: true, reservedQuantity: 0 });
+  expect(now.emdadReserveNote).toContain('تعداد تداركاتي');
+  // With the verified quantity present, the exact code is reserved.
+  await publish([row(10, c, '00123456', { 'شماره امداد ویژه': '0070010', 'كد تداركاتي كالا': '0012345602', 'وضعیت امداد ویژه': 'وارد موجودی شده است', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/22 09:15', 'تعداد تداركاتي': '1' })], -360);
+  expect(await one(p)).toMatchObject({ flowState: 'reserved', emdadQuantityReview: false, reservedQuantity: 1 });
+});
+
 it('registers special aid by «شمارهٔ امداد ویژه» (optional), validates codes by field and never asks for a request number', async () => {
   const c = await newCase('930001');
   const raw = await expert.post(`/cases/${c.id}/parts`, { description: 'آزمون کد', partNumber: '00123456', quantity: 1, source: 'company' });
@@ -169,7 +198,7 @@ it('without a procurement code the clerk chooses among the manufacturer variants
   expect(now).toMatchObject({ flowState: 'emdad_arrived', allowedActions: expect.arrayContaining(['reserve', 'cancel']), reservedQuantity: 0 });
   expect(now.emdadReserveNote).toContain('کد تدارکاتی ۱۰ رقمی');
   const options = (await parts.get('/stock/options?base=00123456')).body.items as { fullStockCode: string; available: string; salePrice: string | null }[];
-  expect(options.map((o) => [o.fullStockCode, o.available, o.salePrice])).toEqual([['0012345601', '1', '1500'], ['0012345602', '4', '1800']]);
+  expect(options.map((o) => [o.fullStockCode, o.available, o.salePrice])).toEqual([['0012345601', '1', '1500'], ['0012345602', '3', '1800']]);
   expect((await parts.post(`/parts/${p.id}/flow`, { expectedVersion: now.version, action: 'reserve', snapshotId, fullStockCode: '0099887701', locationAddress: 'B-01' })).body.code).toBe('PROCUREMENT_CODE_MISMATCH');
   const chosen = await parts.post(`/parts/${p.id}/flow`, { expectedVersion: now.version, action: 'reserve', snapshotId, fullStockCode: '0012345601', locationAddress: 'A-01' });
   expect(chosen.status).toBe(201);

@@ -258,6 +258,8 @@ export interface Part {
   outstandingQuantity: number;
   /** Why an arrived special-aid line is not (fully) reserved, with the next step. */
   emdadReserveNote: string | null;
+  /** Arrived by the report but without a verified received quantity: flagged for review, never reserved or ready. */
+  emdadQuantityReview: boolean;
   /** Latest official Emdad Vijeh status linked to this line. The row shows the stage, never the report date. */
   emdad: {
     emdadNo: string | null;

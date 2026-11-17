@@ -3,6 +3,8 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   EMDAD_ARRIVED_CATEGORIES,
   EMDAD_DEALER_SUPPLY_CATEGORY,
+  EMDAD_RECEIVED_QUANTITY_LABELS,
+  type EmdadReceivedQuantityField,
   assessmentCodeOf,
   emdadNoKey,
   parseBasePartNumber,
@@ -123,15 +125,17 @@ export function parseReportDate(raw: string | null | undefined): Date | null {
   return parseJalali(`${d[1]}/${d[2]}/${d[3]}`, t ? `${t[1]}:${t[2]}` : '00:00');
 }
 
-/** Whole quantity confirmed by the report (supply quantity, else the special quantity); null when missing. */
-export function reportQuantity(o: Pick<EmdadOfficial, 'supplyQuantity' | 'specialQuantity'>): number | null {
-  for (const raw of [o.supplyQuantity, o.specialQuantity]) {
-    const v = toLatinDigits(String(raw ?? '')).trim().replace(/٫/g, '.');
-    if (!/^\d+(?:\.0+)?$/.test(v)) continue;
-    const n = Math.floor(Number(v));
-    if (n > 0) return n;
-  }
-  return null;
+/**
+ * Received quantity of a report row, read ONLY from the column whose meaning the owner
+ * verified (profile setting receivedQuantityField). No verified column, an empty cell or a
+ * value that is not a whole positive number → null; never the case-line quantity.
+ */
+export function reportQuantity(o: Partial<Pick<EmdadOfficial, EmdadReceivedQuantityField>>, field: EmdadReceivedQuantityField | null): number | null {
+  if (!field) return null;
+  const v = toLatinDigits(String(o[field] ?? '')).trim().replace(/٫/g, '.');
+  if (!/^\d+(?:\.0+)?$/.test(v)) return null;
+  const n = Math.floor(Number(v));
+  return n > 0 ? n : null;
 }
 
 const qty = (v: string | number | null | undefined) => Number(v ?? 0);
@@ -153,11 +157,12 @@ export async function applyEmdadToParts(
   actor: Actor,
   importId: string,
   reportAt: Date,
+  quantityField: EmdadReceivedQuantityField | null,
   reserve: (tx: DbOrTx, actor: Actor, input: { partRequestId: string; snapshotId: string; fullStockCode: string; locationAddress: string; quantity: string; confirm: true }) => Promise<string>,
   activeSnapshot: (tx: DbOrTx, tenantId: string) => Promise<{ id: string; reservable: boolean } | null>,
 ) {
   const tenantId = actor.user.tenantId;
-  const result = { emdadNoFilled: 0, arrived: 0, reserved: 0, partial: 0, dealerSupply: 0, needsReview: 0 };
+  const result = { emdadNoFilled: 0, arrived: 0, reserved: 0, partial: 0, quantityReview: 0, dealerSupply: 0, needsReview: 0 };
 
   // Latest linked row per line (an older file never moves a line).
   const newer = alias(emdadRequests, 'newer_emdad');
@@ -218,7 +223,12 @@ export async function applyEmdadToParts(
     if ((EMDAD_ARRIVED_CATEGORIES as readonly string[]).includes(e.statusCategory)) {
       // 2. Arrival. Receipt date only from the report's warehouse receipt column.
       const receivedAt = parseReportDate(official.receivedInWarehouseAt);
-      const confirmed = Math.min(p.quantity, reportQuantity(official) ?? p.quantity);
+      const reportedQuantity = reportQuantity(official, quantityField);
+      // Without a verified received quantity nothing is reserved and the line is not ready.
+      const confirmed = reportedQuantity == null ? null : Math.min(p.quantity, reportedQuantity);
+      const quantityNote = confirmed != null ? null : !quantityField
+        ? 'تعداد رسیده تأیید نشده است: معنای ستون تعداد در گزارش امداد ویژه هنوز تأیید نشده؛ رزرو خودکار انجام نمی‌شود و قطعه آمادهٔ تحویل نیست. تعداد را بررسی کنید.'
+        : `تعداد رسیده در ستون «${EMDAD_RECEIVED_QUANTITY_LABELS[quantityField]}» این گزارش نیامده یا عدد معتبر نیست؛ رزرو خودکار انجام نشد و قطعه آمادهٔ تحویل نیست. تعداد را بررسی کنید.`;
       const reportFull = parseProcurementCode(official.fullCode);
       const assessment = assessmentCodeOf(p.procurementCode) ?? assessmentCodeOf(p.partNumber);
       const recorded = parseProcurementCode(p.procurementCode) ?? parseProcurementCode(p.partNumber);
@@ -228,14 +238,15 @@ export async function applyEmdadToParts(
       else if (reportFull && recorded && reportFull !== recorded) note = `کد تدارکاتی گزارش (${reportFull}) با کد ثبت‌شدهٔ قطعه (${recorded}) فرق دارد؛ کد درست را انتخاب کنید.`;
       else code = recorded ?? reportFull;
       if (!note && code && !recorded) patch.procurementCode = code;
-      const first = !p.emdadReceivedQuantity;
+      const first = p.emdadReceivedQuantity == null && p.emdadReceivedAt == null && !p.emdadReserveNote;
       if (p.emdadReceivedAt?.getTime() !== receivedAt?.getTime()) patch.emdadReceivedAt = receivedAt;
       if (p.emdadReceivedQuantity !== confirmed) patch.emdadReceivedQuantity = confirmed;
 
       const held = (await tx.execute(sql`select coalesce(sum(quantity), 0)::text as q from stock_reservations where tenant_id = ${tenantId} and part_request_id = ${p.id} and status in ('reserved','issued')`)) as unknown as { rows: { q: string }[] };
       let reserved = qty(held.rows[0]?.q);
-      let want = confirmed - reserved;
-      if (!note && !code) note = 'کد تدارکاتی ۱۰ رقمی در گزارش نیامده و سازندهٔ این قطعه هنوز مشخص نیست؛ کدهای هم‌پایه را ببینید، یکی را انتخاب و رزرو کنید.';
+      let want = confirmed == null ? 0 : confirmed - reserved;
+      if (quantityNote) note = note ? `${quantityNote} ${note}` : quantityNote;
+      else if (!note && !code) note = 'کد تدارکاتی ۱۰ رقمی در گزارش نیامده و سازندهٔ این قطعه هنوز مشخص نیست؛ کدهای هم‌پایه را ببینید، یکی را انتخاب و رزرو کنید.';
       else if (!note && want > 0) {
         if (!snapshot) note = 'گزارش موجودی فعال ثبت نشده است؛ پس از بارگذاری گزارش موجودی، رزرو را ثبت کنید.';
         else if (!snapshot.reservable) note = 'گزارش موجودی هنوز برای رزرو تأیید نشده است؛ پس از تأیید مالک، رزرو را ثبت کنید.';
@@ -265,7 +276,7 @@ export async function applyEmdadToParts(
           if (want > 0) note = `موجودی قابل رزرو کد ${code} در گزارش موجودی فعال کافی نیست؛ ${reserved} عدد رزرو شد و ${p.quantity - reserved} عدد باقی است. پس از ثبت رسید انبار در گزارش موجودی، باقی را رزرو کنید.`;
         }
       }
-      if (!note && confirmed < p.quantity) note = `گزارش رسید ${confirmed} از ${p.quantity} عدد را تأیید کرده است؛ ${p.quantity - reserved} عدد هنوز باقی است.`;
+      if (!note && confirmed != null && confirmed < p.quantity) note = `گزارش رسید ${confirmed} از ${p.quantity} عدد را تأیید کرده است؛ ${p.quantity - reserved} عدد هنوز باقی است.`;
       const full = reserved >= p.quantity;
       if (full) Object.assign(patch, { status: 'reserved', reservedAt: new Date(), inStock: true });
       if ((p.emdadReserveNote ?? null) !== (full ? null : note)) patch.emdadReserveNote = full ? null : note;
@@ -286,6 +297,7 @@ export async function applyEmdadToParts(
       if (!saved) continue;
       if (patch.emdadNo) result.emdadNoFilled += 1;
       if (first) result.arrived += 1;
+      if (quantityNote) result.quantityReview += 1;
       if (full) {
         result.reserved += 1;
         const to = await caseAndBayRecipients(tx, tenantId, p.caseId);

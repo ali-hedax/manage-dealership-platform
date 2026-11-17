@@ -170,10 +170,11 @@ describe('daily Emdad report moves the line automatically', () => {
 
     const now = await partsOf(c.id);
     const a = now.find((p) => p.id === arrived.id)!;
-    // Receipt is not readiness: with no stock report nothing is reserved and the reason is shown.
+    // Receipt is not readiness: without a verified received quantity nothing is reserved and the quantity is flagged.
     expect(a).toMatchObject({ flowState: 'emdad_arrived', emdadNo: '500041', allowedActions: ['reserve', 'cancel', 'set_price', 'announce_price'] });
     expect(a.emdad).toMatchObject({ emdadNo: '500041', category: 'in_dealer_stock', statusText: 'وارد موجودی شده است', arrived: true });
-    expect(a.emdadReserveNote).toContain('گزارش موجودی');
+    expect(a).toMatchObject({ emdadQuantityReview: true, reservedQuantity: 0 });
+    expect(a.emdadReserveNote).toContain('تعداد رسیده تأیید نشده');
     const d = now.find((p) => p.id === dealer.id)!;
     expect(d).toMatchObject({ flowState: 'dealer_supply', allowedActions: ['market', 'reserve', 'set_price', 'announce_price'] });
 
