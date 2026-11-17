@@ -1,7 +1,8 @@
+import { DailyReportsService } from '../src/daily-reports/daily-reports.service';
 import { and, eq, inArray } from 'drizzle-orm';
 import request from 'supertest';
 import { formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part } from '@manage/shared';
-import { auditEvents, emdadRequests, partRequests, stockReservations, users } from '../src/db/schema';
+import { auditEvents, dailyReportFiles, emdadRequests, partRequests, stockReservations, users } from '../src/db/schema';
 import { buildEmdadXml, buildStockXlsx, emdadRow, type StockRow } from '../src/daily-reports/fixtures';
 import { Client, createHarness, daysAgo, type Harness } from './harness';
 
@@ -79,7 +80,7 @@ beforeAll(async () => {
   // Two manufacturer variants of one assessment code (8 digits, leading zeros) plus other codes.
   const stock = await preview('stock', buildStockXlsx([
     sku('0012345601', '1', 'A-01', '1500'), sku('0012345602', '5', 'A-02', '1800'),
-    sku('0099887701', '3', 'B-01'), sku('0044332201', '1', 'C-01'),
+    sku('0077665501', '3', 'D-01'), sku('0099887701', '3', 'B-01'), sku('0044332201', '1', 'C-01'),
   ]));
   const applied = await apply(stock, -300);
   expect(applied.status).toBe(201);
@@ -227,4 +228,69 @@ it('explains insufficient stock, keeps the line outstanding, and sends a conflic
   expect(await reservationsOf(conflict.id)).toHaveLength(0);
   // The other parts of this case were not touched by the conflict.
   expect((await h.db.db.select().from(stockReservations).where(inArray(stockReservations.partRequestId, [short.id, conflict.id])))).toHaveLength(0);
+});
+
+
+it('replays retained reports after late VIN entry, keeps receipt dates independent and repeated edits do not duplicate reservations', async () => {
+  const c = await newCase('939901');
+  const vin = c.vehicle.vin!;
+  const blank = await expert.patch(`/cases/${c.id}`, { expectedVersion: c.version, vehicle: { vin: null } });
+  expect(blank.status).toBe(200);
+  const p = await companyPart(blank.body, '00776655', 1, '0099001');
+  await publish([row(9901, c, '00776655', { 'شماره امداد ویژه': '0099001', 'كد تداركاتي كالا': '0077665501', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/20', 'تعداد تداركاتي': '1' })], -90);
+  expect(await reservationsOf(p.id)).toHaveLength(0);
+  const [before] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '0099001'));
+  expect(before.partRequestId).toBeNull();
+  expect(await h.db.db.select().from(dailyReportFiles).where(eq(dailyReportFiles.importId, before.lastImportId))).toHaveLength(1);
+  const update = await expert.patch(`/cases/${c.id}`, { expectedVersion: blank.body.version, vehicle: { vin } });
+  expect(update.status).toBe(200);
+  expect(await one(p)).toMatchObject({ flowState: 'emdad_arrived', reservedQuantity: 0, emdad: { receivedAt: '2026-11-10T20:30:00.000Z' } });
+  // Completing case identity does not grant the expert stock-reservation permission.
+  expect((await one(p)).emdadReserveNote).toContain('اجازهٔ رزرو');
+  const [after] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.id, before.id));
+  expect(after.lastReportAt).toEqual(before.lastReportAt);
+  expect(after.lastImportId).toBe(before.lastImportId);
+  expect(after.partRequestId).toBe(p.id);
+  const authorized = await h.loginAs('rematch-authorized', ['accident_expert'], ['stock.reserve']);
+  expect((await authorized.patch(`/cases/${c.id}`, { expectedVersion: update.body.version, vehicle: { vin } })).status).toBe(200);
+  const fresh = (await expert.get(`/cases/${c.id}`)).body;
+  expect((await authorized.patch(`/cases/${c.id}`, { expectedVersion: fresh.version, vehicle: { vin } })).status).toBe(200);
+  expect(await one(p)).toMatchObject({ flowState: 'reserved', reservedQuantity: 1 });
+  const latest = (await expert.get(`/cases/${c.id}`)).body;
+  const edits = await Promise.all([1, 2].map(() => authorized.patch(`/cases/${c.id}`, { expectedVersion: latest.version, vehicle: { vin } })));
+  expect(edits.map(e => e.status).sort()).toEqual([200, 409]);
+  expect(await reservationsOf(p.id)).toHaveLength(1);
+  const audits = await h.db.db.select().from(auditEvents).where(and(eq(auditEvents.entityId, before.id), eq(auditEvents.action, 'emdad.auto_rematched')));
+  expect(audits.length).toBeGreaterThan(0);
+});
+
+it('a part added after a report is linked without another upload; later report stages stay current', async () => {
+  const c = await newCase('939902');
+  await publish([row(9902, c, '00887766', { 'شماره امداد ویژه': '0099002', 'كد تداركاتي كالا': '0088776601', 'وضعیت امداد ویژه': 'در حال تامین' })], -80);
+  const p = await companyPart(c, '00887766', 1, '0099002');
+  const [linked] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '0099002'));
+  expect(linked.partRequestId).toBe(p.id);
+  expect(linked.matchStatus).toBe('matched');
+  expect((await one(p)).emdad?.arrived).toBe(false);
+  const fresh = (await expert.get(`/cases/${c.id}`)).body;
+  expect((await expert.patch(`/cases/${c.id}`, { expectedVersion: fresh.version, vehicle: { vin: 'TESTVIN99900990022' } })).status).toBe(200);
+  const [review] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.id, linked.id));
+  expect(review).toMatchObject({ matchStatus: 'needs_review', partRequestId: null });
+});
+
+
+it('preserves a manual no-link decision during identifier edits and retains applied source bytes beyond upload expiry', async () => {
+  const c = await newCase('939903');
+  const p = await companyPart(c, '00665544', 1, '0099003');
+  await publish([row(9903, c, '00665544', { 'شماره امداد ویژه': '0099003', 'كد تداركاتي كالا': '0066554401', 'وضعیت امداد ویژه': 'در حال تامین' })], -70);
+  const [r] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '0099003'));
+  const review = await parts.post(`/emdad/requests/${r.id}/match`, { expectedVersion: r.version, caseId: null, partRequestId: null, note: 'تصمیم دستی آزمون: متصل نشود' });
+  expect(review.status).toBe(201);
+  const fresh = (await expert.get(`/cases/${c.id}`)).body;
+  expect((await expert.patch(`/cases/${c.id}`, { expectedVersion: fresh.version, vehicle: { vin: c.vehicle.vin } })).status).toBe(200);
+  const [after] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.id, r.id));
+  expect(after).toMatchObject({ matchSource: 'manual', partRequestId: null, caseId: null, version: r.version + 1 });
+  expect(await reservationsOf(p.id)).toHaveLength(0);
+  await h.app.get(DailyReportsService).recover(new Date(Date.now() + 8 * 86400_000));
+  expect(await h.db.db.select().from(dailyReportFiles).where(eq(dailyReportFiles.importId, r.lastImportId))).toHaveLength(1);
 });

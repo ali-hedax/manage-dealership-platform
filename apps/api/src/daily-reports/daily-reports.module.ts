@@ -9,6 +9,6 @@ import { StockService } from './stock.service';
 @Module({
   controllers: [DailyReportsController],
   providers: [DailyReportsService, DailyTasksService, EmdadService, StockService],
-  exports: [DailyTasksService, StockService],
+  exports: [DailyTasksService, StockService, EmdadService],
 })
 export class DailyReportsModule {}

@@ -1,3 +1,4 @@
+import { EmdadService } from '../daily-reports/emdad.service';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -103,6 +104,7 @@ export class PartsService {
     private readonly blockers: BlockersService,
     private readonly finance: FinanceService,
     private readonly stock: StockService,
+    private readonly emdad: EmdadService,
   ) {}
 
   private get db() {
@@ -111,6 +113,7 @@ export class PartsService {
 
   async create(actor: Actor, caseId: string, input: CreatePartInput): Promise<Part> {
     const id = await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, actor.user.tenantId);
       const tenantId = actor.user.tenantId;
       await this.loadOpenCase(tx, tenantId, caseId);
       // Anti-duplicate (spec section 5): the same technical code never makes a second row;
@@ -126,7 +129,9 @@ export class PartsService {
         await this.finishFlow(tx, actor, p, { quantity: p.quantity + add }, 'part.quantity_increased', 'همان کد فنی دوباره ثبت شد؛ تعداد همان قلم افزایش یافت', 'needed', { quantity: p.quantity });
         return p.id;
       }
-      return (await this.insert(tx, actor, caseId, { ...input, assessmentItemId: null }, null)).id;
+      const created = await this.insert(tx, actor, caseId, { ...input, assessmentItemId: null }, null);
+      await this.emdad.reconcile(tx, actor, caseId);
+      return created.id;
     });
     return this.get(actor, id);
   }
@@ -135,6 +140,7 @@ export class PartsService {
   async fromAssessment(actor: Actor, caseId: string, input: PartsFromAssessmentInput): Promise<Part[]> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, actor.user.tenantId);
       let kase=await this.loadOpenCase(tx, tenantId, caseId);
       const versions=await tx.select().from(assessments).where(and(eq(assessments.tenantId,tenantId),eq(assessments.caseId,caseId))).orderBy(desc(assessments.versionNo));
       const current=versions.find(a=>a.status==='draft'||a.status==='final');
@@ -182,6 +188,7 @@ export class PartsService {
           'از کارشناسی',
         );
       }
+      await this.emdad.reconcile(tx, actor, caseId);
       if(todo.length&&['reception','assessment','awaiting_approval'].includes(kase.stage))kase=await this.cases.applyStage(tx,actor,kase,{stage:'awaiting_parts'},'ارسال اقلام کارشناسی به قطعات و تأمین');
     });
     return this.list(actor, caseId);
@@ -199,11 +206,13 @@ export class PartsService {
     }
     let result: { fresh: PartImportRow[]; duplicates: PartImportRow[] } = { fresh: [], duplicates: [] };
     await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, actor.user.tenantId);
       await this.loadOpenCase(tx, actor.user.tenantId, caseId);
       result = this.splitDuplicates(parsed.rows, await this.activeCodes(tx, actor.user.tenantId, caseId));
       for (const r of result.fresh) {
         await this.insert(tx, actor, caseId, { ...r, assessmentItemId: null }, `ورود از اکسل، ردیف ${r.row}`);
       }
+      await this.emdad.reconcile(tx, actor, caseId);
     });
     return { dryRun: false, rows: result.fresh, errors: [], created: result.fresh.length, duplicates: result.duplicates };
   }
@@ -402,6 +411,7 @@ export class PartsService {
   async flow(actor: Actor, id: string, input: PartFlowActionInput): Promise<Part> {
     if (!actor.user.permissions.has('part.manage')) throw forbidden('تعیین تکلیف، رزرو، لغو و قیمت قطعه کار مسئول قطعات است');
     await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, actor.user.tenantId);
       const tenantId = actor.user.tenantId;
       const p = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
       const emdad = (await this.emdadByPart(tx, tenantId, [p.id])).get(p.id);
@@ -441,6 +451,7 @@ export class PartsService {
           patch = { status: 'ordered', source: 'company', emdadNo: input.emdadNo ?? null, procurementCode: requested ?? p.procurementCode ?? null, emdadReceivedAt: null, emdadReceivedQuantity: null, emdadReserveNote: null, orderedAt: input.requestedAt ? new Date(input.requestedAt) : now, supplier: null, etaAt: null, firstEtaAt: null };
           action = 'part.emdad_requested';
           await this.finishFlow(tx, actor, p, patch, action, requested ? `کد تدارکاتی درخواستی: ${requested}` : null, state);
+          await this.emdad.reconcile(tx, actor, p.caseId);
           return;
         }
         case 'market': {
@@ -582,6 +593,7 @@ export class PartsService {
   async respondPriceNotice(actor: Actor, noticeId: string, input: PriceNoticeResponseInput): Promise<PriceNotice> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, actor.user.tenantId);
       const [n] = await tx.select().from(partPriceNotices).where(and(eq(partPriceNotices.id, noticeId), eq(partPriceNotices.tenantId, tenantId))).for('update');
       if (!n) throw notFound('اعلام قیمت');
       if (n.version !== input.expectedVersion) throw versionConflict(n.version);

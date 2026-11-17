@@ -160,6 +160,7 @@ export async function applyEmdadToParts(
   quantityField: EmdadReceivedQuantityField | null,
   reserve: (tx: DbOrTx, actor: Actor, input: { partRequestId: string; snapshotId: string; fullStockCode: string; locationAddress: string; quantity: string; confirm: true }) => Promise<string>,
   activeSnapshot: (tx: DbOrTx, tenantId: string) => Promise<{ id: string; reservable: boolean } | null>,
+  caseIds?: string[],
 ) {
   const tenantId = actor.user.tenantId;
   const result = { emdadNoFilled: 0, arrived: 0, reserved: 0, partial: 0, quantityReview: 0, dealerSupply: 0, needsReview: 0 };
@@ -179,6 +180,7 @@ export async function applyEmdadToParts(
       eq(partRequests.source, 'company'),
       eq(cases.tenantId, tenantId),
       eq(cases.status, 'open'),
+      caseIds ? inArray(cases.id, caseIds) : undefined,
       notExists(tx.select({ id: newer.id }).from(newer).where(and(
         eq(newer.tenantId, tenantId),
         eq(newer.partRequestId, partRequests.id),
