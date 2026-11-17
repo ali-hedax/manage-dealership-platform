@@ -96,7 +96,10 @@ export class DailyReportsService implements OnApplicationBootstrap {
     await this.db.update(dailyReportImports).set({ status: 'uploaded' }).where(and(interrupted, lt(dailyReportImports.attempts, 3)));
     // Repeated interruption must not leave a job "reading" forever; the uploader can retry it.
     await this.db.update(dailyReportImports).set({ status: 'failed', error: 'پردازش فایل چند بار نیمه‌تمام ماند؛ دوباره تلاش کنید' }).where(interrupted);
-    await this.db.delete(dailyReportFiles).where(lt(dailyReportFiles.expiresAt, now));
+    // Retain applied Emdad originals; only temporary/unapplied uploads expire.
+    const temporary = this.db.select({ id: dailyReportImports.id }).from(dailyReportImports)
+      .where(or(notInArray(dailyReportImports.status, ['applied']), eq(dailyReportImports.kind, 'stock')));
+    await this.db.delete(dailyReportFiles).where(and(lt(dailyReportFiles.expiresAt, now), inArray(dailyReportFiles.importId, temporary)));
     const pending = await this.db.select({ id: dailyReportImports.id }).from(dailyReportImports).where(eq(dailyReportImports.status, 'uploaded'));
     for (const p of pending) await this.process(p.id);
   }
@@ -460,8 +463,8 @@ export class DailyReportsService implements OnApplicationBootstrap {
         .update(dailyReportImports)
         .set({ status: 'applied', appliedAt: now, appliedBy: actor.user.id, reportAt, reportAtPrecision: precision, reportDeclaredBy: actor.user.id, counts: { ...(job.counts as object), ...(result.counts as object) } })
         .where(eq(dailyReportImports.id, id));
-      // The original bytes contain customer contact data (Emdad); only the hash is kept.
-      await tx.delete(dailyReportFiles).where(eq(dailyReportFiles.importId, id));
+      // Applied Emdad source bytes are retained for review and replay.
+      if (kind !== 'emdad') await tx.delete(dailyReportFiles).where(eq(dailyReportFiles.importId, id));
       if (diag.headerSignature && profile.headerSignature !== diag.headerSignature) {
         await tx
           .update(dailyReportProfiles)

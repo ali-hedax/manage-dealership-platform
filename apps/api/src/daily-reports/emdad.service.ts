@@ -3,6 +3,7 @@ import { and, asc, desc, eq, ilike, inArray, isNull, lt, ne, notInArray, or, sql
 import {
   parseBasePartNumber,
   parseStockCode,
+  type EmdadReceivedQuantityField,
   type EmdadFollowUpInput,
   type EmdadMatchInput,
   type EmdadMatchStatus,
@@ -14,11 +15,12 @@ import type { Actor } from '../auth/auth.types';
 import { AuditService, diff } from '../audit/audit.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, cases, dailyReportImports, emdadRequestEvents, emdadRequests, partRequests, users, vehicles } from '../db/schema';
-import { decideEmdadLine, emdadLines } from './emdad-parts';
+import { assessmentItems, assessments, cases, dailyReportImports, dailyReportProfiles, emdadRequestEvents, emdadRequests, partRequests, users, vehicles } from '../db/schema';
+import { applyEmdadToParts, decideEmdadLine, emdadLines } from './emdad-parts';
 import { idKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 import { writeSheet } from '../parts/xlsx';
 import type { EmdadOfficial } from './report-rows';
+import { StockService, snapshotInfo } from './stock.service';
 import { safeCell } from './safe-cell';
 import { nextTehranDay, tehranDate } from './daily-time';
 
@@ -67,9 +69,53 @@ export class EmdadService {
   constructor(
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
     private readonly audit: AuditService,
+    private readonly stock: StockService,
   ) {}
   private get db() {
     return this.handle.db;
+  }
+
+  /** Same lock as report publishing; acquired before case/part row locks. */
+  async lock(tx: DbOrTx, tenantId: string) {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`daily:${tenantId}:emdad`}))`);
+  }
+
+  /** Reuse retained official rows without changing report times or manual decisions. */
+  async reconcile(tx: DbOrTx, actor: Actor, caseId: string) {
+    const tenantId = actor.user.tenantId;
+    const [kase] = await tx.select().from(cases).where(and(eq(cases.id, caseId), eq(cases.tenantId, tenantId)));
+    if (!kase) return;
+    const related = await tx.select({ id: cases.id }).from(cases).where(and(eq(cases.tenantId, tenantId), eq(cases.vehicleId, kase.vehicleId), eq(cases.status, 'open')));
+    const scope = new Set(related.map(c => c.id));
+    const rows = await tx.select().from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.matchSource, 'auto'))).orderBy(emdadRequests.id).for('update');
+    if (!rows.length) return;
+    const match = await this.matcher(tx, tenantId, rows.map(r => r.official as EmdadOfficial));
+    const imports = new Map<string, Date>();
+    for (const r of rows) {
+      let m = match(r.official as EmdadOfficial);
+      // Never move an established link (and its commitments) to another vehicle silently.
+      if ((r.partRequestId && m.partRequestId !== r.partRequestId) || (r.caseId && m.caseId && m.caseId !== r.caseId)) {
+        m = { caseId: r.caseId, partRequestId: null, matchStatus: 'needs_review', matchNote: 'شناسه‌های پرونده تغییر کرده و اتصال قبلی دیگر معتبر نیست؛ اتصال و رزروهای قبلی را دستی بررسی کنید' };
+      }
+      if (!scope.has(r.caseId ?? '') && !scope.has(m.caseId ?? '')) continue;
+      const patch = { caseId: m.caseId, partRequestId: m.partRequestId, matchStatus: m.matchStatus, matchNote: m.matchNote };
+      const changes = diff({ caseId: r.caseId, partRequestId: r.partRequestId, matchStatus: r.matchStatus, matchNote: r.matchNote }, patch);
+      if (changes) {
+        const [saved] = await tx.update(emdadRequests).set({ ...patch, version: r.version + 1, updatedAt: new Date() })
+          .where(and(eq(emdadRequests.id, r.id), eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.version, r.version))).returning();
+        if (!saved) throw versionConflict();
+        await this.audit.record(tx, actor, { entityType: 'emdad', entityId: r.id, caseId: m.caseId ?? r.caseId, action: 'emdad.auto_rematched', ...changes, snapshot: { version: saved.version, row: saved } });
+      }
+      if (m.partRequestId && scope.has(m.caseId ?? '')) imports.set(r.lastImportId, r.lastReportAt);
+    }
+    const [profile] = await tx.select().from(dailyReportProfiles).where(and(eq(dailyReportProfiles.tenantId, tenantId), eq(dailyReportProfiles.kind, 'emdad')));
+    const field = (profile?.settings as { receivedQuantityField?: EmdadReceivedQuantityField } | undefined)?.receivedQuantityField ?? null;
+    for (const [importId, reportAt] of imports) {
+      await applyEmdadToParts(tx, this.audit, actor, importId, reportAt, field,
+        (t, a, input) => this.stock.reserveIn(t, a, input),
+        async (t, tenant) => { const snap = await this.stock.active(t, tenant); return snap ? { id: snap.id, reservable: snapshotInfo(snap).reservable } : null; },
+        [...scope]);
+    }
   }
 
   /**
@@ -249,6 +295,7 @@ export class EmdadService {
   /** Internal follow-up (assignee, due date, note, next action); imports never overwrite these. */
   async followUp(actor: Actor, id: string, input: EmdadFollowUpInput) {
     await this.db.transaction(async (tx) => {
+      await this.lock(tx, actor.user.tenantId);
       const r = await this.loadForWrite(tx, actor, id, input.expectedVersion);
       if (input.assigneeUserId) {
         const [u] = await tx
@@ -278,6 +325,7 @@ export class EmdadService {
   /** A person's decision on the case link; afterwards imports never re-match this row. */
   async match(actor: Actor, id: string, input: EmdadMatchInput) {
     await this.db.transaction(async (tx) => {
+      await this.lock(tx, actor.user.tenantId);
       const r = await this.loadForWrite(tx, actor, id, input.expectedVersion);
       if (input.caseId) {
         const [c] = await tx.select({ id: cases.id }).from(cases).where(and(eq(cases.id, input.caseId), eq(cases.tenantId, actor.user.tenantId)));

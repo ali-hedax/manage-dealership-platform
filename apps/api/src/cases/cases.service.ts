@@ -1,3 +1,4 @@
+import { EmdadService } from '../daily-reports/emdad.service';
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, like, ne, sql, type SQL } from 'drizzle-orm';
@@ -167,6 +168,7 @@ export class CasesService {
   constructor(
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
     private readonly audit: AuditService,
+    private readonly emdad: EmdadService,
   ) {}
 
   private get db() {
@@ -186,6 +188,7 @@ export class CasesService {
 
     const id = newId();
     await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, tenantId);
       const repairPlan=input.repairDurationDays!==undefined?repairDayPlan(input.admittedAt,input.repairDurationDays,await calendarAt(tx,tenantId,input.admittedAt)):null;
       let vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null);
       if (extra.chassisRef && !vehicle.chassisRef) vehicle = await this.setChassisRef(tx, vehicle, extra.chassisRef);
@@ -245,6 +248,7 @@ export class CasesService {
         },
         snapshot: { version: 1, row: row! },
       });
+      await this.emdad.reconcile(tx, actor, id);
     });
     return this.detail(actor, id);
   }
@@ -252,6 +256,7 @@ export class CasesService {
   async update(actor: Actor, id: string, input: UpdateCaseInput, extra: CaseImportFields = {}): Promise<CaseDetail> {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, tenantId);
       const current = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
 
       const admittedAt = input.admittedAt === undefined ? undefined : new Date(input.admittedAt);
@@ -331,6 +336,7 @@ export class CasesService {
         after: changes?.after ?? null,
         snapshot: { version: updated.version, row: finalRow },
       });
+      if (input.vehicle?.vin !== undefined || input.admissionNo !== undefined || extra.chassisRef || extra.admissionNo !== undefined) await this.emdad.reconcile(tx, actor, id);
     });
     return this.detail(actor, id);
   }
