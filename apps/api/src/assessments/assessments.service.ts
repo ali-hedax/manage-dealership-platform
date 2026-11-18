@@ -339,6 +339,24 @@ export class AssessmentsService {
         .update(assessmentItems)
         .set({ ...patch, changed: true, approvalStatus: 'pending', updatedAt: new Date() })
         .where(eq(assessmentItems.id, item.id));
+      // Invalidate a previous technical acceptance whenever identity/quantity changes.
+      const identityChanged=['action','description','partNumber','quantity'].some(k=>Object.prototype.hasOwnProperty.call(patch,k));
+      if(identityChanged){
+        const [review]=await tx.select().from(assessmentTechnicalReviews)
+          .where(and(eq(assessmentTechnicalReviews.itemId,item.id),eq(assessmentTechnicalReviews.tenantId,tenantId)));
+        if(review){
+          await tx.update(assessmentTechnicalReviews).set({
+            status:'pending',reason:null,reviewedBy:null,reviewedAt:null,
+            fingerprint:technicalReviewFingerprint(next),version:review.version+1,updatedAt:new Date(),
+          }).where(and(eq(assessmentTechnicalReviews.itemId,item.id),eq(assessmentTechnicalReviews.version,review.version)));
+          await this.audit.record(tx,actor,{
+            entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.technical_review_reset',
+            before:{itemId:item.id,status:review.status,partNumber:item.partNumber},
+            after:{itemId:item.id,status:'pending',partNumber:next.partNumber},
+            snapshot:{version:review.version+1,row:{itemId:item.id,reviewStatus:'pending'}}
+          });
+        }
+      }
       const saved = await this.touch(tx, a);
       await this.audit.record(tx, actor, {
         entityType: 'assessment',
