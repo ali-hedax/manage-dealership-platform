@@ -9,5 +9,5 @@ CREATE TABLE "assessment_technical_reviews" (
  "reviewed_at" timestamp with time zone,
  "version" integer NOT NULL DEFAULT 1,
  "updated_at" timestamp with time zone NOT NULL DEFAULT now()
-);
+);--> statement-breakpoint
 CREATE INDEX "assessment_technical_reviews_tenant_idx" ON "assessment_technical_reviews" ("tenant_id","assessment_id");
