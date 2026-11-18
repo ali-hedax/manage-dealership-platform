@@ -1,3 +1,9 @@
+## 2026-11-18 — Technical-review foundation (unverified)
+
+- New synthetic unit coverage: 100-line split (95 accepted, five returned), required correction reason, stale version, invalidation after a code/quantity edit, labour exclusion, reason reset after acceptance.
+- Test sources committed to PR #103. **These newly written tests were not run or confirmed by CI in this chat.** Earlier run [44260852930](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/44260852930) passed before this code was added and must not be treated as verification of the latest branch.
+- No production/customer data used or edited.
+
 ## 2026-11-18 — Smart Assessment PR #103 (work in progress)
 
 - Branch: `feature/smart-assessment-persian-search`. Existing synthetic-less production data was **not** accessed or changed.
