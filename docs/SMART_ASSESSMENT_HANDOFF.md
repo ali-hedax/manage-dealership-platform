@@ -28,3 +28,10 @@ Branch: `feature/smart-assessment-persian-search` (independent of ongoing VS Cod
 - Preserve original search label but display actual official catalog title + complete part number.
 - Display a warning for unknown vehicle fitment; never represent similarity score as confirmed compatibility.
 - No model-generated part number or automatic financial/insurance authorization.
+
+## Independent parts-clerk technical review foundation (2026-11-18)
+- New shared pure engine `assessment-part-review.ts` models `pending`, `accepted`, and `returned` separately from insurer/OEM authorization and existing `approvalStatus`.
+- For each part: return requires a reason, optimistic expected version is validated, acceptance becomes pending when its technical code / name / quantity fingerprint changes, and labour is excluded.
+- `technicalReviewSummary` can release the 95 accepted item IDs while returning five disputed item IDs for correction; synthetic unit tests cover this scenario.
+- **Not yet operational:** no review database table or migration, server review endpoint, parts-clerk UI, audit trail, notifications or enforcement on dispatch. Do not show these draft review states as production approvals. Before integration, inspect current main changes and preserve existing supply authorizations; review storage, transactional audit, tenant isolation, role enforcement and per-line dispatch gating are required.
+- The newest PR commits after the successful run `44260852930` have **not been verified by CI**. Earlier CI success is not proof these newer code paths pass.
