@@ -75,3 +75,52 @@ it('rejects readers without assessment permission and unknown cases without disc
   const short = await expert.post('/cases/00000000-0000-4000-8000-000000000001/assessment-catalog/search', {query:'س'});
   expect([404,422]).toContain(short.status);
 });
+
+it('persists independent parts-clerk decisions and audit, requires reason, blocks stale updates and rechecks edited codes', async () => {
+  const kase = await admin.post('/cases', {
+    admittedAt: new Date(Date.now()-86400000).toISOString(),
+    vehicle: {model:'ری را'},coverageType:'insurance',
+  });
+  expect(kase.status).toBe(201);
+  const caseId=kase.body.id as string;
+  const created=await expert.post(`/cases/${caseId}/assessments`,{kind:'initial',assessorName:'کارشناس آزمایشی'});
+  expect(created.status).toBe(201);
+  const a=created.body;
+  const first=await expert.post(`/assessments/${a.id}/items`,{
+    expectedVersion:a.version,action:'replace',description:'سپر تست',partNumber:'100001',quantity:1,
+  });
+  expect(first.status).toBe(201);
+  const second=await expert.post(`/assessments/${a.id}/items`,{
+    expectedVersion:first.body.version,action:'replace',description:'چراغ تست',partNumber:'100002',quantity:1,
+  });
+  expect(second.status).toBe(201);
+  let review=await clerk.get(`/cases/${caseId}/technical-reviews`);
+  expect(review.status).toBe(200);
+  expect(review.body).toHaveLength(2);
+  const [p1,p2]=review.body;
+  expect(p1.status).toBe('pending');
+  expect((await expert.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'accept',expectedVersion:0})).status).toBe(403);
+  expect((await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'return',expectedVersion:0})).status).toBe(422);
+  const accepted=await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'accept',expectedVersion:0});
+  expect(accepted.status).toBe(201);
+  expect((await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'return',reason:'اشتباه',expectedVersion:0})).status).toBe(409);
+  const returned=await clerk.post(`/assessment-items/${p2.itemId}/technical-review`,{
+    action:'return',reason:'شماره فنی برای این خودرو اشتباه است',expectedVersion:0,
+  });
+  expect(returned.status).toBe(201);
+  review=await expert.get(`/cases/${caseId}/technical-reviews`);
+  expect(review.body.map((r:{status:string})=>r.status)).toEqual(['accepted','returned']);
+  expect(review.body[1].reason).toMatch(/اشتباه/);
+  const afterEdit=await expert.patch(`/assessment-items/${p2.itemId}`,{
+    expectedVersion:second.body.version,partNumber:'100003',
+  });
+  expect(afterEdit.status).toBe(200);
+  review=await clerk.get(`/cases/${caseId}/technical-reviews`);
+  expect(review.body[0].status).toBe('accepted');
+  expect(review.body[1].status).toBe('pending');
+  expect(review.body[1].reason).toBeNull();
+  expect(review.body[1].version).toBe(2);
+  expect((await clerk.post(`/assessment-items/${p2.itemId}/technical-review`,{
+    action:'accept',expectedVersion:2,
+  })).status).toBe(201);
+});
