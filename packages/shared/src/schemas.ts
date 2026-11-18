@@ -481,6 +481,10 @@ export const partFlowActionSchema = z.discriminatedUnion('action', [
   z.object({ ...flowBase, action: z.literal('market'), supplier: z.string().trim().min(1, 'نام فروشنده را وارد کنید').max(120), purchaseUnitRial: rial, saleUnitRial: rial, etaAt: optionalIsoDate }),
   z.object({ ...flowBase, action: z.literal('receive'), receiptDocNo: optionalText(64) }),
   z.object({ ...flowBase, action: z.literal('hand_over'), deliveryQuantity: z.number().int().min(1).max(999).optional(), recipientName: z.string().trim().min(1, 'نام تحویل‌گیرنده را وارد کنید').max(120), taskId: uuid.nullish(), departmentId: uuid.nullish(), saleUnitRial: rial.optional() }),
+  // Stock for the vehicle while the special-aid request keeps running; quantity defaults to what is still needed.
+  z.object({ ...flowBase, action: z.literal('use_stock'), snapshotId: uuid, fullStockCode: z.string().trim().min(1).max(32), locationAddress: z.string().max(120).default(''), quantity: z.number().int().min(1).max(999).optional(), saleUnitRial: rial.optional() }),
+  // «لغو رزرو»: releases the active reservation only; the line returns to «تعیین تکلیف نشده» (or keeps its special-aid request).
+  z.object({ ...flowBase, action: z.literal('release'), reason }),
   z.object({ ...flowBase, action: z.literal('cancel'), reason }),
   z.object({ ...flowBase, action: z.literal('return'), reason }),
   z.object({ ...flowBase, action: z.literal('set_price'), saleUnitRial: rial }),
@@ -673,3 +677,15 @@ export const discrepancyResolveSchema = z.object({
   reason: z.string().trim().min(5, 'دلیل و سابقه رسیدگی را بنویسید').max(1000),
 });
 export type DiscrepancyResolveInput = z.infer<typeof discrepancyResolveSchema>;
+
+// ---- release 2026-11-18: technical-code correction, owner case deletion, release notes
+export const codeCorrectionRequestSchema = z.object({ expectedVersion: z.number().int().min(1), reason: z.string().trim().min(5, 'علت را کوتاه بنویسید').max(500) });
+export type CodeCorrectionRequestInput = z.infer<typeof codeCorrectionRequestSchema>;
+export const codeCorrectionResolveSchema = z.object({ expectedVersion: z.number().int().min(1), correctedCode: z.string().trim().min(3, 'شماره فنی درست را وارد کنید').max(40), note: optionalText(300) });
+export type CodeCorrectionResolveInput = z.infer<typeof codeCorrectionResolveSchema>;
+export const caseDeleteSchema = z.object({ expectedVersion: z.number().int().min(1), reason: z.string().trim().min(3, 'علت حذف را بنویسید').max(300), confirm: z.literal(true) });
+export type CaseDeleteInput = z.infer<typeof caseDeleteSchema>;
+export const caseRestoreSchema = z.object({ expectedVersion: z.number().int().min(1) });
+export type CaseRestoreInput = z.infer<typeof caseRestoreSchema>;
+export const releaseAckSchema = z.object({ version: z.string().regex(/^v\d+\.\d+\.\d+$/) });
+export type ReleaseAckInput = z.infer<typeof releaseAckSchema>;
