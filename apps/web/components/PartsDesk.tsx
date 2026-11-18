@@ -10,6 +10,8 @@ import { faNum } from '@/lib/format';
 import { AppIcon } from './AppIcon';
 import { PartsLedger } from './PartsLedger';
 import { PartsWorkbench } from './PartsWorkbench';
+import { VehicleImage } from './FolderParts';
+import { PlateText } from './Plate';
 
 // Parts desk (spec §3, §7; owner reference «میز قطعات»): the cars that have part lines
 // on the side, the single parts list of the chosen car in a folder, the usable stock of
@@ -29,7 +31,7 @@ export function PartsDesk() {
     [folders],
   );
   const term = toLatinDigits(q).trim().toLowerCase();
-  const listed = cars.filter((f) => !term || [f.plate, f.caseNumber, f.admissionNo, f.vehicle, f.customerName].some((v) => v && toLatinDigits(v).toLowerCase().includes(term)));
+  const listed = cars.filter((f) => !term || [f.plate, f.caseNumber, f.admissionNo, f.vehicle, f.vehicleFull, f.customerName].some((v) => v && toLatinDigits(v).toLowerCase().includes(term)));
   const selected = cars.find((f) => f.caseId === picked) ?? cars[0] ?? null;
   const { data: kase, mutate } = useSWR<CaseDetail>(selected ? `/cases/${selected.caseId}` : null, fetcher);
   const manage = can('part.manage');
@@ -48,9 +50,9 @@ export function PartsDesk() {
       <div className="pdesk-grid">
         <aside className="pdesk-side" aria-label="خودروها و وضعیت">
           <section className="side-card">
-            <h2><AppIcon name="folder" />پرونده‌های خودرو</h2>
-            {cars.length > 6 && (
-              <label className="srch side-srch"><AppIcon name="search" /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="پلاک، نام یا شماره" aria-label="جست‌وجو در خودروهای میز قطعات" /></label>
+            <h2><AppIcon name="car" />انتخاب خودرو</h2>
+            {cars.length > 3 && (
+              <label className="srch side-srch"><AppIcon name="search" /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="پلاک، پذیرش، مدل یا تیپ" aria-label="جست‌وجو در خودروهای میز قطعات" /></label>
             )}
             {!folders && !error && <p className="m-empty" role="status">در حال خواندن…</p>}
             {folders && !cars.length && <p className="m-empty">خودرویی با قلم قطعه نیست.</p>}
@@ -58,8 +60,8 @@ export function PartsDesk() {
               {listed.map((f) => (
                 <li key={f.caseId}>
                   <button type="button" className={selected?.caseId === f.caseId ? 'on' : ''} aria-pressed={selected?.caseId === f.caseId} onClick={() => { setPicked(f.caseId); setFocus(null); }}>
-                    <AppIcon name="folder" />
-                    <span className="car-name"><b>{f.vehicle}</b> · پرونده <bdi>{toPersianDigits(f.caseNumber)}</bdi></span>
+                    <VehicleImage vehicle={f.vehicle} size="sm" />
+                    <span className="car-name" title={f.vehicleFull}><b>{f.vehicle}</b><small>{f.plate ? <PlateText value={f.plate} /> : f.admissionNo ? <>پذیرش <bdi>{toPersianDigits(f.admissionNo)}</bdi></> : <>پرونده <bdi>{toPersianDigits(f.caseNumber)}</bdi></>}</small></span>
                     {f.parts.undecided > 0 && <span className="cnt cnt-warn" title="تعیین تکلیف نشده">{faNum(f.parts.undecided)}</span>}
                     {f.parts.ready > 0 && <span className="cnt cnt-ok" title="آمادهٔ تحویل">{faNum(f.parts.ready)}</span>}
                     <AppIcon name="chevron-left" className="chev" />

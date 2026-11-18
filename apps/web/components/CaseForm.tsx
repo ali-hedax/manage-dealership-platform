@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   CASE_STAGES,
   COVERAGE_LABELS,
@@ -45,6 +45,7 @@ interface FormState {
   vehicleLocation: string;
   damageDescription: string;
   isLegacyEntry: boolean;
+  bodyReplacement: boolean;
   stage: CaseStage;
   coverageType: CoverageType;
   goldenCardFileNo: string;
@@ -74,6 +75,7 @@ const empty = (): FormState => ({
   vehicleLocation: '',
   damageDescription: '',
   isLegacyEntry: false,
+  bodyReplacement: false,
   stage: 'reception',
   coverageType: 'unknown',
   goldenCardFileNo: '',
@@ -104,6 +106,7 @@ function fromCase(c: CaseDetail): FormState {
     vehicleLocation: c.vehicleLocation ?? '',
     damageDescription: c.damageDescription ?? '',
     isLegacyEntry: c.isLegacyEntry,
+    bodyReplacement: c.bodyReplacement ?? false,
     stage: c.stage,
     coverageType: c.coverageType,
     goldenCardFileNo: c.goldenCardFileNo ?? '',
@@ -137,6 +140,7 @@ function Section({ title, children, note }: { title: string; children: ReactNode
 
 export function CaseForm({ existing }: { existing?: CaseDetail }) {
   const router = useRouter();
+  const { mutate: mutateKey } = useSWRConfig();
   const toast = useToast();
   const { me, can } = useAuth();
   // A system administrator who is not the owner gives a reason when correcting a recorded value.
@@ -222,6 +226,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
       vehicleLocation: nul(f.vehicleLocation),
       damageDescription: nul(f.damageDescription),
       isLegacyEntry: f.isLegacyEntry,
+      bodyReplacement: f.bodyReplacement,
       coverageType: f.coverageType,
       goldenCardFileNo: nul(f.goldenCardFileNo),
       insurerName: nul(f.insurerName),
@@ -245,6 +250,8 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
           body: { ...payload, expectedVersion: existing!.version, reason: nul(f.reason) },
           idempotencyKey: idempotencyKey.current,
         });
+        // The folder shows the saved case at once (badges such as «تعویض اتاق», coverage).
+        await mutateKey(`/cases/${saved.id}`, saved, { revalidate: true });
         toast('تغییرات پرونده ذخیره شد');
       } else {
         saved = await api<CaseDetail>('/cases', {
@@ -422,6 +429,11 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
               </button>
             ))}
           </div>
+          {/* Independent of the coverage above: combinable with gold card, body insurance or customer cost. */}
+          <label className="check body-check">
+            <input type="checkbox" name="bodyReplacement" checked={f.bodyReplacement} onChange={(e) => set('bodyReplacement', e.target.checked)} />
+            تعویض اتاق
+          </label>
           <div className="grid-3">
             {(f.coverageType === 'golden_card' || f.coverageType === 'mixed') && (
               <label className="field">

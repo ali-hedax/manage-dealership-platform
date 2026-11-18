@@ -188,3 +188,8 @@ Existing rows keep `NULL`. Rollback: `down/0023_assessment_rejections.down.sql` 
 
 Existing rows keep NULL and behave as before. Old application code ignores the new columns; a rollback to `98d8a31` after parallel stock use would show those lines as plain special-aid lines (their reservations stay valid), so stock-parallel handovers should pause until a compatible version returns. The down file is for disposable rehearsals only.
 
+`0030_body_replacement_versions.sql` (approved design, owner 2026-11-18) is additive only:
+
+- `cases.body_replacement boolean not null default false` — «تعویض اتاق», independent of the coverage type. Existing cases stay false; nothing is inferred from price, parts or the damage text.
+- table `app_versions` — confirmed production versions: `version` (vMAJOR.MINOR.PATCH), its numbers (unique together), the 12-character `commit` (unique), `note_keys` (change notes shipped with it) and `confirmed_at`. Rows are written only by `dist/scripts/confirm-release.js` after a healthy release; the same commit keeps its number. The migration records the existing v1.0.0 (commit c6ffc57) from `app_releases` when present. `app_releases` is kept unchanged so an older image still starts after a rollback.
+

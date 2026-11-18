@@ -15,7 +15,7 @@ test('version indicator, one-time announcement and the complete Persian release 
   await expect(page.getByRole('heading', { level: 1, name: 'تاریخچهٔ نسخه‌ها' })).toBeVisible();
   const first = page.getByTestId('release').first();
   await expect(first).toContainText('تغییرات نسخه');
-  for (const t of ['قطعات و انبار', 'پرونده خودرو', 'امکانات مدیریتی', 'گزارش‌ها و چاپ']) await expect(first.getByRole('heading', { name: t })).toBeVisible();
+  for (const t of ['قطعات و انبار', 'پرونده خودرو', 'امکانات مدیریتی', 'گزارش‌ها و چاپ']) await expect(first.getByRole('heading', { name: t }).first()).toBeVisible();
   // Seen once: the announcement does not come back on the next page.
   await page.goto('/accidents/expert');
   await expect(page.getByTestId('version-chip')).toBeVisible();

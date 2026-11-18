@@ -7,9 +7,11 @@ import '@fontsource/vazirmatn/500.css';
 import '@fontsource/vazirmatn/600.css';
 import '@fontsource/vazirmatn/700.css';
 import '@fontsource/vazirmatn/800.css';
+import '@fontsource/vazirmatn/900.css';
 import './globals.css';
 // New design language (spec section 12); components are prefixed m-.
 import './manage-ui.css';
+import './design-20261118.css';
 import { ToastProvider } from '@/lib/toast';
 import {InstallProvider} from '@/components/InstallApp';
 import {NetworkStatus} from '@/components/NetworkStatus';

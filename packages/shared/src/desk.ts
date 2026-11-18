@@ -146,9 +146,17 @@ export interface DeskFolder {
   caseNumber: string;
   admissionNo: string | null;
   plate: string | null;
+  /** Short vehicle name for closed rows (brand/model only, never the trim). */
   vehicle: string;
+  /** Full brand, model and trim, for search and details. */
+  vehicleFull: string;
+  modelYear: number | null;
+  vehicleId: string;
   customerName: string | null;
   coverageType: CoverageType;
+  /** «تعویض اتاق» recorded on the case. */
+  bodyReplacement: boolean;
+  officialDeadlineAt: string | null;
   stage: CaseStage;
   journey: JourneyStep;
   place: string;
@@ -210,4 +218,14 @@ export function greeting(name: string, now = Date.now()): string {
   const first = name.trim().split(/\s+/)[0] ?? name;
   const part = h < 12 ? 'صبح بخیر' : h < 17 ? 'روز بخیر' : 'عصر بخیر';
   return `${part}، ${first}`;
+}
+
+/**
+ * Short vehicle name of a closed row («دنا پلاس»): the model before engine,
+ * gearbox or trim words, or the brand when there is no model. Never the trim.
+ */
+export function shortVehicleName(brand: string | null | undefined, model: string | null | undefined): string {
+  const m = (model ?? '').trim();
+  const head = m.split(/\s+(?:با\s+)?(?:موتور|گیربکس|دنده|اتوماتیک|توربو|تیپ|مدل)(?=\s|$|[a-z0-9])/iu)[0]?.trim() ?? '';
+  return head || (brand ?? '').trim() || 'خودرو';
 }

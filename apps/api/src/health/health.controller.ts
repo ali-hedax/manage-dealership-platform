@@ -1,9 +1,11 @@
 import { Controller, Get, Inject } from '@nestjs/common';
-import { CURRENT_RELEASE } from '@manage/shared';
-import { sql } from 'drizzle-orm';
+import { RELEASE_LINE } from '@manage/shared';
+import { eq, sql } from 'drizzle-orm';
 import { Public } from '../auth/decorators';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { DATABASE, type DatabaseHandle } from '../db/database';
+import { appVersions } from '../db/schema';
+import { runningCommit } from '../releases/releases.service';
 
 @Controller('health')
 export class HealthController {
@@ -21,14 +23,24 @@ export class HealthController {
     } catch {
       db = 'error';
     }
+    let version: string | null = null;
+    const commit = runningCommit();
+    if (db === 'ok' && commit) {
+      try {
+        version = (await this.handle.db.select({ v: appVersions.version }).from(appVersions).where(eq(appVersions.commit, commit)))[0]?.v ?? null;
+      } catch {
+        version = null; // before migration 0030
+      }
+    }
     return {
       status: db === 'ok' ? 'ok' : 'degraded',
       db,
       dbDriver: this.handle.driver,
       environment: this.cfg.APP_ENV,
       nodeId: this.cfg.NODE_ID,
-      // The released Manage version compiled into this image (packages/shared/src/releases.ts).
-      version: CURRENT_RELEASE.version,
+      // Confirmed number of the running commit (null until the release script confirms it).
+      version,
+      line: `v${RELEASE_LINE.major}.${RELEASE_LINE.minor}`,
       commit: process.env.GIT_COMMIT ?? null,
     };
   }

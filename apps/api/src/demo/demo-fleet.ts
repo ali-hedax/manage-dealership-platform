@@ -60,7 +60,8 @@ export async function seedFleet(a: FleetActors, s: FleetServices, p: FleetPlaces
 
   // Reception: just admitted, the assessment is the next step.
   await car(6, 'ریرا', '۲۳ ب ۴۵۶ - ۱۶', 'insurance', 0.1);
-  await car(7, 'سورن پلاس', '۴۷ ج ۸۱۲ - ۱۶', 'golden_card', 0.3, a.expert2);
+  const c7 = await car(7, 'سورن پلاس', '۴۷ ج ۸۱۲ - ۱۶', 'golden_card', 0.3, a.expert2);
+  await s.cases.update(a.expert2, c7.id, { bodyReplacement: true, expectedVersion: c7.version } as never);
   await car(8, 'رانا پلاس', '۱۹ ه ۵۳۸ - ۱۶', 'insurance', 1);
 
   // Assessment: lines entered, not decided by the parts clerk yet.

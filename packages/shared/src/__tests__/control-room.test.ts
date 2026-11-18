@@ -4,7 +4,7 @@ import { analysisSentences, buildBays, buildFunnel, carState, type DeskFolder } 
 
 const NOW = Date.parse('2026-11-10T09:00:00Z');
 const folder = (id: string, x: Partial<DeskFolder>): DeskFolder => ({
-  caseId: id, caseNumber: id, admissionNo: null, plate: null, vehicle: 'ریرا', customerName: null, coverageType: 'insurance',
+  caseId: id, caseNumber: id, admissionNo: null, plate: null, vehicle: 'ریرا', vehicleFull: 'ریرا', modelYear: null, vehicleId: `v-${id}`, bodyReplacement: false, officialDeadlineAt: null, customerName: null, coverageType: 'insurance',
   stage: 'in_repair', journey: 'repair', place: '', admittedAt: '2026-11-05T06:00:00Z', daysInShop: 5,
   next: { text: 'طبق برنامه', actor: 'technician', tone: 'ok' }, behind: false, responsibleUserId: null, responsibleName: null,
   parts: { total: 0, undecided: 0, inProgress: 0, ready: 0, emdadLate: 0 }, openBlockers: 0, tasks: [], ...x,

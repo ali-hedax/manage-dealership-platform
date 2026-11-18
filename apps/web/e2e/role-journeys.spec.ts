@@ -26,15 +26,13 @@ test('login has exactly two doors and never says «مالک»', async ({ page },
 test('accident expert: folder desk → case folder → tabs and «قدم بعدی شما»', async ({ page }, info) => {
   await login(page, 'expert');
   await page.goto('/accidents/expert');
-  await expect(page.locator('.desk-kicker')).toHaveText('میز کار کارشناس تصادفات');
-  await expect(page.getByRole('heading', { level: 1, name: /بخیر/ })).toBeVisible();
-  const folders = page.locator('.folder');
-  await expect(folders.first()).toBeVisible();
-  await expect(folders.first().locator('.folder-next')).toContainText('قدم بعدی');
-  await page.getByRole('button', { name: /^همه/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'میز تصادفات' })).toBeVisible();
+  const rows = page.getByTestId('accident-row');
+  await expect(rows.first()).toBeVisible();
+  await expect(rows.first().locator('.arow-next')).toContainText('قدم بعدی');
   await shots(page, 'expert-desk', (n) => info.outputPath(n));
-  // A folder opens only through its own «باز کردن پرونده» link (one clear action per card).
-  await folders.first().getByRole('link', { name: /باز کردن پرونده/ }).click();
+  // A row opens only through its own «پرونده» link (one clear action per row; rare ones in «⋯»).
+  await rows.first().getByRole('link', { name: /باز کردن پرونده/ }).click();
   await expect(page.locator('.case-hero')).toBeVisible();
   await expect(page.getByRole('list', { name: 'مسیر خودرو' }).getByRole('listitem')).toHaveCount(6);
   for (const tab of ['قطعات', 'مدارک', 'تاریخچه']) await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible();
@@ -75,7 +73,7 @@ test('service manager: control room with four numbers, funnel, map and «تذک�
   await page.goto('/accidents/manager');
   const room = page.getByTestId('control-room');
   await expect(room.getByRole('heading', { name: 'اتاق کنترل مدیر خدمات' })).toBeVisible();
-  await expect(room.locator('.cr-kpi')).toHaveCount(4);
+  await expect(room.locator('.sd-kpi')).toHaveCount(4);
   await expect(room.locator('.cr-funnel li')).toHaveCount(5);
   await expect(room.locator('.cr-funnel li.neck')).toHaveCount(1);
   await expect(room.getByRole('region', { name: 'تحلیل امروز' }).locator('li').first()).toBeVisible();

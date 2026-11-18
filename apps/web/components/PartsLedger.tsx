@@ -239,8 +239,8 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
           {p.emdadQuantityReview && <small className="m-tag wait" data-testid="emdad-quantity-review">تعداد رسیده نیازمند بررسی</small>}
         </div>
         <div className="m-row-action c-act" onClick={(e) => e.stopPropagation()}>
-          {primary === 'decide' && <button type="button" className="m-btn2-s" aria-expanded={expanded} onClick={onToggle}>انتخاب مسیر تأمین <AppIcon name="chevron-down" /></button>}
-          {primary && primary !== 'decide' && <button type="button" className="m-btn2-s" onClick={() => choose(primary)}>{partActionLabel(p.flowState, primary)} <AppIcon name={primary === 'hand_over' ? 'arrow-left' : primary === 'receive' ? 'receipt' : primary === 'reserve' ? 'box' : 'return'} /></button>}
+          {primary === 'decide' && <button type="button" className="m-btn-s part-primary" aria-expanded={expanded} onClick={onToggle}>انتخاب مسیر تأمین <AppIcon name="chevron-down" /></button>}
+          {primary && primary !== 'decide' && <button type="button" className="m-btn-s part-primary" onClick={() => choose(primary)}>{partActionLabel(p.flowState, primary)} <AppIcon name={primary === 'hand_over' ? 'arrow-left' : primary === 'receive' ? 'receipt' : primary === 'reserve' ? 'box' : 'return'} /></button>}
           <AppIcon name="chevron-down" className={`ledger-caret${expanded ? ' up' : ''}`} />
         </div>
       </div>

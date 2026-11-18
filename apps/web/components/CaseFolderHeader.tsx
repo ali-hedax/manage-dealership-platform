@@ -10,6 +10,7 @@ import { AppIcon, type IconName } from './AppIcon';
 import { ReminderComposer, type ReminderDefaults } from './ReminderComposer';
 import { Dialog } from './Dialog';
 import { Plate } from './Plate';
+import { BodyBadge, CoverageBadge, HeaderClip } from './FolderParts';
 
 // Case folder (spec §12; owner reference «پوشهٔ پرونده خودرو»): a physical folder with
 // the coverage tab and a binder clip; the car, customer, plate, identifiers and days in
@@ -38,56 +39,76 @@ export function useFolder(caseId: string) {
   return useSWR<DeskFolder>(`/desk/folders/${caseId}`, fetcher, { refreshInterval: 60_000 });
 }
 
-export function CaseFolderHeader({ kase, tab, onTab, actions, chips, children }: { kase: CaseDetail; tab: CaseTab; onTab: (t: CaseTab, anchor?: string) => void; actions?: ReactNode; chips?: ReactNode; children: ReactNode }) {
+const STEP_ICON: Record<(typeof CASE_STEPS)[number], IconName> = { intake: 'check', assessment: 'doc', plan: 'list', execution: 'wrench', quality: 'shield', completion: 'car' };
+
+/**
+ * Case folder header in the approved design (owner, 2026-11-18; «Dena Plus Vehicle Case
+ * Dashboard»): a cream folder with paper layers, the «پرونده خودرو» tab and the large gold
+ * clip; the short vehicle name, the case's real plate, coverage and «تعویض اتاق»; the
+ * journey as chevrons; and the folder tabs. `side` is the vehicle column beside it.
+ */
+export function CaseFolderHeader({ kase, tab, onTab, actions, chips, side, children }: { kase: CaseDetail; tab: CaseTab; onTab: (t: CaseTab, anchor?: string) => void; actions?: ReactNode; chips?: ReactNode; side?: ReactNode; children: ReactNode }) {
   const { data: f } = useFolder(kase.id);
   const cov = coverageTab(kase.coverageType);
   const { data: workflow } = useSWR<CaseWorkflow>(`/cases/${kase.id}/workflow?v=${kase.version}`, fetcher);
   const current = workflow?.current ?? 'assessment';
   const doneIdx = CASE_STEPS.indexOf(current);
+  const name = f?.vehicle ?? (kase.vehicle.model || kase.vehicle.brand || kase.vehicleLabel).trim();
   return (
-    <div className={`cf cov-${cov.key}`}>
-      <span className="cf-cover-tab" title={COVERAGE_LABELS[kase.coverageType]}>{cov.label}</span>
-      <svg className="cf-clip" width="84" height="74" viewBox="0 0 84 74" aria-hidden="true" focusable="false">
-        <path d="M24 40 30 8a4 4 0 0 1 4-3h16a4 4 0 0 1 4 3l6 32" fill="none" stroke="#9AA1A8" strokeWidth="3.2" strokeLinejoin="round" />
-        <path d="M24 40 30 8a4 4 0 0 1 4-3h16a4 4 0 0 1 4 3l6 32" fill="none" stroke="#E6E9EC" strokeWidth="1.2" strokeLinejoin="round" opacity=".7" />
-        <path d="M10 40h64l-6 24a6 6 0 0 1-6 5H22a6 6 0 0 1-6-5Z" fill="#7C6A3E" />
-        <path d="M10 40h64l-1.6 6.4H11.6Z" fill="#B49A5C" />
-        <path d="M18 62h48" stroke="#5A4C2B" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-      <div className="cf-paper">
-        <header className="case-hero cf-head" aria-label="سربرگ پرونده">
-          <div className="cf-id-row">
-            <h1 className="cf-car"><AppIcon name="car" />{(kase.vehicle.model || kase.vehicle.brand || kase.vehicleLabel).trim()}</h1>
-            <span className="cf-cust"><AppIcon name="user" />{kase.customer?.fullName ?? 'مشتری ثبت نشده'}</span>
-            <Plate value={kase.vehicle.plate} size="xl" />
-            <span className="cf-ids">پرونده <bdi>{toPersianDigits(kase.caseNumber)}</bdi> · پذیرش <bdi>{kase.admissionNo ? toPersianDigits(kase.admissionNo) : 'ندارد'}</bdi></span>
-            {f && <span className="cf-days"><b>{faNum(f.daysInShop)}</b> روز در تعمیرگاه</span>}
-            {kase.isTest && <span className="m-tag">آزمایشی</span>}
-          </div>
-          <ol className="journey guided-journey" aria-label="مسیر خودرو">
-            {CASE_STEPS.map((step, i) => {
-              const locked = i > doneIdx;
-              const reason = step === 'plan' || step === 'execution' || step === 'quality' ? workflow?.requirements[step].join('؛ ') : '';
-              return <li key={step} className={`jstep ${i < doneIdx ? 'done' : i === doneIdx ? 'now' : 'next'}`} aria-current={i === doneIdx ? 'step' : undefined}>
-                <button type="button" disabled={locked} aria-pressed={tab === step} onClick={() => onTab(step)} title={locked ? reason || 'ابتدا مرحلهٔ فعلی را تکمیل کنید' : undefined}>
-                  <span>{faNum(i + 1)} · {CASE_STEP_LABELS[step]}</span>
-                  {locked && <small>{reason || 'پس از تکمیل مرحلهٔ قبل'}</small>}
-                </button>
-                {i < CASE_STEPS.length - 1 && <span className="step-arrow" aria-hidden="true">←</span>}
-              </li>;
-            })}
-          </ol>
-          {(chips || actions) && <div className="cf-status">{chips}{actions && <div className="cf-actions no-print">{actions}</div>}</div>}
-        </header>
-        <nav className="cf-tabs" role="tablist" aria-label="بخش‌های پرونده">
-          {(['parts', 'docs', 'history'] as const).map((t) => (
-            <button key={t} type="button" role="tab" id={`tab-${t}`} aria-controls="case-tabpanel" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => onTab(t)}>
-              <AppIcon name={TAB_ICON[t]} />{CASE_TAB_LABELS[t]}
-            </button>
-          ))}
-        </nav>
-        {children}
+    <div className={`cfx${side ? ' with-side' : ''}`}>
+      <div className={`cf cf2 cov-${cov.key}`}>
+        <div className="cf2-folder" title={COVERAGE_LABELS[kase.coverageType]}>
+          <span className="cf2-sheet s1" aria-hidden="true" />
+          <span className="cf2-sheet s2" aria-hidden="true" />
+          <span className="cf2-tab"><AppIcon name="folder" />پرونده خودرو</span>
+          <HeaderClip />
+          <header className="case-hero cf-head cf2-face" aria-label="سربرگ پرونده">
+            <div className="cf2-name">
+              <span className="cf2-car-ico" aria-hidden="true"><AppIcon name="car" /></span>
+              <h1 className="cf-car">{name}</h1>
+            </div>
+            <span className="cf2-rule" aria-hidden="true" />
+            <div className="cf2-plate"><Plate value={kase.vehicle.plate} size="xxl" /></div>
+            <div className="cf2-badges">
+              <CoverageBadge coverage={kase.coverageType} />
+              {kase.bodyReplacement && <BodyBadge />}
+            </div>
+            <p className="cf2-meta">
+              <span className="cf-cust"><AppIcon name="user" />{kase.customer?.fullName ?? 'مشتری ثبت نشده'}</span>
+              <span className="cf-ids">پرونده <bdi>{toPersianDigits(kase.caseNumber)}</bdi> · پذیرش <bdi>{kase.admissionNo ? toPersianDigits(kase.admissionNo) : 'ندارد'}</bdi></span>
+              {f && <span className="cf-days"><b>{faNum(f.daysInShop)}</b> روز در تعمیرگاه</span>}
+              {kase.isTest && <span className="m-tag">آزمایشی</span>}
+              {chips && <span className="cf2-chips">{chips}</span>}
+            </p>
+          </header>
+        </div>
+        <ol className="journey guided-journey cf2-journey" aria-label="مسیر خودرو">
+          {CASE_STEPS.map((step, i) => {
+            const locked = i > doneIdx;
+            const reason = step === 'plan' || step === 'execution' || step === 'quality' ? workflow?.requirements[step].join('؛ ') : '';
+            return <li key={step} className={`jstep ${i < doneIdx ? 'done' : i === doneIdx ? 'now' : 'next'}`} aria-current={i === doneIdx ? 'step' : undefined}>
+              <button type="button" disabled={locked} aria-pressed={tab === step} onClick={() => onTab(step)} title={locked ? reason || 'ابتدا مرحلهٔ فعلی را تکمیل کنید' : undefined}>
+                <AppIcon name={i < doneIdx ? 'check' : STEP_ICON[step]} />
+                <span>{CASE_STEP_LABELS[step]}</span>
+                {locked && <small>{reason || 'پس از تکمیل مرحلهٔ قبل'}</small>}
+              </button>
+              {i < CASE_STEPS.length - 1 && <span className="step-arrow" aria-hidden="true">←</span>}
+            </li>;
+          })}
+        </ol>
+        {actions && <div className="cf-status"><div className="cf-actions no-print">{actions}</div></div>}
+        <div className="cf-paper cf2-body">
+          <nav className="cf-tabs" role="tablist" aria-label="بخش‌های پرونده">
+            {(['parts', 'docs', 'history'] as const).map((t) => (
+              <button key={t} type="button" role="tab" id={`tab-${t}`} aria-controls="case-tabpanel" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => onTab(t)}>
+                <AppIcon name={TAB_ICON[t]} />{CASE_TAB_LABELS[t]}
+              </button>
+            ))}
+          </nav>
+          {children}
+        </div>
       </div>
+      {side && <aside className="cfx-side no-print-break" aria-label="مشخصات خودرو و اقدامات">{side}</aside>}
     </div>
   );
 }

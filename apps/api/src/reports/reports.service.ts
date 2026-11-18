@@ -1,6 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, gte, inArray, isNull, like, lt, sql, type SQL } from 'drizzle-orm';
 import {
+  SERVICE_KPIS,
+  SERVICE_KPI_KEYS,
+  serviceKpiMembers,
+  shortVehicleName,
+  type ServiceKpi,
   BLOCKER_REASON_LABELS,
   CASE_STAGES,
   DISCREPANCY_KIND_LABELS,
@@ -295,16 +300,32 @@ export class ReportsService {
     };
   }
 
+  /** The four approved numbers with their exact rows, for the service manager dashboard. */
+  async serviceKpis(actor: Actor, now = new Date()): Promise<ServiceKpi[]> {
+    const base = await this.baseCases(actor, {} as ReportQuery);
+    const members = serviceKpiMembers(base.map(serviceRow), now);
+    const byId = new Map(base.map((c) => [c.id, c]));
+    return SERVICE_KPI_KEYS.map((key) => ({
+      key,
+      ...SERVICE_KPIS[key],
+      count: members[key].length,
+      items: members[key].map((id) => {
+        const c = byId.get(id)!;
+        return { caseId: c.id, caseNumber: c.caseNumber, plate: c.plate, vehicle: shortVehicleName(c.brand, c.model), responsibleName: c.responsibleUserId ? c.responsibleName ?? null : null, officialDeadlineAt: c.officialDeadlineAt ? new Date(c.officialDeadlineAt).toISOString() : null, openBlockers: c.openReasons.length };
+      }),
+    }));
+  }
+
   // ----------------------------------------------------------- manager view
 
   private async managerView(base: BaseCase[], now: Date, period: ReturnType<typeof periodRange>, tenantId: string, q: ReportQuery) {
     const blocked = base.filter((c) => c.openReasons.length);
+    const members = serviceKpiMembers(base.map(serviceRow), now);
     const kpis: ReportKpi[] = [
       kpi('active', 'پرونده‌های فعال', 'پرونده', base.length, 'پرونده باز که تحویل نشده است', ''),
-      kpi('vehicles', 'خودروهای موجود', 'خودرو', new Set(base.map((c) => c.vehicleId)).size, 'خودروهای متمایز پرونده‌های فعال', ''),
-      kpi('overdue_official', 'عبور از مهلت رسمی', 'پرونده', base.filter((c) => c.officialDeadlineAt && c.officialDeadlineAt < now).length, 'مهلت رسمی ثبت‌شده گذشته است', 'flag=overdue_official'),
+      // The four approved numbers share one definition with the dashboard (service-kpis.ts).
+      ...SERVICE_KPI_KEYS.map((k) => kpi(k === 'present' ? 'vehicles' : k, SERVICE_KPIS[k].label, SERVICE_KPIS[k].unit, members[k].length, SERVICE_KPIS[k].definition, SERVICE_KPIS[k].listQuery)),
       kpi('overdue_forecast', 'عبور از پیش‌بینی', 'پرونده', base.filter((c) => c.forecastDeliveryAt && c.forecastDeliveryAt < now).length, 'پیش‌بینی داخلی ثبت‌شده گذشته است (جدا از مهلت رسمی)', 'flag=overdue_forecast'),
-      kpi('blocked', 'دارای مانع', 'پرونده', blocked.length, 'حداقل یک مانع باز', 'flag=blocked'),
       kpi('ready', 'آماده تحویل', 'پرونده', base.filter((c) => c.stage === 'ready_for_delivery').length, 'مرحله «آماده تحویل»', 'flag=ready'),
     ];
 
@@ -688,6 +709,8 @@ export class ReportsService {
 
 const commitmentOf = (c: { officialDeadlineAt: Date | null; forecastDeliveryAt: Date | null }) => c.officialDeadlineAt ?? c.forecastDeliveryAt ?? null;
 const reasonsText = (c: { openReasons: string[] }) => (c.openReasons.length ? c.openReasons.map((r) => BLOCKER_REASON_LABELS[r as BlockerReason]).join('، ') : null);
+
+const serviceRow = (c: { id: string; vehicleId: string; officialDeadlineAt: Date | null; responsibleUserId: string | null; openReasons: string[] }) => ({ caseId: c.id, vehicleId: c.vehicleId, officialDeadlineAt: c.officialDeadlineAt, responsibleUserId: c.responsibleUserId, openBlockers: c.openReasons.length });
 
 function kpi(key: string, label: string, unit: string, value: number, definition: string, listQuery?: string, itemKind?: string): ReportKpi {
   return { key, label, unit, value, definition, ...(listQuery !== undefined ? { listQuery } : {}), ...(itemKind ? { itemKind } : {}) };

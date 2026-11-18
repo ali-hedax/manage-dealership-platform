@@ -28,6 +28,7 @@ import { CaseWagesPanel } from '@/components/CaseWagesPanel';
 import { BackLink } from '@/components/BackLink';
 import { CaseFolderHeader, SECTION_TAB, type CaseTab } from '@/components/CaseFolderHeader';
 import { AppIcon } from '@/components/AppIcon';
+import { VehicleImage } from '@/components/FolderParts';
 import { ReminderComposer } from '@/components/ReminderComposer';
 import { WorkflowAction } from '@/components/WorkflowAction';
 import { Timeline } from '@/components/Timeline';
@@ -120,12 +121,34 @@ export default function CaseDetailPage() {
       }));
     }
   }
-  const actions = (
+  const daily = 'case-side-act';
+  const side = (
     <>
-      {can('case.update') && kase.status === 'open' && <Link className="m-btn2-s" href={`/cases/${kase.id}/edit`}>ویرایش پرونده</Link>}
-      <button className="m-btn2-s" type="button" onClick={() => setReminding(true)}>تذکر</button>
-      <button className="m-btn2-s" type="button" onClick={() => window.print()}>چاپ</button>
-      {can('case.create') && <Link className="m-btn2-s" href="/cases/new">پذیرش بعدی</Link>}
+      <section className="side-vehicle" aria-label="مشخصات خودرو">
+        <VehicleImage vehicle={(v.model || v.brand || kase.vehicleLabel).trim()} size="lg" />
+        <dl className="veh-facts">
+          <div><dt><AppIcon name="car" />مدل</dt><dd>{[v.model, v.trim].filter(Boolean).join(' ') || '—'}</dd></div>
+          <div><dt><AppIcon name="calendar" />سال ساخت</dt><dd>{v.modelYear ? toPersianDigits(String(v.modelYear)) : '—'}</dd></div>
+          <div><dt><AppIcon name="paint" />رنگ</dt><dd>{v.color ?? '—'}</dd></div>
+          <div><dt><AppIcon name="idcard" />VIN</dt><dd><bdi dir="ltr">{v.vin ?? '—'}</bdi></dd></div>
+          <div><dt><AppIcon name="receipt" />شمارهٔ پذیرش</dt><dd><bdi>{kase.admissionNo ? toPersianDigits(kase.admissionNo) : '—'}</bdi></dd></div>
+        </dl>
+      </section>
+      <nav className="side-actions no-print" aria-label="اقدامات پرونده">
+        {can('assessment.manage') && active && workflow?.current === 'assessment' && <a href="#case-assessment" className={`${daily} primary`} onClick={(e) => { e.preventDefault(); goTab('assessment', 'case-assessment'); }}><AppIcon name="clipboard" />شروع کارشناسی</a>}
+        {can('case.update') && kase.status === 'open' && <Link className={daily} href={`/cases/${kase.id}/edit`}><AppIcon name="settings" />ویرایش پرونده</Link>}
+        <button className={daily} type="button" onClick={() => window.print()}><AppIcon name="print" />چاپ</button>
+        <button className={daily} type="button" onClick={() => goTab('docs')}><AppIcon name="doc" />مدارک</button>
+        <button className={daily} type="button" onClick={() => setReminding(true)}><AppIcon name="bell" />تذکر</button>
+        {can('case.create') && (
+          <details className="more-menu">
+            <summary className={daily}><AppIcon name="list" />بیشتر ⋯</summary>
+            <div className="more-pop" role="group" aria-label="اقدامات کم‌تکرار">
+              <Link className={daily} href="/cases/new"><AppIcon name="add" />پذیرش بعدی</Link>
+            </div>
+          </details>
+        )}
+      </nav>
     </>
   );
   const chips = (
@@ -139,10 +162,10 @@ export default function CaseDetailPage() {
   return (
     <div className="stack case-folder">
       <div className="cf-title-row">
-        <p className="cf-title"><AppIcon name="folder" />پوشهٔ پرونده خودرو</p>
+        <p className="cf-title">پرونده خودرو</p>
         <BackLink href={workspaceHome(me)} label="بازگشت به میز کار" />
       </div>
-      <CaseFolderHeader kase={kase} tab={activeTab} onTab={goTab} actions={actions} chips={chips}>
+      <CaseFolderHeader kase={kase} tab={activeTab} onTab={goTab} chips={chips} side={side}>
       <div id="case-tabpanel" role="tabpanel" aria-label={activeTab} className="stack cf-panel">
       {kase.missingFields.length > 0 && (
         <div className="callout callout-amber row" style={{ justifyContent: 'space-between' }}>

@@ -291,6 +291,8 @@ export const cases = pgTable(
     origin: text('origin').notNull().default('manual'),
     importKey: text('import_key'),
     isLegacyEntry: boolean('is_legacy_entry').notNull().default(false),
+    // «تعویض اتاق» (owner, 2026-11-18): independent of coverage; old cases stay false, never inferred.
+    bodyReplacement: boolean('body_replacement').notNull().default(false),
     // Owner-only soft deletion (migration 0028): status becomes 'deleted' and the previous
     // status is kept for the restore; no row of the case or its history is removed.
     deletedAt: ts('deleted_at'),
@@ -1471,3 +1473,20 @@ export const appReleases = pgTable('app_releases', {
   firstStartedAt: ts('first_started_at').notNull().defaultNow(),
   lastStartedAt: ts('last_started_at').notNull().defaultNow(),
 });
+
+/**
+ * Confirmed production versions (owner, 2026-11-18; migration 0030). A version is
+ * numbered only when its release passed the health checks: the release script runs
+ * confirm-release, which gives a new commit the next patch number of the release
+ * line and records the change-note keys that shipped with it. The same commit
+ * always keeps its number; a failed attempt never gets one.
+ */
+export const appVersions = pgTable('app_versions', {
+  version: text('version').primaryKey(),
+  major: integer('major').notNull(),
+  minor: integer('minor').notNull(),
+  patch: integer('patch').notNull(),
+  commit: text('commit').notNull().unique(),
+  noteKeys: jsonb('note_keys').$type<string[]>().notNull().default([]),
+  confirmedAt: ts('confirmed_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('app_versions_number_unique').on(t.major, t.minor, t.patch)]);
