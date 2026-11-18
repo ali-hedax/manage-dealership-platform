@@ -29,6 +29,13 @@ import {
   type CreatePartInput,
   type ImportPartsInput,
   type Part,
+  type PartCodeCorrection,
+  type CodeCorrectionRequestInput,
+  type CodeCorrectionResolveInput,
+  normalizeTechnicalCode,
+  nonOemPrefix,
+  type StockCandidate,
+  type StockSnapshotInfo,
   type PartActionInput,
   type PartImportResult,
   type PartImportRow,
@@ -39,14 +46,14 @@ import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { BlockersService } from '../blockers/blockers.service';
 import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
-import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
+import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, cases, customers, departments, emdadRequestEvents, emdadRequests, partPriceNotices, partRequests, partQuotes, stockReservations, tasks, users, vehicles } from '../db/schema';
-import { caseAndBayRecipients, notifyUsers, partLink } from './part-notify';
+import { assessmentItems, assessments, blockers, cases, customers, departments, emdadRequestEvents, emdadRequests, partCodeCorrections, partPriceNotices, partRequests, partQuotes, stockReservations, tasks, users, vehicles } from '../db/schema';
+import { caseAndBayRecipients, notifyUsers, partLink, usersWithRole } from './part-notify';
 import { parseReportDate } from '../daily-reports/emdad-parts';
 import { sql } from 'drizzle-orm';
-import { StockService } from '../daily-reports/stock.service';
+import { snapshotInfo, StockService } from '../daily-reports/stock.service';
 import { FinanceService, PURCHASE_SOURCES } from '../finance/finance.service';
 import { readFirstSheet, XlsxError } from './xlsx';
 
@@ -57,6 +64,9 @@ type PartRow = typeof partRequests.$inferSelect;
  * need any more: only its cancellation remains (task 3). A line that already has
  * supply keeps its normal actions; the clerk decides (never cancelled automatically).
  */
+/** Stock reserved or issued for the vehicle while its special-aid request is still running. */
+export const isParallel = (p: { status: string; source: string; stockParallelAt: Date | null }) => p.status === 'ordered' && p.source === 'company' && !!p.stockParallelAt;
+
 function rejectedNeedActions<T extends string>(p: { assessmentRejectedAt: Date | null; status: string }, actions: T[]): T[] {
   return p.assessmentRejectedAt && p.status === 'needed' ? actions.filter((a) => a === 'cancel') : actions;
 }
@@ -64,6 +74,8 @@ function rejectedNeedActions<T extends string>(p: { assessmentRejectedAt: Date |
 const createdByUser = alias(users, 'part_created_by');
 const noticeBy = alias(users, 'price_notice_by');
 const noticeAnswerBy = alias(users, 'price_notice_answer_by');
+const correctionBy = alias(users, 'code_correction_by');
+const correctionResolver = alias(users, 'code_correction_resolver');
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
 // Column headers of the import sheet (first row). Matching ignores spaces.
@@ -303,8 +315,10 @@ export class PartsService {
         action = input.inspection === 'ok' ? 'part.received' : 'part.rejected';
         break;
       case 'hand_over': {
-        if (p.status !== 'received' && p.status !== 'reserved') throw invalidTransition(p.status);
-        if (p.source === 'company' && (await this.emdadByPart(tx, tenantId, [p.id])).get(p.id)?.category === 'cancelled') throw badRequest('EMDAD_CANCELLED_HANDOVER', 'امداد این قطعه ابطال شده است؛ تأمین قطعه را بررسی کنید');
+        // Stock used in parallel with a running special-aid request is delivered from its own reservation.
+        const parallel = isParallel(p);
+        if (p.status !== 'received' && p.status !== 'reserved' && !parallel) throw invalidTransition(p.status);
+        if (!parallel && p.source === 'company' && (await this.emdadByPart(tx, tenantId, [p.id])).get(p.id)?.category === 'cancelled') throw badRequest('EMDAD_CANCELLED_HANDOVER', 'امداد این قطعه ابطال شده است؛ تأمین قطعه را بررسی کنید');
         if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
         const salePriceRial = input.salePriceRial ?? p.salePriceRial ?? p.unitPriceRial;
         if (salePriceRial === null) throw badRequest('PART_SALE_PRICE_REQUIRED', 'قیمت فروش این قطعه را وارد کنید');
@@ -312,7 +326,7 @@ export class PartsService {
           eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, id), eq(stockReservations.status, 'reserved'),
         )).orderBy(asc(stockReservations.id));
         const handed = handedOverQuantity(p);
-        const target = Math.min(p.quantity, p.emdadReceivedQuantity ?? p.quantity);
+        const target = p.stockParallelAt ? p.quantity : Math.min(p.quantity, p.emdadReceivedQuantity ?? p.quantity);
         const held = reservations.reduce((n, r) => n + Number(r.quantity), 0);
         const available = reservations.length ? Math.min(target - handed, held) : p.emdadReceivedQuantity == null ? p.quantity - handed : 0;
         const delivery = input.deliveryQuantity ?? available;
@@ -433,7 +447,7 @@ export class PartsService {
       const tenantId = actor.user.tenantId;
       const p = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
       const emdad = (await this.emdadByPart(tx, tenantId, [p.id])).get(p.id);
-      const state = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: emdad?.category });
+      const state = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: emdad?.category, parallelStock: isParallel(p) });
       const handed = handedOverQuantity(p);
       const partialReturn = input.action === 'return' && handed > 0 && p.status !== 'handed_over';
       if (!isPartActionAllowed(state, input.action) && !partialReturn) {
@@ -497,6 +511,40 @@ export class PartsService {
             departmentId = t.departmentId;
           }
           await this.actIn(tx, actor, id, { action: 'hand_over', expectedVersion: p.version, recipientName: input.recipientName, deliveryQuantity: input.deliveryQuantity, departmentId, salePriceRial: input.saleUnitRial }, now);
+          return;
+        }
+        case 'use_stock': {
+          // Owner, 2026-11-18: usable stock goes to the vehicle now; the special-aid request is left untouched
+          // and keeps being tracked. When it arrives it replenishes the warehouse (never a second delivery).
+          const [held] = ((await tx.execute(sql`select coalesce(sum(quantity), 0)::int as q from stock_reservations where tenant_id = ${tenantId} and part_request_id = ${p.id} and status in ('reserved','issued')`)) as unknown as { rows: { q: number }[] }).rows;
+          const left = p.quantity - Number(held?.q ?? 0);
+          if (left < 1 || (input.quantity ?? 0) > left) throw badRequest('OVER_NEED', `مقدار بیشتر از باقی‌ماندهٔ نیاز است (باقی‌مانده: ${Math.max(0, left)})`, { needLeft: Math.max(0, left) });
+          // Only a real candidate of this line (exact, OEM variant or explicitly chosen non-OEM match).
+          const { byPart } = await this.stock.candidatesFor(tx, tenantId, [{ id: p.id, partNumber: p.partNumber, procurementCode: p.procurementCode }]);
+          const chosen = (byPart.get(p.id) ?? []).find((o) => o.fullStockCode === input.fullStockCode && o.locationAddress === input.locationAddress);
+          if ((p.partNumber || p.procurementCode) && !chosen) throw badRequest('STOCK_NOT_CANDIDATE', 'این کالا با شماره فنی قطعه تطبیق ندارد؛ یکی از نامزدهای موجودی همین قطعه را انتخاب کنید');
+          // Default: what is still needed, capped by what the chosen location can give now.
+          const want = input.quantity ?? Math.max(1, Math.min(left, Math.floor(Number(chosen?.available ?? left))));
+          const reservationId = await this.stock.reserveIn(tx, actor, { partRequestId: p.id, snapshotId: input.snapshotId, fullStockCode: input.fullStockCode, locationAddress: input.locationAddress, quantity: String(want), confirm: true });
+          const [r] = await tx.select({ unitSalePrice: stockReservations.unitSalePrice }).from(stockReservations).where(eq(stockReservations.id, reservationId));
+          const fromStock = r?.unitSalePrice != null ? Math.round(Number(r.unitSalePrice)) : null;
+          patch = { stockParallelAt: now, stockParallelBy: actor.user.id, salePriceRial: input.saleUnitRial ?? p.salePriceRial ?? fromStock };
+          await this.finishFlow(tx, actor, p, patch, 'part.stock_used_parallel', `${input.fullStockCode}${input.locationAddress ? ` @ ${input.locationAddress}` : ''} · ${want} عدد؛ امداد ویژه فعال می‌ماند`, state, { status: p.status, flowState: state, emdadCategory: emdad?.category ?? null, reservedQuantity: Number(held?.q ?? 0) });
+          await this.notifyReady(tx, actor, p);
+          return;
+        }
+        case 'release': {
+          // «لغو رزرو» (owner, 2026-11-18): only the reservation is undone. The line stays on the case and on the
+          // clerk's list; a running special-aid request, its status, history and dates are not touched.
+          if (handed > 0) throw badRequest('PART_PARTIAL_DELIVERY_RELEASE', 'بخشی از این قطعه تحویل شده است؛ برای برگشت، مرجوعی با علت ثبت کنید');
+          const pending = await tx.select().from(stockReservations).where(and(eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, p.id), eq(stockReservations.status, 'reserved'))).orderBy(asc(stockReservations.id));
+          if (!pending.length) throw badRequest('NO_ACTIVE_RESERVATION', 'رزرو فعالی برای لغو نیست');
+          for (const r of pending) await this.stock.actIn(tx, actor, r.id, { action: 'release', expectedVersion: r.version, reason: input.reason });
+          if (state === 'stock_parallel') patch = { stockParallelAt: null, stockParallelBy: null };
+          else if (p.source === 'company' && emdad && emdad.category !== 'cancelled') {
+            patch = { status: 'ordered', reservedAt: null, inStock: null, stockParallelAt: null, stockParallelBy: null, autoReserveBlockedAt: now, emdadReserveNote: 'رزرو این قطعه توسط مسئول قطعات لغو شد؛ گزارش روزانه آن را دوباره خودکار رزرو نمی‌کند. برای رزرو دوباره، کد را انتخاب کنید.' };
+          } else patch = { status: 'needed', reservedAt: null, inStock: null, stockParallelAt: null, stockParallelBy: null };
+          await this.finishFlow(tx, actor, p, patch, 'part.reservation_released', input.reason, state, { status: p.status, flowState: state, reservations: pending.map((r) => ({ id: r.id, fullStockCode: r.fullStockCode, locationAddress: r.locationAddress, quantity: r.quantity })) });
           return;
         }
         case 'cancel':
@@ -575,6 +623,7 @@ export class PartsService {
     const fromStock = r?.unitSalePrice != null ? Math.round(Number(r.unitSalePrice)) : null;
     const patch: Partial<PartRow> = {
       procurementCode: chosen,
+      autoReserveBlockedAt: null,
       emdadReserveNote: full ? null : `${reserved} از ${p.quantity} عدد رزرو شد؛ ${p.quantity - reserved} عدد هنوز باقی است.`,
       ...(full ? { status: 'reserved', reservedAt: new Date(), inStock: true } : {}),
       salePriceRial: input.saleUnitRial ?? p.salePriceRial ?? fromStock,
@@ -712,6 +761,119 @@ export class PartsService {
 
   // ----------------------------------------------------------------- queries
 
+  /** Current stock candidates of a line, read at request time (never from an earlier screen). */
+  async stockCandidates(actor: Actor, id: string): Promise<{ snapshot: StockSnapshotInfo | null; base: string | null; items: StockCandidate[] }> {
+    const tenantId = actor.user.tenantId;
+    const [p] = await this.db.select().from(partRequests).where(and(eq(partRequests.id, id), eq(partRequests.tenantId, tenantId)));
+    if (!p) throw notFound('قطعه');
+    await this.cases.detail(actor, p.caseId);
+    const { snapshot, byPart } = await this.stock.candidatesFor(this.db, tenantId, [{ id: p.id, partNumber: p.partNumber, procurementCode: p.procurementCode }]);
+    const base = assessmentCodeOf(p.procurementCode) ?? assessmentCodeOf(p.partNumber) ?? nonOemPrefix(p.partNumber);
+    return { snapshot: snapshot ? snapshotInfo(snapshot) : null, base, items: byPart.get(p.id) ?? [] };
+  }
+
+  // ------------------------------------- technical-code correction (owner, 2026-11-18)
+
+  /** Latest correction per line (open first), with what blocks the change now. */
+  private async corrections(db: DbOrTx, tenantId: string, partIds: string[]): Promise<Map<string, PartCodeCorrection>> {
+    const out = new Map<string, PartCodeCorrection>();
+    if (!partIds.length) return out;
+    const rows = await db
+      .select({ c: partCodeCorrections, by: correctionBy.displayName, resolver: correctionResolver.displayName })
+      .from(partCodeCorrections)
+      .innerJoin(correctionBy, eq(correctionBy.id, partCodeCorrections.requestedBy))
+      .leftJoin(correctionResolver, eq(correctionResolver.id, partCodeCorrections.resolvedBy))
+      .where(and(eq(partCodeCorrections.tenantId, tenantId), inArray(partCodeCorrections.partRequestId, partIds)))
+      .orderBy(asc(partCodeCorrections.requestedAt));
+    const open = rows.filter((r) => r.c.status === 'open');
+    const parts = open.length ? await db.select().from(partRequests).where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.id, open.map((r) => r.c.partRequestId)))) : [];
+    const blockersOf = new Map<string, string[]>();
+    for (const p of parts) blockersOf.set(p.id, await this.correctionBlockers(db, tenantId, p));
+    for (const { c, by, resolver } of rows) {
+      const current = out.get(c.partRequestId);
+      if (current?.status === 'open') continue;
+      out.set(c.partRequestId, {
+        id: c.id, status: c.status as PartCodeCorrection['status'], reason: c.reason, originalCode: c.originalCode, correctedCode: c.correctedCode,
+        requestedBy: { id: c.requestedBy, displayName: by }, requestedAt: c.requestedAt.toISOString(),
+        resolvedBy: c.resolvedBy ? { id: c.resolvedBy, displayName: resolver ?? '' } : null, resolvedAt: iso(c.resolvedAt),
+        blockers: c.status === 'open' ? (blockersOf.get(c.partRequestId) ?? []) : [],
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Operations that tie the line to its current code. They are never moved to the
+   * corrected code automatically; the parts clerk resolves them first.
+   */
+  private async correctionBlockers(db: DbOrTx, tenantId: string, p: PartRow): Promise<string[]> {
+    const out: string[] = [];
+    const held = await db.select({ status: stockReservations.status }).from(stockReservations)
+      .where(and(eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, p.id), inArray(stockReservations.status, ['reserved', 'issued'])));
+    if (held.some((r) => r.status === 'reserved')) out.push('رزرو فعال از موجودی دارد؛ مسئول قطعات ابتدا «لغو رزرو» را بزند.');
+    if (handedOverQuantity(p) > 0 || held.some((r) => r.status === 'issued')) out.push('قطعه به واحد تعمیر تحویل شده است؛ برگشت فقط با «مرجوعی» مسئول قطعات ممکن است.');
+    if (p.status === 'ordered' && p.source === 'company') out.push('امداد ویژه با شمارهٔ فعلی ثبت شده است؛ سفارش بیرونی خودکار لغو یا جابه‌جا نمی‌شود. مسئول قطعات وضعیت آن را روشن و در صورت نیاز لغو کند.');
+    if (p.status === 'ordered' && p.source !== 'company') out.push('خرید بازار ثبت شده است؛ مسئول قطعات ابتدا آن را لغو کند.');
+    if (p.status === 'received') out.push('قطعه رسیده و آمادهٔ تحویل است؛ مسئول قطعات تکلیف آن را روشن کند.');
+    if (['cancelled', 'returned', 'handed_over'].includes(p.status) && !out.length) out.push('این قطعه دیگر فعال نیست.');
+    return out;
+  }
+
+  /** «درخواست اصلاح شماره فنی»: only this line goes back to the accident expert, with a short reason. */
+  async requestCodeCorrection(actor: Actor, id: string, input: CodeCorrectionRequestInput): Promise<Part> {
+    if (!actor.user.permissions.has('part.manage')) throw forbidden('درخواست اصلاح شماره فنی کار مسئول قطعات است');
+    const tenantId = actor.user.tenantId;
+    await this.db.transaction(async (tx) => {
+      const p = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
+      if (['cancelled', 'returned'].includes(p.status) || p.consumedAt) throw badRequest('PART_NOT_OPEN', 'این قطعه لغو، مرجوع یا مصرف شده است؛ اصلاح شماره فنی لازم نیست');
+      await this.loadOpenCase(tx, tenantId, p.caseId);
+      const [existing] = await tx.select({ id: partCodeCorrections.id }).from(partCodeCorrections).where(and(eq(partCodeCorrections.tenantId, tenantId), eq(partCodeCorrections.partRequestId, p.id), eq(partCodeCorrections.status, 'open')));
+      if (existing) throw conflict('CORRECTION_ALREADY_OPEN', 'برای این قطعه درخواست اصلاح باز وجود دارد');
+      const correctionId = newId();
+      await tx.insert(partCodeCorrections).values({ id: correctionId, tenantId, caseId: p.caseId, partRequestId: p.id, reason: input.reason, originalCode: p.partNumber, previousStatus: p.status, requestedBy: actor.user.id, isTest: actor.user.isTestTenant });
+      // The version moves so that open screens re-read the line before acting on the old code.
+      const saved = await this.save(tx, p, {});
+      await this.audit.record(tx, actor, { entityType: 'part', entityId: p.id, caseId: p.caseId, action: 'part.code_correction_requested', reason: input.reason, before: { partNumber: p.partNumber, status: p.status }, after: { correctionId, description: p.description }, snapshot: { version: saved.version, row: saved } });
+      const [kase] = await tx.select({ responsibleUserId: cases.responsibleUserId }).from(cases).where(and(eq(cases.id, p.caseId), eq(cases.tenantId, tenantId)));
+      const to = kase?.responsibleUserId ? [kase.responsibleUserId] : await usersWithRole(tx, tenantId, ['accident_expert']);
+      await notifyUsers(tx, tenantId, to, { kind: 'part_code_correction', title: `نیازمند اصلاح شماره فنی: ${p.description}`, body: input.reason, link: partLink(p.caseId, p.id), dedupeKey: `part_code_correction:${correctionId}` });
+    });
+    return this.get(actor, id);
+  }
+
+  /** «ثبت و ارسال مجدد»: the expert enters the right code; stock is matched again for the new code. */
+  async resolveCodeCorrection(actor: Actor, correctionId: string, input: CodeCorrectionResolveInput): Promise<Part> {
+    if (!actor.user.permissions.has('assessment.manage')) throw forbidden('اصلاح شماره فنی کار کارشناس تصادفات است');
+    const tenantId = actor.user.tenantId;
+    const partId = await this.db.transaction(async (tx) => {
+      await this.emdad.lock(tx, tenantId);
+      const [c] = await tx.select().from(partCodeCorrections).where(and(eq(partCodeCorrections.id, correctionId), eq(partCodeCorrections.tenantId, tenantId))).for('update');
+      if (!c) throw notFound('درخواست اصلاح');
+      if (c.status !== 'open') throw conflict('CORRECTION_NOT_OPEN', 'این درخواست اصلاح قبلاً بسته شده است');
+      const p = await this.loadForWrite(tx, tenantId, c.partRequestId, input.expectedVersion);
+      await this.loadOpenCase(tx, tenantId, p.caseId);
+      const blockers = await this.correctionBlockers(tx, tenantId, p);
+      if (blockers.length) throw conflict('CORRECTION_BLOCKED', `شماره فنی هنوز قابل اصلاح نیست: ${blockers.join(' ')}`, { blockers });
+      const code = normalizeTechnicalCode(input.correctedCode);
+      if (!code) throw badRequest('CODE_REQUIRED', 'شماره فنی درست را وارد کنید');
+      if (partCodeKey(code) === partCodeKey(p.partNumber)) throw badRequest('CODE_UNCHANGED', 'شمارهٔ تازه با شمارهٔ قبلی یکی است');
+      const twins = await tx.select({ id: partRequests.id, partNumber: partRequests.partNumber }).from(partRequests)
+        .where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.caseId, p.caseId), ne(partRequests.id, p.id), notInArray(partRequests.status, ['cancelled', 'returned'])));
+      if (twins.some((t) => partCodeKey(t.partNumber) === partCodeKey(code))) throw conflict('DUPLICATE_PART_CODE', 'این شماره فنی در قطعهٔ دیگری از همین پرونده ثبت است');
+      const keepProcurement = parseProcurementCode(p.procurementCode)?.slice(0, 8) === assessmentCodeOf(code);
+      const patch: Partial<PartRow> = { partNumber: code, procurementCode: keepProcurement ? p.procurementCode : null, inStock: null, stockCheckedAt: null };
+      const saved = await this.save(tx, p, patch);
+      const now = new Date();
+      await tx.update(partCodeCorrections).set({ status: 'resolved', correctedCode: code, resolvedBy: actor.user.id, resolvedAt: now, resolutionNote: input.note ?? null, version: c.version + 1 }).where(and(eq(partCodeCorrections.id, c.id), eq(partCodeCorrections.version, c.version)));
+      await this.audit.record(tx, actor, { entityType: 'part', entityId: p.id, caseId: p.caseId, action: 'part.code_corrected', reason: c.reason, before: { partNumber: p.partNumber, procurementCode: p.procurementCode, correctionStatus: 'open' }, after: { description: p.description, partNumber: code, procurementCode: saved.procurementCode, correctionId: c.id, correctionStatus: 'resolved', note: input.note ?? null }, snapshot: { version: saved.version, row: saved } });
+      // The stored special-aid report is matched again for the corrected code (spec section 16).
+      await this.emdad.reconcile(tx, actor, p.caseId);
+      await notifyUsers(tx, tenantId, [c.requestedBy], { kind: 'part_code_corrected', title: `شماره فنی اصلاح شد: ${p.description}`, body: `${p.partNumber ?? '—'} ← ${code}. موجودی با شمارهٔ تازه دوباره تطبیق داده شد؛ تعیین تکلیف کنید.`, link: partLink(p.caseId, p.id), dedupeKey: `part_code_corrected:${c.id}` });
+      return p.id;
+    });
+    return this.get(actor, partId);
+  }
+
   async list(actor: Actor, caseId: string): Promise<Part[]> {
     await this.cases.detail(actor, caseId); // tenant check + 404
     return this.load(actor.user.tenantId, eq(partRequests.caseId, caseId));
@@ -744,6 +906,21 @@ export class PartsService {
         : Promise.resolve([] as { partId: string; q: string }[]),
     ]);
     const heldOf = new Map(held.map((h) => [h.partId, Number(h.q)]));
+    // Inventory dimension of lines with a running special-aid request (owner, 2026-11-18).
+    const parallelIds = rows.filter(({ p }) => !!p.stockParallelAt).map(({ p }) => p.id);
+    const split = parallelIds.length
+      ? await this.db.select({ partId: stockReservations.partRequestId, status: stockReservations.status, q: sql<string>`coalesce(sum(${stockReservations.quantity}), 0)::text` }).from(stockReservations)
+        .where(and(eq(stockReservations.tenantId, tenantId), inArray(stockReservations.partRequestId, parallelIds), inArray(stockReservations.status, ['reserved', 'issued'])))
+        .groupBy(stockReservations.partRequestId, stockReservations.status)
+      : [];
+    // «استفاده از موجودی» is offered only when a special-aid line has usable stock now.
+    const emdadOnly = rows.filter(({ p }) => p.status === 'ordered' && p.source === 'company' && !p.assessmentRejectedAt && (p.stockParallelAt ? (heldOf.get(p.id) ?? 0) < p.quantity : emdad.get(p.id)?.category !== 'cancelled' && !isEmdadArrived(emdad.get(p.id)?.category) && emdad.get(p.id)?.category !== 'supplied_by_dealer'));
+    const usable = new Set<string>();
+    if (emdadOnly.length) {
+      const { snapshot, byPart } = await this.stock.candidatesFor(this.db, tenantId, emdadOnly.map(({ p }) => ({ id: p.id, partNumber: p.partNumber, procurementCode: p.procurementCode })));
+      if (snapshot?.scope && snapshot.completeness && snapshot.quantityMeaning) for (const [id, list] of byPart) if (list.some((o) => Number(o.available) >= 1)) usable.add(id);
+    }
+    const corrections = await this.corrections(this.db, tenantId, ids);
     // «الحاقیه»: the root line was first written in a supplement, or an earlier row of the same root exists.
     const firstOfRoot = new Map<string, string>();
     for (const { p } of rows) if (p.assessmentItemId && !firstOfRoot.has(p.assessmentItemId)) firstOfRoot.set(p.assessmentItemId, p.id);
@@ -756,13 +933,15 @@ export class PartsService {
     );
     return rows.map(({ p, d, createdByName }) => {
       const e = emdad.get(p.id) ?? null;
-      const flowState = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: e?.category });
+      const parallel = isParallel(p);
+      const flowState = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: e?.category, parallelStock: parallel });
       const root = p.assessmentItemId ? roots.get(p.assessmentItemId) : undefined;
       const reservedQuantity = Math.min(p.quantity, Math.floor(heldOf.get(p.id) ?? 0));
       const handed = handedOverQuantity(p);
-      const canDeliver = ['reserved', 'received'].includes(p.status) && !(p.source === 'company' && e?.category === 'cancelled');
-      const deliverable = canDeliver ? Math.max(0, p.quantity - handed) : 0;
-      const actions = rejectedNeedActions(p, allowedPartActions(flowState)).filter(a => !(a === 'cancel' && handed > 0) && !(a === 'hand_over' && !canDeliver));
+      const canDeliver = (['reserved', 'received'].includes(p.status) && !(p.source === 'company' && e?.category === 'cancelled')) || parallel;
+      const parallelReserved = Math.floor(Number(split.find((x) => x.partId === p.id && x.status === 'reserved')?.q ?? 0));
+      const deliverable = canDeliver ? Math.max(0, parallel ? Math.min(parallelReserved, p.quantity - handed) : p.quantity - handed) : 0;
+      const actions = rejectedNeedActions(p, allowedPartActions(flowState)).filter(a => !(a === 'cancel' && handed > 0) && !(a === 'hand_over' && (!canDeliver || (parallel && deliverable < 1))) && !(a === 'use_stock' && !usable.has(p.id)) && !(a === 'release' && handed > 0));
       if (handed > 0 && p.status !== 'handed_over' && !actions.includes('return')) actions.push('return');
       const ids = partIdentifiers({ partNumber: p.partNumber, procurementCode: p.procurementCode, source: p.source });
       const done = ['handed_over', 'cancelled', 'returned'].includes(p.status);
@@ -774,7 +953,7 @@ export class PartsService {
       handedOverQuantity: handed,
       deliverableQuantity: deliverable,
       outstandingQuantity: done ? 0 : Math.max(0, p.quantity - (p.status === 'reserved' || p.status === 'received' ? p.quantity : reservedQuantity)),
-      emdadReserveNote: p.status === 'ordered' ? p.emdadReserveNote : null,
+      emdadReserveNote: p.status === 'ordered' || (p.stockParallelAt && p.status === 'handed_over') ? p.emdadReserveNote : null,
       emdadQuantityReview: p.status === 'ordered' && p.source === 'company' && !!e?.arrived && p.emdadReceivedQuantity == null,
       flowState,
       allowedActions: actions,
@@ -786,6 +965,11 @@ export class PartsService {
       returnReason: p.returnReason,
       emdad: e,
       priceNotice: openNotices.filter((n) => n.partId === p.id).at(-1) ?? null,
+      stockParallel: p.stockParallelAt
+        ? { at: p.stockParallelAt.toISOString(), reservedQuantity: parallelReserved, issuedQuantity: Math.floor(Number(split.find((x) => x.partId === p.id && x.status === 'issued')?.q ?? 0)) || (p.status === 'handed_over' ? handed : 0), replenished: !!e?.arrived }
+        : null,
+      stockUsable: usable.has(p.id),
+      codeCorrection: corrections.get(p.id) ?? null,
       id: p.id,
       caseId: p.caseId,
       assessmentItemId: p.assessmentItemId,

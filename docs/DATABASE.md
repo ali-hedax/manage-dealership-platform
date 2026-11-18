@@ -177,3 +177,14 @@ Existing rows keep `NULL`. Rollback: `down/0023_assessment_rejections.down.sql` 
 
 
 `0027_low_praxagora.sql` adds the nullable `part_requests.handed_over_quantity` counter for cumulative workshop handover. Existing completed rows with NULL retain their implicit full-quantity handover. A partial issue divides the associated stock reservation in the same transaction, preserving the total commitment and auditing both the split and the individual handover. The down file is for disposable rehearsals. A runtime rollback after partial handovers requires withholding further handover mutations until a compatible version is restored because the older app lacks the cumulative count.
+
+`0028_pretty_chamber.sql` (release v1.0.0, owner 2026-11-18) is additive only:
+
+- nullable `cases.deleted_at`, `deleted_by`, `delete_reason`, `deleted_from_status` — owner-only soft deletion. The status becomes `deleted`, the previous status is kept for the restore, no row is removed. Every multi-case read (lists, search, desks, technician queues, dashboards, reports) excludes `deleted`.
+- nullable `part_requests.stock_parallel_at`, `stock_parallel_by` — stock used for the vehicle while its special-aid request keeps running; and `auto_reserve_blocked_at` — the clerk released an arrived special-aid reservation, so the daily report does not reserve it again.
+- nullable `users.release_seen` — the release announcement this person acknowledged.
+- table `part_code_corrections` — technical-code corrections; one open correction per part (partial unique index), original and corrected code, reason, requester, resolver and times.
+- table `app_releases` — first and latest start of each released version on this installation; a restart only moves `last_started_at`.
+
+Existing rows keep NULL and behave as before. Old application code ignores the new columns; a rollback to `98d8a31` after parallel stock use would show those lines as plain special-aid lines (their reservations stay valid), so stock-parallel handovers should pause until a compatible version returns. The down file is for disposable rehearsals only.
+

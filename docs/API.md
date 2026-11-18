@@ -92,6 +92,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/daily-reports/profiles/:kind` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/daily-reports/status` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/dashboard` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| GET | `/api/v1/deleted-cases` | [source](../apps/api/src/cases/case-deletion.controller.ts) |
 | GET | `/api/v1/departments` | [source](../apps/api/src/reference/reference.controller.ts) |
 | GET | `/api/v1/desk/folders/:id` | [source](../apps/api/src/desk/desk.controller.ts) |
 | GET | `/api/v1/desk/folders` | [source](../apps/api/src/desk/desk.controller.ts) |
@@ -100,6 +101,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/notifications` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/part-discrepancies/:id/history` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | GET | `/api/v1/part-discrepancies` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
+| GET | `/api/v1/parts/:id/stock-candidates` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/parts/contractors` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/parts/desk` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/parts/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
@@ -107,10 +109,14 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/parts/workbench/notices` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/parts/workbench` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/price-notices` | [source](../apps/api/src/parts/parts.controller.ts) |
+| GET | `/api/v1/print/cases/:id/picking.pdf` | [source](../apps/api/src/print/print.controller.ts) |
+| GET | `/api/v1/print/inspection.pdf` | [source](../apps/api/src/print/print.controller.ts) |
 | GET | `/api/v1/reference-data/:kind/sample` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-data/:kind` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id/report` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
+| GET | `/api/v1/releases/current` | [source](../apps/api/src/releases/releases.controller.ts) |
+| GET | `/api/v1/releases` | [source](../apps/api/src/releases/releases.controller.ts) |
 | GET | `/api/v1/reminders/inbox` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reminders/people` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |
@@ -169,6 +175,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/alerts/respond` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | POST | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/cases/:id/blockers` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/cases/:id/delete` | [source](../apps/api/src/cases/case-deletion.controller.ts) |
 | POST | `/api/v1/cases/:id/delivery` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/documents` | [source](../apps/api/src/cases/case-documents.controller.ts) |
 | POST | `/api/v1/cases/:id/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
@@ -183,12 +190,14 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/parts` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/cases/:id/qc` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/repair-plan/steps` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/cases/:id/restore` | [source](../apps/api/src/cases/case-deletion.controller.ts) |
 | POST | `/api/v1/cases/:id/stage` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/tasks` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/technical-close` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/transfer` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/cases/:id/workflow` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/code-corrections/:id/resolve` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/apply` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/discard` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/retry` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -202,6 +211,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/part-discrepancies/:id/assign` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/part-discrepancies/:id/resolve` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/parts/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
+| POST | `/api/v1/parts/:id/code-correction` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/parts/:id/flow` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/parts/contractors` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/parts/external-work/:id/actions` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
@@ -211,6 +221,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reference-imports/:id/apply` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
+| POST | `/api/v1/releases/ack` | [source](../apps/api/src/releases/releases.controller.ts) |
 | POST | `/api/v1/reminders/:id/respond` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/reminders/parts-ready/:id` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |

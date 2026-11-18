@@ -903,3 +903,23 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .emdad-stage b { font-weight: 700; }
 .emdad-stage .emdad-received { font-size: 12px; color: #5F6672; }
 .emdad-ready-note { font-size: 12px; color: #7A4A0B; }
+
+/* ---- release v1.0.0: compact menus, version indicator, update notice (owner, 2026-11-18) */
+.m-menu { position: relative; display: inline-block; }
+.m-menu > summary { list-style: none; cursor: pointer; }
+.m-menu > summary::-webkit-details-marker { display: none; }
+.m-menu-pop { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 190px; padding: 6px; background: #fffefb; border: 1px solid #e6e2d9; border-radius: 10px; box-shadow: 0 8px 24px rgba(21, 24, 29, .12); }
+.m-menu-pop > a, .m-menu-pop > button { justify-content: flex-start; text-align: start; white-space: nowrap; }
+.version-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border: 1px solid #e6e2d9; border-radius: 999px; font-size: 11px; font-weight: 700; color: #5f6672; background: #fffefb; text-decoration: none; white-space: nowrap; direction: ltr; }
+.version-chip:hover { color: #0e5f66; border-color: #0e5f66; }
+.release-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid #b9d7d9; border-radius: 12px; background: #eef6f6; color: #15181d; }
+.release-notice b { color: #0e5f66; }
+.release-notice .grow { flex: 1 1 220px; }
+.release-list { display: grid; gap: 14px; }
+.release-card { border: 1px solid #e6e2d9; border-radius: 14px; background: #fffefb; padding: 14px 16px; }
+.release-card h2 { margin: 0; font-size: 17px; }
+.release-card h3 { margin: 14px 0 4px; font-size: 14px; color: #0e5f66; }
+.release-card ul { margin: 0; padding-inline-start: 20px; line-height: 1.9; }
+.release-meta { color: #5f6672; font-size: 12px; }
+@media (max-width: 640px) { .version-chip .vc-brand { display: none; } .m-menu-pop { min-width: 160px; } }
+.release-slot:empty { display: none; } .release-slot { padding: 12px 16px 0; } .release-slot .release-notice { margin: 0; }

@@ -29,3 +29,4 @@ export * from './case-workflow';
 export * from './workflow-blockers';
 
 export * from './part-delivery';
+export * from './releases';

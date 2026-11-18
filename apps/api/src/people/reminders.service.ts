@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, lte, ne, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, ne, type SQL, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   addWorkingMinutes,
@@ -184,7 +184,7 @@ export class RemindersService implements OnApplicationBootstrap, OnApplicationSh
     const [row] = await this.db
       .select({ t: tasks, responsible: cases.responsibleUserId, plate: vehicles.plate, department: departments.name })
       .from(tasks)
-      .innerJoin(cases, and(eq(cases.id, tasks.caseId), eq(cases.tenantId, tenantId)))
+      .innerJoin(cases, and(eq(cases.id, tasks.caseId), eq(cases.tenantId, tenantId), sql`${cases.status} <> 'deleted'`))
       .innerJoin(vehicles, eq(vehicles.id, cases.vehicleId))
       .innerJoin(departments, eq(departments.id, tasks.departmentId))
       .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)));

@@ -1,4 +1,10 @@
 import { CaseDocumentsController } from '../cases/case-documents.controller';
+import { CaseDeletionController } from '../cases/case-deletion.controller';
+import { CaseDeletionService } from '../cases/case-deletion.service';
+import { PrintController } from '../print/print.controller';
+import { PrintService } from '../print/print.service';
+import { ReleasesController } from '../releases/releases.controller';
+import { ReleasesService } from '../releases/releases.service';
 import { Module } from '@nestjs/common';
 import { DailyReportsModule } from '../daily-reports/daily-reports.module';
 import { AlertsController } from '../alerts/alerts.controller';
@@ -44,6 +50,9 @@ import {
   imports: [DailyReportsModule],
   controllers: [
     CaseDocumentsController,
+    CaseDeletionController,
+    PrintController,
+    ReleasesController,
     AlertsController,
     DeskController,
     ControlRoomController,
@@ -63,6 +72,9 @@ import {
     DiscrepanciesController,
   ],
   providers: [
+    CaseDeletionService,
+    PrintService,
+    ReleasesService,
     AlertsService,
     DeskService,
     ControlRoomService,

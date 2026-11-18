@@ -17,7 +17,8 @@ export class DashboardService {
   async summary(actor: Actor): Promise<DashboardSummary> {
     const db = this.handle.db;
     const tenantId = actor.user.tenantId;
-    const tenantCases = eq(cases.tenantId, tenantId);
+    // Soft-deleted cases (owner only) never count in current figures.
+    const tenantCases = and(eq(cases.tenantId, tenantId), sql`${cases.status} <> 'deleted'`)!;
     const count = (cond: ReturnType<typeof sql>) => sql<number>`(count(*) filter (where ${cond}))::int`;
 
     const [totals] = await db

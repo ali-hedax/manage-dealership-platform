@@ -77,6 +77,50 @@ export function normalizeTechnicalCode(raw: string | null | undefined): string |
   return v || null;
 }
 
+// ------------------------------------------- non-OEM matching (owner, 2026-11-18)
+// A non-OEM («غیرشرکتی») stock code may be longer than 10 characters, end in
+// English letters or carry leading zeros. The first 8 digits of its leading digit
+// run are the matching identifier against the 8-digit assessment code. Such a
+// match is only a candidate («احتمالاً معادل»): it is never interchangeable by
+// itself and is never preselected; the parts clerk chooses explicitly.
+
+/** Comparison form of a technical code: Latin digits, upper case, no spaces or safe separators (- _ . /). */
+export function codeMatchKey(raw: string | null | undefined): string | null {
+  const v = cleanCode(raw);
+  return v || null;
+}
+
+/** First 8 digits of the leading digit run of a code ("0012345678AB" → "00123456"); null when it does not start with 8 digits. */
+export function nonOemPrefix(raw: string | null | undefined): string | null {
+  const m = /^([0-9]{8})/.exec(cleanCode(raw));
+  return m ? m[1]! : null;
+}
+
+/** OEM («شرکتی»): the standard 10-digit procurement code; every other shape is non-OEM («غیرشرکتی»). */
+export function isOemStockCode(fullStockCode: string): boolean {
+  return /^[0-9]{10}$/.test(fullStockCode);
+}
+
+export type StockMatchKind = 'exact' | 'oem_variant' | 'non_oem';
+export const STOCK_MATCH_LABELS: Record<StockMatchKind, string> = {
+  exact: 'منطبق دقیق',
+  oem_variant: 'شرکتی · همان کد اختصاصی',
+  non_oem: 'غیرشرکتی · احتمالاً معادل',
+};
+
+/**
+ * How a stock code relates to a part. `base` is the part's 8-digit assessment code,
+ * `exact` its own complete codes (technical and procurement). Null = not a candidate.
+ */
+export function classifyStockMatch(fullStockCode: string, part: { base: string | null; exact: readonly string[]; aliasBase?: string | null }): StockMatchKind | null {
+  const code = codeMatchKey(fullStockCode);
+  if (!code) return null;
+  if (part.exact.some((e) => codeMatchKey(e) === code)) return 'exact';
+  if (!part.base) return null;
+  if (isOemStockCode(code)) return code.slice(0, 8) === part.base ? 'oem_variant' : null;
+  return part.aliasBase === part.base || nonOemPrefix(code) === part.base ? 'non_oem' : null;
+}
+
 export interface PartIdentifiers {
   /** 8-digit assessment identifier, when the line has one. */
   assessmentCode: string | null;

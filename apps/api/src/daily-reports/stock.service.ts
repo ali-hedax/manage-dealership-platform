@@ -2,6 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   RESERVATION_STATUS_LABELS,
+  assessmentCodeOf,
+  classifyStockMatch,
+  codeMatchKey,
+  isOemStockCode,
+  nonOemPrefix,
+  type StockCandidate,
   normalizePersian,
   parseStockCode,
   parseDecimal,
@@ -111,10 +117,12 @@ export class StockService {
     const effectiveBase = sql<string>`coalesce(${stockSnapshotItems.basePartNumber}, ${stockCodeAliases.basePartNumber})`;
     const term = toLatinDigits(q.q).replace(/\s+/g, ' ').trim();
     const code = term.replace(/\s+/g, '').toUpperCase();
-    if (q.base) conds.push(sql`${effectiveBase} = ${q.base}`);
+    // Non-OEM codes (longer, letters, other lengths) also match by their leading 8 digits (owner, 2026-11-18).
+    const byBase = (b: string) => sql`(${effectiveBase} = ${b} or (${stockSnapshotItems.codeKind} = 'needs_mapping' and substring(${stockSnapshotItems.fullStockCode} from '^[0-9]{8}') = ${b}))`;
+    if (q.base) conds.push(byBase(q.base));
     if (q.needsMapping) conds.push(eq(stockSnapshotItems.codeKind, 'needs_mapping'), isNull(stockCodeAliases.basePartNumber));
     if (term) {
-      if (/^\d{8}$/.test(code)) conds.push(sql`${effectiveBase} = ${code}`);
+      if (/^\d{8}$/.test(code)) conds.push(byBase(code));
       else if (/^[0-9A-Z]{3,}$/.test(code)) conds.push(ilike(stockSnapshotItems.fullStockCode, `%${code}%`));
       else {
         // Report text uses Arabic ي/ك; compare in Persian form.
@@ -180,6 +188,85 @@ export class StockService {
       page: q.page,
       pageSize: q.pageSize,
     };
+  }
+
+  /**
+   * Stock candidates of part lines (owner, 2026-11-18): exact complete code, OEM variants of the
+   * same 8-digit assessment code, and non-OEM codes whose leading 8 digits equal it. Each
+   * code+location is its own candidate with its usable quantity; nothing is preselected here.
+   */
+  async candidatesFor(tx: DbOrTx, tenantId: string, specs: { id: string; partNumber: string | null; procurementCode: string | null }[]): Promise<{ snapshot: Snapshot | null; byPart: Map<string, StockCandidate[]> }> {
+    const byPart = new Map<string, StockCandidate[]>();
+    const snap = await this.active(tx, tenantId);
+    if (!snap || !specs.length) return { snapshot: snap, byPart };
+    const keys = specs.map((p) => {
+      const exact = [p.partNumber, p.procurementCode].map(codeMatchKey).filter((x): x is string => !!x);
+      const base = assessmentCodeOf(p.procurementCode) ?? assessmentCodeOf(p.partNumber) ?? nonOemPrefix(p.partNumber);
+      return { id: p.id, exact, base };
+    });
+    const exacts = [...new Set(keys.flatMap((k) => k.exact))];
+    const bases = [...new Set(keys.map((k) => k.base).filter((x): x is string => !!x))];
+    if (!exacts.length && !bases.length) return { snapshot: snap, byPart };
+    const aliasJoin = and(eq(stockCodeAliases.tenantId, tenantId), eq(stockCodeAliases.fullStockCode, stockSnapshotItems.fullStockCode));
+    const effectiveBase = sql<string>`coalesce(${stockSnapshotItems.basePartNumber}, ${stockCodeAliases.basePartNumber})`;
+    const prefix = sql<string>`substring(${stockSnapshotItems.fullStockCode} from '^[0-9]{8}')`;
+    const match: SQL[] = [];
+    if (exacts.length) match.push(inArray(stockSnapshotItems.fullStockCode, exacts));
+    if (bases.length) match.push(inArray(effectiveBase, bases), and(eq(stockSnapshotItems.codeKind, 'needs_mapping'), inArray(prefix, bases))!);
+    const c = this.commitments(tx, tenantId);
+    const rows = await tx
+      .select({ i: stockSnapshotItems, alias: stockCodeAliases, reserved: sql<string>`coalesce(${c.reserved}, 0)::text`, issued: sql<string>`coalesce(${c.issued}, 0)::text` })
+      .from(stockSnapshotItems)
+      .leftJoin(stockCodeAliases, aliasJoin)
+      .leftJoin(c, and(eq(c.code, stockSnapshotItems.fullStockCode), eq(c.loc, stockSnapshotItems.locationAddress)))
+      .where(and(eq(stockSnapshotItems.snapshotId, snap.id), eq(stockSnapshotItems.tenantId, tenantId), sql`${stockSnapshotItems.quantity} > 0`, sql`(${sql.join(match, sql` or `)})`))
+      .orderBy(asc(stockSnapshotItems.fullStockCode), asc(stockSnapshotItems.locationAddress))
+      .limit(2000);
+    const avail = await this.available(tx, rows.map((r) => ({ quantity: r.i.quantity, reserved: r.reserved, issued: r.issued })));
+    const codes = [...new Set(rows.map((r) => r.i.fullStockCode))];
+    const holders = new Map<string, { caseId: string; caseNumber: string; quantity: string }[]>();
+    if (codes.length) {
+      const held = await tx
+        .select({ code: stockReservations.fullStockCode, loc: stockReservations.locationAddress, caseId: cases.id, caseNumber: cases.caseNumber, quantity: stockReservations.quantity })
+        .from(stockReservations)
+        .innerJoin(cases, eq(cases.id, stockReservations.caseId))
+        .where(and(eq(stockReservations.tenantId, tenantId), inArray(stockReservations.fullStockCode, codes), sql`(${stockReservations.status} = 'reserved' or (${stockReservations.status} = 'issued' and ${stockReservations.reflectedAt} is null))`));
+      for (const h of held) holders.set(`${h.code}@${h.loc}`, [...(holders.get(`${h.code}@${h.loc}`) ?? []), { caseId: h.caseId, caseNumber: h.caseNumber, quantity: dec(h.quantity)! }]);
+    }
+    const order = { exact: 0, oem_variant: 1, non_oem: 2 } as const;
+    for (const k of keys) {
+      const list: StockCandidate[] = [];
+      rows.forEach(({ i, alias, reserved, issued }, n) => {
+        const kind = classifyStockMatch(i.fullStockCode, { base: k.base, exact: k.exact, aliasBase: alias?.basePartNumber ?? null });
+        if (!kind) return;
+        list.push({
+          match: kind,
+          oem: isOemStockCode(i.fullStockCode),
+          reservedFor: holders.get(`${i.fullStockCode}@${i.locationAddress}`) ?? [],
+          fullStockCode: i.fullStockCode,
+          rawCode: i.rawCode,
+          basePartNumber: i.basePartNumber ?? alias?.basePartNumber ?? null,
+          alias: alias ? { id: alias.id, basePartNumber: alias.basePartNumber, reason: alias.reason, version: alias.version } : null,
+          supplySuffix: i.supplySuffix,
+          codeKind: i.codeKind as StockCandidate['codeKind'],
+          description: i.description,
+          unit: i.unit,
+          vehicleModel: i.vehicleModel,
+          locationAddress: i.locationAddress,
+          locationText: i.locationText,
+          reported: dec(i.quantity)!,
+          reserved: dec(reserved)!,
+          issuedUnreflected: dec(issued)!,
+          available: avail[n]!,
+          salePrice: dec(i.salePrice),
+          avgPrice: dec(i.avgPrice),
+          carriedReportedAt: i.carriedReportedAt?.toISOString() ?? null,
+        });
+      });
+      list.sort((a, b) => order[a.match] - order[b.match]);
+      byPart.set(k.id, list);
+    }
+    return { snapshot: snap, byPart };
   }
 
   /** Match only exact full codes or an unambiguous eligible location for a base code. */
