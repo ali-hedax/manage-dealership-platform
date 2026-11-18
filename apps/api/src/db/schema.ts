@@ -432,6 +432,7 @@ export const assessments = pgTable(
     versionNo: smallint('version_no').notNull(),
     kind: text('kind').notNull(),
     status: text('status').notNull().default('draft'),
+    smartManual: boolean('smart_manual').notNull().default(false),
     previousId: uuid('previous_id'),
     assessorName: text('assessor_name').notNull(),
     assessorOrg: text('assessor_org'),
