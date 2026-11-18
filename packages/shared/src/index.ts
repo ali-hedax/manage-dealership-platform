@@ -31,3 +31,5 @@ export * from './workflow-blockers';
 export * from './part-delivery';
 
 export * from './assessment-search';
+
+export * from './assessment-part-review';
