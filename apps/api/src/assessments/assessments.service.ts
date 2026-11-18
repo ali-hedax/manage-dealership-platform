@@ -623,7 +623,7 @@ export class AssessmentsService {
       const [r]=await tx.select().from(assessmentTechnicalReviews)
         .where(and(eq(assessmentTechnicalReviews.itemId,itemId),eq(assessmentTechnicalReviews.tenantId,tenantId))).for('update');
       const fingerprint=technicalReviewFingerprint(i);
-      if(r&&r.fingerprint!==fingerprint) throw conflict('REVIEW_STALE_ITEM','اطلاعات قطعه تغییر کرده؛ صفحه را تازه کنید و دوباره بررسی کنید');
+      if(r&&r.fingerprint!==fingerprint&&input.action!=='reset') throw conflict('REVIEW_STALE_ITEM','اطلاعات قطعه تغییر کرده؛ ابتدا بررسی قبلی را بازنشانی کنید');
       const state={itemId,assessmentId:i.assessmentId,action:'replace' as const,
         partNumber:i.partNumber,description:i.description,status:(r?.status??'pending') as 'pending'|'accepted'|'returned',
         reason:r?.reason??null,fingerprint,reviewedBy:r?.reviewedBy??null,
