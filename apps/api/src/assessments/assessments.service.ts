@@ -4,6 +4,9 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   toPersianDigits,
   assessmentPartKey,
+  technicalReviewFingerprint,
+  applyTechnicalReview,
+  type TechnicalReviewAction,
   type ImportAssessmentInput,
   type AssessmentImportPreview,
   type Assessment,
@@ -21,10 +24,10 @@ import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { BlockersService } from '../blockers/blockers.service';
 import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
-import { badRequest, conflict, notFound, versionConflict } from '../common/errors';
+import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, cases, departments, partRequests, users } from '../db/schema';
+import { assessmentItems, assessmentTechnicalReviews, assessments, blockers, cases, departments, partRequests, users } from '../db/schema';
 import { notifyUsers, partLink, usersWithRole } from '../parts/part-notify';
 import { parseAssessmentSheet } from './assessment-sheet';
 
@@ -561,6 +564,81 @@ export class AssessmentsService {
       await this.closeBlocker(tx, actor, a.blockerId, at, 'ثبت تصمیم مجوز');
     });
     return this.get(actor, assessmentId);
+  }
+
+  /**
+   * Internal review only; never changes official assessment authorization or parts procurement.
+   * Unknown (unreviewed) lines are pending. A changed fingerprint invalidates old acceptance.
+   */
+  async technicalReviews(actor: Actor, caseId: string) {
+    if (!actor.user.permissions.has('case.read')) throw forbidden();
+    await this.cases.detail(actor, caseId);
+    const tenantId=actor.user.tenantId;
+    const rows=await this.db.select({i:assessmentItems,a:assessments,r:assessmentTechnicalReviews})
+      .from(assessmentItems).innerJoin(assessments,and(eq(assessments.id,assessmentItems.assessmentId),eq(assessments.tenantId,tenantId)))
+      .leftJoin(assessmentTechnicalReviews,and(eq(assessmentTechnicalReviews.itemId,assessmentItems.id),eq(assessmentTechnicalReviews.tenantId,tenantId)))
+      .where(and(eq(assessments.caseId,caseId),eq(assessmentItems.tenantId,tenantId),eq(assessments.status,'draft')))
+      .orderBy(asc(assessmentItems.lineNo));
+    return rows.filter(x=>x.i.action==='replace').map(({i,r})=>{
+      const fingerprint=technicalReviewFingerprint(i);
+      const valid=!!r&&r.fingerprint===fingerprint;
+      return {itemId:i.id,assessmentId:i.assessmentId,partNumber:i.partNumber,description:i.description,
+        status:valid?r.status:'pending',reason:valid?r.reason:null,
+        reviewedAt:valid?iso(r.reviewedAt):null,reviewedBy:valid?r.reviewedBy:null,
+        version:r?.version??0,stale:!!r&&!valid};
+    });
+  }
+
+  /** Per-item decision with tenant, role, version and immutable audit event checks. */
+  async reviewTechnicalItem(actor: Actor,itemId:string,input:{
+    action:TechnicalReviewAction; reason?:string|null; expectedVersion:number;
+  }) {
+    if(!actor.user.permissions.has('part.manage')) throw forbidden();
+    const tenantId=actor.user.tenantId;
+    await this.db.transaction(async tx=>{
+      const i=await this.loadItem(tx,tenantId,itemId);
+      const [a]=await tx.select().from(assessments).where(and(eq(assessments.id,i.assessmentId),eq(assessments.tenantId,tenantId))).for('update');
+      if(!a) throw notFound('کارشناسی');
+      if(a.status!=='draft') throw badRequest('REVIEW_DRAFT_ONLY','بررسی داخلی فقط روی پیش‌نویس کارشناسی انجام می‌شود');
+      await this.cases.loadForWrite(tx,tenantId,a.caseId);
+      if(i.action!=='replace') throw badRequest('REVIEW_PART_ONLY','اجرت در بررسی شماره فنی قطعات قرار نمی‌گیرد');
+      const [r]=await tx.select().from(assessmentTechnicalReviews)
+        .where(and(eq(assessmentTechnicalReviews.itemId,itemId),eq(assessmentTechnicalReviews.tenantId,tenantId))).for('update');
+      const fingerprint=technicalReviewFingerprint(i);
+      if(r&&r.fingerprint!==fingerprint) throw conflict('REVIEW_STALE_ITEM','اطلاعات قطعه تغییر کرده؛ صفحه را تازه کنید و دوباره بررسی کنید');
+      const state={itemId,assessmentId:i.assessmentId,action:'replace' as const,
+        partNumber:i.partNumber,description:i.description,status:(r?.status??'pending') as 'pending'|'accepted'|'returned',
+        reason:r?.reason??null,fingerprint,reviewedBy:r?.reviewedBy??null,
+        reviewedAt:iso(r?.reviewedAt),version:r?.version??0};
+      const outcome=applyTechnicalReview(state,{...input,actorId:actor.user.id,occurredAt:new Date().toISOString()});
+      if(!outcome.ok){
+        if(outcome.code==='STALE_VERSION')throw versionConflict(state.version);
+        throw badRequest(outcome.code??'REVIEW_INVALID',outcome.code==='REASON_REQUIRED'?'برای برگشت قطعه، دلیل اصلاح را وارد کنید':'درخواست بررسی معتبر نیست');
+      }
+      const next=outcome.line;
+      if(r){
+        const [saved]=await tx.update(assessmentTechnicalReviews).set({
+          status:next.status,reason:next.reason,fingerprint:next.fingerprint,
+          reviewedBy:next.reviewedBy,reviewedAt:next.reviewedAt?new Date(next.reviewedAt):null,
+          version:next.version,updatedAt:new Date(),
+        }).where(and(eq(assessmentTechnicalReviews.itemId,itemId),eq(assessmentTechnicalReviews.version,r.version))).returning();
+        if(!saved)throw versionConflict();
+      }else{
+        await tx.insert(assessmentTechnicalReviews).values({
+          itemId,tenantId,assessmentId:i.assessmentId,status:next.status,reason:next.reason,
+          fingerprint:next.fingerprint,reviewedBy:next.reviewedBy,
+          reviewedAt:next.reviewedAt?new Date(next.reviewedAt):null,version:next.version
+        });
+      }
+      await this.audit.record(tx,actor,{
+        entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.technical_review',
+        reason:next.reason,
+        before:{itemId,status:state.status,partNumber:i.partNumber,version:state.version},
+        after:{itemId,status:next.status,partNumber:i.partNumber,version:next.version},
+        snapshot:{version:a.version,row:{assessmentId:a.id,itemId,status:next.status,reviewVersion:next.version}}
+      });
+    });
+    return {itemId,updated:true};
   }
 
   // ----------------------------------------------------------------- queries
