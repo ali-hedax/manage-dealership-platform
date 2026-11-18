@@ -1,3 +1,10 @@
+## 2026-11-18 — Smart Assessment quick-entry validation slice (PR #103, draft)
+
+- Independent branch `feature/smart-assessment-persian-search`: existing reference parts, case-context search API, Persian normalized ranking and insurance/personal draft quick-entry UI. No merge or production release.
+- Fixed malformed suggestion prefilter, then added `apps/api/test/smart-assessment.e2e-spec.ts` and `apps/web/e2e/smart-assessment.spec.ts` to test imported synthetic catalog, role restrictions, consecutive line persistence, duplicate prevention and page reload.
+- Last fully successful CI checked before these changes: run 44260852930 for commit `6a991c0`; latest tests **not yet verified**. Do not label this feature done until latest CI, browser checks and test report are green.
+- Next: resolve any fresh test failure; verify code with an actual synthetic dataset, then implement per-line parts-clerk correction / return workflow with audit, without blocking approved lines. No schema migration or production access in this slice.
+
 ## 2026-11-18 — تعداد اختصاصی، تحویل تعدادی و جایگزین ابطال امداد
 
 - شاخهٔ `feature/emdad-quantity-partial-delivery` از `c26c516`، آخرین commit کد `e8ef1a7`. مالک «تعداد اختصاصی» را به‌جای انتخاب قبلی تأیید کرد. رزرو تا سقف موجودی، انتخاب تعداد تحویل، حفظ مانده و جایگزین یکتای همان شاسی و کد اختصاصی پیاده شد. migration افزایشی `0027_low_praxagora` و down آزمایشی دارد.
