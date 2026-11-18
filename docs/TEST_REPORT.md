@@ -1,3 +1,10 @@
+## 2026-11-18 — Smart Assessment PR #103 (work in progress)
+
+- Branch: `feature/smart-assessment-persian-search`. Existing synthetic-less production data was **not** accessed or changed.
+- Prior commit `6a991c0`: CI run [44260852930](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/44260852930) succeeded, including six jobs. **This result does not cover the newly added tests or SQL correction.**
+- After finding a damaged SQL prefilter in current branch, corrected the case-scoped catalog suggestions method; added unit-style HTTP integration coverage in `apps/api/test/smart-assessment.e2e-spec.ts` and a Playwright browser flow in `apps/web/e2e/smart-assessment.spec.ts`. Both use synthetic case/catalog data.
+- **Latest tests not yet verified:** wait for latest PR head CI; resolve failures before merge. Manual real-browser behavior has not been confirmed in this chat. No production deployment.
+
 ## 2026-11-18 — تعداد اختصاصی و تحویل تعدادی امداد
 
 - کد `e8ef1a7`. محلی، شش مجموعه و **۵۹/۵۹** آزمون موفق (`special-aid.e2e-spec`، `part-flow.e2e-spec`، `parts-workbench.e2e-spec`، `daily-reports.e2e-spec`، `guided-migrations.e2e-spec` و `report-rows.spec`). همهٔ داده‌ها ساختگی‌اند. پوشش تغییر: تعداد اختصاصی ۳ در برابر تعداد تدارکاتی ۸، خانهٔ خالی، افزایش تعداد از نیاز اولیه، تحویل ۲+۱، نسخهٔ قدیمی و سقف تحویل، جایگزین با شمارهٔ متفاوت و با شمارهٔ یکسان، حفظ ابطال و رد انتخاب بین چند جایگزین. migration ۲۸ مرحله و down روی پایگاه تمرینی بررسی شد.
