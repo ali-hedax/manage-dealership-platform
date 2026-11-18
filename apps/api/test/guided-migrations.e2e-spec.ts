@@ -27,11 +27,11 @@ it('upgrades the previous schema without rewriting existing cases and rehearses 
     await client.query("insert into cases(id,tenant_id,vehicle_id,case_number,admitted_at,stage,created_by,updated_by,is_test) values ($1,$2,$3,'AC-1405-0999',now(),'quality_control',$4,$4,true)", [kase, tenant, vehicle, user]);
     const before = (await client.query('select to_jsonb(c) as data from cases c where tenant_id=$1 and id=$2', [tenant, kase])).rows;
     await migrate(db, { migrationsFolder: source });
-    expect((await client.query('select count(*)::int as count from drizzle.__drizzle_migrations')).rows).toEqual([{ count: 29 }]);
+    expect((await client.query('select count(*)::int as count from drizzle.__drizzle_migrations')).rows).toEqual([{ count: journal.entries.length }]);
     expect((await client.query('select workflow from cases where tenant_id=$1 and id=$2', [tenant, kase])).rows).toEqual([{ workflow: null }]);
     expect((await client.query("select to_jsonb(c)-'workflow'-'deleted_at'-'deleted_by'-'delete_reason'-'deleted_from_status' as data from cases c where tenant_id=$1 and id=$2", [tenant, kase])).rows).toEqual(before);
     expect((await client.query("select to_regclass('public.case_documents') as name")).rows).toEqual([{ name: 'case_documents' }]);
-    for (const name of ['0028_pretty_chamber', '0027_low_praxagora', '0026_broad_wildside', '0025_freezing_alex_power', '0024_fat_zaran']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
+    for (const name of ['0029_smart_assessment', '0028_pretty_chamber', '0027_low_praxagora', '0026_broad_wildside', '0025_freezing_alex_power', '0024_fat_zaran']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
     expect((await client.query('select to_jsonb(c) as data from cases c where tenant_id=$1 and id=$2', [tenant, kase])).rows).toEqual(before);
   } finally {
     await client.close();
