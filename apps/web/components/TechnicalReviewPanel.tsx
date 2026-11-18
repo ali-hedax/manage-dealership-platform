@@ -60,7 +60,7 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
         <span className={`chip ${badge[r.status]}`}>{label[r.status]}</span>
       </div>
       {r.status==='returned'&&r.reason&&<p className="callout callout-amber small">دلیل برگشت: {r.reason}</p>}
-      {r.stale&&<p className="callout callout-amber small">اطلاعات قطعه تغییر کرده است؛ برای بررسی دوباره صفحه را تازه کنید.</p>}
+      {r.stale&&<p className="callout callout-amber small">اطلاعات قطعه تغییر کرده است؛ برای بررسی دوباره ابتدا «بازنشانی بررسی» را بزنید.</p>}
       {can('part.manage')&&<div className="stack">
         <label className="field"><span>دلیل اصلاح (هنگام برگشت الزامی)</span>
           <input className="input" value={reason[r.itemId]??''} maxLength={500}
@@ -71,7 +71,7 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
         <div className="row" style={{gap:8,flexWrap:'wrap'}}>
           <button type="button" className="btn btn-sm" disabled={busy!==null||r.stale} onClick={()=>void decide(r,'accept')}>تأیید فنی</button>
           <button type="button" className="btn btn-sm" disabled={busy!==null||r.stale} onClick={()=>void decide(r,'return')}>برگشت برای اصلاح</button>
-          {r.status!=='pending'&&<button type="button" className="btn btn-sm" disabled={busy!==null} onClick={()=>void decide(r,'reset')}>لغو تصمیم</button>}
+          {(r.status!=='pending'||r.stale)&&<button type="button" className="btn btn-sm" disabled={busy!==null} onClick={()=>void decide(r,'reset')}>{r.stale?'بازنشانی بررسی':'لغو تصمیم'}</button>}
         </div>
       </div>}
     </div>)}
