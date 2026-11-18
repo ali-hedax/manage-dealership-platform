@@ -350,7 +350,7 @@ export class AssessmentsService {
             fingerprint:technicalReviewFingerprint(next),version:review.version+1,updatedAt:new Date(),
           }).where(and(eq(assessmentTechnicalReviews.itemId,item.id),eq(assessmentTechnicalReviews.version,review.version)));
           await this.audit.record(tx,actor,{
-            entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.technical_review_reset',
+            entityType:'assessment_technical_review',entityId:item.id,caseId:a.caseId,action:'assessment.technical_review_reset',
             before:{itemId:item.id,status:review.status,partNumber:item.partNumber},
             after:{itemId:item.id,status:'pending',partNumber:next.partNumber},
             snapshot:{version:review.version+1,row:{itemId:item.id,reviewStatus:'pending'}}
@@ -649,11 +649,11 @@ export class AssessmentsService {
         });
       }
       await this.audit.record(tx,actor,{
-        entityType:'assessment',entityId:a.id,caseId:a.caseId,action:'assessment.technical_review',
+        entityType:'assessment_technical_review',entityId:itemId,caseId:a.caseId,action:'assessment.technical_review',
         reason:next.reason,
         before:{itemId,status:state.status,partNumber:i.partNumber,version:state.version},
         after:{itemId,status:next.status,partNumber:i.partNumber,version:next.version},
-        snapshot:{version:a.version,row:{assessmentId:a.id,itemId,status:next.status,reviewVersion:next.version}}
+        snapshot:{version:next.version,row:{assessmentId:a.id,itemId,status:next.status,reviewVersion:next.version}}
       });
     });
     return {itemId,updated:true};
