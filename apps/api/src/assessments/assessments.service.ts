@@ -434,6 +434,23 @@ export class AssessmentsService {
       const kase = await this.cases.loadForWrite(tx, tenantId, a.caseId);
       const items = await tx.select().from(assessmentItems).where(eq(assessmentItems.assessmentId, a.id));
       if (!items.length) throw badRequest('EMPTY_ASSESSMENT', 'کارشناسی بدون قلم را نمی‌توان نهایی کرد');
+      // Only new review-enabled insurance/private drafts require every active
+      // technical part to be accepted before finalization. Approved lines can
+      // already be dispatched independently while the assessment is a draft.
+      const reviewRows=await tx.select().from(assessmentTechnicalReviews)
+        .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
+          eq(assessmentTechnicalReviews.assessmentId,a.id)));
+      if(['insurance','personal'].includes(kase.coverageType)&&reviewRows.length){
+        const byItem=new Map(reviewRows.map(r=>[r.itemId,r]));
+        const awaiting=items.filter(i=>i.action==='replace'&&i.approvalStatus!=='rejected')
+          .filter(i=>{
+            const review=byItem.get(i.id);
+            return !review||review.status!=='accepted'||
+              review.fingerprint!==technicalReviewFingerprint(i);
+          });
+        if(awaiting.length)throw badRequest('ASSESSMENT_TECHNICAL_REVIEW',
+          'پیش از نهایی‌کردن، تمام قطعات کارشناسی را تأیید فنی یا اصلاح کنید؛ قطعات تأییدشده می‌توانند جداگانه به تأمین ارسال شوند');
+      }
       const totals = totalsOf(items);
 
       let previous: AssessmentRow | null = null;
