@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, sql, inArray } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, normalizePersian, normalizeVin, toLatinDigits, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
+import { REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, rankAssessmentCandidates, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
@@ -143,6 +143,48 @@ export class ReferenceDataService {
   }
   return {truncated:found.length>20,records};
  }
+
+ /**
+  * Read-only suggestions for the accident expert. Reuses existing reference
+  * part records, checks case tenancy and never creates case parts.
+  *
+  * The free-text vehicleUse field is only a ranking hint, NOT verified fitment.
+  * A separate authoritative catalog/VIN mapping is needed before confirming it.
+  */
+ async suggestAssessmentParts(actor:Actor,caseId:string,query:string){
+  if(!actor.user.permissions.has('assessment.manage')||!actor.user.permissions.has('case.read'))throw forbidden();
+  const tenantId=actor.user.tenantId;
+  const [context]=await this.db.select({model:vehicles.model,trim:vehicles.trim,brand:vehicles.brand})
+   .from(cases).innerJoin(vehicles,and(eq(vehicles.id,cases.vehicleId),eq(vehicles.tenantId,tenantId)))
+   .where(and(eq(cases.id,caseId),eq(cases.tenantId,tenantId))).limit(1);
+  if(!context)throw notFound('پرونده خودرو');
+  const normalized=normalizeAssessmentSearch(query);
+  if(normalized.length<2)throw badRequest('ASSESSMENT_SEARCH_SHORT','حداقل دو نویسه از نام یا شماره فنی وارد کنید');
+  // Normalize common Persian/Arabic shapes in SQL for a bounded prefilter.
+  // Do not load the entire catalog into memory on each keystroke.
+  const folded=sql`replace(replace(replace(replace(replace(replace(lower(coalesce(${referenceEntries.data}->>'description','')),'ي','ی'),'ك','ک'),' ',''),chr(8204),''),'-',''),'_','')`;
+  const fragment=normalized.slice(0,Math.min(3,normalized.length)).replace(/[\\%_]/g,'\\ private record(e:Entry,fileName:string):ReferenceRecord');
+  const codeQuery=toLatinDigits(query).replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
+  const prefilter=sql`(${folded} like ${'%'+fragment+'%'} or ${referenceEntries.lookupKey} like ${codeQuery.replace(/[\\%_]/g,'\\ private record(e:Entry,fileName:string):ReferenceRecord')+'%'})`;
+  const rows=await this.db.select({id:referenceEntries.id,data:referenceEntries.data})
+   .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts'),prefilter))
+   .orderBy(referenceEntries.lookupKey).limit(250);
+  const candidates=rows.map(row=>{
+   const data=row.data as Record<string,unknown>;
+   return {id:row.id,name:String(data.description??''),partNumber:String(data.partNumber??''),
+    vehicleUse:typeof data.vehicleUse==='string'?data.vehicleUse:'',
+    vehicleMatch:'unknown' as const};
+  }).filter(row=>row.name&&row.partNumber);
+  const ranked=rankAssessmentCandidates(query,candidates,20);
+  const modelKey=normalizeAssessmentSearch(context.model??'');
+  const ordered=ranked.map(item=>({
+   ...item,vehicleUse:candidates.find(row=>row.id===item.id)?.vehicleUse??'',
+   vehicleUseHint:!!modelKey&&normalizeAssessmentSearch(candidates.find(row=>row.id===item.id)?.vehicleUse??'').includes(modelKey),
+  })).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score);
+  return {caseId,vehicle:{brand:context.brand,model:context.model,trim:context.trim},
+   results:ordered,limited:rows.length===250,fitmentVerified:false};
+ }
+
  private record(e:Entry,fileName:string):ReferenceRecord{return {id:e.id,kind:e.kind as ReferenceKind,data:e.data as ReferenceRecord['data'],fileName,importedAt:e.updatedAt.toISOString(),version:e.version};}
  async report(actor:Actor,id:string){const imp=await this.get(actor,id);return writeSheet('نتیجه اطلاعات پایه',[['ردیف','نتیجه','پیام',...Object.values(REFERENCE_FIELDS[imp.kind])],...imp.rows.map(r=>[r.rowNo,REFERENCE_OUTCOME_LABELS[r.outcome],r.messages.join('؛ '),...Object.keys(REFERENCE_FIELDS[imp.kind]).map(k=>r.data[k as ReferenceField]||'')])]);}
  sample(actor:Actor,kind:ReferenceKind){this.allow(actor,kind,true);return writeSheet('اطلاعات پایه',[Object.values(REFERENCE_FIELDS[kind])]);}
