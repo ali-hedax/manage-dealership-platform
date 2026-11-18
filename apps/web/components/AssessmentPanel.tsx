@@ -113,8 +113,25 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const list = versions ?? [];
   const current = list.at(-1);
   const older = list.slice(0, -1).reverse();
-  const dispatchLines=current&&requests?assessmentDispatchLines(current.items,list.flatMap(a=>a.items),requests):[];
-  useEffect(()=>{setSelected([]);},[current?.id,current?.version]);
+  const technicalFlow=kase.coverageType==='insurance'||kase.coverageType==='personal';
+  const {data:technicalReviews}=useSWR<Array<{itemId:string;status:string;stale:boolean}>>(
+    technicalFlow&&can('part.request')?`/cases/${kase.id}/technical-reviews`:null,fetcher
+  );
+  const reviewEnabled=technicalFlow&&(technicalReviews?.length??0)>0;
+  const technicalByItem=new Map((technicalReviews??[]).map(r=>[r.itemId,r]));
+  const dispatchLines=current&&requests
+    ?assessmentDispatchLines(current.items,list.flatMap(a=>a.items),requests).map(line=>{
+      if(!technicalFlow||line.state!=='ready')return line;
+      if(!technicalReviews)return {...line,state:'review' as const,message:'در حال بررسی وضعیت تأیید فنی'};
+      if(!reviewEnabled)return line; // Golden Card/legacy flow unaffected
+      const decision=technicalByItem.get(line.itemId);
+      if(decision?.status==='accepted'&&!decision.stale)return line;
+      return {...line,state:'review' as const,message:decision?.status==='returned'
+        ?'شماره فنی برای اصلاح برگشت داده شده است'
+        :'نیازمند تأیید فنی مسئول قطعات'};
+    }):[];
+  const reviewStateKey=(technicalReviews??[]).map(r=>`${r.itemId}:${r.status}:${r.stale}`).join(',');
+  useEffect(()=>{setSelected([]);},[current?.id,current?.version,reviewStateKey]);
   async function dispatchParts(){
     if(!current||!selected.length||sending)return;setSending(true);
     try{const items=await api<Part[]>(`/cases/${kase.id}/parts/from-assessment`,{body:{assessmentId:current.id,expectedVersion:current.version,itemIds:selected}});await refreshCache(`/cases/${kase.id}/parts`,items,{revalidate:false});await mutate();setSelected([]);onChange();toast('اقلام انتخابی به قطعات و تأمین ارسال شدند');window.location.hash='case-parts';}
