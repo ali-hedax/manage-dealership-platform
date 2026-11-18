@@ -167,6 +167,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/blockers/:id/follow-up` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/blockers/:id/resolve` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/alerts/respond` | [source](../apps/api/src/alerts/alerts.controller.ts) |
+| POST | `/api/v1/cases/:id/assessment-catalog/search` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/cases/:id/blockers` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/delivery` | [source](../apps/api/src/completion/completion.controller.ts) |
