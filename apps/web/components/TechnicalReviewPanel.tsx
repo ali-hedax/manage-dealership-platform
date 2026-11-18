@@ -28,7 +28,7 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
   const [reason,setReason]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState<string|null>(null);
   const rows=(data??[]).filter(r=>r.assessmentId===assessment.id);
-  if(assessment.status!=='draft'||!rows.length) return null;
+  if(!rows.length) return null;
   async function decide(r:Review,action:'accept'|'return'|'reset') {
     if(busy) return;
     const explanation=(reason[r.itemId]??'').trim();
@@ -61,7 +61,7 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
       </div>
       {r.status==='returned'&&r.reason&&<p className="callout callout-amber small">دلیل برگشت: {r.reason}</p>}
       {r.stale&&<p className="callout callout-amber small">اطلاعات قطعه تغییر کرده است؛ برای بررسی دوباره ابتدا «بازنشانی بررسی» را بزنید.</p>}
-      {can('part.manage')&&<div className="stack">
+      {can('part.manage')&&assessment.status==='draft'&&<div className="stack">
         <label className="field"><span>دلیل اصلاح (هنگام برگشت الزامی)</span>
           <input className="input" value={reason[r.itemId]??''} maxLength={500}
             placeholder="مثلاً شماره فنی مناسب این تیپ نیست"
