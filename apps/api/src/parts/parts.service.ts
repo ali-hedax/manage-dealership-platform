@@ -166,7 +166,7 @@ export class PartsService {
       const reviewRows=await tx.select().from(assessmentTechnicalReviews)
         .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
           eq(assessmentTechnicalReviews.assessmentId,current.id)));
-      const requiresTechnicalReview=['insurance','personal'].includes(kase.coverageType)&&reviewRows.length>0;
+      const requiresTechnicalReview=current.smartManual;
       const reviewByItem=new Map(reviewRows.map(r=>[r.itemId,r]));
       const isAccepted=(itemId:string)=>{
         const item=items.find(i=>i.id===itemId);
