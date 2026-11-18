@@ -11,6 +11,12 @@
 - Last fully successful CI checked before these changes: run 44260852930 for commit `6a991c0`; latest tests **not yet verified**. Do not label this feature done until latest CI, browser checks and test report are green.
 - Next: resolve any fresh test failure; verify code with an actual synthetic dataset, then implement per-line parts-clerk correction / return workflow with audit, without blocking approved lines. No schema migration or production access in this slice.
 
+## 2026-11-18 — نسخهٔ v1.0.0 (هشت اصلاح) — شاخه و PR
+
+- شاخهٔ feature/release-v1-eight-improvements از main در 98d8a31. بخش ۱۸ سند جامع قواعد تازهٔ مالک را ثبت کرد. migration افزایشی 0028_pretty_chamber با down آزمایشی.
+- آزمون‌ها: docs/TEST_REPORT.md. قدم بعد: CI سبز، ادغام، دانلود artifact همان SHA از main، پوشهٔ انتشار روی سرور مشتق از emdadqty-98d8a31-20261118، پشتیبان و تمرین migration روی نسخهٔ بازیابی‌شده، نصب، بررسی نسخه v1.0.0 و تگ git.
+- بازگشت به 98d8a31 پس از استفادهٔ موازی از موجودی: تحویل‌های حالت موازی تا بازگشت نسخهٔ سازگار متوقف بماند؛ ستون‌ها حذف نشوند.
+
 ## 2026-11-18 — تعداد اختصاصی، تحویل تعدادی و جایگزین ابطال امداد
 
 - شاخهٔ `feature/emdad-quantity-partial-delivery` از `c26c516`، آخرین commit کد `e8ef1a7`. مالک «تعداد اختصاصی» را به‌جای انتخاب قبلی تأیید کرد. رزرو تا سقف موجودی، انتخاب تعداد تحویل، حفظ مانده و جایگزین یکتای همان شاسی و کد اختصاصی پیاده شد. migration افزایشی `0027_low_praxagora` و down آزمایشی دارد.
