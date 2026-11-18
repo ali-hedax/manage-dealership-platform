@@ -1,9 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import request from 'supertest';
-import { CURRENT_RELEASE, formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part, type StockCandidate } from '@manage/shared';
-import { appReleases, auditEvents, cases, emdadRequests, partCodeCorrections, partRequests, stockReservations, users } from '../src/db/schema';
+import { formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part, type StockCandidate } from '@manage/shared';
+import { appVersions, auditEvents, cases, emdadRequests, partCodeCorrections, partRequests, stockReservations, users } from '../src/db/schema';
 import { buildEmdadXml, buildStockXlsx, emdadRow, type StockRow } from '../src/daily-reports/fixtures';
 import { PrintService } from '../src/print/print.service';
+import { ReleasesService } from '../src/releases/releases.service';
 import { Client, createHarness, daysAgo, type Harness } from './harness';
 
 // Release v1.0.0 (owner, 2026-11-18): parallel stock + special aid, non-OEM matching,
@@ -266,19 +267,54 @@ describe('4 · owner-only recoverable case deletion', () => {
 });
 
 describe('5 · version and release notes', () => {
-  it('reports the running version, records its first start once, and stores the acknowledgement per person', async () => {
-    const cur = (await expert.get('/releases/current')).body;
-    expect(cur).toMatchObject({ version: CURRENT_RELEASE.version, seen: false });
-    const history = (await parts.get('/releases')).body as { version: string; sections: { items: string[] }[] }[];
-    expect(history[0]!.version).toBe(CURRENT_RELEASE.version);
-    expect(history[0]!.sections.flatMap((s) => s.items).length).toBeGreaterThanOrEqual(8);
-    expect((await expert.post('/releases/ack', { version: 'v0.0.1' })).status).toBe(422);
-    expect((await expert.post('/releases/ack', { version: CURRENT_RELEASE.version })).body.seen).toBe(true);
-    expect((await expert.get('/releases/current')).body.seen).toBe(true);
-    expect((await parts.get('/releases/current')).body.seen).toBe(false);
-    const recs = await h.db.db.select().from(appReleases);
-    expect(recs.map((r) => r.version)).toEqual([CURRENT_RELEASE.version]);
-    expect((await request(h.app.getHttpServer()).get('/api/v1/releases/current')).status).toBe(401);
+  it('numbers each confirmed release once, never a failed attempt, and keeps the older number after a rollback', async () => {
+    const svc = h.app.get(ReleasesService);
+    const patch = (v: string) => Number(v.split('.')[2]);
+    const health = async () => (await request(h.app.getHttpServer()).get('/api/v1/health')).body as { version: string | null; line: string };
+    const saved = process.env.GIT_COMMIT;
+    try {
+      process.env.GIT_COMMIT = 'aaaaaaa11111';
+      // Started but not confirmed: no number and no announcement yet.
+      expect((await expert.get('/releases/current')).body).toMatchObject({ version: null, line: 'v1.0', seen: true });
+      expect(await health()).toMatchObject({ version: null, line: 'v1.0' });
+      const first = await svc.confirm('aaaaaaa11111');
+      expect(first.created).toBe(true);
+      // Re-running the same release does not create another number.
+      expect(await svc.confirm('aaaaaaa11111')).toMatchObject({ version: first.version, created: false });
+      expect(await svc.confirm('AAAAAAA11111fff')).toMatchObject({ version: first.version, created: false });
+      const cur = (await expert.get('/releases/current')).body;
+      expect(cur).toMatchObject({ version: first.version, seen: false, commit: 'aaaaaaa11111' });
+      expect(cur.summary.length).toBeGreaterThan(20);
+      expect((await health()).version).toBe(first.version);
+
+      // A failed attempt: the new image started, failed its checks and was rolled back before confirmation.
+      process.env.GIT_COMMIT = 'bbbbbbb22222';
+      expect((await expert.get('/releases/current')).body.version).toBeNull();
+      // Rollback: the older commit shows the number it already had.
+      process.env.GIT_COMMIT = 'aaaaaaa11111';
+      expect((await expert.get('/releases/current')).body.version).toBe(first.version);
+
+      // The next successful release gets the next patch; the failed commit never got one.
+      const next = await svc.confirm('ccccccc33333');
+      expect(patch(next.version)).toBe(patch(first.version) + 1);
+      expect(next.noteKeys).toEqual([]);
+      const history = (await parts.get('/releases')).body as { version: string; commit: string; running: boolean; summary: string; sections: { items: string[] }[] }[];
+      expect(history.map((r) => r.version)).toEqual([next.version, first.version]);
+      expect(history.map((r) => r.commit)).not.toContain('bbbbbbb22222');
+      expect(history[1]!.running).toBe(true);
+      expect(history[1]!.sections.flatMap((s) => s.items).length).toBeGreaterThanOrEqual(8);
+      expect((await h.db.db.select().from(appVersions)).length).toBe(2);
+      await expect(svc.confirm('not-a-commit')).rejects.toThrow();
+
+      expect((await expert.post('/releases/ack', { version: 'v0.0.1' })).status).toBe(422);
+      expect((await expert.post('/releases/ack', { version: first.version })).body.seen).toBe(true);
+      expect((await expert.get('/releases/current')).body.seen).toBe(true);
+      expect((await parts.get('/releases/current')).body.seen).toBe(false);
+      expect((await request(h.app.getHttpServer()).get('/api/v1/releases/current')).status).toBe(401);
+    } finally {
+      if (saved === undefined) delete process.env.GIT_COMMIT;
+      else process.env.GIT_COMMIT = saved;
+    }
   });
 });
 

@@ -1,3 +1,10 @@
+## 2026-11-18 — طرح مصوب میزها، تعویض اتاق، چهار شاخص و شماره‌گذاری خودکار نسخه
+
+- شاخهٔ `feature/approved-design-20261118` از main در `b27a512`؛ بخش ۱۹ سند جامع. چهار تصویر مرجع در `docs/design/mockups/approved-2026-11-18` و اسکرین‌شات واقعی در `docs/screenshots/approved-2026-11-18`.
+- migration افزایشی 0030 (`cases.body_replacement`، جدول `app_versions`) با down آزمایشی. شمارهٔ نسخه پس از سلامت انتشار با `dist/scripts/confirm-release.js`؛ نسخهٔ بعدی Production باید v1.0.1 باشد (v1.0.0 = c6ffc57 از app_releases ثبت می‌شود).
+- آزمون‌ها: [TEST_REPORT](docs/TEST_REPORT.md). قدم بعد: CI سبز، ادغام، artifact همان SHA از main، پوشهٔ انتشار `design-20261118` مشتق از smart-20261118 (پشتیبان، تمرین روی نسخهٔ بازیابی‌شده با تأیید نسخه، نصب، `confirm-release` پس از سلامت).
+- باقی‌مانده: عکس مجاز و منطبق برای هر مدل خودرو (فعلاً طرح خنثی)؛ ارتقای امنیتی Next.js جداگانه.
+
 ## 2026-11-18 — Internal technical review foundation (PR #103, draft)
 
 - Added shared pure technical-code review state and tests (`packages/shared/src/assessment-part-review.ts`), distinct from external insurer/OEM financial authorization. An accepted line remains releasable while other lines are returned for correction with mandatory reasons.

@@ -1,33 +1,89 @@
 // Release metadata of Manage by HEDAX (owner, 2026-11-18).
 //
-// Every production release gets one Semantic Version (vMAJOR.MINOR.PATCH) and a
-// complete Persian list of the user-visible changes that actually shipped in it.
-// The list is reviewed in the pull request like code; CI checks its shape
-// (unique, strictly increasing versions, at least one change per release).
+// Version numbers are not written by hand. Each pull request that changes what
+// staff see adds one change note (a stable key, a Tehran date and a complete
+// Persian list of the changes) at the top of CHANGE_NOTES; CI checks its shape.
 //
-// The running version is the first entry of RELEASES compiled into the build, so
-// a restart never changes it and a rollback to an older image shows the older
-// version automatically. The API records the first time each version started
-// (app_releases) as its deployment time; re-running the same release does not
-// create a new version. A release is added here only in the PR that ships it.
+// A production release is numbered only after it passed its health checks: the
+// release script runs confirm-release, which gives the running commit the next
+// patch number of RELEASE_LINE and attaches every change note that no earlier
+// version carried. Confirming the same commit again returns the same number; a
+// failed attempt (rolled back before confirmation) never gets a number; a
+// rollback shows the number the older commit already had. Numbers live in the
+// database table app_versions (migration 0030).
 
 export interface ReleaseSection {
   title: string;
   items: string[];
 }
 
-export interface ReleaseNote {
-  /** vMAJOR.MINOR.PATCH */
-  version: string;
-  /** Tehran calendar day of the production release (YYYY-MM-DD). */
+export interface ChangeNote {
+  /** Stable, unique key (never reused). */
+  key: string;
+  /** Tehran calendar day the change was approved for release (YYYY-MM-DD). */
   date: string;
   summary: string;
   sections: ReleaseSection[];
 }
 
-export const RELEASES: readonly ReleaseNote[] = [
+/** Major and minor of the current release line; the patch number is assigned at confirmation. */
+export const RELEASE_LINE = { major: 1, minor: 0 } as const;
+
+/** Newest first. Add one note per user-visible change set in the PR that ships it. */
+export const CHANGE_NOTES: readonly ChangeNote[] = [
   {
-    version: 'v1.0.0',
+    key: 'design-2026-11-18',
+    date: '2026-11-18',
+    summary: 'طرح تازهٔ پروندهٔ خودرو، میز تصادفات، میز قطعات و داشبورد مدیر خدمات؛ تیک مستقل «تعویض اتاق»؛ چهار شاخص یکسان مدیر خدمات و شماره‌گذاری خودکار نسخه‌ها.',
+    sections: [
+      {
+        title: 'پرونده خودرو',
+        items: [
+          'سربرگ پرونده به شکل پوشهٔ کرم با لایه‌های کاغذ، زبانهٔ «پرونده خودرو» و گیرهٔ طلایی؛ نام خودرو، پلاک واقعی پرونده و نشان پوشش بالای پرونده.',
+          'ستون کناری پرونده با تصویر خودرو، مدل، سال ساخت، رنگ، VIN و شمارهٔ پذیرش؛ کارهای روزمره با آیکون و نام فارسی و اقدامات کم‌تکرار داخل «بیشتر ⋯».',
+          'تیک مستقل «تعویض اتاق» در پذیرش و ویرایش پرونده؛ با کارت طلایی، بیمهٔ بدنه یا هزینهٔ مشتری قابل ترکیب است و فقط وقتی فعال باشد کنار پوشش نشان داده می‌شود. پرونده‌های قدیمی بدون این تیک می‌مانند.',
+        ],
+      },
+      {
+        title: 'میزهای کار',
+        items: [
+          'میز تصادفات به شکل ردیف پرونده‌ها با برگهٔ شمارهٔ پرونده و گیرهٔ باریک، پلاک، نشان پوشش و «تعویض اتاق»، نام کوتاه خودرو و دکمهٔ «پرونده»؛ جست‌وجو و صافی وضعیت، نوع پرونده، پوشش و مدل خودرو.',
+          'چاپ چک‌لیست بازدید تصادفات همچنان مستقیم در بالای میز تصادفات در دسترس است.',
+          'میز قطعات: انتخاب خودرو در سمت راست و فهرست قطعات در بخش اصلی؛ ردیف بسته نام کوتاه خودرو و پلاک یا شمارهٔ پذیرش را نشان می‌دهد و تیپ کامل در جست‌وجو و جزئیات هست.',
+        ],
+      },
+      {
+        title: 'مدیر خدمات و مالک',
+        items: [
+          'نوار آماری یکپارچه با چهار شاخص: خودروهای حاضر، گذشته از مهلت رسمی، بدون مسئول و دارای مانع؛ هر عدد فهرست دقیق خودش را باز می‌کند و تعریفش در داشبورد، گزارش و خروجی یکی است.',
+          'صف «پیگیری امروز» کنار نقشهٔ سه‌بعدی کارگاه؛ در موبایل صف پیگیری پیش از نقشه می‌آید.',
+        ],
+      },
+      {
+        title: 'نسخه',
+        items: [
+          'هر انتشار موفق پس از بررسی سلامت، خودکار شمارهٔ patch تازه می‌گیرد؛ اجرای دوبارهٔ همان انتشار شمارهٔ دیگری نمی‌سازد و تلاش ناموفق شماره نمی‌گیرد.',
+          'نشان بالای سایت و تاریخچهٔ نسخه‌ها شمارهٔ فعال، تاریخ شمسی انتشار و خلاصهٔ فارسی تغییرات را نشان می‌دهند.',
+        ],
+      },
+    ],
+  },
+  {
+    key: 'smart-assessment-pr103',
+    date: '2026-11-18',
+    summary: 'کارشناسی دستی هوشمند با جست‌وجوی شماره فنی و بررسی هر قلم توسط مسئول قطعات.',
+    sections: [
+      {
+        title: 'کارشناسی',
+        items: [
+          'کارشناسی دستی هوشمند: جست‌وجوی قطعه با نام فارسی یا شماره فنی در کاتالوگ مرجع و ورود سریع پشت‌سرهم اقلام.',
+          'مسئول قطعات شماره فنی هر قلم را جداگانه تأیید می‌کند یا با علت برای اصلاح برمی‌گرداند؛ اقلام تأییدشده ارسال می‌شوند و قلم برگشتی دست نخورده می‌ماند.',
+        ],
+      },
+    ],
+  },
+  {
+    key: 'v1.0.0',
     date: '2026-11-18',
     summary: 'نخستین نسخهٔ شماره‌دار منیج: استفادهٔ هم‌زمان از موجودی و امداد ویژه، شناسایی قطعات غیرشرکتی، اصلاح لغو رزرو، حذف و بازیابی پرونده، اصلاح شماره فنی، چک‌لیست‌های چاپی و اعلان نسخهٔ تازه.',
     sections: [
@@ -81,8 +137,6 @@ export const RELEASES: readonly ReleaseNote[] = [
   },
 ];
 
-export const CURRENT_RELEASE: ReleaseNote = RELEASES[0]!;
-
 const parts = (v: string) => v.slice(1).split('.').map(Number) as [number, number, number];
 
 /** Negative when a < b, positive when a > b (semantic version order). */
@@ -92,35 +146,64 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** Problems of the release list (CI test): format, order, uniqueness, content. */
-export function releaseProblems(list: readonly ReleaseNote[] = RELEASES): string[] {
+export const versionLabel = (major: number, minor: number, patch: number) => `v${major}.${minor}.${patch}`;
+
+/**
+ * The number a newly confirmed commit gets: the next patch of the release line
+ * (0 for the first version of a line), and the change notes no earlier version carried.
+ */
+export function nextVersion(existing: readonly { major: number; minor: number; patch: number; noteKeys: readonly string[] }[], notes: readonly ChangeNote[] = CHANGE_NOTES, line: { major: number; minor: number } = RELEASE_LINE) {
+  const same = existing.filter((v) => v.major === line.major && v.minor === line.minor);
+  const patch = same.length ? Math.max(...same.map((v) => v.patch)) + 1 : 0;
+  const shipped = new Set(existing.flatMap((v) => v.noteKeys));
+  return { major: line.major, minor: line.minor, patch, version: versionLabel(line.major, line.minor, patch), noteKeys: notes.map((n) => n.key).filter((k) => !shipped.has(k)) };
+}
+
+/** Summary and sections of a version from its change notes, newest note first. */
+export function versionNotes(noteKeys: readonly string[], notes: readonly ChangeNote[] = CHANGE_NOTES): { summary: string; sections: ReleaseSection[] } {
+  const own = notes.filter((n) => noteKeys.includes(n.key));
+  return { summary: own.map((n) => n.summary).join(' '), sections: own.flatMap((n) => n.sections) };
+}
+
+/** Problems of the change notes (CI test): unique keys, dates, newest first, content. */
+export function releaseProblems(list: readonly ChangeNote[] = CHANGE_NOTES): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   list.forEach((r, i) => {
-    if (!/^v\d+\.\d+\.\d+$/.test(r.version)) out.push(`${r.version}: format`);
-    if (seen.has(r.version)) out.push(`${r.version}: duplicate`);
-    seen.add(r.version);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) out.push(`${r.version}: date`);
-    if (!r.sections.length || r.sections.some((s) => !s.title || !s.items.length || s.items.some((t) => !t.trim()))) out.push(`${r.version}: empty changes`);
+    if (!/^[a-z0-9][a-z0-9.-]{2,63}$/.test(r.key)) out.push(`${r.key}: key format`);
+    if (seen.has(r.key)) out.push(`${r.key}: duplicate`);
+    seen.add(r.key);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) out.push(`${r.key}: date`);
+    if (!r.summary.trim()) out.push(`${r.key}: summary`);
+    if (!r.sections.length || r.sections.some((s) => !s.title || !s.items.length || s.items.some((t) => !t.trim()))) out.push(`${r.key}: empty changes`);
     const next = list[i + 1];
-    if (next && compareVersions(r.version, next.version) <= 0) out.push(`${r.version}: must be newer than ${next.version}`);
-    if (next && r.date < next.date) out.push(`${r.version}: date before ${next.version}`);
+    if (next && r.date < next.date) out.push(`${r.key}: date before ${next.key}`);
   });
   return out;
 }
 
 /** What the API reports about the running build. */
 export interface VersionInfo {
-  version: string;
+  /** Confirmed number of the running commit; null until the release is confirmed (or in development). */
+  version: string | null;
+  /** Release line, e.g. v1.0 — shown while the number is not confirmed yet. */
+  line: string;
   /** Short Git commit of the running image, when the build recorded it. */
   commit: string | null;
-  /** First start of this version on this server (deployment time). */
+  /** Confirmation time of this version (deployment time). */
   deployedAt: string | null;
+  summary: string;
   /** The signed-in person has acknowledged this version's announcement. */
   seen: boolean;
 }
 
-export interface ReleaseHistoryEntry extends ReleaseNote {
-  commit: string | null;
-  deployedAt: string | null;
+export interface ReleaseHistoryEntry {
+  version: string;
+  commit: string;
+  deployedAt: string;
+  summary: string;
+  sections: ReleaseSection[];
+  noteKeys: string[];
+  /** The version the server is running now. */
+  running: boolean;
 }

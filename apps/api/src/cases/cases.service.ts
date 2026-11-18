@@ -218,6 +218,7 @@ export class CasesService {
         forecastDeliveryAt: repairPlan?new Date(repairPlan.endAt):toDate(input.forecastDeliveryAt),
         repairPlan,
         isLegacyEntry: input.isLegacyEntry ?? false,
+        bodyReplacement: input.bodyReplacement ?? false,
         admissionNo: extra.admissionNo ?? input.admissionNo ?? null,
         admissionNoKey: extra.admissionNoKey ?? (input.admissionNo&&!isNonUniqueAdmission(input.admissionNo)?idKey(input.admissionNo):null),
         admittedAtPrecision: extra.admittedAtPrecision ?? 'minute',
@@ -292,6 +293,7 @@ export class CasesService {
         'coverageNotes',
         'responsibleUserId',
         'isLegacyEntry',
+        'bodyReplacement',
       ] as const;
       for (const key of simple) {
         if (input[key] !== undefined) (patch as any)[key] = input[key];
@@ -796,6 +798,7 @@ export class CasesService {
       progressPercent: Number(progress),
       missingFields: c.missingFields,
       isLegacyEntry: c.isLegacyEntry,
+      bodyReplacement: c.bodyReplacement,
       isTest: c.isTest,
     };
   }

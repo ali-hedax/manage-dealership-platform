@@ -170,6 +170,8 @@ const caseFields = {
   forecastDeliveryAt: optionalIsoDate,
   stage: z.enum(CASE_STAGES).optional(),
   isLegacyEntry: z.boolean().optional(),
+  /** «تعویض اتاق»: independent of coverage (owner, 2026-11-18). */
+  bodyReplacement: z.boolean().optional(),
 };
 
 export const createCaseSchema = z.object({

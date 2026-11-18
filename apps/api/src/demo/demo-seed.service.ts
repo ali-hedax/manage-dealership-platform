@@ -206,6 +206,7 @@ export class DemoSeedService {
       vehicleLocation: 'سالن بدنه — جایگاه ۳',
       coverageType: 'golden_card',
       goldenCardFileNo: 'GC-TEST-1001',
+      bodyReplacement: true,
       responsibleUserId: supervisor.user.id,
       officialDeadlineAt: ahead(4 * DAY),
       forecastDeliveryAt: ahead(3 * DAY),

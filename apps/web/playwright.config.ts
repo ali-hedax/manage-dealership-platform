@@ -57,6 +57,9 @@ export default defineConfig({
         // Synthetic key allows the manual staff-invitation fallback to use
         // the real API without enabling personal-mode login for demo roles.
         AUTH_TOKEN_SECRET: 'e2e-synthetic-only-authenticator-key',
+        // Synthetic build commit, numbered at start (development only) so the version chip and notice show.
+        GIT_COMMIT: 'e2e0000c0ffee',
+        RELEASE_AUTOCONFIRM: 'true',
       },
     },
     {

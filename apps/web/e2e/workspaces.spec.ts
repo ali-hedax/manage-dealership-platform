@@ -8,7 +8,7 @@ test('department menu exposes only the desks of the six roles, on desktop and ph
  await expect(page.getByRole('heading',{name:'واحد تصادفات',exact:true})).toBeVisible();
  const launch=page.getByRole('navigation',{name:'میزهای کار مجاز من'});
  await expect(launch.getByRole('link',{name:/کارشناس تصادفات/})).toBeVisible();await expect(launch.getByRole('link',{name:/مالک|مالی و صندوق|کنترل کیفیت/})).toHaveCount(0);
- await launch.getByRole('link',{name:/کارشناس تصادفات/}).click();await expect(page.locator('.desk-kicker')).toHaveText('میز کار کارشناس تصادفات');await expect(page.getByRole('heading',{level:1,name:/بخیر/})).toBeVisible();
+ await launch.getByRole('link',{name:/کارشناس تصادفات/}).click();await expect(page.getByRole('heading',{level:1,name:'میز تصادفات'})).toBeVisible();
  await page.screenshot({path:info.outputPath('expert-workspace-desktop.png'),fullPage:true});
  await page.goto('/accidents/owner');await expect(page.getByRole('heading',{name:'این میز کار برای شما فعال نیست'})).toBeVisible();
  await page.setViewportSize({width:390,height:844});await page.goto('/accidents/expert');

@@ -5,6 +5,7 @@ import {
   analysisSentences,
   buildBays,
   buildFunnel,
+  buildFollowUps,
   normalizeRoles,
   partFlowState,
   type ControlRange,
@@ -19,6 +20,7 @@ import { DATABASE, type DatabaseHandle } from '../db/database';
 import { tehranAt, tehranDate } from '../daily-reports/daily-time';
 import { auditEvents, cases, dailyReportImports, departments, emdadRequests, partPriceNotices, partRequests, reminderRecipients, reminders, users, workshopStations } from '../db/schema';
 import { DeskService } from '../desk/desk.service';
+import { ReportsService } from '../reports/reports.service';
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -33,6 +35,7 @@ export class ControlRoomService {
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
     private readonly desk: DeskService,
     private readonly alerts: AlertsService,
+    private readonly reports: ReportsService,
   ) {}
 
   /** Start of the range in Tehran days: today, the last 7 days or the last 30 days (rolling). */
@@ -47,7 +50,7 @@ export class ControlRoomService {
     const tenantId = actor.user.tenantId;
     const now = nowDate.getTime();
     const from = ControlRoomService.rangeStart(range, nowDate);
-    const [folders, settings, staff, stations] = await Promise.all([
+    const [folders, settings, staff, stations, service] = await Promise.all([
       this.desk.folders(actor, now),
       this.alerts.alertSettings(tenantId),
       db.select({ id: users.id, name: users.displayName, roles: users.roles, isOwner: users.isOwner }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.isActive, true))),
@@ -57,6 +60,7 @@ export class ControlRoomService {
         .innerJoin(departments, eq(departments.id, workshopStations.departmentId))
         .where(and(eq(workshopStations.tenantId, tenantId), eq(workshopStations.isActive, true)))
         .orderBy(workshopStations.code),
+      this.reports.serviceKpis(actor, nowDate),
     ]);
     const ids = folders.map((f) => f.caseId);
     const byCase = new Map<string, DeskFolder>(folders.map((f: DeskFolder) => [f.caseId, f]));
@@ -189,6 +193,8 @@ export class ControlRoomService {
         unanswered: alerts.length,
         oldestUnansweredHours: alerts[0]?.waitingHours ?? null,
       },
+      service,
+      followUps: buildFollowUps(folders, now),
       funnel,
       bays,
       analysis: analysisSentences({ funnel, bays, folders, alerts, emdadLateDays: settings.emdadLateDays, emdadFresh, afterNoon }),

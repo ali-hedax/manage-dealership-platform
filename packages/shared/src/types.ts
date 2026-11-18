@@ -77,6 +77,8 @@ export interface CaseListItem {
   progressPercent: number;
   missingFields: string[];
   isLegacyEntry: boolean;
+  /** «تعویض اتاق» recorded at intake or edit; false for old cases (never inferred). */
+  bodyReplacement: boolean;
   isTest: boolean;
 }
 

@@ -2,18 +2,18 @@
 :root {
   /* Paper space of the design language (docs/PRODUCT_SPEC_FA.md §12): warm, light,
      «پوشهٔ پرونده روی میز». The dark space (login, control room) lives in manage-ui.css. */
-  --navy: #0e5f66;
-  --navy-2: #0a464c;
+  --navy: #12645d;
+  --navy-2: #0c4a44;
   --navy-line: #e6e2d9;
   --on-navy: #3a4049;
   --on-navy-muted: #7c828c;
-  --ground: #f3f1ec;
+  --ground: #f7f6f2;
   --surface: #fffefb;
   --line: #e6e2d9;
   --ink: #15181d;
   --muted: #5f6672;
-  --gold: #0e5f66;
-  --gold-ink: #0a464c;
+  --gold: #12645d;
+  --gold-ink: #0c4a44;
   --gold-soft: #e2f0ee;
   --ok: #0e7a55;
   --ok-soft: #e6f2ec;
@@ -30,7 +30,7 @@
   --blue-strong: var(--navy-2);
   --blue-soft: #e2f0ee;
   --silver: var(--line);
-  --silver-2: #f3f1ec;
+  --silver-2: #f7f6f2;
   --steel: var(--muted);
   --steel-2: var(--muted);
   --paper: var(--ground);

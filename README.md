@@ -17,10 +17,11 @@
 **وضعیت:** ماژول اول (خودروهای تصادفی) در نمایندگی ۱۳۰۷ ایران‌خودرو قم در حال استفاده است. جزئیات هر انتشار در [CHANGELOG.md](CHANGELOG.md) و وضعیت جاری در [PROGRESS.md](PROGRESS.md).
 
 <p align="center">
-  <img src="docs/screenshots/readme-dashboard.jpg" alt="داشبورد مدیر خدمات" width="74%">
-  &nbsp;
-  <img src="docs/screenshots/readme-cases-mobile.jpg" alt="فهرست پرونده‌ها روی گوشی" width="22%">
-  <br><sub>تصاویر با دادهٔ ساختگی.</sub>
+  <img src="docs/screenshots/approved-2026-11-18/case-folder-desktop.png" alt="پروندهٔ خودرو" width="49%">
+  <img src="docs/screenshots/approved-2026-11-18/accident-desk-desktop.png" alt="میز تصادفات" width="49%">
+  <img src="docs/screenshots/approved-2026-11-18/parts-desk-desktop.png" alt="میز قطعات" width="49%">
+  <img src="docs/screenshots/approved-2026-11-18/service-manager-desktop.png" alt="داشبورد مدیر خدمات" width="49%">
+  <br><sub>اسکرین‌شات واقعی با دادهٔ ساختگی؛ طرح‌های مرجع در <a href="docs/design/mockups/approved-2026-11-18/">docs/design/mockups/approved-2026-11-18</a>.</sub>
 </p>
 
 ## شش نقش

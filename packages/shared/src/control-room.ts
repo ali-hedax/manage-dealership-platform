@@ -83,6 +83,10 @@ export interface ControlRoomSnapshot {
     unanswered: number;
     oldestUnansweredHours: number | null;
   };
+  /** The four approved numbers with their exact lists (service-kpis.ts). */
+  service: import('./service-kpis').ServiceKpi[];
+  /** «پیگیری امروز», most urgent first. */
+  followUps: import('./service-kpis').FollowUpItem[];
   funnel: FunnelStage[];
   bays: Bay[];
   analysis: string[];

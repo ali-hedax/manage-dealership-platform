@@ -32,3 +32,4 @@ export * from './part-delivery';
 export * from './releases';
 export * from './assessment-search';
 export * from './assessment-part-review';
+export * from './service-kpis';

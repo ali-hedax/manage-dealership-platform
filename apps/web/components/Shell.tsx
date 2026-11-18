@@ -68,7 +68,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const back = backTarget(pathname, home);
 
   return (
-    <div className={`shell app-shell${dark ? ' shell-dark' : ''}`}>
+    <div className="shell app-shell">
       <a className="skip-link" href="#page-content">رفتن به محتوای صفحه</a>
       {open && mobile && <button type="button" className="nav-scrim" aria-label="بستن منو" onClick={() => { setOpen(false); menu.current?.focus(); }} />}
       <aside className={`sidebar app-side${open ? ' open' : ''}`} aria-label="منوی اصلی" inert={mobile && !open}>
