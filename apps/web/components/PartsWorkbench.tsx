@@ -234,7 +234,7 @@ function PartLine({ item, card, refresh, preparation, accepted, onManualChange }
       if (action === 'handover') {
         const destination = item.destinations.find(d => d.taskId === targetTask);
         if (!destination) throw new Error('پیش از تحویل، جایگاه مقصد قطعه را انتخاب کنید.');
-        await api(`/parts/${item.id}/actions`, { body: { action: 'hand_over', expectedVersion, salePriceRial, recipientName: data.get('recipient'), departmentId: destination.departmentId } });
+        await api(`/parts/${item.id}/actions`, { body: { action: 'hand_over', expectedVersion, salePriceRial, recipientName: data.get('recipient'), departmentId: destination.departmentId, ...(data.get('deliveryQuantity') ? { deliveryQuantity: Number(data.get('deliveryQuantity')) } : {}) } });
       } else if (action === 'reserve') {
         const selected = item.stockOptions.find(o => `${o.snapshotId}|${o.fullStockCode}|${o.locationAddress}` === data.get('stock'));
         if (!selected) throw new Error('موجودی و محل صحیح را انتخاب کنید.');
@@ -363,6 +363,12 @@ function PartLine({ item, card, refresh, preparation, accepted, onManualChange }
           <p className="small muted">ثبت قیمت پیشنهادی به‌معنای خرید یا تأیید رسمی نیست. تأیید واقعی از بخش قیمت‌ها قابل ثبت است.</p>
         </> : <label className="field">شماره فاکتور خرید<input className="input" name="reference" maxLength={64}/></label>}
       </>}
+      {action === 'handover' && (item.deliverableQuantity ?? item.quantity) > 1 && <label className="field">تعداد تحویل به تعمیرگاه
+        <select className="input" name="deliveryQuantity" required defaultValue="">
+          <option value="">تعداد را انتخاب کنید</option>
+          {Array.from({ length: item.deliverableQuantity ?? item.quantity }, (_, i) => <option key={i + 1} value={i + 1}>{faNum(i + 1)} عدد</option>)}
+        </select>
+      </label>}
       {action === 'handover' && <label className="field">نام تحویل‌گیرنده<input className="input" name="recipient" maxLength={120} required/></label>}
       {action !== 'emdad' && !(action === 'market' && quoteOnly) && <label className="field">قیمت واحد فروش (ریال)
         <input className="input" name="salePrice" inputMode="numeric" required={action === 'reserve' || action === 'received' || action === 'handover'} defaultValue={item.suggestedPriceRial ?? ''}/>

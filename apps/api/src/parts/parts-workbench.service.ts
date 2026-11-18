@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import {
-  manageSupplyAdvice, emdadNoKey, parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
+  manageSupplyAdvice, handedOverQuantity, emdadNoKey, parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
   type PartPickup, type PartsWorkbench, type PartsWorkbenchAction, type PartsWorkbenchLine,
   workingDayMinutes,
 } from '@manage/shared';
@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { assertNotFuture } from '../cases/cases.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
+import { EmdadService } from '../daily-reports/emdad.service';
 import type { EmdadOfficial } from '../daily-reports/report-rows';
 import { StockService, snapshotInfo } from '../daily-reports/stock.service';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
@@ -36,6 +37,7 @@ export class PartsWorkbenchService {
     private readonly parts: PartsService,
     private readonly stock: StockService,
     private readonly audit: AuditService,
+    private readonly emdadService: EmdadService,
   ) {}
 
   async list(actor: Actor, includeTransit = false): Promise<PartsWorkbench> {
@@ -101,7 +103,8 @@ export class PartsWorkbenchService {
       const matching = related.filter(r => !p.emdadNo || emdadNoKey(r.emdadNo) === emdadNoKey(p.emdadNo));
       const official = matching.length === 1 ? matching[0] : undefined;
       const reportedReceipt = p.source === 'company' && official && RECEIVED.includes(official.statusCategory);
-      const ready = p.status === 'received' || p.status === 'reserved';
+      const cancelled = !official && (byPart.get(p.id) ?? []).some(r => r.caseId === c.id && r.matchStatus === 'matched' && r.statusCategory === 'cancelled');
+      const ready = (p.status === 'received' || p.status === 'reserved') && !(p.source === 'company' && cancelled);
       const started = p.receivedAt ?? p.reservedAt ?? (reportedReceipt ? reportDate((official.official as EmdadOfficial).receivedInWarehouseAt) ?? official.lastReportAt : null);
       const overdueHandover = !!started && workingMinutesBetween(started.toISOString(), now.toISOString(), calendar.calendar) > 240;
       const lead = leadTimes.get(baseOf(p.partNumber) ?? '');
@@ -176,7 +179,7 @@ export class PartsWorkbenchService {
         blocking, hasDestination: destinationTasks.length > 0,
       });
       card.card.items.push({
-        id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, version: p.version,
+        id: p.id, description: p.description, partNumber: p.partNumber, quantity: p.quantity, deliverableQuantity: Math.max(0, p.quantity - handedOverQuantity(p)), version: p.version,
         action, suggestedPriceRial: p.salePriceRial ?? inferredPrice ?? p.unitPriceRial,
         companyPriceRial: inferredPrice,
         stock: option ? { snapshotId: option.snapshotId, fullStockCode: option.fullStockCode, locationAddress: option.locationAddress, available: option.available } : null,
@@ -198,6 +201,7 @@ export class PartsWorkbenchService {
   async act(actor: Actor, id: string, input: PartsWorkbenchAction) {
     const tenantId = actor.user.tenantId;
     return this.handle.db.transaction(async tx => {
+      if (input.action === 'emdad' || input.action === 'received') await this.emdadService.lock(tx, tenantId);
       if (input.action === 'emdad') {
         const orderedAt = new Date(input.requestedAt);
         assertNotFuture(orderedAt, 'تاریخ درخواست نمی‌تواند در آینده باشد');
@@ -214,6 +218,7 @@ export class PartsWorkbenchService {
             source: 'company', unitPriceRial: entry.companyPriceRial, salePriceRial: entry.salePriceRial,
             emdadNo: input.emdadNo ?? undefined, etaAt: input.etaAt }, orderedAt);
         }
+        await this.emdadService.reconcile(tx, actor, id);
         return;
       }
       const p = await this.lockPart(tx, tenantId, id, input.expectedVersion);
@@ -242,12 +247,14 @@ export class PartsWorkbenchService {
         }
         const ref = emdad.emdadNo;
         if (p.status !== 'ordered' && !ref) throw badRequest('EMDAD_REF_REQUIRED', 'شمارهٔ امداد ویژه در گزارش نیامده است');
-        const ordered = p.status === 'ordered' ? p : await this.parts.actIn(tx, actor, id, {
+        if (p.status !== 'ordered') await this.parts.actIn(tx, actor, id, {
           action: 'order', expectedVersion: p.version, source: 'company', emdadNo: ref ?? undefined,
-          unitPriceRial: input.salePriceRial,
+          unitPriceRial: input.salePriceRial, salePriceRial: input.salePriceRial,
         });
-        await this.parts.actIn(tx, actor, id, { action: 'receive', expectedVersion: ordered.version, inspection: 'ok',
-          salePriceRial: input.salePriceRial, receiptDocNo: ref ?? undefined });
+        await this.emdadService.applyRetained(tx, actor, emdad.lastImportId, emdad.lastReportAt, [p.caseId], [p.id]);
+        const [current] = await tx.select().from(partRequests).where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.id, p.id)));
+        if (current?.status !== 'reserved') throw badRequest('EMDAD_RESERVATION_REQUIRED', current?.emdadReserveNote ?? 'برای تحویل امداد، ابتدا رزرو را در قطعات پرونده کامل کنید');
+        await this.parts.flowInSetPrice(tx, actor, current, input.salePriceRial);
       } else {
         if (p.status !== 'handed_over' || p.returnedAt) throw badRequest('PART_NOT_RETURNABLE', 'فقط قطعه تحویل‌شده را می‌توان برگرداند');
         const now = new Date();

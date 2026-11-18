@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, notExists, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, ne, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   EMDAD_ARRIVED_CATEGORIES,
@@ -135,7 +135,7 @@ export function reportQuantity(o: Partial<Pick<EmdadOfficial, EmdadReceivedQuant
   const v = toLatinDigits(String(o[field] ?? '')).trim().replace(/٫/g, '.');
   if (!/^\d+(?:\.0+)?$/.test(v)) return null;
   const n = Math.floor(Number(v));
-  return n > 0 ? n : null;
+  return Number.isSafeInteger(n) && n > 0 && n <= 999 ? n : null;
 }
 
 const qty = (v: string | number | null | undefined) => Number(v ?? 0);
@@ -161,6 +161,7 @@ export async function applyEmdadToParts(
   reserve: (tx: DbOrTx, actor: Actor, input: { partRequestId: string; snapshotId: string; fullStockCode: string; locationAddress: string; quantity: string; confirm: true }) => Promise<string>,
   activeSnapshot: (tx: DbOrTx, tenantId: string) => Promise<{ id: string; reservable: boolean } | null>,
   caseIds?: string[],
+  partIds?: string[],
 ) {
   const tenantId = actor.user.tenantId;
   const result = { emdadNoFilled: 0, arrived: 0, reserved: 0, partial: 0, quantityReview: 0, dealerSupply: 0, needsReview: 0 };
@@ -181,10 +182,14 @@ export async function applyEmdadToParts(
       eq(cases.tenantId, tenantId),
       eq(cases.status, 'open'),
       caseIds ? inArray(cases.id, caseIds) : undefined,
+      partIds ? inArray(partRequests.id, partIds) : undefined,
       notExists(tx.select({ id: newer.id }).from(newer).where(and(
         eq(newer.tenantId, tenantId),
         eq(newer.partRequestId, partRequests.id),
-        gt(newer.lastReportAt, emdadRequests.lastReportAt),
+        eq(newer.matchStatus, 'matched'),
+        sql`(${newer.statusCategory} <> 'cancelled' or ${emdadRequests.statusCategory} = 'cancelled')`,
+        or(gt(newer.lastReportAt, emdadRequests.lastReportAt),
+          sql`(${newer.lastReportAt} = ${emdadRequests.lastReportAt} and ${newer.id} > ${emdadRequests.id})`),
       ))),
     ))
     .orderBy(emdadRequests.id);
@@ -195,8 +200,8 @@ export async function applyEmdadToParts(
 
   for (const { e, partId } of linked) {
     // The line is locked for the whole decision: concurrent reservations and retries see one state.
-    const [p] = await tx.select().from(partRequests).where(and(eq(partRequests.id, partId), eq(partRequests.tenantId, tenantId))).for('update');
-    if (!p || ['cancelled', 'returned', 'handed_over'].includes(p.status)) continue;
+    let [p] = await tx.select().from(partRequests).where(and(eq(partRequests.id, partId), eq(partRequests.tenantId, tenantId))).for('update');
+    if (!p || p.assessmentRejectedAt || ['cancelled', 'returned', 'handed_over'].includes(p.status)) continue;
     const official = (e.official ?? {}) as EmdadOfficial;
     const toReview = async (note: string) => {
       await tx.update(emdadRequests).set({ partRequestId: null, matchStatus: 'needs_review', matchNote: note, updatedAt: new Date(), version: e.version + 1 })
@@ -208,12 +213,19 @@ export async function applyEmdadToParts(
     const reportNo = official.emdadNo?.trim() || null;
     const patch: Partial<typeof partRequests.$inferInsert> = {};
     if (reportNo && p.emdadNo && emdadNoKey(p.emdadNo) !== emdadNoKey(reportNo)) {
+      // A cancelled request already superseded by a live replacement stays on the line as history.
+      if (e.statusCategory === 'cancelled') {
+        const [live] = await tx.select({ id: emdadRequests.id }).from(emdadRequests).where(and(
+          eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.partRequestId, p.id), eq(emdadRequests.matchStatus, 'matched'),
+          ne(emdadRequests.statusCategory, 'cancelled'), ne(emdadRequests.id, e.id))).limit(1);
+        if (live) continue;
+      }
       await toReview('شمارهٔ امداد ویژهٔ ثبت‌شده روی قطعه با گزارش فرق دارد؛ دستی بررسی کنید');
       continue;
     }
     if (reportNo && !p.emdadNo) patch.emdadNo = reportNo;
 
-    if (p.status !== 'ordered') {
+    if (p.status !== 'ordered' && p.status !== 'reserved') {
       // Already reserved or received: only the number may still be filled.
       if (patch.emdadNo) {
         await saveLine(tx, audit, actor, p, patch, 'part.emdad_no_filled', { emdadNo: patch.emdadNo, requestId: e.id });
@@ -227,7 +239,13 @@ export async function applyEmdadToParts(
       const receivedAt = parseReportDate(official.receivedInWarehouseAt);
       const reportedQuantity = reportQuantity(official, quantityField);
       // Without a verified received quantity nothing is reserved and the line is not ready.
-      const confirmed = reportedQuantity == null ? null : Math.min(p.quantity, reportedQuantity);
+      const confirmed = reportedQuantity;
+      // A report may authorize more than the original assessment line anticipated.
+      if (confirmed != null && confirmed > p.quantity) {
+        const expanded = await saveLine(tx, audit, actor, p, { quantity: confirmed }, 'part.emdad_quantity_updated', { quantity: confirmed, previousQuantity: p.quantity });
+        if (!expanded) continue;
+        p = expanded;
+      }
       const quantityNote = confirmed != null ? null : !quantityField
         ? 'تعداد رسیده تأیید نشده است: معنای ستون تعداد در گزارش امداد ویژه هنوز تأیید نشده؛ رزرو خودکار انجام نمی‌شود و قطعه آمادهٔ تحویل نیست. تعداد را بررسی کنید.'
         : `تعداد رسیده در ستون «${EMDAD_RECEIVED_QUANTITY_LABELS[quantityField]}» این گزارش نیامده یا عدد معتبر نیست؛ رزرو خودکار انجام نشد و قطعه آمادهٔ تحویل نیست. تعداد را بررسی کنید.`;
@@ -279,15 +297,16 @@ export async function applyEmdadToParts(
         }
       }
       if (!note && confirmed != null && confirmed < p.quantity) note = `گزارش رسید ${confirmed} از ${p.quantity} عدد را تأیید کرده است؛ ${p.quantity - reserved} عدد هنوز باقی است.`;
-      const full = reserved >= p.quantity;
-      if (full) Object.assign(patch, { status: 'reserved', reservedAt: new Date(), inStock: true });
+      const full = confirmed != null && confirmed >= p.quantity && reserved >= p.quantity;
+      if (full && p.status !== 'reserved') Object.assign(patch, { status: 'reserved', reservedAt: new Date(), inStock: true });
+      if (!full && p.status === 'reserved') patch.status = 'ordered';
       if ((p.emdadReserveNote ?? null) !== (full ? null : note)) patch.emdadReserveNote = full ? null : note;
       if (!Object.keys(patch).length) continue;
       if (patch.status === 'reserved' && p.salePriceRial == null) {
         const [r] = await tx.select({ price: stockReservations.unitSalePrice }).from(stockReservations).where(and(eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, p.id), eq(stockReservations.status, 'reserved'))).limit(1);
         if (r?.price != null) patch.salePriceRial = Math.round(Number(r.price));
       }
-      const saved = await saveLine(tx, audit, actor, p, patch, full ? 'part.emdad_reserved' : first ? 'part.emdad_arrived' : 'part.emdad_arrival_updated', {
+      const saved = await saveLine(tx, audit, actor, p, patch, patch.status === 'reserved' ? 'part.emdad_reserved' : first ? 'part.emdad_arrived' : 'part.emdad_arrival_updated', {
         emdadStatus: official.emdadStatus ?? null,
         emdadNo: patch.emdadNo ?? p.emdadNo,
         receivedAt: receivedAt?.toISOString() ?? null,
@@ -300,11 +319,11 @@ export async function applyEmdadToParts(
       if (patch.emdadNo) result.emdadNoFilled += 1;
       if (first) result.arrived += 1;
       if (quantityNote) result.quantityReview += 1;
-      if (full) {
+      if (patch.status === 'reserved') {
         result.reserved += 1;
         const to = await caseAndBayRecipients(tx, tenantId, p.caseId);
         await notifyUsers(tx, tenantId, to, { kind: 'part_ready', title: `امداد ویژه رسید و رزرو شد: ${p.description}`, body: 'قطعه آمادهٔ تحویل به جایگاه است؛ تحویل بگیرید.', link: partLink(p.caseId, p.id), dedupeKey: `part_ready:${p.id}:${saved.version}` });
-      } else {
+      } else if (!full) {
         result.partial += 1;
         await notifyUsers(tx, tenantId, clerks, { kind: 'emdad_arrival_action', title: `امداد ویژه رسید؛ رزرو کامل نشد — ${p.description}`, body: note ?? 'رزرو این قطعه را کامل کنید.', link: partLink(p.caseId, p.id), dedupeKey: `emdad_arrival_action:${p.id}:${note ?? ''}` });
       }

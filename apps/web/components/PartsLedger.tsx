@@ -228,6 +228,7 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
         <div className="m-row-state c-state">
           <span className={`m-tag ${STATE_TONE[p.flowState]}`}>{PART_FLOW_STATE_LABELS[p.flowState]}</span>
           {detail && <small>{detail}</small>}
+          {(p.handedOverQuantity ?? 0) > 0 && (p.deliverableQuantity ?? 0) > 0 && <small>{faNum(p.handedOverQuantity!)} تحویل‌شده · {faNum(p.deliverableQuantity!)} آمادهٔ تحویل</small>}
           <EmdadStage part={p} />
           {p.emdadQuantityReview && <small className="m-tag wait" data-testid="emdad-quantity-review">تعداد رسیده نیازمند بررسی</small>}
         </div>
@@ -298,6 +299,7 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
   const [v, setV] = useState<Record<string, string>>({});
   const [option, setOption] = useState<{ o: StockOption; snapshot: StockSnapshotInfo } | null>(null);
   const set = (k: string) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }));
+  const deliverable = p.deliverableQuantity ?? p.quantity;
   const amount = (k: string) => (v[k]?.trim() ? parseAmount(v[k]!) : undefined);
 
   async function submit(e: React.FormEvent) {
@@ -319,7 +321,7 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
         body = { ...base, action, receiptDocNo: v.doc?.trim() || undefined };
         break;
       case 'hand_over':
-        body = { ...base, action, recipientName: v.recipient ?? '', taskId: v.task || null, saleUnitRial: amount('sale') };
+        body = { ...base, action, recipientName: v.recipient ?? '', taskId: v.task || null, saleUnitRial: amount('sale'), ...(deliverable > 1 ? { deliveryQuantity: Number(v.deliveryQuantity) } : {}) };
         break;
       case 'cancel':
       case 'return':
@@ -374,6 +376,12 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
               {openTasks.map((t) => <option key={t.id} value={t.id}>{t.stationName ?? t.department.name}{t.title ? ` · ${t.title}` : ''}</option>)}
             </select>
           </label>
+          {deliverable > 1 && <label className="m-field">تعداد تحویل به تعمیرگاه
+            <select required value={v.deliveryQuantity ?? ''} onChange={set('deliveryQuantity')}>
+              <option value="">تعداد را انتخاب کنید</option>
+              {Array.from({ length: deliverable }, (_, i) => <option key={i + 1} value={i + 1}>{faNum(i + 1)} عدد</option>)}
+            </select>
+          </label>}
           <label className="m-field">تحویل‌گیرنده *<input required value={v.recipient ?? ''} onChange={set('recipient')} /></label>
           {p.salePriceRial == null && <label className="m-field">قیمت فروش واحد (ریال) *<input required inputMode="numeric" dir="ltr" value={v.sale ?? ''} onChange={set('sale')} /></label>}
         </>

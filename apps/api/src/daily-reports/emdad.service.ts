@@ -3,7 +3,9 @@ import { and, asc, desc, eq, ilike, inArray, isNull, lt, ne, notInArray, or, sql
 import {
   parseBasePartNumber,
   parseStockCode,
-  type EmdadReceivedQuantityField,
+  assessmentCodeOf,
+  emdadNoKey,
+  parseProcurementCode,
   type EmdadFollowUpInput,
   type EmdadMatchInput,
   type EmdadMatchStatus,
@@ -15,8 +17,8 @@ import type { Actor } from '../auth/auth.types';
 import { AuditService, diff } from '../audit/audit.service';
 import { badRequest, forbidden, notFound, versionConflict } from '../common/errors';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, cases, dailyReportImports, dailyReportProfiles, emdadRequestEvents, emdadRequests, partRequests, users, vehicles } from '../db/schema';
-import { applyEmdadToParts, decideEmdadLine, emdadLines } from './emdad-parts';
+import { assessmentItems, assessments, cases, dailyReportImports, emdadRequestEvents, emdadRequests, partRequests, stockReservations, users, vehicles } from '../db/schema';
+import { applyEmdadToParts, decideEmdadLine, emdadLines, reportAssessmentCode, sameVehicle } from './emdad-parts';
 import { idKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 import { writeSheet } from '../parts/xlsx';
 import type { EmdadOfficial } from './report-rows';
@@ -92,6 +94,8 @@ export class EmdadService {
     const match = await this.matcher(tx, tenantId, rows.map(r => r.official as EmdadOfficial));
     const imports = new Map<string, Date>();
     for (const r of rows) {
+      // Retain previous cancelled links as evidence/history when a replacement becomes current.
+      if (r.statusCategory === 'cancelled' && r.partRequestId) continue;
       let m = match(r.official as EmdadOfficial);
       // Never move an established link (and its commitments) to another vehicle silently.
       if ((r.partRequestId && m.partRequestId !== r.partRequestId) || (r.caseId && m.caseId && m.caseId !== r.caseId)) {
@@ -108,14 +112,59 @@ export class EmdadService {
       }
       if (m.partRequestId && scope.has(m.caseId ?? '')) imports.set(r.lastImportId, r.lastReportAt);
     }
-    const [profile] = await tx.select().from(dailyReportProfiles).where(and(eq(dailyReportProfiles.tenantId, tenantId), eq(dailyReportProfiles.kind, 'emdad')));
-    const field = (profile?.settings as { receivedQuantityField?: EmdadReceivedQuantityField } | undefined)?.receivedQuantityField ?? null;
-    for (const [importId, reportAt] of imports) {
-      await applyEmdadToParts(tx, this.audit, actor, importId, reportAt, field,
-        (t, a, input) => this.stock.reserveIn(t, a, input),
-        async (t, tenant) => { const snap = await this.stock.active(t, tenant); return snap ? { id: snap.id, reservable: snapshotInfo(snap).reservable } : null; },
-        [...scope]);
+    for (const [importId, reportAt] of await this.replaceCancelled(tx, actor, scope)) imports.set(importId, reportAt);
+    for (const [importId, reportAt] of imports) await this.applyRetained(tx, actor, importId, reportAt, [...scope]);
+  }
+
+  async applyRetained(tx: DbOrTx, actor: Actor, importId: string, reportAt: Date, caseIds?: string[], partIds?: string[]) {
+    return applyEmdadToParts(tx, this.audit, actor, importId, reportAt, 'specialQuantity',
+      (t, a, input) => this.stock.reserveIn(t, a, input),
+      async (t, tenant) => { const snap = await this.stock.active(t, tenant); return snap ? { id: snap.id, reservable: snapshotInfo(snap).reservable } : null; }, caseIds, partIds);
+  }
+
+  /** A positively identified cancelled variant can be superseded by one unambiguous active variant. */
+  async replaceCancelled(tx: DbOrTx, actor: Actor, scope?: Set<string>) {
+    const tenant = actor.user.tenantId;
+    const imports = new Map<string, Date>();
+    const reports = await tx.select().from(emdadRequests).where(eq(emdadRequests.tenantId, tenant));
+    if (!reports.some(r => r.statusCategory === 'cancelled')) return imports;
+    const lines = await emdadLines(tx, tenant);
+    for (const line of lines) {
+      if (scope && !scope.has(line.caseId)) continue;
+      const base = assessmentCodeOf(line.partNumber) ?? assessmentCodeOf(line.procurementCode);
+      if (!base) continue;
+      const same = lines.filter(l => (assessmentCodeOf(l.partNumber) ?? assessmentCodeOf(l.procurementCode)) === base && (l.vin && l.vin === line.vin || l.chassisRef && l.chassisRef === line.chassisRef));
+      const relevant = reports.filter(r => {
+        const official = r.official as EmdadOfficial;
+        if (!sameVehicle(official.chassis, line) || reportAssessmentCode(official).code !== base) return false;
+        if (same.length <= 1) return true;
+        const admission = admissionKeyOf(official.admissionNo);
+        return !!admission && admission === line.admissionKey && same.filter(l => l.admissionKey === admission).length === 1;
+      });
+      const recordedCode = parseProcurementCode(line.procurementCode) ?? parseProcurementCode(line.partNumber);
+      const original = relevant.filter(r => emdadNoKey(r.emdadNo) === emdadNoKey(line.emdadNo) && (!recordedCode || parseProcurementCode((r.official as EmdadOfficial).fullCode) === recordedCode));
+      if (!original.some(r => r.statusCategory === 'cancelled') || relevant.some(r => r.partRequestId === line.id && r.matchSource === 'manual')) continue;
+      if (recordedCode && original.some(r => r.statusCategory !== 'cancelled')) continue;
+      const candidates = relevant.filter(r => r.matchSource === 'auto' && ['in_supply', 'ready_to_collect', 'invoice_ready', 'invoiced', 'in_dealer_stock', 'received_by_dealer'].includes(r.statusCategory) && (!r.caseId || r.caseId === line.caseId) && (!r.partRequestId || r.partRequestId === line.id));
+      if (candidates.length !== 1) continue;
+      const [replacement] = candidates;
+      const official = replacement.official as EmdadOfficial;
+      const full = parseProcurementCode(official.fullCode);
+      if (!full || !official.emdadNo || (replacement.partRequestId === line.id && recordedCode === full && emdadNoKey(line.emdadNo) === emdadNoKey(official.emdadNo))) continue;
+      const [part] = await tx.select().from(partRequests).where(and(eq(partRequests.tenantId, tenant), eq(partRequests.id, line.id))).for('update');
+      if (!part || part.status !== 'ordered' || part.source !== 'company' || part.assessmentRejectedAt || part.handedOverQuantity) continue;
+      const [held] = await tx.select({ id: stockReservations.id }).from(stockReservations).where(and(eq(stockReservations.tenantId, tenant), eq(stockReservations.partRequestId, line.id), inArray(stockReservations.status, ['reserved', 'issued']))).limit(1);
+      if (held) continue;
+      const [saved] = await tx.update(partRequests).set({ emdadNo: official.emdadNo, procurementCode: full, emdadReceivedAt: null, emdadReceivedQuantity: null, emdadReserveNote: null, version: part.version + 1, updatedAt: new Date() }).where(and(eq(partRequests.tenantId, tenant), eq(partRequests.id, line.id), eq(partRequests.version, part.version))).returning();
+      if (!saved) throw versionConflict();
+      await this.audit.record(tx, actor, { entityType: 'part', entityId: part.id, caseId: part.caseId, action: 'part.emdad_replaced_cancelled', before: { emdadNo: part.emdadNo, procurementCode: part.procurementCode }, after: { emdadNo: saved.emdadNo, procurementCode: full, cancelledIds: original.map(r => r.id), replacementId: replacement.id }, snapshot: { version: saved.version, row: saved } });
+      const patch = { caseId: part.caseId, partRequestId: part.id, matchStatus: 'matched', matchNote: 'جایگزین معتبر برای امداد ابطال‌شده با همان شاسی و کد اختصاصی' };
+      const [linked] = await tx.update(emdadRequests).set({ ...patch, version: replacement.version + 1, updatedAt: new Date() }).where(and(eq(emdadRequests.tenantId, tenant), eq(emdadRequests.id, replacement.id), eq(emdadRequests.version, replacement.version))).returning();
+      if (!linked) throw versionConflict();
+      await this.audit.record(tx, actor, { entityType: 'emdad', entityId: linked.id, caseId: part.caseId, action: 'emdad.replacement_matched', before: { caseId: replacement.caseId, partRequestId: replacement.partRequestId }, after: patch, snapshot: { version: linked.version, row: linked } });
+      imports.set(linked.lastImportId, linked.lastReportAt);
     }
+    return imports;
   }
 
   /**

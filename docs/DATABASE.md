@@ -174,3 +174,6 @@ New nullable columns, nothing else changes:
 - `part_requests.assessment_rejected_at` and `assessment_rejected_version` mark a part whose assessment line was rejected. The part stays in the list with the «رد شده» tag and is never cancelled automatically. It is left out of supply needs, the cost alert and dispatch. When a reservation, Emdad request or purchase already exists, the parts clerks and the case expert are notified.
 
 Existing rows keep `NULL`. Rollback: `down/0023_assessment_rejections.down.sql` (drops the four columns; rejected items keep `approval_status = 'rejected'`).
+
+
+`0027_low_praxagora.sql` adds the nullable `part_requests.handed_over_quantity` counter for cumulative workshop handover. Existing completed rows with NULL retain their implicit full-quantity handover. A partial issue divides the associated stock reservation in the same transaction, preserving the total commitment and auditing both the split and the individual handover. The down file is for disposable rehearsals. A runtime rollback after partial handovers requires withholding further handover mutations until a compatible version is restored because the older app lacks the cumulative count.

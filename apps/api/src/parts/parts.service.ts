@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm
 import { alias } from 'drizzle-orm/pg-core';
 import {
   PART_FLOW_STATE_LABELS,
+  handedOverQuantity,
   PART_SOURCE_LABELS,
   PART_SOURCES,
   allowedPartActions,
@@ -287,6 +288,7 @@ export class PartsService {
         action = 'part.eta_changed';
         break;
       case 'receive':
+        if (p.source === 'company' && (await this.emdadByPart(tx, tenantId, [p.id])).get(p.id)?.arrived) throw badRequest('EMDAD_RESERVATION_REQUIRED', 'برای تحویل امداد، ابتدا رزرو را در قطعات پرونده کامل کنید');
         if (p.status !== 'ordered') throw invalidTransition(p.status);
         if (p.orderedAt && at.getTime() < p.orderedAt.getTime() - MINUTE_TOLERANCE_MS) {
           throw badRequest('INVALID_TIME', 'زمان رسید نمی‌تواند قبل از سفارش باشد');
@@ -302,19 +304,32 @@ export class PartsService {
         break;
       case 'hand_over': {
         if (p.status !== 'received' && p.status !== 'reserved') throw invalidTransition(p.status);
+        if (p.source === 'company' && (await this.emdadByPart(tx, tenantId, [p.id])).get(p.id)?.category === 'cancelled') throw badRequest('EMDAD_CANCELLED_HANDOVER', 'امداد این قطعه ابطال شده است؛ تأمین قطعه را بررسی کنید');
         if (input.departmentId) await this.assertDepartment(tx, tenantId, input.departmentId);
         const salePriceRial = input.salePriceRial ?? p.salePriceRial ?? p.unitPriceRial;
         if (salePriceRial === null) throw badRequest('PART_SALE_PRICE_REQUIRED', 'قیمت فروش این قطعه را وارد کنید');
         const reservations = await tx.select().from(stockReservations).where(and(
           eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, id), eq(stockReservations.status, 'reserved'),
         )).orderBy(asc(stockReservations.id));
+        const handed = handedOverQuantity(p);
+        const target = Math.min(p.quantity, p.emdadReceivedQuantity ?? p.quantity);
+        const held = reservations.reduce((n, r) => n + Number(r.quantity), 0);
+        const available = reservations.length ? Math.min(target - handed, held) : p.emdadReceivedQuantity == null ? p.quantity - handed : 0;
+        const delivery = input.deliveryQuantity ?? available;
+        if (!Number.isInteger(delivery) || delivery < 1 || delivery > available) throw badRequest('DELIVERY_QUANTITY_INVALID', `تعداد تحویل باید بین یک و ${available} عددِ باقی‌مانده و آماده باشد`);
+        let left = delivery;
         for (const r of reservations) {
-          await this.stock.actIn(tx, actor, r.id, { action: 'issue', expectedVersion: r.version }, receivedByTechnician);
+          if (!left) break;
+          const take = Math.min(left, Number(r.quantity));
+          await this.stock.issueQuantityIn(tx, actor, r.id, take, r.version, receivedByTechnician);
+          left -= take;
         }
+        before = { status: p.status, handedOverQuantity: handed };
         patch = {
+          handedOverQuantity: handed + delivery,
           salePriceRial,
           handedOverBy: actor.user.id,
-          status: 'handed_over',
+          status: handed + delivery === p.quantity ? 'handed_over' : p.status,
           handedOverAt: at,
           handedOverDepartmentId: input.departmentId ?? null,
           recipientName: input.recipientName!,
@@ -323,6 +338,7 @@ export class PartsService {
         break;
       }
       case 'cancel': {
+        if (handedOverQuantity(p) > 0) throw badRequest('PART_PARTIAL_DELIVERY_CANCEL', 'بخشی از این قطعه تحویل شده است؛ برای برگشت، مرجوعی با علت ثبت کنید');
         if (p.status === 'handed_over' || p.status === 'cancelled') throw invalidTransition(p.status);
         const reservations = await tx.select().from(stockReservations).where(and(
           eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, id), eq(stockReservations.status, 'reserved'),
@@ -355,7 +371,7 @@ export class PartsService {
       snapshot: { version: saved.version, row: saved },
     });
 
-    if (input.action === 'hand_over') {
+    if (input.action === 'hand_over' && saved.status === 'handed_over') {
       const waiting = await tx
         .select()
         .from(blockers)
@@ -377,7 +393,7 @@ export class PartsService {
       .select({ id: emdadRequests.id, partId: emdadRequests.partRequestId, emdadNo: emdadRequests.emdadNo, category: emdadRequests.statusCategory, official: emdadRequests.official, at: emdadRequests.lastReportAt })
       .from(emdadRequests)
       .where(and(eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.partRequestId, partIds)))
-      .orderBy(asc(emdadRequests.lastReportAt));
+      .orderBy(asc(emdadRequests.lastReportAt), asc(emdadRequests.id));
     // Status history from the daily reports: one entry per change of the official status (a report that repeats it adds nothing).
     const history = new Map<string, { at: string; statusText: string | null }[]>();
     if (withHistory && rows.length) {
@@ -396,9 +412,11 @@ export class PartsService {
       }
     }
     for (const r of rows) {
+      const current = out.get(r.partId!);
+      if (current && r.category === 'cancelled' && current.category !== 'cancelled') continue;
       const official = (r.official ?? {}) as { emdadStatus?: string; receivedInWarehouseAt?: string };
       const arrived = isEmdadArrived(r.category);
-      out.set(r.partId!, { emdadNo: r.emdadNo, category: r.category, statusText: official.emdadStatus ?? null, reportAt: r.at.toISOString(), arrived, receivedAt: arrived ? (parseReportDate(official.receivedInWarehouseAt)?.toISOString() ?? null) : null, ...(withHistory ? { history: (history.get(r.id) ?? []).reverse() } : {}) });
+      out.set(r.partId!, { emdadNo: r.emdadNo, category: r.category, statusText: official.emdadStatus ?? null, reportAt: r.at.toISOString(), arrived, receivedAt: arrived ? (parseReportDate(official.receivedInWarehouseAt)?.toISOString() ?? null) : null, ...(withHistory ? { history: rows.filter(other => other.partId === r.partId).flatMap(other => history.get(other.id) ?? []).sort((a, b) => b.at.localeCompare(a.at)) } : {}) });
     }
     return out;
   }
@@ -416,7 +434,9 @@ export class PartsService {
       const p = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
       const emdad = (await this.emdadByPart(tx, tenantId, [p.id])).get(p.id);
       const state = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: emdad?.category });
-      if (!isPartActionAllowed(state, input.action)) {
+      const handed = handedOverQuantity(p);
+      const partialReturn = input.action === 'return' && handed > 0 && p.status !== 'handed_over';
+      if (!isPartActionAllowed(state, input.action) && !partialReturn) {
         throw badRequest('PART_ACTION_NOT_ALLOWED', `«${partActionLabel(state, input.action)}» در وضعیت «${PART_FLOW_STATE_LABELS[state]}» مجاز نیست`, { state, allowed: allowedPartActions(state) });
       }
       if (!rejectedNeedActions(p, [input.action]).length) {
@@ -476,7 +496,7 @@ export class PartsService {
             if (!t) throw badRequest('PART_TARGET_INVALID', 'جایگاه انتخاب‌شده به این پرونده تعلق ندارد');
             departmentId = t.departmentId;
           }
-          await this.actIn(tx, actor, id, { action: 'hand_over', expectedVersion: p.version, recipientName: input.recipientName, departmentId, salePriceRial: input.saleUnitRial }, now);
+          await this.actIn(tx, actor, id, { action: 'hand_over', expectedVersion: p.version, recipientName: input.recipientName, deliveryQuantity: input.deliveryQuantity, departmentId, salePriceRial: input.saleUnitRial }, now);
           return;
         }
         case 'cancel':
@@ -484,6 +504,8 @@ export class PartsService {
           await this.closeNotices(tx, p.id);
           return;
         case 'return': {
+          const pending = await tx.select().from(stockReservations).where(and(eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, p.id), eq(stockReservations.status, 'reserved')));
+          for (const r of pending) await this.stock.actIn(tx, actor, r.id, { action: 'release', expectedVersion: r.version, reason: input.reason });
           // Back to usable stock: the issued reservation stops lowering it (spec section 7).
           const issued = await tx.select().from(stockReservations).where(and(eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, p.id), eq(stockReservations.status, 'issued')));
           for (const r of issued) {
@@ -559,6 +581,10 @@ export class PartsService {
     };
     await this.finishFlow(tx, actor, p, patch, 'part.variant_selected', null, state, { status: p.status, flowState: state, procurementCode: p.procurementCode, reservedQuantity: held });
     if (full) await this.notifyReady(tx, actor, p);
+  }
+
+  async flowInSetPrice(tx: DbOrTx, actor: Actor, p: PartRow, salePriceRial: number) {
+    await this.finishFlow(tx, actor, p, { salePriceRial }, 'part.price_changed', null, 'reserved', { salePriceRial: p.salePriceRial });
   }
 
   private async finishFlow(tx: DbOrTx, actor: Actor, p: PartRow, patch: Partial<PartRow>, action: string, reason: string | null, state: PartFlowState, before?: Record<string, unknown>) {
@@ -733,6 +759,11 @@ export class PartsService {
       const flowState = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: e?.category });
       const root = p.assessmentItemId ? roots.get(p.assessmentItemId) : undefined;
       const reservedQuantity = Math.min(p.quantity, Math.floor(heldOf.get(p.id) ?? 0));
+      const handed = handedOverQuantity(p);
+      const canDeliver = ['reserved', 'received'].includes(p.status) && !(p.source === 'company' && e?.category === 'cancelled');
+      const deliverable = canDeliver ? Math.max(0, p.quantity - handed) : 0;
+      const actions = rejectedNeedActions(p, allowedPartActions(flowState)).filter(a => !(a === 'cancel' && handed > 0) && !(a === 'hand_over' && !canDeliver));
+      if (handed > 0 && p.status !== 'handed_over' && !actions.includes('return')) actions.push('return');
       const ids = partIdentifiers({ partNumber: p.partNumber, procurementCode: p.procurementCode, source: p.source });
       const done = ['handed_over', 'cancelled', 'returned'].includes(p.status);
       return {
@@ -740,11 +771,13 @@ export class PartsService {
       emdadNo: p.emdadNo,
       emdadReceivedAt: iso(p.emdadReceivedAt),
       reservedQuantity,
+      handedOverQuantity: handed,
+      deliverableQuantity: deliverable,
       outstandingQuantity: done ? 0 : Math.max(0, p.quantity - (p.status === 'reserved' || p.status === 'received' ? p.quantity : reservedQuantity)),
       emdadReserveNote: p.status === 'ordered' ? p.emdadReserveNote : null,
       emdadQuantityReview: p.status === 'ordered' && p.source === 'company' && !!e?.arrived && p.emdadReceivedQuantity == null,
       flowState,
-      allowedActions: rejectedNeedActions(p, allowedPartActions(flowState)),
+      allowedActions: actions,
       fromSupplement: !!p.assessmentItemId && ((root?.versionNo ?? 1) > 1 || firstOfRoot.get(p.assessmentItemId) !== p.id),
       assessmentRejection: p.assessmentRejectedAt ? { versionNo: p.assessmentRejectedVersion ?? 0, at: p.assessmentRejectedAt.toISOString() } : null,
       replaces: root?.replacesItemId && replaced.has(root.replacesItemId) ? { description: replaced.get(root.replacesItemId)!, probable: root.replacementBasis !== 'same_file' } : null,

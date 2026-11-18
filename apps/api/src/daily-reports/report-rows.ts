@@ -207,7 +207,7 @@ export const EMDAD_CRITICAL_FIELDS: { field: EmdadField; use: string }[] = [
   { field: 'fullCode', use: 'کد تدارکاتی ۱۰ رقمی برای رزرو' },
   { field: 'emdadStatus', use: 'مرحلهٔ امداد ویژه و تأیید ورود به انبار' },
   { field: 'receivedInWarehouseAt', use: 'تاریخ واقعی رسید انبار' },
-  { field: 'supplyQuantity', use: 'تعداد رسیده برای رزرو' },
+  { field: 'specialQuantity', use: 'تعداد اختصاصی مبنای رزرو' },
 ];
 
 export function parseEmdadSheet(rows: string[][]) {
@@ -258,6 +258,13 @@ export function parseEmdadSheet(rows: string[][]) {
   for (const p of out) if (p.key) seen.set(p.key, [...(seen.get(p.key) ?? []), p]);
   for (const group of seen.values()) {
     if (group.length < 2) continue;
+    // The source can reuse an assistance identity for a cancelled and a replacement SKU.
+    const variants = group.map(p => parseStockCode(p.data.fullCode)?.fullStockCode);
+    const hasCancellation = group.some(p => emdadStatusCategory(p.data.emdadStatus) === 'cancelled');
+    if (hasCancellation && variants.every(Boolean) && new Set(variants).size === group.length) {
+      for (const [i, p] of group.entries()) p.key = `${p.key}|variant:${variants[i]}`;
+      continue;
+    }
     for (const p of group) {
       p.outcome = 'duplicate';
       p.messages.push(`شناسه یکسان در ردیف‌های ${group.map((g) => g.rowNo).join('، ')}؛ هیچ‌کدام خودکار جایگزین دیگری نمی‌شود`);

@@ -80,7 +80,7 @@ beforeAll(async () => {
   // Two manufacturer variants of one assessment code (8 digits, leading zeros) plus other codes.
   const stock = await preview('stock', buildStockXlsx([
     sku('0012345601', '1', 'A-01', '1500'), sku('0012345602', '5', 'A-02', '1800'),
-    sku('0077665501', '3', 'D-01'), sku('0099887701', '3', 'B-01'), sku('0044332201', '1', 'C-01'),
+    sku('0055887702', '8', 'E-02'), sku('0033445502', '5', 'F-02'), sku('0077665501', '3', 'D-01'), sku('0099887701', '3', 'B-01'), sku('0044332201', '1', 'C-01'),
   ]));
   const applied = await apply(stock, -300);
   expect(applied.status).toBe(201);
@@ -92,32 +92,20 @@ afterAll(async () => {
   await h?.close();
 });
 
-it('without a verified received quantity an arrival shows the stage, flags the quantity and is never reserved or ready; only the owner verifies the column', async () => {
+it('uses the owner-confirmed special quantity column and rejects substitution from the procurement column', async () => {
   const c = await newCase('930010');
   const p = await companyPart(c, '00123456', 1, '0070010');
-  await publish([row(10, c, '00123456', { 'شماره امداد ویژه': '0070010', 'كد تداركاتي كالا': '0012345602', 'وضعیت امداد ویژه': 'وارد موجودی شده است', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/22 09:15', 'تعداد تداركاتي': '1' })], -400);
-  let now = await one(p);
-  expect(now).toMatchObject({ flowState: 'emdad_arrived', emdadQuantityReview: true, reservedQuantity: 0, outstandingQuantity: 1, emdadNo: '0070010', emdad: { arrived: true, receivedAt: '2026-11-13T05:45:00.000Z' } });
+  const arrival = { 'شماره امداد ویژه': '0070010', 'كد تداركاتي كالا': '0012345602', 'وضعیت امداد ویژه': 'وارد موجودی شده است', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/22 09:15', 'تعداد تداركاتي': '5' };
+  await publish([row(10, c, '00123456', { ...arrival, 'تعداد اختصاصي': '' })], -400);
+  const now = await one(p);
+  expect(now).toMatchObject({ flowState: 'emdad_arrived', emdadQuantityReview: true, reservedQuantity: 0, outstandingQuantity: 1, emdad: { arrived: true, receivedAt: '2026-11-13T05:45:00.000Z' } });
   expect(now.allowedActions).not.toContain('hand_over');
-  expect(now.emdadReserveNote).toContain('تعداد رسیده تأیید نشده');
-  expect(await reservationsOf(p.id)).toHaveLength(0);
-  // The clerk cannot reserve it by hand either while the quantity is unverified.
+  expect(now.emdadReserveNote).toContain('تعداد اختصاصي');
   expect((await parts.post(`/parts/${p.id}/flow`, { expectedVersion: now.version, action: 'reserve', snapshotId, fullStockCode: '0012345602', locationAddress: 'A-02' })).body.code).toBe('EMDAD_QUANTITY_UNVERIFIED');
-
-  // Verifying the column is the owner's decision, recorded on the special-aid report profile.
-  let prof = await owner.get('/daily-reports/profiles/emdad');
-  expect((await parts.patch('/daily-reports/profiles/emdad', { expectedVersion: prof.body.version, receivedQuantityField: 'supplyQuantity' })).status).toBe(403);
-  expect((await owner.patch('/daily-reports/profiles/stock', { expectedVersion: (await owner.get('/daily-reports/profiles/stock')).body.version, receivedQuantityField: 'supplyQuantity' })).body.code).toBe('DAILY_PROFILE_FIELD');
-  prof = await owner.get('/daily-reports/profiles/emdad');
-  expect((await owner.patch('/daily-reports/profiles/emdad', { expectedVersion: prof.body.version, receivedQuantityField: 'supplyQuantity' })).status).toBe(200);
-
-  // Verified column but an empty cell: still flagged, still nothing reserved.
-  await publish([row(10, c, '00123456', { 'شماره امداد ویژه': '0070010', 'كد تداركاتي كالا': '0012345602', 'وضعیت امداد ویژه': 'وارد موجودی شده است', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/22 09:15', 'تعداد تداركاتي': '' })], -380);
-  now = await one(p);
-  expect(now).toMatchObject({ flowState: 'emdad_arrived', emdadQuantityReview: true, reservedQuantity: 0 });
-  expect(now.emdadReserveNote).toContain('تعداد تداركاتي');
-  // With the verified quantity present, the exact code is reserved.
-  await publish([row(10, c, '00123456', { 'شماره امداد ویژه': '0070010', 'كد تداركاتي كالا': '0012345602', 'وضعیت امداد ویژه': 'وارد موجودی شده است', 'تاريخ رسيد شدن امداد ويژه در انبار': '1405/08/22 09:15', 'تعداد تداركاتي': '1' })], -360);
+  const prof = await owner.get('/daily-reports/profiles/emdad');
+  expect(prof.body.settings.receivedQuantityField).toBe('specialQuantity');
+  expect((await owner.patch('/daily-reports/profiles/emdad', { expectedVersion: prof.body.version, receivedQuantityField: 'supplyQuantity' })).body.code).toBe('EMDAD_QUANTITY_COLUMN_FIXED');
+  await publish([row(10, c, '00123456', { ...arrival, 'تعداد اختصاصي': '۱' })], -360);
   expect(await one(p)).toMatchObject({ flowState: 'reserved', emdadQuantityReview: false, reservedQuantity: 1 });
 });
 
@@ -179,13 +167,13 @@ it('shows each pre-arrival stage, fills the number once, then reserves the exact
 it('«رسید توسط نمایندگی» with a partial receipt reserves only what was confirmed, shows no date without one, and completes later', async () => {
   const c = await newCase('930003');
   const p = await companyPart(c, '00998877', 3, '0070003');
-  await publish([row(3, c, '00998877', { 'شماره امداد ویژه': '0070003', 'كد تداركاتي كالا': '0099887701', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد تداركاتي': '2', 'تاريخ رسيد شدن امداد ويژه در انبار': '' })], -90);
+  await publish([row(3, c, '00998877', { 'شماره امداد ویژه': '0070003', 'كد تداركاتي كالا': '0099887701', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '2', 'تاريخ رسيد شدن امداد ويژه در انبار': '' })], -90);
   let now = await one(p);
   expect(now).toMatchObject({ flowState: 'emdad_arrived', reservedQuantity: 2, outstandingQuantity: 1, emdadReceivedAt: null, emdad: { arrived: true, receivedAt: null } });
   expect(now.emdadReserveNote).toContain('2 از 3');
   // Ready for delivery only when the whole quantity is reserved.
   expect(now.allowedActions).not.toContain('hand_over');
-  await publish([row(3, c, '00998877', { 'شماره امداد ویژه': '0070003', 'كد تداركاتي كالا': '0099887701', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد تداركاتي': '3' })], -80);
+  await publish([row(3, c, '00998877', { 'شماره امداد ویژه': '0070003', 'كد تداركاتي كالا': '0099887701', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '3' })], -80);
   now = await one(p);
   expect(now).toMatchObject({ flowState: 'reserved', reservedQuantity: 3, outstandingQuantity: 0, emdadReserveNote: null });
   expect((await reservationsOf(p.id)).reduce((n, r) => n + Number(r.quantity), 0)).toBe(3);
@@ -293,4 +281,90 @@ it('preserves a manual no-link decision during identifier edits and retains appl
   expect(await reservationsOf(p.id)).toHaveLength(0);
   await h.app.get(DailyReportsService).recover(new Date(Date.now() + 8 * 86400_000));
   expect(await h.db.db.select().from(dailyReportFiles).where(eq(dailyReportFiles.importId, r.lastImportId))).toHaveLength(1);
+});
+
+
+it('reserves all special units beyond the initial line quantity and gives the clerk control of each handover', async () => {
+  const c = await newCase('939904');
+  const p = await companyPart(c, '00558877', 1, '0099004');
+  await publish([row(9904, c, '00558877', { 'شماره امداد ویژه': '0099004', 'كد تداركاتي كالا': '0055887702', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '3', 'تعداد تداركاتي': '8' })], -35);
+  const ready = await one(p);
+  expect(ready).toMatchObject({ quantity: 3, reservedQuantity: 3, handedOverQuantity: 0, deliverableQuantity: 3, flowState: 'reserved' });
+  const handover = (version: number, deliveryQuantity: number, recipientName: string) => parts.post(`/parts/${p.id}/flow`, { action: 'hand_over', expectedVersion: version, deliveryQuantity, recipientName });
+  expect((await handover(ready.version, 4, 'کارگاه آزمون')).body.code).toBe('DELIVERY_QUANTITY_INVALID');
+  const first = await handover(ready.version, 2, 'کارگاه آزمون یک');
+  expect(first.status).toBe(201);
+  expect(first.body).toMatchObject({ quantity: 3, handedOverQuantity: 2, deliverableQuantity: 1, flowState: 'reserved' });
+  const held = await reservationsOf(p.id);
+  expect(held.map(r => [r.status, Number(r.quantity)]).sort()).toEqual([['issued', 2], ['reserved', 1]]);
+  expect((await handover(ready.version, 1, 'کارگاه آزمون')).status).toBe(409);
+  expect((await handover(first.body.version, 2, 'کارگاه آزمون')).body.code).toBe('DELIVERY_QUANTITY_INVALID');
+  const last = await handover(first.body.version, 1, 'کارگاه آزمون دو');
+  expect(last.status).toBe(201);
+  expect(last.body).toMatchObject({ handedOverQuantity: 3, deliverableQuantity: 0, flowState: 'handed_over' });
+  const events = await h.db.db.select().from(auditEvents).where(and(eq(auditEvents.entityId, p.id), eq(auditEvents.action, 'part.handed_over')));
+  expect(events).toHaveLength(2);
+});
+
+it('uses the sole live replacement of an explicitly cancelled SKU with the same chassis and assessment code', async () => {
+  const c = await newCase('939905');
+  const p = await companyPart(c, '00334455', 1, '0099005');
+  const ordered = await parts.post(`/parts/${p.id}/flow`, { action: 'set_price', expectedVersion: p.version, saleUnitRial: 100 });
+  expect(ordered.status).toBe(201);
+  const old = { 'شماره امداد ویژه': '0099005', 'كد تداركاتي كالا': '0033445501', 'وضعیت امداد ویژه': 'ابطال', 'تعداد اختصاصي': '4' };
+  const next = { 'شماره امداد ویژه': '0099006', 'كد تداركاتي كالا': '0033445502', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '2' };
+  await publish([row(9905, c, '00334455', old)], -38);
+  expect((await one(p)).emdad?.category).toBe('cancelled');
+  await publish([row(9906, c, '00334455', next), row(9905, c, '00334455', old)], -36);
+  expect(await one(p)).toMatchObject({ emdadNo: '0099006', procurementCode: '0033445502', reservedQuantity: 2, emdad: { category: 'received_by_dealer', history: expect.arrayContaining([expect.objectContaining({ statusText: 'ابطال' })]) } });
+  expect((await reservationsOf(p.id)).map(r => [r.fullStockCode, Number(r.quantity)])).toEqual([['0033445502', 2]]);
+  await publish([row(9905, c, '00334455', old)], -32);
+  // Republishing only the cancelled request keeps it as history on the line, not as a review item.
+  expect(await one(p)).toMatchObject({ emdadNo: '0099006', emdad: { category: 'received_by_dealer', history: expect.arrayContaining([expect.objectContaining({ statusText: 'ابطال' })]) } });
+  const cancelled = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '0099005'));
+  expect(cancelled.map(r => [r.partRequestId, r.matchStatus])).toEqual([[p.id, 'matched']]);
+});
+
+
+it('preserves both manufacturer variants when the report repeats the same special-aid number', async () => {
+  const c = await newCase('939906');
+  const need = await expert.post(`/cases/${c.id}/parts`, { description: 'قطعه جایگزین آزمون', partNumber: '00558877', quantity: 1, source: 'company' });
+  const reg = await parts.post(`/parts/${need.body.id}/flow`, { expectedVersion: need.body.version, action: 'emdad', emdadNo: '0099010', requestedCode: '0055887701' });
+  expect(reg.status).toBe(201);
+  const old = row(9910, c, '00558877', { 'شماره امداد ویژه': '0099010', 'كد تداركاتي كالا': '0055887701', 'وضعیت امداد ویژه': 'ابطال' });
+  const replacement = row(9911, c, '00558877', { 'شماره امداد ویژه': '0099010', 'كد تداركاتي كالا': '0055887702', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '2' });
+  await publish([replacement, old], -25);
+  expect(await one(reg.body)).toMatchObject({ emdadNo: '0099010', procurementCode: '0055887702', reservedQuantity: 2, emdad: { category: 'received_by_dealer' } });
+  await publish([old], -24);
+  expect(await one(reg.body)).toMatchObject({ procurementCode: '0055887702', reservedQuantity: 2, emdad: { category: 'received_by_dealer' } });
+  expect(await reservationsOf(reg.body.id)).toHaveLength(1);
+});
+
+it('leaves competing replacements for review instead of picking the first SKU', async () => {
+  const c = await newCase('939907');
+  const p = await companyPart(c, '00334455', 1, '0099020');
+  const variant = (id: number, suffix: string, status: string) => row(id, c, '00334455', { 'شماره امداد ویژه': `00990${id}`, 'كد تداركاتي كالا': `00334455${suffix}`, 'وضعیت امداد ویژه': status, 'تعداد اختصاصي': '1' });
+  await publish([variant(20, '01', 'ابطال'), variant(21, '02', 'رسید توسط نمایندگی'), variant(22, '03', 'در حال تامین')], -20);
+  expect(await one(p)).toMatchObject({ emdadNo: '0099020', procurementCode: null, emdad: { category: 'cancelled' } });
+  expect(await reservationsOf(p.id)).toHaveLength(0);
+  const candidates = await h.db.db.select().from(emdadRequests).where(inArray(emdadRequests.emdadNo, ['0099021', '0099022']));
+  expect(candidates.map(r => r.matchStatus)).toEqual(['needs_review', 'needs_review']);
+});
+
+it('keeps an existing reservation and blocks handover when its request is cancelled and another SKU appears', async () => {
+  const c = await newCase('939908');
+  const p = await companyPart(c, '00558877', 1, '0099030');
+  const arrived = { 'شماره امداد ویژه': '0099030', 'كد تداركاتي كالا': '0055887702', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '1' };
+  await publish([row(9930, c, '00558877', arrived)], -18);
+  expect(await one(p)).toMatchObject({ flowState: 'reserved', reservedQuantity: 1, procurementCode: '0055887702' });
+  const replacement = row(9931, c, '00558877', { 'شماره امداد ویژه': '0099031', 'كد تداركاتي كالا': '0055887701', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '1' });
+  await publish([row(9930, c, '00558877', { ...arrived, 'وضعیت امداد ویژه': 'ابطال' }), replacement], -16);
+  const now = await one(p);
+  expect(now).toMatchObject({ emdadNo: '0099030', procurementCode: '0055887702', emdad: { category: 'cancelled' } });
+  expect(now.allowedActions).not.toContain('hand_over');
+  expect((await reservationsOf(p.id)).map(r => [r.fullStockCode, r.status, Number(r.quantity)])).toEqual([['0055887702', 'reserved', 1]]);
+  const handover = await parts.post(`/parts/${p.id}/flow`, { action: 'hand_over', expectedVersion: now.version, recipientName: 'کارگاه آزمون' });
+  expect(handover.body.code).toBe('EMDAD_CANCELLED_HANDOVER');
+  const [next] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '0099031'));
+  expect(next.partRequestId).toBeNull();
 });

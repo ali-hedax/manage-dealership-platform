@@ -445,6 +445,7 @@ export const partActionSchema = z
     inspection: z.enum(PART_INSPECTIONS).optional(),
     salePriceRial: rial.optional(),
     // hand_over
+    deliveryQuantity: z.number().int().min(1).max(999).optional(),
     departmentId: uuid.nullish(),
     recipientName: optionalText(120),
   })
@@ -478,7 +479,7 @@ export const partFlowActionSchema = z.discriminatedUnion('action', [
   z.object({ ...flowBase, action: z.literal('emdad'), emdadNo: emdadNoField, requestedAt: optionalIsoDate, requestedCode: optionalText(32) }),
   z.object({ ...flowBase, action: z.literal('market'), supplier: z.string().trim().min(1, 'نام فروشنده را وارد کنید').max(120), purchaseUnitRial: rial, saleUnitRial: rial, etaAt: optionalIsoDate }),
   z.object({ ...flowBase, action: z.literal('receive'), receiptDocNo: optionalText(64) }),
-  z.object({ ...flowBase, action: z.literal('hand_over'), recipientName: z.string().trim().min(1, 'نام تحویل‌گیرنده را وارد کنید').max(120), taskId: uuid.nullish(), departmentId: uuid.nullish(), saleUnitRial: rial.optional() }),
+  z.object({ ...flowBase, action: z.literal('hand_over'), deliveryQuantity: z.number().int().min(1).max(999).optional(), recipientName: z.string().trim().min(1, 'نام تحویل‌گیرنده را وارد کنید').max(120), taskId: uuid.nullish(), departmentId: uuid.nullish(), saleUnitRial: rial.optional() }),
   z.object({ ...flowBase, action: z.literal('cancel'), reason }),
   z.object({ ...flowBase, action: z.literal('return'), reason }),
   z.object({ ...flowBase, action: z.literal('set_price'), saleUnitRial: rial }),

@@ -9,7 +9,6 @@ import {
   type DailyApplyInput,
   type DailyImport,
   type DailyReportKind,
-  type EmdadReceivedQuantityField,
   type DailyReportsStatus,
   type DailyRowOutcome,
   type StockProfileInput,
@@ -36,11 +35,10 @@ import { readWorkbook, writeSheet, XlsxError } from '../parts/xlsx';
 import { compareReportTimes, nextTehranDay, tehranDate } from './daily-time';
 import { DailyTasksService } from './daily-tasks.service';
 import { EmdadService, SETTLED_CATEGORIES } from './emdad.service';
-import { applyEmdadToParts } from './emdad-parts';
-import { PARSER_VERSION, emdadStatusCategory, parseEmdadSheet, parseStockSheet, type EmdadOfficial, type ParsedRow, type StockRowData } from './report-rows';
+import { PARSER_VERSION, emdadKey, emdadStatusCategory, parseEmdadSheet, parseStockSheet, type EmdadOfficial, type ParsedRow, type StockRowData } from './report-rows';
 import { safeCell } from './safe-cell';
 import { detectFormat, FORMAT_ERRORS, readHtmlTable, readSpreadsheetML, SpreadsheetError } from './spreadsheet-formats';
-import { StockService, snapshotInfo } from './stock.service';
+import { StockService } from './stock.service';
 
 type ImportRow = typeof dailyReportImports.$inferSelect;
 type Profile = typeof dailyReportProfiles.$inferSelect;
@@ -568,8 +566,24 @@ export class DailyReportsService implements OnApplicationBootstrap {
     const tenantId = actor.user.tenantId;
     const rows = await this.staged(tx, job.id, ['new', 'changed', 'unchanged']);
     const prev = new Map<string, typeof emdadRequests.$inferSelect>();
-    for (const keys of chunks(rows.map((r) => r.rowKey!), 1000)) {
+    const identity = rows.map(r => {
+      const official = r.data as EmdadOfficial;
+      const base = emdadKey(official) ?? r.rowKey!;
+      return { r, base, variant: official.fullCode ? `${base}|variant:${official.fullCode}` : null };
+    });
+    const keysToLoad = [...new Set(identity.flatMap(({ base, variant }) => variant ? [base, variant] : [base]))];
+    for (const keys of chunks(keysToLoad, 1000)) {
       for (const e of await tx.select().from(emdadRequests).where(and(eq(emdadRequests.tenantId, tenantId), inArray(emdadRequests.externalKey, keys))).for('update')) prev.set(e.externalKey, e);
+    }
+    const splitKeys = new Set(identity.filter(({ r, base }) => r.rowKey !== base).map(({ base }) => base));
+    for (const { r, base, variant } of identity) {
+      const o = r.data as EmdadOfficial;
+      const stored = prev.get(base);
+      const oldCode = (stored?.official as EmdadOfficial | undefined)?.fullCode;
+      if (!variant) continue;
+      if (prev.has(variant)) r.rowKey = variant;
+      else if (stored && oldCode === o.fullCode) r.rowKey = base;
+      else if (splitKeys.has(base) || (oldCode && oldCode !== o.fullCode && (stored?.statusCategory === 'cancelled' || emdadStatusCategory(o.emdadStatus) === 'cancelled'))) r.rowKey = variant;
     }
     const lastImports = [...new Set([...prev.values()].map((p) => p.lastImportId))];
     const precisionOf = new Map<string, string>();
@@ -630,7 +644,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
         continue;
       }
       const base = { lastImportId: job.id, lastReportAt: reportAt, updatedAt: new Date() };
-      const candidate = p.matchSource === 'auto' ? match(o) : null;
+      const candidate = p.matchSource === 'auto' && !(statusCategory === 'cancelled' && p.partRequestId) ? match(o) : null;
       const m = candidate && (candidate.byChassisAndCode || retryMatch(p)) ? candidate : null;
       const matchPatch = m && (m.caseId !== p.caseId || m.matchStatus !== p.matchStatus || m.partRequestId !== p.partRequestId || m.matchNote !== p.matchNote)
         ? { caseId: m.caseId, partRequestId: m.partRequestId, matchStatus: m.matchStatus, matchNote: m.matchNote }
@@ -662,11 +676,11 @@ export class DailyReportsService implements OnApplicationBootstrap {
         .where(and(eq(dailyReportRows.importId, job.id), inArray(dailyReportRows.rowNo, b)));
     }
     // Spec section 7: the report moves the linked part lines automatically.
-    const profile = await this.ensureProfile(tx, tenantId, 'emdad');
-    const quantityField = ((profile.settings as Record<string, unknown>).receivedQuantityField as EmdadReceivedQuantityField | null | undefined) ?? null;
-    const parts = await applyEmdadToParts(tx, this.audit, actor, job.id, reportAt, quantityField,
-      (t, a, input) => this.stock.reserveIn(t, a, input),
-      async (t, tenant) => { const snap = await this.stock.active(t, tenant); return snap ? { id: snap.id, reservable: snapshotInfo(snap).reservable } : null; });
+    const replacements = await this.emdad.replaceCancelled(tx, actor);
+    const parts = await this.emdad.applyRetained(tx, actor, job.id, reportAt);
+    for (const [importId, replacementAt] of replacements) {
+      if (importId !== job.id) await this.emdad.applyRetained(tx, actor, importId, replacementAt);
+    }
     return { counts: { ...counts, partsArrived: parts.arrived, partsReserved: parts.reserved, partsPartial: parts.partial, quantityReview: parts.quantityReview, partsDealerSupply: parts.dealerSupply, emdadNoFilled: parts.emdadNoFilled, emdadReview: parts.needsReview } };
   }
 
@@ -688,7 +702,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
   async profile(actor: Actor, kind: DailyReportKind) {
     if (!['daily_reports.settings', 'daily_reports.upload', 'stock.read', 'emdad.read'].some((p) => actor.user.permissions.has(p as never))) throw forbidden();
     const p = await this.ensureProfile(this.db, actor.user.tenantId, kind);
-    return { kind, settings: p.settings, reminderTime: p.reminderTime, reminderUserId: p.reminderUserId, headerConfirmed: !!p.headerSignature, version: p.version, updatedAt: p.updatedAt.toISOString() };
+    return { kind, settings: kind === 'emdad' ? { ...p.settings as object, receivedQuantityField: 'specialQuantity' } : p.settings, reminderTime: p.reminderTime, reminderUserId: p.reminderUserId, headerConfirmed: !!p.headerSignature, version: p.version, updatedAt: p.updatedAt.toISOString() };
   }
 
   /**
@@ -705,6 +719,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
     if (emdadFields.length && kind !== 'emdad') throw badRequest('DAILY_PROFILE_FIELD', 'این تنظیم فقط برای گزارش امداد ویژه است');
     const ownerFields = [...stockFields, ...emdadFields];
     if (ownerFields.length && !actor.user.isOwner) throw forbidden('تأیید دامنه انبار، کامل‌بودن، معنای موجودی، واحد پول و معنای ستون تعداد رسیدهٔ امداد ویژه فقط با مالک سامانه است');
+    if (emdadFields.length && input.receivedQuantityField !== 'specialQuantity') throw badRequest('EMDAD_QUANTITY_COLUMN_FIXED', 'طبق تأیید مالک، مبنای رزرو ستون تعداد اختصاصی است');
     await this.db.transaction(async (tx) => {
       const p = await this.ensureProfile(tx, actor.user.tenantId, kind);
       if (p.version !== input.expectedVersion) throw versionConflict(p.version);
