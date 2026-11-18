@@ -31,6 +31,7 @@ import { useToast } from '@/lib/toast';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
 import { AssessmentImport } from './AssessmentImport';
+import { SmartAssessmentEntry } from './SmartAssessmentEntry';
 import { StockFamilyPreview } from './CaseStockPanel';
 
 const AUTH_TONE: Record<AuthorizationStatus, string> = {
@@ -302,6 +303,17 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
 
       {current && (
         <>
+        {manage && editable && current.status === 'draft' && (kase.coverageType === 'insurance' || kase.coverageType === 'personal') && (
+          <SmartAssessmentEntry
+            kase={kase}
+            assessment={current}
+            onSaved={async () => {
+              const refreshed = await mutate();
+              onChange();
+              return refreshed;
+            }}
+          />
+        )}
         {manage && editable && current.status === 'draft' && <div className="assessment-import-entry"><button type="button" className="btn btn-sm" onClick={() => setImporting(true)}>دریافت اکسل کارشناسی</button><span className="xs muted">قطعات و اجرت از خروجی PDF</span></div>}
         <Version
           a={current}
