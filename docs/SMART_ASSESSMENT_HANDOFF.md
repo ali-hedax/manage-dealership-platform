@@ -35,3 +35,13 @@ Branch: `feature/smart-assessment-persian-search` (independent of ongoing VS Cod
 - `technicalReviewSummary` can release the 95 accepted item IDs while returning five disputed item IDs for correction; synthetic unit tests cover this scenario.
 - **Not yet operational:** no review database table or migration, server review endpoint, parts-clerk UI, audit trail, notifications or enforcement on dispatch. Do not show these draft review states as production approvals. Before integration, inspect current main changes and preserve existing supply authorizations; review storage, transactional audit, tenant isolation, role enforcement and per-line dispatch gating are required.
 - The newest PR commits after the successful run `44260852930` have **not been verified by CI**. Earlier CI success is not proof these newer code paths pass.
+
+## Parts-clerk technical review UI and persistence (2026-11-18)
+
+Implemented in this branch only:
+- Migration 0028 creates `assessment_technical_reviews` keyed by assessment item; status, reason, reviewer, date, fingerprint and record version persist independently from insurer/OEM approvals. Migration journal and rollback SQL are included.
+- `GET /api/v1/cases/:id/technical-reviews` returns review statuses for draft part lines after case-tenant authorization. `POST /api/v1/assessment-items/:id/technical-review` requires `part.manage`, validates the expected review version and reason for returns, and writes state and audit/change-log in one transaction.
+- Editing a technical code, quantity, action or description through the existing item edit API resets old technical acceptance with an audit entry. The review UI also supports explicit reset if a different import path made the stored fingerprint stale.
+- `TechnicalReviewPanel` shows independent buttons and reasons to parts clerks and read-only status to the accident expert inside draft insurance/personal assessments. Synthetic API and Playwright tests were committed, but their latest-run results are not verified here.
+
+**Important current boundary:** technical review status is not yet a server-enforced requirement for dispatching parts to the existing procurement list; do not imply that pressing “accept” sends a part, or that “return” automatically blocks purchasing. Before enabling the feature for staff, add guarded per-item dispatch behavior with backward compatibility for existing Golden Card workflows, check all permissions and migrations on a disposable synthetic database, and pass the full CI matrix. No merge, production migration or deployment was performed.
