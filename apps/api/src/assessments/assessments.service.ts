@@ -280,6 +280,21 @@ export class AssessmentsService {
         evidence: input.evidence ?? null,
         isTest: actor.user.isTestTenant,
       });
+      // Opt in newly entered insurance/personal parts to review without modifying
+      // existing Golden Card Excel or historical assessment workflows.
+      if(input.action==='replace'){
+        const [ownerCase]=await tx.select({coverageType:cases.coverageType})
+          .from(cases).where(and(eq(cases.id,a.caseId),eq(cases.tenantId,tenantId))).limit(1);
+        if(ownerCase && ['insurance','personal'].includes(ownerCase.coverageType)){
+          await tx.insert(assessmentTechnicalReviews).values({
+            itemId:id,tenantId,assessmentId:a.id,status:'pending',
+            fingerprint:technicalReviewFingerprint({
+              action:input.action,description:input.description,
+              partNumber:input.partNumber??null,quantity:input.quantity
+            }),version:1,
+          });
+        }
+      }
       const saved = await this.touch(tx, a);
       await this.audit.record(tx, actor, {
         entityType: 'assessment',
