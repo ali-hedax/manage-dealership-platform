@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import { z } from 'zod';
 import {
   assessmentItemSchema,
   importAssessmentSchema,
@@ -29,6 +30,27 @@ export class AssessmentsController {
   @RequirePermissions('case.read')
   list(@CurrentActor() actor: Actor, @IdParam() id: string) {
     return this.assessments.list(actor, id);
+  }
+
+  /** Parts clerk technical review, separate from insurer/OEM authorization. */
+  @Get('cases/:id/technical-reviews')
+  @RequirePermissions('case.read')
+  technicalReviews(@CurrentActor() actor: Actor, @IdParam() id: string) {
+    return this.assessments.technicalReviews(actor,id);
+  }
+
+  @Post('assessment-items/:id/technical-review')
+  @RequirePermissions('part.manage')
+  reviewTechnicalItem(
+    @CurrentActor() actor: Actor,
+    @IdParam() id: string,
+    @Body(new ZodPipe(z.object({
+      action:z.enum(['accept','return','reset']),
+      reason:z.string().trim().max(500).nullish(),
+      expectedVersion:z.number().int().min(0)
+    }).strict())) body:{action:'accept'|'return'|'reset';reason?:string|null;expectedVersion:number},
+  ){
+    return this.assessments.reviewTechnicalItem(actor,id,body);
   }
 
   @Post('cases/:id/assessments')

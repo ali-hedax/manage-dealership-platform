@@ -20,6 +20,7 @@ import {
   type PriceNoticeResponseInput,
   assessmentDispatchLines,
   assessmentPartKey,
+  technicalReviewFingerprint,
   toLatinDigits,
   assessmentCodeOf,
   isEmdadArrived,
@@ -49,7 +50,7 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, cases, customers, departments, emdadRequestEvents, emdadRequests, partCodeCorrections, partPriceNotices, partRequests, partQuotes, stockReservations, tasks, users, vehicles } from '../db/schema';
+import { assessmentItems, assessmentTechnicalReviews, assessments, blockers, cases, customers, departments, emdadRequestEvents, emdadRequests, partCodeCorrections, partPriceNotices, partRequests, partQuotes, stockReservations, tasks, users, vehicles } from '../db/schema';
 import { caseAndBayRecipients, notifyUsers, partLink, usersWithRole } from './part-notify';
 import { parseReportDate } from '../daily-reports/emdad-parts';
 import { sql } from 'drizzle-orm';
@@ -171,7 +172,24 @@ export class PartsService {
       if(selected&&[...selected].some(id=>!lines.some(l=>l.itemId===id)))throw badRequest('ASSESSMENT_ITEM_INVALID','قلم انتخابی متعلق به کارشناسی فعلی نیست');
       const chosen=lines.filter(l=>!selected||selected.has(l.itemId));
       if(selected&&chosen.some(l=>l.state==='review'||l.state==='excluded'))throw badRequest('ASSESSMENT_ITEM_REVIEW','بعضی اقلام انتخابی نیازمند اصلاح یا بررسی‌اند؛ هیچ قطعه‌ای ارسال نشد');
-      const todo=chosen.filter(l=>l.state==='ready');
+      // Enforce review on explicit smart manual
+      // assessments. Existing Golden Card Excel and legacy cases without review
+      // rows retain their established dispatch behavior.
+      const reviewRows=await tx.select().from(assessmentTechnicalReviews)
+        .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
+          eq(assessmentTechnicalReviews.assessmentId,current.id)));
+      const requiresTechnicalReview=current.smartManual;
+      const reviewByItem=new Map(reviewRows.map(r=>[r.itemId,r]));
+      const isAccepted=(itemId:string)=>{
+        const item=items.find(i=>i.id===itemId);
+        const review=reviewByItem.get(itemId);
+        return !!item&&!!review&&review.status==='accepted'&&
+          review.fingerprint===technicalReviewFingerprint(item);
+      };
+      if(requiresTechnicalReview&&selected&&chosen.some(l=>l.state==='ready'&&!isAccepted(l.itemId)))
+        throw badRequest('ASSESSMENT_TECHNICAL_REVIEW','فقط قطعاتی که مسئول قطعات تأیید فنی کرده قابل ارسال هستند');
+      const todo=chosen.filter(l=>l.state==='ready'&&(!requiresTechnicalReview||isAccepted(l.itemId)));
+
       if(current.authorizationStatus==='pending'&&current.blockerId){
         const [oldBlocker]=await tx.select().from(blockers).where(and(eq(blockers.id,current.blockerId),eq(blockers.tenantId,tenantId),eq(blockers.caseId,caseId)));
         if(oldBlocker&&!oldBlocker.resolvedAt)await this.blockers.close(tx,actor,oldBlocker,new Date(),'اجرای روال جدید: ثبت کارشناسی و ارسال قطعه نیازمند مجوز خرید نیست');

@@ -4,6 +4,9 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   toPersianDigits,
   assessmentPartKey,
+  technicalReviewFingerprint,
+  applyTechnicalReview,
+  type TechnicalReviewAction,
   type ImportAssessmentInput,
   type AssessmentImportPreview,
   type Assessment,
@@ -21,10 +24,10 @@ import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { BlockersService } from '../blockers/blockers.service';
 import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
-import { badRequest, conflict, notFound, versionConflict } from '../common/errors';
+import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessments, blockers, cases, departments, partRequests, users } from '../db/schema';
+import { assessmentItems, assessmentTechnicalReviews, assessments, blockers, cases, departments, partRequests, users } from '../db/schema';
 import { notifyUsers, partLink, usersWithRole } from '../parts/part-notify';
 import { parseAssessmentSheet } from './assessment-sheet';
 
@@ -88,6 +91,10 @@ export class AssessmentsService {
         throw conflict('ASSESSMENT_DRAFT_EXISTS', 'یک پیش‌نویس کارشناسی باز برای این پرونده وجود دارد');
       }
       const latest = versions.at(-1);
+      if(input.kind==='initial'&&input.smartManual&&!['insurance','personal'].includes(kase.coverageType))
+        throw badRequest('SMART_ASSESSMENT_COVERAGE','کارشناسی دستی هوشمند فقط برای بیمه یا پرداخت شخصی فعال است');
+      if(input.kind==='supplement'&&input.smartManual&&!latest?.smartManual)
+        throw badRequest('SMART_ASSESSMENT_KIND','نوع کارشناسی الحاقیه از پرونده قبلی تعیین می‌شود');
       if (input.kind === 'initial' && latest) {
         throw badRequest('ASSESSMENT_EXISTS', 'کارشناسی اولیه قبلاً ثبت شده است؛ برای آسیب پنهان الحاقیه ثبت کنید');
       }
@@ -103,6 +110,7 @@ export class AssessmentsService {
           caseId,
           versionNo: (latest?.versionNo ?? 0) + 1,
           kind: input.kind,
+          smartManual:latest?.smartManual??!!input.smartManual,
           previousId: latest?.id ?? null,
           assessorName: input.assessorName,
           assessorOrg: input.assessorOrg ?? null,
@@ -124,17 +132,27 @@ export class AssessmentsService {
           .where(eq(assessmentItems.assessmentId, latest.id))
           .orderBy(asc(assessmentItems.lineNo));
         if (items.length) {
-          await tx.insert(assessmentItems).values(
-            items.map((i) => ({
-              ...i,
-              id: newId(),
-              assessmentId: id,
-              originItemId: i.id,
-              changed: false,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })),
-          );
+          const copies=items.map(i=>({
+            ...i,id:newId(),assessmentId:id,originItemId:i.id,changed:false,
+            createdAt:new Date(),updatedAt:new Date(),
+          }));
+          await tx.insert(assessmentItems).values(copies);
+          if(row!.smartManual){
+            const prior=await tx.select().from(assessmentTechnicalReviews)
+              .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
+                eq(assessmentTechnicalReviews.assessmentId,latest.id)));
+            const priorById=new Map(prior.map(r=>[r.itemId,r]));
+            const reviews=copies.filter(i=>i.action==='replace').map(i=>{
+              const old=priorById.get(i.originItemId!);
+              const fingerprint=technicalReviewFingerprint(i);
+              const accepted=old?.status==='accepted'&&old.fingerprint===fingerprint;
+              return {itemId:i.id,tenantId,assessmentId:id,
+                fingerprint,status:accepted?'accepted':'pending',
+                reviewedBy:accepted?(old?.reviewedBy??null):null,
+                reviewedAt:accepted?(old?.reviewedAt??null):null,version:1};
+            });
+            if(reviews.length)await tx.insert(assessmentTechnicalReviews).values(reviews);
+          }
         }
       }
 
@@ -277,6 +295,17 @@ export class AssessmentsService {
         evidence: input.evidence ?? null,
         isTest: actor.user.isTestTenant,
       });
+      // Explicit smart-manual drafts require technical review for every new part.
+      // Legacy drafts and Golden Card Excel retain their established flow.
+      if(input.action==='replace'&&a.smartManual){
+          await tx.insert(assessmentTechnicalReviews).values({
+            itemId:id,tenantId,assessmentId:a.id,status:'pending',
+            fingerprint:technicalReviewFingerprint({
+              action:input.action,description:input.description,
+              partNumber:input.partNumber??null,quantity:input.quantity
+            }),version:1,
+          });
+      }
       const saved = await this.touch(tx, a);
       await this.audit.record(tx, actor, {
         entityType: 'assessment',
@@ -336,6 +365,24 @@ export class AssessmentsService {
         .update(assessmentItems)
         .set({ ...patch, changed: true, approvalStatus: 'pending', updatedAt: new Date() })
         .where(eq(assessmentItems.id, item.id));
+      // Invalidate a previous technical acceptance whenever identity/quantity changes.
+      const identityChanged=['action','description','partNumber','quantity'].some(k=>Object.prototype.hasOwnProperty.call(patch,k));
+      if(identityChanged){
+        const [review]=await tx.select().from(assessmentTechnicalReviews)
+          .where(and(eq(assessmentTechnicalReviews.itemId,item.id),eq(assessmentTechnicalReviews.tenantId,tenantId)));
+        if(review){
+          await tx.update(assessmentTechnicalReviews).set({
+            status:'pending',reason:null,reviewedBy:null,reviewedAt:null,
+            fingerprint:technicalReviewFingerprint(next),version:review.version+1,updatedAt:new Date(),
+          }).where(and(eq(assessmentTechnicalReviews.itemId,item.id),eq(assessmentTechnicalReviews.version,review.version)));
+          await this.audit.record(tx,actor,{
+            entityType:'assessment_technical_review',entityId:item.id,caseId:a.caseId,action:'assessment.technical_review_reset',
+            before:{itemId:item.id,status:review.status,partNumber:item.partNumber},
+            after:{itemId:item.id,status:'pending',partNumber:next.partNumber},
+            snapshot:{version:review.version+1,row:{itemId:item.id,reviewStatus:'pending'}}
+          });
+        }
+      }
       const saved = await this.touch(tx, a);
       await this.audit.record(tx, actor, {
         entityType: 'assessment',
@@ -398,6 +445,23 @@ export class AssessmentsService {
       const kase = await this.cases.loadForWrite(tx, tenantId, a.caseId);
       const items = await tx.select().from(assessmentItems).where(eq(assessmentItems.assessmentId, a.id));
       if (!items.length) throw badRequest('EMPTY_ASSESSMENT', 'کارشناسی بدون قلم را نمی‌توان نهایی کرد');
+      // Only new review-enabled insurance/private drafts require every active
+      // technical part to be accepted before finalization. Approved lines can
+      // already be dispatched independently while the assessment is a draft.
+      const reviewRows=await tx.select().from(assessmentTechnicalReviews)
+        .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
+          eq(assessmentTechnicalReviews.assessmentId,a.id)));
+      if(a.smartManual){
+        const byItem=new Map(reviewRows.map(r=>[r.itemId,r]));
+        const awaiting=items.filter(i=>i.action==='replace'&&i.approvalStatus!=='rejected')
+          .filter(i=>{
+            const review=byItem.get(i.id);
+            return !review||review.status!=='accepted'||
+              review.fingerprint!==technicalReviewFingerprint(i);
+          });
+        if(awaiting.length)throw badRequest('ASSESSMENT_TECHNICAL_REVIEW',
+          'پیش از نهایی‌کردن، تمام قطعات کارشناسی را تأیید فنی یا اصلاح کنید؛ قطعات تأییدشده می‌توانند جداگانه به تأمین ارسال شوند');
+      }
       const totals = totalsOf(items);
 
       let previous: AssessmentRow | null = null;
@@ -563,6 +627,82 @@ export class AssessmentsService {
     return this.get(actor, assessmentId);
   }
 
+  /**
+   * Internal review only; never changes official assessment authorization or parts procurement.
+   * Unknown (unreviewed) lines are pending. A changed fingerprint invalidates old acceptance.
+   */
+  async technicalReviews(actor: Actor, caseId: string) {
+    if (!actor.user.permissions.has('case.read')) throw forbidden();
+    await this.cases.detail(actor, caseId);
+    const tenantId=actor.user.tenantId;
+    const rows=await this.db.select({i:assessmentItems,a:assessments,r:assessmentTechnicalReviews})
+      .from(assessmentItems).innerJoin(assessments,and(eq(assessments.id,assessmentItems.assessmentId),eq(assessments.tenantId,tenantId)))
+      .leftJoin(assessmentTechnicalReviews,and(eq(assessmentTechnicalReviews.itemId,assessmentItems.id),eq(assessmentTechnicalReviews.tenantId,tenantId)))
+      .where(and(eq(assessments.caseId,caseId),eq(assessmentItems.tenantId,tenantId)))
+      .orderBy(asc(assessmentItems.lineNo));
+    return rows.filter(x=>x.i.action==='replace').map(({i,r})=>{
+      const fingerprint=technicalReviewFingerprint(i);
+      const valid=!!r&&r.fingerprint===fingerprint;
+      return {itemId:i.id,assessmentId:i.assessmentId,partNumber:i.partNumber,description:i.description,
+        status:valid?r.status:'pending',reason:valid?r.reason:null,
+        reviewedAt:valid?iso(r.reviewedAt):null,reviewedBy:valid?r.reviewedBy:null,
+        version:r?.version??0,stale:!!r&&!valid};
+    });
+  }
+
+  /** Per-item decision with tenant, role, version and immutable audit event checks. */
+  async reviewTechnicalItem(actor: Actor,itemId:string,input:{
+    action:TechnicalReviewAction; reason?:string|null; expectedVersion:number;
+  }) {
+    if(!actor.user.permissions.has('part.manage')) throw forbidden();
+    const tenantId=actor.user.tenantId;
+    await this.db.transaction(async tx=>{
+      const i=await this.loadItem(tx,tenantId,itemId);
+      const [a]=await tx.select().from(assessments).where(and(eq(assessments.id,i.assessmentId),eq(assessments.tenantId,tenantId))).for('update');
+      if(!a) throw notFound('کارشناسی');
+      if(!a.smartManual)throw badRequest('REVIEW_NOT_ENABLED','این پرونده در گردش کارشناسی دستی هوشمند نیست');
+      if(a.status!=='draft') throw badRequest('REVIEW_DRAFT_ONLY','بررسی داخلی فقط روی پیش‌نویس کارشناسی انجام می‌شود');
+      await this.cases.loadForWrite(tx,tenantId,a.caseId);
+      if(i.action!=='replace') throw badRequest('REVIEW_PART_ONLY','اجرت در بررسی شماره فنی قطعات قرار نمی‌گیرد');
+      const [r]=await tx.select().from(assessmentTechnicalReviews)
+        .where(and(eq(assessmentTechnicalReviews.itemId,itemId),eq(assessmentTechnicalReviews.tenantId,tenantId))).for('update');
+      const fingerprint=technicalReviewFingerprint(i);
+      if(r&&r.fingerprint!==fingerprint&&input.action!=='reset') throw conflict('REVIEW_STALE_ITEM','اطلاعات قطعه تغییر کرده؛ ابتدا بررسی قبلی را بازنشانی کنید');
+      const state={itemId,assessmentId:i.assessmentId,action:'replace' as const,
+        partNumber:i.partNumber,description:i.description,status:(r?.status??'pending') as 'pending'|'accepted'|'returned',
+        reason:r?.reason??null,fingerprint,reviewedBy:r?.reviewedBy??null,
+        reviewedAt:iso(r?.reviewedAt),version:r?.version??0};
+      const outcome=applyTechnicalReview(state,{...input,actorId:actor.user.id,occurredAt:new Date().toISOString()});
+      if(!outcome.ok){
+        if(outcome.code==='STALE_VERSION')throw versionConflict(state.version);
+        throw badRequest(outcome.code??'REVIEW_INVALID',outcome.code==='REASON_REQUIRED'?'برای برگشت قطعه، دلیل اصلاح را وارد کنید':'درخواست بررسی معتبر نیست');
+      }
+      const next=outcome.line;
+      if(r){
+        const [saved]=await tx.update(assessmentTechnicalReviews).set({
+          status:next.status,reason:next.reason,fingerprint:next.fingerprint,
+          reviewedBy:next.reviewedBy,reviewedAt:next.reviewedAt?new Date(next.reviewedAt):null,
+          version:next.version,updatedAt:new Date(),
+        }).where(and(eq(assessmentTechnicalReviews.itemId,itemId),eq(assessmentTechnicalReviews.version,r.version))).returning();
+        if(!saved)throw versionConflict();
+      }else{
+        await tx.insert(assessmentTechnicalReviews).values({
+          itemId,tenantId,assessmentId:i.assessmentId,status:next.status,reason:next.reason,
+          fingerprint:next.fingerprint,reviewedBy:next.reviewedBy,
+          reviewedAt:next.reviewedAt?new Date(next.reviewedAt):null,version:next.version
+        });
+      }
+      await this.audit.record(tx,actor,{
+        entityType:'assessment_technical_review',entityId:itemId,caseId:a.caseId,action:'assessment.technical_review',
+        reason:next.reason,
+        before:{itemId,status:state.status,partNumber:i.partNumber,version:state.version},
+        after:{itemId,status:next.status,partNumber:i.partNumber,version:next.version},
+        snapshot:{version:next.version,row:{assessmentId:a.id,itemId,status:next.status,reviewVersion:next.version}}
+      });
+    });
+    return {itemId,updated:true};
+  }
+
   // ----------------------------------------------------------------- queries
 
   async list(actor: Actor, caseId: string): Promise<Assessment[]> {
@@ -634,6 +774,7 @@ export class AssessmentsService {
         caseId: a.caseId,
         versionNo: a.versionNo,
         kind: a.kind as Assessment['kind'],
+        smartManual:a.smartManual,
         status: a.status as Assessment['status'],
         assessorName: a.assessorName,
         assessorOrg: a.assessorOrg,

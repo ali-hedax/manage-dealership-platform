@@ -1,3 +1,23 @@
+## 2026-11-18 — Per-item parts-clerk review (PR #103, unverified latest commit)
+
+- Added synthetic API regression case for parts-clerk-only acceptance/return, mandatory return reason, stale optimistic version rejection, reopening on technical code change, and two independent item decisions.
+- Added browser Playwright scenario for a parts clerk reviewing a two-item insurance draft, saving accepted and returned statuses, and reloading to verify persisted state.
+- Migration 0028, tenant-scoped review API, audit event, schema and UI committed. **Latest head `e855754` has no confirmed CI run in this conversation.** The last green run `44260852930` covered a much earlier commit, so do not merge or deploy this code yet.
+- Follow-up needed: run full CI including PGlite/PostgreSQL migrations and Playwright; verify authorized/unprivileged and wrong-tenant access; validate procurement dispatch gating for accepted-only lines before enabling operational use. Existing production remains unchanged.
+
+## 2026-11-18 — Technical-review foundation (unverified)
+
+- New synthetic unit coverage: 100-line split (95 accepted, five returned), required correction reason, stale version, invalidation after a code/quantity edit, labour exclusion, reason reset after acceptance.
+- Test sources committed to PR #103. **These newly written tests were not run or confirmed by CI in this chat.** Earlier run [44260852930](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/44260852930) passed before this code was added and must not be treated as verification of the latest branch.
+- No production/customer data used or edited.
+
+## 2026-11-18 — Smart Assessment PR #103 (work in progress)
+
+- Branch: `feature/smart-assessment-persian-search`. Existing synthetic-less production data was **not** accessed or changed.
+- Prior commit `6a991c0`: CI run [44260852930](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/44260852930) succeeded, including six jobs. **This result does not cover the newly added tests or SQL correction.**
+- After finding a damaged SQL prefilter in current branch, corrected the case-scoped catalog suggestions method; added unit-style HTTP integration coverage in `apps/api/test/smart-assessment.e2e-spec.ts` and a Playwright browser flow in `apps/web/e2e/smart-assessment.spec.ts`. Both use synthetic case/catalog data.
+- **Latest tests not yet verified:** wait for latest PR head CI; resolve failures before merge. Manual real-browser behavior has not been confirmed in this chat. No production deployment.
+
 ## 2026-11-18 — نسخهٔ v1.0.0: هشت اصلاح یکپارچه
 
 - شاخهٔ feature/release-v1-eight-improvements از main در 98d8a31. داده‌ها فقط ساختگی روی PGlite محلی.

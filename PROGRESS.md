@@ -1,3 +1,16 @@
+## 2026-11-18 — Internal technical review foundation (PR #103, draft)
+
+- Added shared pure technical-code review state and tests (`packages/shared/src/assessment-part-review.ts`), distinct from external insurer/OEM financial authorization. An accepted line remains releasable while other lines are returned for correction with mandatory reasons.
+- A material correction to a line resets acceptance; stale versions reject; labour rows are excluded. Synthetic test scenario covers 95 accepted and five returned among 100.
+- **Not integrated with database or parts-clerk UI; no deployment, no migration.** Current latest head CI is not confirmed; last verified successful run was `44260852930` on an earlier SHA. The next owner-approved development step is a transactional, tenant-scoped, audited review store and UI, then dispatch gating with backward compatibility.
+
+## 2026-11-18 — Smart Assessment quick-entry validation slice (PR #103, draft)
+
+- Independent branch `feature/smart-assessment-persian-search`: existing reference parts, case-context search API, Persian normalized ranking and insurance/personal draft quick-entry UI. No merge or production release.
+- Fixed malformed suggestion prefilter, then added `apps/api/test/smart-assessment.e2e-spec.ts` and `apps/web/e2e/smart-assessment.spec.ts` to test imported synthetic catalog, role restrictions, consecutive line persistence, duplicate prevention and page reload.
+- Last fully successful CI checked before these changes: run 44260852930 for commit `6a991c0`; latest tests **not yet verified**. Do not label this feature done until latest CI, browser checks and test report are green.
+- Next: resolve any fresh test failure; verify code with an actual synthetic dataset, then implement per-line parts-clerk correction / return workflow with audit, without blocking approved lines. No schema migration or production access in this slice.
+
 ## 2026-11-18 — نسخهٔ v1.0.0 (هشت اصلاح) — شاخه و PR
 
 - شاخهٔ feature/release-v1-eight-improvements از main در 98d8a31. بخش ۱۸ سند جامع قواعد تازهٔ مالک را ثبت کرد. migration افزایشی 0028_pretty_chamber با down آزمایشی.

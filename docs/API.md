@@ -79,6 +79,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/cases/:id/parts` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/cases/:id/provenance` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | GET | `/api/v1/cases/:id/responsibility` | [source](../apps/api/src/people/people.controllers.ts) |
+| GET | `/api/v1/cases/:id/technical-reviews` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | GET | `/api/v1/cases/:id/timeline` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | GET | `/api/v1/cases/:id/wages` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/cases/:id/workflow` | [source](../apps/api/src/accident/accident.controllers.ts) |
@@ -155,6 +156,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PATCH | `/api/v1/tasks/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PATCH | `/api/v1/workshop/stations/:id` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/assessment-items/:id/remove` | [source](../apps/api/src/assessments/assessments.controller.ts) |
+| POST | `/api/v1/assessment-items/:id/technical-review` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/authorization` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/finalize` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/import` | [source](../apps/api/src/assessments/assessments.controller.ts) |
@@ -173,6 +175,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/blockers/:id/follow-up` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/blockers/:id/resolve` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/alerts/respond` | [source](../apps/api/src/alerts/alerts.controller.ts) |
+| POST | `/api/v1/cases/:id/assessment-catalog/search` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/cases/:id/blockers` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/delete` | [source](../apps/api/src/cases/case-deletion.controller.ts) |
