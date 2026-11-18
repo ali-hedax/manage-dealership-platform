@@ -12,11 +12,12 @@ Branch: `feature/smart-assessment-persian-search` (independent of ongoing VS Cod
 ## Implemented in this branch
 - Pure shared ranking utility with Persian/Arabic character normalization, digit normalization, joined/separated/ZWNJ search, aliases, exact/partial code matching, limited typo tolerance, capped results, and explicit unknown fitment flag.
 - Unit tests with synthetic sample parts only.
-- **Not wired to a real catalog/API/UI yet.** No customer data, production access, schema migration, or deployment.
+- Read-only case-scoped API endpoint now added: `POST /api/v1/cases/:id/assessment-catalog/search` with `{ "query": "سپر" }`; it searches the existing imported `reference_entries` parts catalog, filters by tenant, checks case access and ranks a bounded sample of candidates. Returns official names, part numbers, vehicle-use hint and `fitmentVerified: false`.
+- **Not wired to the assessment UI or persistence yet.** Free-text `vehicleUse` is NOT authoritative fitment. The bounded prefilter is an initial implementation and needs performance/fuzzy-search improvements for a very large catalog. No customer data, production access, schema migration, or deployment.
 
 ## Next steps for VS Code agent
-1. Inspect existing case assessment endpoints, catalog/price-list storage, and real vehicle applicability linkage before choosing a query implementation. Do **not** infer compatible parts just from name; if applicability is missing, mark suggestions `unknown` and require the expert/parts manager to confirm.
-2. Build tenant-scoped, permission-guarded, paginated catalog suggestions endpoint; database-level filters first, rank bounded candidates using `rankAssessmentCandidates`. Do not fetch the entire catalog client-side.
+1. Validate the new case-scoped endpoint against synthetic imported reference parts and authorized/unauthorized case actors, including wrong-tenant requests, large catalog search and Persian join/spacing variants. Verify available permissions for accident experts. Do **not** infer compatibility from free-text vehicleUse; keep `unknown` pending authoritative fitment metadata.
+2. Improve prefilter coverage and index/performance for large catalogs and synonyms; add pagination if needed, rather than fetching the full catalog client-side.
 3. Add Persian RTL typeahead to the existing case assessment editor, with arrow/Enter controls, loading/empty states, preserved part code, quantity and quick successive entry.
 4. Reuse existing assessment/parts mutation contracts, transaction + audit/outbox, deduping and version locking. No direct writes from suggestions endpoint.
 5. Design a per-line review and return workflow integrated with parts manager, without blocking approved lines. Add authorization and regression tests.
