@@ -506,6 +506,23 @@ export const assessmentItems = pgTable(
   (t) => [index('assessment_items_assessment_idx').on(t.assessmentId, t.lineNo)],
 );
 
+/**
+ * Independent internal parts-clerk review; NOT the insurer/OEM authorization.
+ * One current review per assessment item; audit_events retains its changes.
+ */
+export const assessmentTechnicalReviews = pgTable('assessment_technical_reviews', {
+  itemId: uuid('item_id').primaryKey().references(() => assessmentItems.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  assessmentId: uuid('assessment_id').notNull().references(() => assessments.id),
+  status: text('status').notNull().default('pending'),
+  reason: text('reason'),
+  fingerprint: text('fingerprint').notNull(),
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: ts('reviewed_at'),
+  version: integer('version').notNull().default(1),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, t => [index('assessment_technical_reviews_tenant_idx').on(t.tenantId, t.assessmentId)]);
+
 // One row per needed part of a case. Each step keeps its own time so delays
 // can be attributed: need â†’ stock check / reservation â†’ order (ETA) â†’ receipt
 // with inspection â†’ handover to the repair unit.
