@@ -160,12 +160,13 @@ export class ReferenceDataService {
   if(!context)throw notFound('پرونده خودرو');
   const normalized=normalizeAssessmentSearch(query);
   if(normalized.length<2)throw badRequest('ASSESSMENT_SEARCH_SHORT','حداقل دو نویسه از نام یا شماره فنی وارد کنید');
-  // Normalize common Persian/Arabic shapes in SQL for a bounded prefilter.
-  // Do not load the entire catalog into memory on each keystroke.
-  const folded=sql`replace(replace(replace(replace(replace(replace(lower(coalesce(${referenceEntries.data}->>'description','')),'ي','ی'),'ك','ک'),' ',''),chr(8204),''),'-',''),'_','')`;
-  const fragment=normalized.slice(0,Math.min(3,normalized.length)).replace(/[\\%_]/g,'\\ private record(e:Entry,fileName:string):ReferenceRecord');
+  // Bounded SQL prefilter avoids reading the entire catalog per keystroke.
+  const folded=sql`replace(replace(replace(replace(replace(lower(coalesce(${referenceEntries.data}->>'description','')),'ي','ی'),'ك','ک'),' ',''),chr(8204),''),'-','')`;
+  const fragment=normalized.slice(0,Math.min(3,normalized.length));
   const codeQuery=toLatinDigits(query).replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
-  const prefilter=sql`(${folded} like ${'%'+fragment+'%'} or ${referenceEntries.lookupKey} like ${codeQuery.replace(/[\\%_]/g,'\\ private record(e:Entry,fileName:string):ReferenceRecord')+'%'})`;
+  const prefilter=codeQuery
+   ? sql`(${folded} like ${'%'+fragment+'%'} or ${referenceEntries.lookupKey} like ${codeQuery+'%'})`
+   : sql`${folded} like ${'%'+fragment+'%'}`;
   const rows=await this.db.select({id:referenceEntries.id,data:referenceEntries.data})
    .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts'),prefilter))
    .orderBy(referenceEntries.lookupKey).limit(250);
@@ -177,10 +178,11 @@ export class ReferenceDataService {
   }).filter(row=>row.name&&row.partNumber);
   const ranked=rankAssessmentCandidates(query,candidates,100);
   const modelKey=normalizeAssessmentSearch(context.model??'');
-  const ordered=ranked.map(item=>({
-   ...item,vehicleUse:candidates.find(row=>row.id===item.id)?.vehicleUse??'',
-   vehicleUseHint:!!modelKey&&normalizeAssessmentSearch(candidates.find(row=>row.id===item.id)?.vehicleUse??'').includes(modelKey),
-  })).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score).slice(0,20);
+  const useById=new Map(candidates.map(row=>[row.id,row.vehicleUse]));
+  const ordered=ranked.map(item=>{
+   const vehicleUse=useById.get(item.id)??'';
+   return {...item,vehicleUse,vehicleUseHint:!!modelKey&&normalizeAssessmentSearch(vehicleUse).includes(modelKey)};
+  }).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score).slice(0,20);
   return {caseId,vehicle:{brand:context.brand,model:context.model,trim:context.trim},
    results:ordered,limited:rows.length===250,fitmentVerified:false};
  }
