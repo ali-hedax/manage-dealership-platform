@@ -1,3 +1,14 @@
+## 2026-11-18 — انتشار v1.0.0 (c6ffc57، PR #104) روی Production — نصب سالم
+
+- main c6ffc57، CI همان SHA شش job سبز، artifact preview-images-c6ffc57 با digest 7b009b9d…575c (دانلود محلی در F:Manage Releases1-c6ffc57، انتقال با scp؛ دانلود مستقیم سرور timeout شد).
+- ایمیج‌ها: API 5bf1a8da…930f، وب 06c5084b…2172. تگ بازگشت rollback-v1-20261118T092855Z (نسخهٔ قبل 98d8a31).
+- پشتیبان‌ها: 20261118T074349Z-v1-pre و 20261118T093015Z-v1-final، هر دو بازیابی و با اثرانگشت تطبیق شدند (۵۴ جدول، ۲۸ migration). scratch: manage_v1_c6ffc57_pre/final_20261118.
+- تمرین روی نسخهٔ بازیابی‌شده: ۵۶ جدول، ۲۹ migration، ردیف‌های قبلی بدون تغییر؛ سلامت، ورود پین تکنسین و مدیر خدمات، RBAC، ۲۶ پرونده، ۱۲۲ قطعه، /releases، deleted-cases فقط مالک (403)، PDF بازدید.
+- نصب 09:30–09:32 UTC: migration 28 ← 29، هیچ جدولی تغییر نکرد، api/web سالم، health نسخهٔ v1.0.0 و commit c6ffc57، /login 200، API بدون نشست 401، TECH 99 ← INVALID_CREDENTIALS، gate و .env بدون تغییر، restart=0، بدون خطای error-level. app_releases: v1.0.0 از 09:32:23 UTC. تگ git v1.0.0.
+- بررسی زنده با نشست واقعی کارکنان و مالک انجام نشد.
+- بازگشت: پس از استفادهٔ موازی از موجودی، تحویل‌های حالت موازی تا نسخهٔ سازگار متوقف بماند؛ ستون‌ها حذف نشوند و down روی Production اجرا نشود.
+- قدم بعد: نسخهٔ بیرونی DPAPI پشتیبان نهایی؛ بررسی رابط کاربری با حساب واقعی توسط مالک.
+
 ## 2026-11-18 — نسخهٔ v1.0.0 (هشت اصلاح) — شاخه و PR
 
 - شاخهٔ feature/release-v1-eight-improvements از main در 98d8a31. بخش ۱۸ سند جامع قواعد تازهٔ مالک را ثبت کرد. migration افزایشی 0028_pretty_chamber با down آزمایشی.
