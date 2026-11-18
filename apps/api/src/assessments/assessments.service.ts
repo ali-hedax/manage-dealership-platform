@@ -148,8 +148,8 @@ export class AssessmentsService {
               const accepted=old?.status==='accepted'&&old.fingerprint===fingerprint;
               return {itemId:i.id,tenantId,assessmentId:id,
                 fingerprint,status:accepted?'accepted':'pending',
-                reviewedBy:accepted?old.reviewedBy:null,
-                reviewedAt:accepted?old.reviewedAt:null,version:1};
+                reviewedBy:accepted?(old?.reviewedBy??null):null,
+                reviewedAt:accepted?(old?.reviewedAt??null):null,version:1};
             });
             if(reviews.length)await tx.insert(assessmentTechnicalReviews).values(reviews);
           }
