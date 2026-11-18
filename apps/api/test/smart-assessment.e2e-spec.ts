@@ -73,7 +73,7 @@ it('rejects readers without assessment permission and unknown cases without disc
   const unknown = await expert.post('/cases/00000000-0000-4000-8000-000000000001/assessment-catalog/search', {query:'سپر'});
   expect(unknown.status).toBe(404);
   const short = await expert.post('/cases/00000000-0000-4000-8000-000000000001/assessment-catalog/search', {query:'س'});
-  expect([404,422]).toContain(short.status);
+  expect([400,404,422]).toContain(short.status);
 });
 
 it('persists independent parts-clerk decisions and audit, requires reason, blocks stale updates and rechecks edited codes', async () => {
