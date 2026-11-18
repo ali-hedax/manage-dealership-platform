@@ -15,6 +15,7 @@ import {
 } from '@manage/shared';
 import { CoverageChip, StageChip } from '@/components/Chips';
 import { Plate } from '@/components/Plate';
+import { CaseDeleteMenu } from '@/components/CaseDeleteMenu';
 import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { deadlineTone, faNum, formatJalali, relativeDays, toPersianDigits } from '@/lib/format';
@@ -39,7 +40,7 @@ const FLAGS: { key: string; label: string }[] = [
 function CasesList() {
   const router = useRouter();
   const params = useSearchParams();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const [q, setQ] = useState(params.get('q') ?? '');
 
   // Debounced search keeps the URL shareable and the back button meaningful.
@@ -60,7 +61,7 @@ function CasesList() {
   }
 
   const apiQuery = new URLSearchParams(params.toString());
-  const { data, error, isLoading } = useSWR<Paged<CaseListItem>>(`/cases?${apiQuery}`, fetcher, {
+  const { data, error, isLoading, mutate } = useSWR<Paged<CaseListItem>>(`/cases?${apiQuery}`, fetcher, {
     keepPreviousData: true,
   });
   const flag = params.get('flag');
@@ -84,6 +85,11 @@ function CasesList() {
           {can('case.import') && (
             <Link className="btn" href="/cases/import">
               ورود خودروهای موجود از اکسل
+            </Link>
+          )}
+          {me.isOwner && (
+            <Link className="btn" href="/cases/deleted">
+              پرونده‌های حذف‌شده
             </Link>
           )}
           {can('case.create') && (
@@ -193,6 +199,7 @@ function CasesList() {
               <th>مسئول</th>
               <th>مهلت</th>
               <th>پیشرفت</th>
+              {me.isOwner && <th><span className="sr-only">اقدام مالک</span></th>}
             </tr>
           </thead>
           <tbody>
@@ -256,6 +263,7 @@ function CasesList() {
                     </div>
                     <div className="xs muted num">{faNum(c.progressPercent)}٪</div>
                   </td>
+                  {me.isOwner && <td><CaseDeleteMenu kase={c} onDone={() => void mutate()} /></td>}
                 </tr>
               );
             })}

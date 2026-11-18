@@ -10,11 +10,11 @@ import { formatJalali, REPORT_VIEW_LABELS, toPersianDigits, WORK_PRIORITY_LABELS
 
 const bidi = bidiFactory();
 const fontDir = join(dirname(require.resolve('vazirmatn/package.json')), 'fonts', 'ttf');
-const FONT = join(fontDir, 'Vazirmatn-Regular.ttf');
-const BOLD = join(fontDir, 'Vazirmatn-Bold.ttf');
+export const FONT = join(fontDir, 'Vazirmatn-Regular.ttf');
+export const BOLD = join(fontDir, 'Vazirmatn-Bold.ttf');
 export const MAX_PDF_ROWS = 1000;
 
-type Doc = InstanceType<typeof PDFDocument>;
+export type Doc = InstanceType<typeof PDFDocument>;
 interface Token {
   text: string;
   level: number;
@@ -66,12 +66,12 @@ const glyphText = (t: Token) =>
       ? [...t.text].reverse().join('')
       : t.text;
 
-function lineWidth(doc: Doc, text: string): number {
+export function lineWidth(doc: Doc, text: string): number {
   return tokens(text).reduce((w, t) => w + doc.widthOfString(glyphText(t)), 0);
 }
 
 /** Draws one right-to-left line ending at `right` (or centered between left and right). */
-function drawLine(doc: Doc, text: string, left: number, right: number, y: number, align: 'right' | 'center' = 'right') {
+export function drawLine(doc: Doc, text: string, left: number, right: number, y: number, align: 'right' | 'center' = 'right') {
   const ts = visual(tokens(text));
   const total = ts.reduce((w, t) => w + doc.widthOfString(glyphText(t)), 0);
   let x = align === 'center' ? left + (right - left - total) / 2 : right - total;
@@ -84,7 +84,7 @@ function drawLine(doc: Doc, text: string, left: number, right: number, y: number
 }
 
 /** Greedy word wrap in logical order. */
-function wrap(doc: Doc, text: string, width: number): string[] {
+export function wrap(doc: Doc, text: string, width: number): string[] {
   const lines: string[] = [];
   for (const para of text.split('\n')) {
     let line = '';

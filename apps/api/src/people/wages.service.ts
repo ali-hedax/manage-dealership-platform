@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   COVERAGE_BUCKETS,
@@ -191,7 +191,7 @@ export class WagesService {
     return this.db
       .select({ t: tasks, coverage: cases.coverageType, plate: vehicles.plate, brand: vehicles.brand, model: vehicles.model, department: departments.name, w: technicianWages, techName: technician.displayName })
       .from(tasks)
-      .innerJoin(cases, and(eq(cases.id, tasks.caseId), eq(cases.tenantId, tenantId)))
+      .innerJoin(cases, and(eq(cases.id, tasks.caseId), eq(cases.tenantId, tenantId), sql`${cases.status} <> 'deleted'`))
       .innerJoin(vehicles, eq(vehicles.id, cases.vehicleId))
       .innerJoin(departments, eq(departments.id, tasks.departmentId))
       .innerJoin(technician, eq(technician.id, tasks.assignedUserId))

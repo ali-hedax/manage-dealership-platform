@@ -167,7 +167,8 @@ describe('stock snapshot, options and reservations', () => {
     expect((await other.post('/stock/aliases', body)).status).toBe(201);
     expect((await owner.post('/stock/aliases', { ...body, basePartNumber: null, expectedVersion: 1, reason: 'قطع اتصال برای آزمون' })).status).toBe(201);
     expect((await parts.get('/stock/options?base=00123456')).body.total).toBe(8);
-    expect((await parts.get('/stock/options?q=99999999')).body.total).toBe(0);
+    // Owner, 2026-11-18: an 8-digit search also finds non-OEM codes by their leading 8 digits (a candidate, not a grouping).
+    expect((await parts.get('/stock/options?q=99999999')).body.items.map((i: { fullStockCode: string }) => i.fullStockCode)).toEqual(['999999999AA']);
     expect((await parts.get('/stock/options?needsMapping=true')).body.items.map((i: { fullStockCode: string }) => i.fullStockCode)).toContain('999999999AA');
   });
 

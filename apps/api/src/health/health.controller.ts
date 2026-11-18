@@ -1,4 +1,5 @@
 import { Controller, Get, Inject } from '@nestjs/common';
+import { CURRENT_RELEASE } from '@manage/shared';
 import { sql } from 'drizzle-orm';
 import { Public } from '../auth/decorators';
 import { APP_CONFIG, type AppConfig } from '../config';
@@ -26,7 +27,8 @@ export class HealthController {
       dbDriver: this.handle.driver,
       environment: this.cfg.APP_ENV,
       nodeId: this.cfg.NODE_ID,
-      version: process.env.npm_package_version ?? '0.1.0',
+      // The released Manage version compiled into this image (packages/shared/src/releases.ts).
+      version: CURRENT_RELEASE.version,
       commit: process.env.GIT_COMMIT ?? null,
     };
   }

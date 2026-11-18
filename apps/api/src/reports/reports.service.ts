@@ -388,6 +388,7 @@ export class ReportsService {
     for (let t = start.getTime(); t < period.to.getTime(); t += step) buckets.push(new Date(t));
     const scope = and(
       eq(cases.tenantId, tenantId),
+      sql`${cases.status} <> 'deleted'`,
       ...(q.stationCode?[sql`exists (select 1 from tasks t where t.case_id = ${cases.id} and t.tenant_id = ${cases.tenantId} and t.station_snapshot->>'code' = ${q.stationCode})`]:[]),
       ...(q.responsibleUserId && !['me', 'none'].includes(q.responsibleUserId) ? [eq(cases.responsibleUserId, q.responsibleUserId)] : []),
     );

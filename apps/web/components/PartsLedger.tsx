@@ -8,7 +8,6 @@ import {
   PART_FLOW_NEXT_STEP,
   PART_FLOW_STATE_LABELS,
   formatJalaliDay,
-  parseStockCode,
   partActionLabel,
   partFlowFilter,
   toLatinDigits,
@@ -19,8 +18,9 @@ import {
   type PartFlowFilter,
   type PartFlowState,
   type PartImportResult,
-  type StockOption,
+  type StockCandidate,
   type StockSnapshotInfo,
+  STOCK_MATCH_LABELS,
 } from '@manage/shared';
 import { api, errorMessage, fetcher, newKey } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -37,6 +37,7 @@ const STATE_TONE: Record<PartFlowState, string> = {
   emdad: 'em',
   emdad_arrived: 'wait',
   dealer_supply: 'stop',
+  stock_parallel: 'ok',
   market: 'em',
   ready: 'ok',
   handed_over: 'ok',
@@ -55,6 +56,8 @@ function stateDetail(p: Part): string {
     case 'emdad':
     case 'dealer_supply':
       return p.emdad ? '' : `ثبت امداد ویژه ${dayText(p.orderedAt)} · منتظر گزارش روزانه`;
+    case 'stock_parallel':
+      return `${faNum(p.stockParallel?.reservedQuantity ?? 0)} عدد از موجودی رزرو${p.stockParallel?.issuedQuantity ? ` · ${faNum(p.stockParallel.issuedQuantity)} عدد تحویل شد` : ''} · امداد ویژه جداگانه پیگیری می‌شود`;
     case 'emdad_arrived':
       return p.reservedQuantity > 0 ? `${faNum(p.reservedQuantity)} از ${faNum(p.quantity)} عدد رزرو شد؛ ${faNum(p.outstandingQuantity)} عدد باقی است` : 'هنوز رزرو نشده است';
     case 'market':
@@ -180,6 +183,7 @@ export function PartsLedger({ kase, onChange, title = 'فهرست قطعات', o
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجوی قطعه، کد فنی یا شمارهٔ امداد ویژه…" aria-label="جست‌وجو در قطعات" />
           </label>
           {editable && can('part.request') && <AddPart caseId={kase.id} onDone={refresh} />}
+          {can('stock.read') && <PickingPrint caseId={kase.id} />}
         </div>
         {error && <p className="m-error" role="alert">دریافت فهرست قطعات ناموفق بود؛ صفحه را تازه کنید.</p>}
         {!parts && !error && <p className="m-empty" role="status">در حال دریافت قطعات…</p>}
@@ -221,6 +225,7 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
           {p.assessmentRejection && <span className="m-badge stop" title="این قلم در کارشناسی رد شده است؛ نیاز تأمین حساب نمی‌شود">رد شده{p.assessmentRejection.versionNo > 1 ? ` · الحاقیه ${toPersianDigits(p.assessmentRejection.versionNo)}` : ""}</span>}
           {p.replaces && <span className="m-badge" title={p.replaces.probable ? "پیوند از روی کد فنی یکسان؛ قطعی نیست" : undefined}>جایگزین «{p.replaces.description}»{p.replaces.probable ? " · احتمالی" : ""}</span>}
           {p.priceNotice && <span className="m-tag wait">اعلام قیمت</span>}
+          {p.codeCorrection?.status === 'open' && <span className="m-tag stop" data-testid="code-correction-badge">نیازمند اصلاح شماره فنی</span>}
           {p.displayCode && <small className="m-num m-muted" data-testid="part-code"><bdi dir="ltr">{toPersianDigits(p.displayCode)}</bdi></small>}
         </div>
         <span className="c-qty m-num"><span className="sr-only">تعداد </span>{faNum(p.quantity)}</span>
@@ -229,6 +234,7 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
           <span className={`m-tag ${STATE_TONE[p.flowState]}`}>{PART_FLOW_STATE_LABELS[p.flowState]}</span>
           {detail && <small>{detail}</small>}
           {(p.handedOverQuantity ?? 0) > 0 && (p.deliverableQuantity ?? 0) > 0 && <small>{faNum(p.handedOverQuantity!)} تحویل‌شده · {faNum(p.deliverableQuantity!)} آمادهٔ تحویل</small>}
+          {p.stockParallel && p.flowState !== 'stock_parallel' && p.stockParallel.issuedQuantity > 0 && <small>تأمین از موجودی · امداد ویژه جایگزین موجودی انبار</small>}
           <EmdadStage part={p} />
           {p.emdadQuantityReview && <small className="m-tag wait" data-testid="emdad-quantity-review">تعداد رسیده نیازمند بررسی</small>}
         </div>
@@ -249,6 +255,8 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
             {(p.emdadNo || p.emdad?.emdadNo) && (<><dt>شمارهٔ امداد ویژه</dt><dd data-testid="emdad-no"><bdi className="m-num">{toPersianDigits(p.emdadNo ?? p.emdad?.emdadNo ?? '')}</bdi></dd></>)}
             {p.emdad && (<><dt>آخرین وضعیت امداد ویژه</dt><dd>{p.emdad.statusText ?? '—'} <small className="m-muted">(تاریخ گزارش {dayText(p.emdad.reportAt)})</small></dd></>)}
             {p.emdadReserveNote && (<><dt>رزرو امداد ویژه</dt><dd className="emdad-ready-note">{p.emdadReserveNote}</dd></>)}
+            {p.stockParallel && (<><dt>تأمین از موجودی</dt><dd data-testid="stock-parallel">{faNum(p.stockParallel.reservedQuantity)} عدد رزرو · {faNum(p.stockParallel.issuedQuantity)} عدد تحویل · از {dayText(p.stockParallel.at)}{p.stockParallel.replenished ? ' · امداد ویژه رسید و جایگزین موجودی انبار است' : ' · امداد ویژه همچنان فعال است'}</dd></>)}
+            {p.codeCorrection?.status === 'resolved' && (<><dt>اصلاح شماره فنی</dt><dd><bdi className="m-num" dir="ltr">{p.codeCorrection.originalCode ?? '—'}</bdi> ← <bdi className="m-num" dir="ltr">{p.codeCorrection.correctedCode}</bdi> · {p.codeCorrection.resolvedBy?.displayName} · {dayText(p.codeCorrection.resolvedAt)}</dd></>)}
             {p.emdad?.history && p.emdad.history.length > 1 && (
               <>
                 <dt>تاریخچهٔ وضعیت امداد ویژه</dt>
@@ -267,10 +275,11 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
             <dd>{p.createdBy.displayName} · {dayText(p.createdAt)}</dd>
           </dl>
           {p.priceNotice && <PriceNoticeBox part={p} canAnswer={kase.status === 'open' && can('case.update')} onDone={onDone} />}
+          {p.codeCorrection?.status === 'open' && <CorrectionBox part={p} canFix={kase.status === 'open' && can('assessment.manage')} onDone={onDone} />}
           {manage && decideActions.length > 0 && (
             <div className="m-actions" role="group" aria-label={`اقدام‌های ${p.description}`}>
               {decideActions.map((a) => (
-                <button key={a} type="button" className={form === a ? 'm-btn-s' : a === 'cancel' || a === 'return' ? 'm-btn2-s warn' : 'm-btn2-s'} aria-pressed={form === a} onClick={() => setForm(form === a ? null : a)}>
+                <button key={a} type="button" className={form === a ? 'm-btn-s' : a === 'cancel' || a === 'return' || a === 'release' ? 'm-btn2-s warn' : 'm-btn2-s'} aria-pressed={form === a} onClick={() => setForm(form === a ? null : a)}>
                   {partActionLabel(p.flowState, a)}
                 </button>
               ))}
@@ -282,7 +291,10 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
             </div>
           )}
           {manage && form && <FlowForm kase={kase} part={p} action={form} onCancel={() => setForm(null)} onDone={async () => { setForm(null); await onDone(); }} />}
-          <div className="m-actions"><button type="button" className="m-btn2-s" onClick={() => setReminding(true)}>تذکر دربارهٔ این قطعه</button></div>
+          <div className="m-actions">
+            <button type="button" className="m-btn2-s" onClick={() => setReminding(true)}>تذکر دربارهٔ این قطعه</button>
+            {manage && !['cancelled', 'returned', 'consumed'].includes(p.flowState) && p.codeCorrection?.status !== 'open' && <PartMenu part={p} onDone={onDone} />}
+          </div>
         </div>
       )}
       <ReminderComposer open={reminding} onClose={() => setReminding(false)} defaults={{ caseId: kase.id, caseLabel: kase.caseNumber, plate: kase.vehicle.plate, partId: p.id, partLabel: p.description, ...(manage ? { userIds: kase.responsible ? [kase.responsible.id] : [] } : { role: 'parts_clerk' as const }) }} />
@@ -297,7 +309,7 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
   const [err, setErr] = useState('');
   const [key] = useState(newKey);
   const [v, setV] = useState<Record<string, string>>({});
-  const [option, setOption] = useState<{ o: StockOption; snapshot: StockSnapshotInfo } | null>(null);
+  const [option, setOption] = useState<{ o: StockCandidate; snapshot: StockSnapshotInfo } | null>(null);
   const set = (k: string) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }));
   const deliverable = p.deliverableQuantity ?? p.quantity;
   const amount = (k: string) => (v[k]?.trim() ? parseAmount(v[k]!) : undefined);
@@ -310,6 +322,13 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
       case 'reserve':
         if (!option) return setErr('یکی از کدهای موجود را انتخاب کنید');
         body = { ...base, action, snapshotId: option.snapshot.id, fullStockCode: option.o.fullStockCode, locationAddress: option.o.locationAddress, saleUnitRial: amount('sale') };
+        break;
+      case 'use_stock':
+        if (!option) return setErr('یکی از کدهای موجود را انتخاب کنید');
+        body = { ...base, action, snapshotId: option.snapshot.id, fullStockCode: option.o.fullStockCode, locationAddress: option.o.locationAddress, quantity: v.useQuantity ? Number(v.useQuantity) : undefined, saleUnitRial: amount('sale') };
+        break;
+      case 'release':
+        body = { ...base, action, reason: v.reason ?? '' };
         break;
       case 'emdad':
         body = { ...base, action, emdadNo: v.emdadNo?.trim() ? toLatinDigits(v.emdadNo).trim() : undefined, requestedCode: v.code?.trim() ? toLatinDigits(v.code).trim() : undefined };
@@ -351,7 +370,19 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
   const salePlaceholder = p.salePriceRial != null ? toPersianDigits(String(p.salePriceRial)) : '';
   return (
     <form className="m-form" onSubmit={submit} aria-label={partActionLabel(p.flowState, action)}>
-      {action === 'reserve' && <StockChoice part={p} value={option} onChange={setOption} />}
+      {(action === 'reserve' || action === 'use_stock') && <StockChoice part={p} value={option} onChange={setOption} parallel={action === 'use_stock'} />}
+      {action === 'use_stock' && (
+        <>
+          <p className="m-lbl" style={{ flexBasis: '100%', margin: 0 }}>قطعه از موجودی برای همین خودرو رزرو و آمادهٔ تحویل می‌شود؛ امداد ویژه لغو نمی‌شود و با رسیدن، جایگزین موجودی انبار است.</p>
+          {p.quantity - p.reservedQuantity > 1 && <label className="m-field">تعداد از موجودی
+            <select value={v.useQuantity ?? ''} onChange={set('useQuantity')}>
+              <option value="">همهٔ باقی‌مانده (تا سقف این محل)</option>
+              {Array.from({ length: p.quantity - p.reservedQuantity }, (_, i) => <option key={i + 1} value={i + 1}>{faNum(i + 1)} عدد</option>)}
+            </select>
+          </label>}
+        </>
+      )}
+      {action === 'release' && <p className="m-lbl" style={{ flexBasis: '100%', margin: 0 }}>{p.flowState === 'stock_parallel' ? 'فقط رزرو موجودی لغو می‌شود؛ امداد ویژه با همان وضعیت و تاریخچه ادامه دارد.' : 'رزرو آزاد می‌شود و قطعه در همین پرونده با وضعیت «تعیین تکلیف نشده» می‌ماند.'}</p>}
       {action === 'emdad' && (
         <>
           <label className="m-field">شمارهٔ امداد ویژه<input inputMode="numeric" dir="ltr" value={v.emdadNo ?? ''} onChange={set('emdadNo')} /></label>
@@ -386,8 +417,8 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
           {p.salePriceRial == null && <label className="m-field">قیمت فروش واحد (ریال) *<input required inputMode="numeric" dir="ltr" value={v.sale ?? ''} onChange={set('sale')} /></label>}
         </>
       )}
-      {(action === 'cancel' || action === 'return') && (
-        <label className="m-field" style={{ flexBasis: '100%' }}>علت {action === 'return' ? 'مرجوعی' : 'لغو'} *<input required minLength={3} value={v.reason ?? ''} onChange={set('reason')} /></label>
+      {(action === 'cancel' || action === 'return' || action === 'release') && (
+        <label className="m-field" style={{ flexBasis: '100%' }}>علت {action === 'return' ? 'مرجوعی' : action === 'release' ? 'لغو رزرو' : 'لغو'} *<input required minLength={3} value={v.reason ?? ''} onChange={set('reason')} /></label>
       )}
       {(action === 'set_price' || action === 'announce_price') && (
         <>
@@ -408,26 +439,29 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
 }
 
 /**
- * Reservation by the first 8 digits of the code (spec section 7): every supplier
- * suffix in stock with its usable quantity, price and place; one is preselected
- * when it is the only one. A code held by another open case shows who holds it.
+ * Stock choice of one line (spec section 7; owner, 2026-11-18). The server lists the
+ * candidates of this part read now: the exact code, OEM variants of the same 8-digit
+ * assessment code and possible non-OEM matches («غیرشرکتی · احتمالاً معادل»), each code
+ * and location separately with usable and reserved quantity. Only a single OEM option
+ * is preselected; a non-OEM candidate is always an explicit choice.
  */
-function StockChoice({ part, value, onChange }: { part: Part; value: { o: StockOption; snapshot: StockSnapshotInfo } | null; onChange: (v: { o: StockOption; snapshot: StockSnapshotInfo } | null) => void }) {
-  // An arrived special-aid line may reserve what is available now; the rest stays outstanding.
-  const minimum = part.flowState === 'emdad_arrived' ? 1 : part.quantity;
-  const base = part.assessmentCode ?? (part.partNumber ? parseStockCode(toLatinDigits(part.partNumber))?.basePartNumber ?? (/^\d{8}/.test(toLatinDigits(part.partNumber)) ? toLatinDigits(part.partNumber).slice(0, 8) : null) : null);
-  const [q, setQ] = useState(base ? '' : part.description);
-  const url = base ? `/stock/options?base=${base}&pageSize=50` : q.trim().length >= 2 ? `/stock/options?q=${encodeURIComponent(q.trim())}&pageSize=30` : null;
-  const { data, error } = useSWR<{ snapshot: StockSnapshotInfo | null; items: StockOption[] }>(url, fetcher, {
+function StockChoice({ part, value, onChange, parallel = false }: { part: Part; value: { o: StockCandidate; snapshot: StockSnapshotInfo } | null; onChange: (v: { o: StockCandidate; snapshot: StockSnapshotInfo } | null) => void; parallel?: boolean }) {
+  // An arrived special-aid line and stock used beside special aid may take what is available now.
+  const minimum = part.flowState === 'emdad_arrived' || parallel ? 1 : part.quantity;
+  const coded = !!(part.partNumber || part.procurementCode);
+  const [q, setQ] = useState(coded ? '' : part.description);
+  const url = coded ? `/parts/${part.id}/stock-candidates?v=${part.version}` : q.trim().length >= 2 ? `/stock/options?q=${encodeURIComponent(q.trim())}&pageSize=30` : null;
+  const { data, error } = useSWR<{ snapshot: StockSnapshotInfo | null; base?: string | null; items: StockCandidate[] }>(url, fetcher, {
+    revalidateOnFocus: false,
     onSuccess: (d) => {
       const usable = d.items.filter((o) => Number(o.available) >= minimum);
-      if (!value && d.snapshot && usable.length === 1) onChange({ o: usable[0]!, snapshot: d.snapshot });
+      if (!value && d.snapshot && usable.length === 1 && usable[0]!.match !== 'non_oem') onChange({ o: usable[0]!, snapshot: d.snapshot });
     },
   });
   return (
     <div style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {base ? (
-        <span className="m-lbl">کدهای تدارکاتی ۱۰ رقمی با کد اختصاصی <bdi>{toPersianDigits(base)}</bdi> (هر دو رقم آخر = یک سازنده). کد دقیق را انتخاب کنید؛ همان کد برای این خودرو رزرو و ثبت می‌شود.</span>
+      {coded ? (
+        <span className="m-lbl">موجودی تطبیق‌یافته با این قطعه{data?.base ? <> (کد اختصاصی <bdi>{toPersianDigits(data.base)}</bdi>)</> : null}. شرکتی یا غیرشرکتی بودن هر کالا کنارش آمده است؛ کالای غیرشرکتی فقط با انتخاب شما رزرو می‌شود.</span>
       ) : (
         <label className="m-field">جست‌وجوی موجودی (کد یا نام)<input value={q} onChange={(e) => setQ(e.target.value)} /></label>
       )}
@@ -438,13 +472,16 @@ function StockChoice({ part, value, onChange }: { part: Part; value: { o: StockO
         const enough = Number(o.available) >= minimum;
         const held = (o.reservedFor ?? []).filter((h) => h.caseId !== part.caseId);
         const selected = !!value && value.o.fullStockCode === o.fullStockCode && value.o.locationAddress === o.locationAddress;
+        const oem = o.oem ?? o.codeKind === 'standard';
         return (
-          <label key={`${o.fullStockCode}@${o.locationAddress}`} className="m-option" aria-disabled={!enough}>
+          <label key={`${o.fullStockCode}@${o.locationAddress}`} className="m-option" aria-disabled={!enough} data-testid="stock-candidate" data-match={o.match ?? ''}>
             <input type="radio" name={`stock-${part.id}`} disabled={!enough} checked={selected} onChange={() => onChange({ o, snapshot: data.snapshot! })} />
             <span>
-              <bdi className="m-num" style={{ fontWeight: 700 }}>{toPersianDigits(o.fullStockCode)}</bdi> · {o.description ?? ''}
+              <bdi className="m-num" dir="ltr" style={{ fontWeight: 700 }}>{toPersianDigits(o.fullStockCode)}</bdi> · {o.description ?? ''}
+              {' '}<span className={`m-badge${oem ? '' : ' stop'}`}>{oem ? 'شرکتی' : 'غیرشرکتی'}</span>
+              {o.match && <> <span className="m-badge">{STOCK_MATCH_LABELS[o.match]}</span></>}
               <br />
-              <small className="m-muted">محل {o.locationText || toPersianDigits(o.locationAddress) || '—'}{held.length ? ` · رزرو فعال برای پروندهٔ ${held.map((h) => toPersianDigits(h.caseNumber)).join('، ')}` : ''}</small>
+              <small className="m-muted">محل {o.locationAddress ? <bdi dir="ltr">{o.locationAddress}</bdi> : o.locationText || 'ثبت نشده'}{Number(o.reserved) > 0 ? ` · رزروشده ${toPersianDigits(o.reserved)}` : ''}{held.length ? ` · رزرو فعال برای پروندهٔ ${held.map((h) => toPersianDigits(h.caseNumber)).join('، ')}` : ''}</small>
             </span>
             <span style={{ textAlign: 'end' }}>
               <b className="m-num">{toPersianDigits(o.available)}</b> <small className="m-muted">قابل‌استفاده</small>
@@ -454,6 +491,99 @@ function StockChoice({ part, value, onChange }: { part: Part; value: { o: StockO
           </label>
         );
       })}
+    </div>
+  );
+}
+
+/** «چاپ لیست برداشت قطعات»: A4 PDF read from the server now; printing changes nothing. */
+function PickingPrint({ caseId }: { caseId: string }) {
+  return (
+    <details className="m-menu no-print">
+      <summary className="m-btn2-s"><AppIcon name="receipt" /> چاپ لیست برداشت قطعات</summary>
+      <div className="m-menu-pop" role="group" aria-label="چاپ لیست برداشت قطعات">
+        <a className="m-btn2-s" href={`/api/v1/print/cases/${caseId}/picking.pdf`} target="_blank" rel="noopener">قطعات قابل برداشت</a>
+        <a className="m-btn2-s" href={`/api/v1/print/cases/${caseId}/picking.pdf?scope=all`} target="_blank" rel="noopener">همهٔ قطعات خودرو</a>
+      </div>
+    </details>
+  );
+}
+
+/** «⋯» menu of a line: rarely used actions stay out of sight («درخواست اصلاح شماره فنی»). */
+function PartMenu({ part: p, onDone }: { part: Part; onDone: () => Promise<void> }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false), [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  const [key] = useState(newKey);
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    try {
+      await api(`/parts/${p.id}/code-correction`, { body: { expectedVersion: p.version, reason: reason.trim() }, idempotencyKey: key });
+      toast('درخواست اصلاح برای کارشناس فرستاده شد');
+      setOpen(false);
+      await onDone();
+    } catch (x) {
+      setErr(errorMessage(x));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <details className="m-menu">
+        <summary className="m-btn2-s" aria-label={`اقدام‌های بیشتر ${p.description}`}>⋯</summary>
+        <div className="m-menu-pop" role="menu">
+          <button type="button" role="menuitem" className="m-btn2-s" onClick={(e) => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; setOpen(true); }}>درخواست اصلاح شماره فنی</button>
+        </div>
+      </details>
+      {open && (
+        <form className="m-form" onSubmit={send} style={{ flexBasis: '100%' }} aria-label="درخواست اصلاح شماره فنی">
+          <p className="m-lbl" style={{ flexBasis: '100%', margin: 0 }}>فقط همین قطعه با شمارهٔ <bdi dir="ltr">{p.partNumber ?? '—'}</bdi> برای اصلاح به کارشناس برمی‌گردد.</p>
+          <label className="m-field" style={{ flexBasis: '100%' }}>علت کوتاه *<input required minLength={5} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="شماره فنی ثبت‌شده با مدل خودرو مطابقت ندارد. لطفاً بررسی و اصلاح شود." /></label>
+          {err && <p className="m-error" role="alert" style={{ flexBasis: '100%', margin: 0 }}>{err}</p>}
+          <div className="m-actions" style={{ flexBasis: '100%' }}>
+            <button type="submit" className="m-btn-s" disabled={busy || reason.trim().length < 5}>{busy ? 'در حال ارسال…' : 'ارسال برای کارشناس'}</button>
+            <button type="button" className="m-btn2-s" onClick={() => setOpen(false)}>انصراف</button>
+          </div>
+        </form>
+      )}
+    </>
+  );
+}
+
+/** The expert's side: original code, the clerk's reason and «ثبت و ارسال مجدد». */
+function CorrectionBox({ part: p, canFix, onDone }: { part: Part; canFix: boolean; onDone: () => Promise<void> }) {
+  const c = p.codeCorrection!;
+  const toast = useToast();
+  const [code, setCode] = useState(''), [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  const [key] = useState(newKey);
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    try {
+      await api(`/code-corrections/${c.id}/resolve`, { body: { expectedVersion: p.version, correctedCode: toLatinDigits(code.trim()) }, idempotencyKey: key });
+      toast('شماره فنی اصلاح و برای مسئول قطعات فرستاده شد');
+      await onDone();
+    } catch (x) {
+      setErr(errorMessage(x));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="m-warn" data-testid="code-correction">
+      <b>نیازمند اصلاح شماره فنی</b> — {c.requestedBy.displayName} · {dayText(c.requestedAt)}
+      <div>شمارهٔ ثبت‌شده: <bdi className="m-num" dir="ltr">{c.originalCode ?? '—'}</bdi></div>
+      <div>علت: {c.reason}</div>
+      {c.blockers.length > 0 && <ul style={{ margin: '4px 0', paddingInlineStart: 18 }}>{c.blockers.map((b) => <li key={b}>{b}</li>)}</ul>}
+      {canFix && c.blockers.length === 0 && (
+        <form className="m-form" onSubmit={send} style={{ marginBlockStart: 8 }} aria-label="اصلاح شماره فنی">
+          <label className="m-field">شماره فنی درست *<input required dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} /></label>
+          <button type="submit" className="m-btn-s" disabled={busy || code.trim().length < 3}>{busy ? 'در حال ثبت…' : 'ثبت و ارسال مجدد'}</button>
+        </form>
+      )}
+      {err && <p className="m-error" role="alert">{err}</p>}
     </div>
   );
 }

@@ -17,6 +17,9 @@ RUN pnpm --filter @manage/shared build && pnpm --filter @manage/api build \
 
 FROM node:22-alpine
 ENV NODE_ENV=production
+# Commit of the source this image was built from (CI passes it); shown with the release version.
+ARG GIT_COMMIT=
+ENV GIT_COMMIT=$GIT_COMMIT
 WORKDIR /app
 COPY --from=build /out/node_modules ./node_modules
 COPY --from=build /out/package.json ./package.json

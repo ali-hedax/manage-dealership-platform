@@ -12,6 +12,7 @@ import { BackLink } from './BackLink';
 import { NotificationBar } from './NotificationBar';
 import { PageActions } from './PageActions';
 import { InstallButton } from './InstallApp';
+import { ReleaseNotice, VersionChip } from './ReleaseNotice';
 
 // App shell of the approved design (owner references, Nov 2026): brand and five
 // destinations on the inline-start side, a top bar with the global search (Ctrl+K),
@@ -95,6 +96,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
           {!technicianOnly && can('case.read') && <GlobalSearch />}
           <div className="top-end">
+            <VersionChip />
             <span className="top-tenant" title="نمایندگی">{me.tenant.name}</span>
             <Link href="/reminders" className="icon-btn bell" aria-label={unseen ? `تذکرها و اعلان‌ها، ${unseen.toLocaleString('fa-IR')} مورد تازه` : 'تذکرها و اعلان‌ها'} aria-current={pathname === '/reminders' ? 'page' : undefined}>
               <AppIcon name="bell" />{unseen > 0 && <span className="dot" aria-hidden="true" />}
@@ -111,6 +113,8 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </header>
         {me.environment !== 'production' && <div className="env-banner" role="note">نسخهٔ آزمایشی — داده‌های این محیط ساختگی‌اند و جای سامانه‌های رسمی را نمی‌گیرند.</div>}
+        {/* Outside <main>: a page's own actions stay the only buttons in its content. */}
+        <div className="release-slot"><ReleaseNotice /></div>
         <main className="page" id="page-content" tabIndex={-1}>
           <NotificationBar />
           {back && <BackLink href={back.href} label={back.label} />}

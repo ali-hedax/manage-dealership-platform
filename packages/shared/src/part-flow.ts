@@ -10,6 +10,7 @@ export const PART_FLOW_STATES = [
   'emdad',
   'emdad_arrived',
   'dealer_supply',
+  'stock_parallel',
   'market',
   'ready',
   'handed_over',
@@ -25,6 +26,7 @@ export const PART_FLOW_STATE_LABELS: Record<PartFlowState, string> = {
   emdad: 'امداد ویژه · در حال تأمین',
   emdad_arrived: 'رسیده · در انتظار رزرو',
   dealer_supply: 'امداد ویژه: تأمین توسط نمایندگی',
+  stock_parallel: 'از موجودی · امداد ویژه در جریان',
   market: 'خرید بازار · در راه',
   ready: 'آمادهٔ تحویل',
   handed_over: 'تحویل‌شده به جایگاه',
@@ -33,15 +35,17 @@ export const PART_FLOW_STATE_LABELS: Record<PartFlowState, string> = {
   returned: 'مرجوعی',
 };
 
-export const PART_FLOW_ACTIONS = ['reserve', 'emdad', 'market', 'receive', 'hand_over', 'cancel', 'return', 'set_price', 'announce_price'] as const;
+export const PART_FLOW_ACTIONS = ['reserve', 'use_stock', 'emdad', 'market', 'receive', 'hand_over', 'release', 'cancel', 'return', 'set_price', 'announce_price'] as const;
 export type PartFlowAction = (typeof PART_FLOW_ACTIONS)[number];
 
 export const PART_FLOW_ACTION_LABELS: Record<PartFlowAction, string> = {
   reserve: 'رزرو از موجودی',
+  use_stock: 'استفاده از موجودی',
   emdad: 'ثبت امداد ویژه',
   market: 'خرید بازار',
   receive: 'ثبت رسید',
   hand_over: 'تحویل به واحد تعمیر',
+  release: 'لغو رزرو',
   cancel: 'لغو قطعه',
   return: 'مرجوعی',
   set_price: 'تغییر قیمت',
@@ -51,12 +55,16 @@ export const PART_FLOW_ACTION_LABELS: Record<PartFlowAction, string> = {
 /** Status transitions of the specification table; price actions are added for every active state. */
 export const PART_FLOW_TRANSITIONS: Record<PartFlowState, readonly PartFlowAction[]> = {
   needed: ['reserve', 'emdad', 'market', 'cancel'],
-  reserved: ['hand_over', 'cancel'],
-  // Status changes only through the daily Emdad report; the clerk may still cancel with a reason.
-  emdad: ['cancel'],
+  // «لغو رزرو» releases only the reservation; the line stays on the list as «تعیین تکلیف نشده» (owner, 2026-11-18).
+  reserved: ['hand_over', 'release'],
+  // Status changes only through the daily Emdad report; the clerk may still cancel with a reason, or
+  // fulfil the vehicle from usable stock while the special-aid request keeps running (owner, 2026-11-18).
+  emdad: ['use_stock', 'cancel'],
   // Arrived by the report but not (fully) reserved: the clerk chooses the exact 10-digit code.
   emdad_arrived: ['reserve', 'cancel'],
   dealer_supply: ['market', 'reserve'],
+  // Stock reserved for the vehicle in parallel with a running special-aid request; «لغو رزرو» keeps the request.
+  stock_parallel: ['use_stock', 'hand_over', 'release'],
   market: ['receive', 'cancel'],
   ready: ['hand_over', 'cancel'],
   handed_over: ['return'],
@@ -65,7 +73,7 @@ export const PART_FLOW_TRANSITIONS: Record<PartFlowState, readonly PartFlowActio
   returned: [],
 };
 
-export const ACTIVE_PART_FLOW_STATES: readonly PartFlowState[] = ['needed', 'reserved', 'emdad', 'emdad_arrived', 'dealer_supply', 'market', 'ready', 'handed_over'];
+export const ACTIVE_PART_FLOW_STATES: readonly PartFlowState[] = ['needed', 'reserved', 'emdad', 'emdad_arrived', 'dealer_supply', 'stock_parallel', 'market', 'ready', 'handed_over'];
 const PRICE_ACTIONS: readonly PartFlowAction[] = ['set_price', 'announce_price'];
 
 /** Emdad categories that mean «arrived»: the part becomes ready for handover automatically. */
@@ -79,6 +87,8 @@ export interface PartFlowRow {
   consumedAt?: string | Date | null;
   /** statusCategory of the latest Emdad request linked to this line, if any. */
   emdadCategory?: string | null;
+  /** Stock was reserved for the vehicle while the special-aid request keeps running (part_requests.stock_parallel_at). */
+  parallelStock?: boolean;
 }
 
 export const isEmdadArrived = (category: string | null | undefined) => !!category && (EMDAD_ARRIVED_CATEGORIES as readonly string[]).includes(category);
@@ -97,6 +107,8 @@ export function partFlowState(p: PartFlowRow): PartFlowState {
       return 'ready';
     case 'ordered':
       if (p.source === 'company') {
+        // Inventory and special aid are independent: the special-aid stage is shown beside it.
+        if (p.parallelStock) return 'stock_parallel';
         if (p.emdadCategory === EMDAD_DEALER_SUPPLY_CATEGORY) return 'dealer_supply';
         // Receipt is not readiness: the line is ready only once its whole quantity is reserved.
         return isEmdadArrived(p.emdadCategory) ? 'emdad_arrived' : 'emdad';
@@ -121,7 +133,6 @@ export function isPartActionAllowed(state: PartFlowState, action: PartFlowAction
 
 /** «لغو قطعه» becomes «لغو رزرو» once stock is reserved for it (spec section 2, example). */
 export function partActionLabel(state: PartFlowState, action: PartFlowAction): string {
-  if (action === 'cancel' && (state === 'reserved' || state === 'ready')) return 'لغو رزرو';
   if (action === 'cancel' && (state === 'emdad' || state === 'emdad_arrived')) return 'لغو (با علت)';
   if (action === 'reserve' && state === 'emdad_arrived') return 'انتخاب کد و رزرو';
   return PART_FLOW_ACTION_LABELS[action];
@@ -139,7 +150,7 @@ export const PART_FLOW_FILTER_LABELS: Record<PartFlowFilter, string> = {
 export function partFlowFilter(state: PartFlowState): PartFlowFilter | null {
   if (state === 'needed') return 'undecided';
   if (state === 'emdad' || state === 'emdad_arrived' || state === 'dealer_supply' || state === 'market') return 'in_progress';
-  if (state === 'reserved' || state === 'ready') return 'ready';
+  if (state === 'reserved' || state === 'ready' || state === 'stock_parallel') return 'ready';
   if (state === 'handed_over' || state === 'consumed') return 'delivered';
   return null;
 }
@@ -151,6 +162,7 @@ export const PART_FLOW_NEXT_STEP: Record<PartFlowState, string> = {
   emdad: 'منتظر گزارش روزانهٔ امداد ویژه؛ با «وارد موجودی» یا «رسید نمایندگی» کد تدارکاتی همین خودرو خودکار رزرو و آمادهٔ تحویل می‌شود.',
   emdad_arrived: 'امداد ویژه رسیده ولی همهٔ تعداد رزرو نشده است؛ علت زیر قلم را ببینید، کد ۱۰ رقمی درست را انتخاب و رزرو کنید.',
   dealer_supply: 'شرکت موجود ندارد؛ قیمت بدهید و از بازار یا موجودی تأمین کنید.',
+  stock_parallel: 'قطعه از موجودی برای این خودرو رزرو شده و آمادهٔ تحویل است؛ امداد ویژه جداگانه پیگیری می‌شود و با رسیدن، جایگزین موجودی انبار می‌شود.',
   market: 'وقتی پیک آورد، «ثبت رسید» بزنید تا آمادهٔ تحویل شود.',
   ready: 'با «تحویل به واحد تعمیر» به جایگاه بدهید؛ کارشناس و جایگاه خبر دارند.',
   handed_over: 'در خودرو مصرف می‌شود؛ با پایان کار پرونده بسته می‌شود.',

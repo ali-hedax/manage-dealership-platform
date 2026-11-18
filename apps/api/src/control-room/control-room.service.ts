@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, gte, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import {
   ALERT_TABLE,
   analysisSentences,
@@ -90,8 +90,8 @@ export class ControlRoomService {
             .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, ids), notInArray(partRequests.status, ['cancelled', 'returned'])))
         : Promise.resolve([]),
       db.select({ kind: dailyReportImports.kind, at: dailyReportImports.reportAt }).from(dailyReportImports).where(and(eq(dailyReportImports.tenantId, tenantId), eq(dailyReportImports.status, 'applied'))).orderBy(desc(dailyReportImports.reportAt)),
-      db.select({ id: cases.id }).from(cases).where(and(eq(cases.tenantId, tenantId), gte(cases.admittedAt, from))),
-      db.select({ admittedAt: cases.admittedAt, deliveredAt: cases.actualDeliveryAt }).from(cases).where(and(eq(cases.tenantId, tenantId), gte(cases.actualDeliveryAt, from))),
+      db.select({ id: cases.id }).from(cases).where(and(eq(cases.tenantId, tenantId), sql`${cases.status} <> 'deleted'`, gte(cases.admittedAt, from))),
+      db.select({ admittedAt: cases.admittedAt, deliveredAt: cases.actualDeliveryAt }).from(cases).where(and(eq(cases.tenantId, tenantId), sql`${cases.status} <> 'deleted'`, gte(cases.actualDeliveryAt, from))),
     ]);
 
     // Days in the current stage: since the last recorded stage change, else since admission.
