@@ -175,12 +175,12 @@ export class ReferenceDataService {
     vehicleUse:typeof data.vehicleUse==='string'?data.vehicleUse:'',
     vehicleMatch:'unknown' as const};
   }).filter(row=>row.name&&row.partNumber);
-  const ranked=rankAssessmentCandidates(query,candidates,20);
+  const ranked=rankAssessmentCandidates(query,candidates,100);
   const modelKey=normalizeAssessmentSearch(context.model??'');
   const ordered=ranked.map(item=>({
    ...item,vehicleUse:candidates.find(row=>row.id===item.id)?.vehicleUse??'',
    vehicleUseHint:!!modelKey&&normalizeAssessmentSearch(candidates.find(row=>row.id===item.id)?.vehicleUse??'').includes(modelKey),
-  })).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score);
+  })).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score).slice(0,20);
   return {caseId,vehicle:{brand:context.brand,model:context.model,trim:context.trim},
    results:ordered,limited:rows.length===250,fitmentVerified:false};
  }
