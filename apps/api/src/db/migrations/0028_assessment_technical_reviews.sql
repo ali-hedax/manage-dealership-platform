@@ -1,3 +1,4 @@
+ALTER TABLE "assessments" ADD COLUMN "smart_manual" boolean NOT NULL DEFAULT false;--> statement-breakpoint
 CREATE TABLE "assessment_technical_reviews" (
  "item_id" uuid PRIMARY KEY NOT NULL REFERENCES "assessment_items"("id") ON DELETE CASCADE,
  "tenant_id" uuid NOT NULL REFERENCES "tenants"("id"),
