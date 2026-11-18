@@ -36,7 +36,7 @@ test('smart assessment: rapid catalog selection persists two lines and prevents 
   await page.goto(`/cases/${id}`);
   await openCaseTab(page, 'کارشناسی');
   const panel = page.getByTestId('assessment-panel');
-  await panel.getByRole('button', {name: 'شروع کارشناسی'}).click();
+  await panel.getByRole('button', {name: 'ایجاد کارشناسی دستی هوشمند'}).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('نام کارشناس *').fill('کارشناس نمونه');
   await dialog.getByRole('button', {name: 'ثبت', exact: true}).click();
@@ -79,7 +79,7 @@ test('parts clerk reviews individual draft lines and returns only a disputed tec
   expect(kase.status()).toBe(201);
   const {id}=(await kase.json()) as {id:string};
   const created=await page.request.post(`/api/v1/cases/${id}/assessments`, {
-    headers, data:{kind:'initial',assessorName:'کارشناس آزمایشی'},
+    headers, data:{kind:'initial',smartManual:true,assessorName:'کارشناس آزمایشی'},
   });
   expect(created.status()).toBe(201);
   const draft=(await created.json()) as {id:string;version:number};
