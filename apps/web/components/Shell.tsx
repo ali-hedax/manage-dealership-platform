@@ -113,8 +113,9 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </header>
         {me.environment !== 'production' && <div className="env-banner" role="note">نسخهٔ آزمایشی — داده‌های این محیط ساختگی‌اند و جای سامانه‌های رسمی را نمی‌گیرند.</div>}
+        {/* Outside <main>: a page's own actions stay the only buttons in its content. */}
+        <div className="release-slot"><ReleaseNotice /></div>
         <main className="page" id="page-content" tabIndex={-1}>
-          <ReleaseNotice />
           <NotificationBar />
           {back && <BackLink href={back.href} label={back.label} />}
           <PageActions />
