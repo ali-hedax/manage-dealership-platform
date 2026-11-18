@@ -1,3 +1,10 @@
+## 2026-11-18 — Per-item parts-clerk review (PR #103, unverified latest commit)
+
+- Added synthetic API regression case for parts-clerk-only acceptance/return, mandatory return reason, stale optimistic version rejection, reopening on technical code change, and two independent item decisions.
+- Added browser Playwright scenario for a parts clerk reviewing a two-item insurance draft, saving accepted and returned statuses, and reloading to verify persisted state.
+- Migration 0028, tenant-scoped review API, audit event, schema and UI committed. **Latest head `e855754` has no confirmed CI run in this conversation.** The last green run `44260852930` covered a much earlier commit, so do not merge or deploy this code yet.
+- Follow-up needed: run full CI including PGlite/PostgreSQL migrations and Playwright; verify authorized/unprivileged and wrong-tenant access; validate procurement dispatch gating for accepted-only lines before enabling operational use. Existing production remains unchanged.
+
 ## 2026-11-18 — Technical-review foundation (unverified)
 
 - New synthetic unit coverage: 100-line split (95 accepted, five returned), required correction reason, stale version, invalidation after a code/quantity edit, labour exclusion, reason reset after acceptance.
