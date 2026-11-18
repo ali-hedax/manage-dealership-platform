@@ -1,4 +1,5 @@
 import type { PartFlowAction, PartFlowState } from './part-flow';
+import type { StockOption } from './daily-reports';
 import type {
   AssessmentItemAction,
   AssessmentKind,
@@ -281,6 +282,48 @@ export interface Part {
   } | null;
   /** Open price announcement of the parts clerk, waiting for the expert. */
   priceNotice: PriceNotice | null;
+  /**
+   * Inventory dimension, independent of special aid (owner, 2026-11-18): stock reserved or issued
+   * for this vehicle while a special-aid request keeps running. Null when not used in parallel.
+   */
+  stockParallel?: { at: string; reservedQuantity: number; issuedQuantity: number; replenished: boolean } | null;
+  /** «استفاده از موجودی» may be offered: an active special-aid request and usable stock for this part. */
+  stockUsable?: boolean;
+  /** Open or latest technical-code correction of this line. */
+  codeCorrection?: PartCodeCorrection | null;
+}
+
+export interface PartCodeCorrection {
+  id: string;
+  status: 'open' | 'resolved' | 'withdrawn';
+  reason: string;
+  originalCode: string | null;
+  correctedCode: string | null;
+  requestedBy: UserRef;
+  requestedAt: string;
+  resolvedBy: UserRef | null;
+  resolvedAt: string | null;
+  /** Persian descriptions of operations that must be resolved before the code can change. */
+  blockers: string[];
+}
+
+/** One stock candidate of a part (exact, OEM variant or possible non-OEM match). */
+export interface StockCandidate extends StockOption {
+  match: import('./stock-code').StockMatchKind;
+  oem: boolean;
+}
+
+export interface DeletedCase {
+  id: string;
+  caseNumber: string;
+  admissionNo: string | null;
+  plate: string | null;
+  vehicle: string;
+  deletedAt: string;
+  deletedBy: UserRef | null;
+  reason: string | null;
+  previousStatus: string;
+  version: number;
 }
 
 export interface PriceNotice {
