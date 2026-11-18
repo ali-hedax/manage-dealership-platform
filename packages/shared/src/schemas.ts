@@ -302,7 +302,7 @@ const rial = z.number().int().min(0).max(1_000_000_000_000);
 export const createAssessmentSchema = z
   .object({
     kind: z.enum(ASSESSMENT_KINDS),
-    smartManual: z.boolean().optional().default(false),
+    smartManual: z.boolean().optional(),
     // External assessor (insurer / golden card expert) or the dealership expert.
     assessorName: z.string().trim().min(1).max(120),
     assessorOrg: optionalText(120),
