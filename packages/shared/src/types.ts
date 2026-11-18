@@ -256,6 +256,10 @@ export interface Part {
   /** Quantity reserved for this vehicle (active reservations and issues) and what is still outstanding. */
   reservedQuantity: number;
   outstandingQuantity: number;
+  /** Delivered across all handovers; legacy completed lines count their full quantity. */
+  handedOverQuantity?: number;
+  /** Maximum physical quantity that can be handed over now. */
+  deliverableQuantity?: number;
   /** Why an arrived special-aid line is not (fully) reserved, with the next step. */
   emdadReserveNote: string | null;
   /** Arrived by the report but without a verified received quantity: flagged for review, never reserved or ready. */

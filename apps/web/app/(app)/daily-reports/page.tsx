@@ -3,7 +3,7 @@ import {useSearchParams} from 'next/navigation';
 import {Suspense,useEffect,useRef,useState} from 'react';
 import useSWR,{mutate as refreshCache} from 'swr';
 import {
- DAILY_IMPORT_STATUS_LABELS,DAILY_REPORT_KIND_LABELS,DAILY_ROW_OUTCOME_LABELS,DAILY_ROW_OUTCOMES,STOCK_COMPLETENESS_LABELS,STOCK_CURRENCY_LABELS,STOCK_QUANTITY_MEANING_LABELS,EMDAD_RECEIVED_QUANTITY_LABELS,
+ DAILY_IMPORT_STATUS_LABELS,DAILY_REPORT_KIND_LABELS,DAILY_ROW_OUTCOME_LABELS,DAILY_ROW_OUTCOMES,STOCK_COMPLETENESS_LABELS,STOCK_CURRENCY_LABELS,STOCK_QUANTITY_MEANING_LABELS,
  formatJalaliDateInput,formatTimeInput,toLatinDigits,toPersianDigits,type DailyImport,type DailyReportKind,type DailyRowOutcome,type UserRef,
 } from '@manage/shared';
 import {ApiError,api,errorMessage,fetcher} from '@/lib/api';
@@ -118,12 +118,11 @@ function Settings({kind}:{kind:DailyReportKind}){
  const [form,setForm]=useState<Record<string,string>>({});const [busy,setBusy]=useState(false);const [error,setError]=useState('');
  useEffect(()=>{if(!data)return;const s=data.settings;setForm({reminderTime:data.reminderTime,reminderUserId:data.reminderUserId??'',currency:s.currency??'',taxIncluded:s.taxIncluded==null?'':String(s.taxIncluded),completeness:s.completeness??'',scope:s.scope??'',quantityMeaning:s.quantityMeaning??'',receivedQuantityField:s.receivedQuantityField??''});},[data]);
  if(!data)return null;
- const set=(k:string,v:string)=>setForm(f=>({...f,[k]:v}));const owner=!!me.isOwner&&kind==='stock';const emdadOwner=!!me.isOwner&&kind==='emdad';const edit=can('daily_reports.settings');
+ const set=(k:string,v:string)=>setForm(f=>({...f,[k]:v}));const owner=!!me.isOwner&&kind==='stock';const edit=can('daily_reports.settings');
  const confirmed=!!(data.settings.scope&&data.settings.completeness&&data.settings.quantityMeaning);
  async function save(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{
   const body:Record<string,unknown>={expectedVersion:data!.version,reminderTime:toLatinDigits(form.reminderTime??''),reminderUserId:form.reminderUserId||null};
   if(owner)Object.assign(body,{currency:form.currency||null,taxIncluded:form.taxIncluded===''?null:form.taxIncluded==='true',completeness:form.completeness||null,scope:form.scope?.trim()||null,quantityMeaning:form.quantityMeaning||null});
-  if(emdadOwner)Object.assign(body,{receivedQuantityField:form.receivedQuantityField||null});
   await mutate(await api<Profile>(`/daily-reports/profiles/${kind}`,{method:'PATCH',body}),{revalidate:false});toast('تنظیمات ذخیره شد');}catch(err){setError(errorMessage(err));}finally{setBusy(false);}}
  return <section className="panel"><div className="panel-head"><h2>تنظیمات این گزارش</h2></div><form className="panel-body stack" onSubmit={e=>void save(e)}>
   {kind==='stock'&&<>{!confirmed&&<p className="callout callout-amber small">دامنه انبار، کامل‌بودن و معنای ستون موجودی هنوز تأیید نشده؛ تا آن زمان موجودی فقط قابل مشاهده است و رزرو فعال نمی‌شود.</p>}{!data.settings.currency&&<p className="callout callout-amber small">واحد پول قیمت‌ها تأیید نشده است؛ قیمت‌ها با برچسب «واحد پول تأییدنشده» نمایش داده می‌شوند و مبنای مالی نیستند.</p>}
@@ -134,10 +133,7 @@ function Settings({kind}:{kind:DailyReportKind}){
    <label className="field"><span>واحد پول قیمت‌ها</span><select className="input" value={form.currency??''} onChange={e=>set('currency',e.target.value)}><option value="">تأیید نشده</option>{Object.entries(STOCK_CURRENCY_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
    <label className="field"><span>شمول مالیات در قیمت</span><select className="input" value={form.taxIncluded??''} onChange={e=>set('taxIncluded',e.target.value)}><option value="">تأیید نشده</option><option value="true">با مالیات</option><option value="false">بدون مالیات</option></select></label>
   </div></fieldset></>}
-  {kind==='emdad'&&<>{!data.settings.receivedQuantityField&&<p className="callout callout-amber small">معنای ستون تعداد رسیده تأیید نشده است؛ تا آن زمان قطعهٔ رسیده خودکار رزرو نمی‌شود و تعدادش «نیازمند بررسی» نشان داده می‌شود.</p>}
-  <fieldset className="stack" disabled={!emdadOwner}><legend>تأیید مالک {emdadOwner?'':'(فقط مالک سامانه می‌تواند تغییر دهد)'}</legend>
-   <label className="field"><span>ستونی که تعداد رسیده را نشان می‌دهد (پس از تأیید از گزارش یا مستندات منبع)</span><select className="input" value={form.receivedQuantityField??''} onChange={e=>set('receivedQuantityField',e.target.value)}><option value="">تأیید نشده</option>{Object.entries(EMDAD_RECEIVED_QUANTITY_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
-  </fieldset></>}
+  {kind==='emdad'&&<p className="small">مبنای تعداد رزرو امداد ویژه، ستون «تعداد اختصاصی» در گزارش است.</p>}
   <fieldset className="stack" disabled={!edit}><legend>یادآوری روزانه داخل منیج</legend><div className="grid-2">
    <label className="field"><span>ساعت یادآوری (تهران)</span><input className="input ltr-input" value={form.reminderTime??''} onChange={e=>set('reminderTime',e.target.value)} placeholder="11:00"/></label>
    <label className="field"><span>مسئول یادآوری</span><select className="input" value={form.reminderUserId??''} onChange={e=>set('reminderUserId',e.target.value)}><option value="">همه دارندگان مجوز بارگذاری</option>{staff?.map(u=><option key={u.id} value={u.id}>{u.displayName}</option>)}</select></label>

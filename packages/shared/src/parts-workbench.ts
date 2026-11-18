@@ -24,6 +24,7 @@ export interface PartsWorkbenchLine {
   description: string;
   partNumber: string | null;
   quantity: number;
+  deliverableQuantity?: number;
   version: number;
   action: 'reserve' | 'market' | 'emdad' | 'received' | 'handover' | 'follow_up';
   suggestedPriceRial: number | null;

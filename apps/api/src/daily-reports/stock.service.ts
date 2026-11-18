@@ -307,6 +307,27 @@ export class StockService {
     return id;
   }
 
+  /** Split a reservation only for the units physically handed over; commitments stay equal. */
+  async issueQuantityIn(tx: DbOrTx, actor: Actor, id: string, quantity: number, expectedVersion: number, pickup = false) {
+    if (!pickup) this.needPermission(actor, 'stock.issue');
+    const tenantId = actor.user.tenantId;
+    const [r] = await tx.select().from(stockReservations).where(and(eq(stockReservations.id, id), eq(stockReservations.tenantId, tenantId))).for('update');
+    if (!r) throw notFound('رزرو');
+    if (r.version !== expectedVersion) throw versionConflict(r.version);
+    if (r.status !== 'reserved' || !Number.isInteger(quantity) || quantity < 1 || quantity > Number(r.quantity)) throw badRequest('DELIVERY_QUANTITY_INVALID', 'تعداد تحویل باید بین یک و تعداد رزروشده باشد');
+    let version = r.version;
+    if (quantity < Number(r.quantity)) {
+      const remainder = { ...r, id: newId(), quantity: String(Number(r.quantity) - quantity), version: 1, updatedAt: new Date() };
+      await tx.insert(stockReservations).values(remainder);
+      const [saved] = await tx.update(stockReservations).set({ quantity: String(quantity), version: r.version + 1, updatedAt: new Date() })
+        .where(and(eq(stockReservations.id, id), eq(stockReservations.tenantId, tenantId), eq(stockReservations.version, r.version))).returning();
+      if (!saved) throw versionConflict();
+      version = saved.version;
+      await this.audit.record(tx, actor, { entityType: 'part', entityId: r.partRequestId, caseId: r.caseId, action: 'stock.reservation_split', before: { reservationId: id, quantity: r.quantity }, after: { reservationId: id, quantity: String(quantity), remainderId: remainder.id, remainderQuantity: remainder.quantity }, snapshot: { version: 1, row: remainder } });
+    }
+    await this.actIn(tx, actor, id, { action: 'issue', expectedVersion: version }, pickup);
+  }
+
   async act(actor: Actor, id: string, input: ReservationActionInput): Promise<StockReservation> {
     await this.db.transaction((tx) => this.actIn(tx, actor, id, input));
     return (await this.reservations(actor, { ids: [id] }))[0]!;

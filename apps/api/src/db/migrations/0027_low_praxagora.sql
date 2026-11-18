@@ -1,0 +1,1 @@
+ALTER TABLE "part_requests" ADD COLUMN "handed_over_quantity" smallint;

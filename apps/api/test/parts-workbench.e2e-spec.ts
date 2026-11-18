@@ -117,8 +117,8 @@ test('batches Emdad with separate prices, suggests matched receipts and keeps ma
     caseId: c.id, partRequestId: p1.id, matchStatus: 'matched', isTest: true });
   const action = await line(p1);
   expect(action).toMatchObject({ action: 'received', emdadId: id, suggestedPriceRial: 2500 });
-  expect((await workAction(p1.id, { action: 'received', expectedVersion: action!.version, emdadId: id, salePriceRial: 4000 })).status).toBe(201);
-  expect(await line(p1)).toMatchObject({ action: 'handover', suggestedPriceRial: 4000 });
+  expect((await workAction(p1.id, { action: 'received', expectedVersion: action!.version, emdadId: id, salePriceRial: 4000 })).body.code).toBe('EMDAD_RESERVATION_REQUIRED');
+  expect(await line(p1)).toMatchObject({ action: 'received', suggestedPriceRial: 2500 });
 });
 
 test('rejects handover without a sale price and exports immutable versions after approval', async () => {

@@ -5,7 +5,7 @@ test.use({ actionTimeout: 15000 });
 
 // Owner instructions of 2026-11-17, synthetic data only (TESTVIN…, invented numbers).
 const headers = { 'x-manage-client': 'e2e' };
-const FIELDS = ['شماره کارت پذيرش', 'شماره شاسی', 'شماره امداد ویژه', 'کد اختصاصی اولیه', 'کد قطعه', 'كد تداركاتي كالا', 'وضعیت امداد ویژه', 'تاريخ رسيد شدن امداد ويژه در انبار', 'تعداد تداركاتي'];
+const FIELDS = ['شماره کارت پذيرش', 'شماره شاسی', 'شماره امداد ویژه', 'کد اختصاصی اولیه', 'کد قطعه', 'كد تداركاتي كالا', 'وضعیت امداد ویژه', 'تاريخ رسيد شدن امداد ويژه در انبار', 'تعداد اختصاصي'];
 
 async function publish(api: APIRequestContext, rows: string[][], minutesAgo: number) {
   const row = (cells: string[]) => `<Row>${cells.map((v) => `<Cell><Data ss:Type="String">${v}</Data></Cell>`).join('')}</Row>`;
@@ -37,7 +37,7 @@ test('part row: current special-aid stage before arrival, newer stage after impo
   const parts = await ctx.newPage();
   await login(parts, 'parts');
   for (const p of [withDate, withoutDate]) expect((await parts.request.post(`/api/v1/parts/${p.id}/flow`, { headers, data: { expectedVersion: p.version, action: 'emdad' } })).status()).toBe(201);
-  const line = (code: string, no: string, status: string, received = '', full = `${code}02`) => ['9931', vin, no, code, code, full, status, received, '1'];
+  const line = (code: string, no: string, status: string, received = '', full = `${code}02`) => ['9931', vin, no, code, code, full, status, received, ''];
 
   const row = (name: string) => page.getByTestId('part').filter({ hasText: name });
   await publish(parts.request, [line('00123456', '0070031', 'در مرحلهٔ خرید'), line('00654321', '0070032', 'در مرحلهٔ خرید')], 60);
@@ -59,7 +59,7 @@ test('part row: current special-aid stage before arrival, newer stage after impo
   await expect(stage.locator('b')).toHaveText('امداد ویژه رسیده');
   await expect(stage.getByTestId('emdad-received')).toHaveText(receipt);
   await expect(row('گلگیر امداد ساختگی').locator('.ledger-row')).not.toContainText(reportDay);
-  // The source has a time; only the date is shown. Without a verified received quantity the line is flagged, not ready.
+  // The source has a time; only the date is shown. With the quantity cell empty the line is flagged, not ready.
   await expect(stage.getByTestId('emdad-received')).not.toContainText('۱۰:۳۰');
   await expect(row('گلگیر امداد ساختگی').getByTestId('emdad-quantity-review')).toHaveText('تعداد رسیده نیازمند بررسی');
   await expect(row('گلگیر امداد ساختگی')).toHaveAttribute('data-state', 'emdad_arrived');
@@ -147,4 +147,40 @@ test('missing repair route: Persian dialog for the expert (with the fix) and the
   // Leave the shared seed technician without active work for the suites that follow.
   expect((await techPage.request.post(`/api/v1/workshop/my-tasks/${task.id}/actions`, { headers, data: { action: 'complete', expectedVersion: started!.version } })).status()).toBe(201);
   await ctx.close();
+});
+
+
+test('parts clerk selects one of two units and can hand over the remainder separately', async ({ page, browser }) => {
+  await login(page, 'expert');
+  const created = await page.request.post('/api/v1/cases', { headers, data: { vehicle: { model: 'خودرو تعداد ساختگی', vin: 'TESTVIN99900E2E33' }, coverageType: 'personal', admittedAt: new Date().toISOString() } });
+  expect(created.status()).toBe(201);
+  const c = await created.json();
+  const need = await page.request.post(`/api/v1/cases/${c.id}/parts`, { headers, data: { description: 'قطعه تحویل تعدادی ساختگی', partNumber: 'TEST-DELIVERY-33', quantity: 2, source: 'external' } });
+  expect(need.status()).toBe(201);
+  const p = await need.json();
+  const ctx = await browser.newContext();
+  try {
+    const clerk = await ctx.newPage();
+    await login(clerk, 'parts');
+    const order = await clerk.request.post(`/api/v1/parts/${p.id}/flow`, { headers, data: { expectedVersion: p.version, action: 'market', supplier: 'فروشنده ساختگی', purchaseUnitRial: 1000, saleUnitRial: 1500 } });
+    expect(order.status()).toBe(201);
+    const receipt = await clerk.request.post(`/api/v1/parts/${p.id}/flow`, { headers, data: { expectedVersion: (await order.json()).version, action: 'receive' } });
+    expect(receipt.status()).toBe(201);
+    await clerk.goto(`/cases/${c.id}#case-parts`);
+    const line = clerk.getByTestId('part').filter({ hasText: 'قطعه تحویل تعدادی ساختگی' });
+    await line.getByRole('button', { name: 'تحویل به واحد تعمیر', exact: true }).click();
+    const quantity = line.getByLabel('تعداد تحویل به تعمیرگاه');
+    await expect(quantity).toHaveValue('');
+    await expect(quantity.locator('option')).toHaveCount(3);
+    await quantity.selectOption('1');
+    await line.getByLabel('تحویل‌گیرنده').fill('تعمیرگاه ساختگی');
+    await line.locator('form button[type=submit]').click();
+    await expect(line).toContainText('۱ تحویل‌شده');
+    await line.locator('.ledger-row').getByRole('button', { name: 'تحویل به واحد تعمیر', exact: true }).click();
+    await expect(line.getByLabel('تحویل‌گیرنده')).toBeVisible();
+    await expect(quantity).toHaveCount(0);
+    await line.getByLabel('تحویل‌گیرنده').fill('تعمیرگاه ساختگی');
+    await line.locator('form button[type=submit]').click();
+    await expect(line).toHaveAttribute('data-state', 'handed_over');
+  } finally { await ctx.close(); }
 });

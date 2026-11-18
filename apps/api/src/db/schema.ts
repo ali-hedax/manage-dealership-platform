@@ -532,6 +532,8 @@ export const partRequests = pgTable(
     approvedUnitPriceRial: bigint('approved_unit_price_rial', { mode: 'number' }),
     salePriceRial: bigint('sale_price_rial', { mode: 'number' }),
     handedOverBy: uuid('handed_over_by').references(() => users.id),
+    // NULL preserves old full-handover semantics without rewriting historical rows.
+    handedOverQuantity: smallint('handed_over_quantity'),
     consumedAt: ts('consumed_at'),
     returnedAt: ts('returned_at'),
     returnReason: text('return_reason'),

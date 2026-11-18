@@ -163,7 +163,7 @@ describe('daily Emdad report moves the line automatically', () => {
     dealer = (await flow(dealer, { action: 'emdad', emdadNo: '500042' })).body;
 
     const result = await publish([
-      row(41, '12345641', 'وارد موجودی شده است', vin, '500041'),
+      { ...row(41, '12345641', 'وارد موجودی شده است', vin, '500041'), 'تعداد اختصاصي': '' },
       row(42, '12345642', 'تامین توسط نمایندگی', '', '500042'),
     ], 1);
     expect(result.counts).toMatchObject({ partsArrived: 1, partsDealerSupply: 1, emdadNoFilled: 1 });
@@ -174,7 +174,7 @@ describe('daily Emdad report moves the line automatically', () => {
     expect(a).toMatchObject({ flowState: 'emdad_arrived', emdadNo: '500041', allowedActions: ['reserve', 'cancel', 'set_price', 'announce_price'] });
     expect(a.emdad).toMatchObject({ emdadNo: '500041', category: 'in_dealer_stock', statusText: 'وارد موجودی شده است', arrived: true });
     expect(a).toMatchObject({ emdadQuantityReview: true, reservedQuantity: 0 });
-    expect(a.emdadReserveNote).toContain('تعداد رسیده تأیید نشده');
+    expect(a.emdadReserveNote).toContain('تعداد اختصاصي');
     const d = now.find((p) => p.id === dealer.id)!;
     expect(d).toMatchObject({ flowState: 'dealer_supply', allowedActions: ['market', 'reserve', 'set_price', 'announce_price'] });
 
