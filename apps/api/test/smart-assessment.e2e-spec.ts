@@ -47,7 +47,7 @@ it('searches real imported catalog by Persian phrase, code and case model, then 
   expect(codeSearch.status).toBe(201);
   expect(codeSearch.body.results[0].partNumber).toBe('00123002');
 
-  const draft = await expert.post(`/cases/${caseId}/assessments`, { kind: 'initial', assessorName: 'کارشناس ساختگی' });
+  const draft = await expert.post(`/cases/${caseId}/assessments`, { kind: 'initial', smartManual:true, assessorName: 'کارشناس ساختگی' });
   expect(draft.status).toBe(201);
   const a = draft.body;
   const item1 = await expert.post(`/assessments/${a.id}/items`, {
@@ -83,7 +83,7 @@ it('persists independent parts-clerk decisions and audit, requires reason, block
   });
   expect(kase.status).toBe(201);
   const caseId=kase.body.id as string;
-  const created=await expert.post(`/cases/${caseId}/assessments`,{kind:'initial',assessorName:'کارشناس آزمایشی'});
+  const created=await expert.post(`/cases/${caseId}/assessments`,{kind:'initial',smartManual:true,assessorName:'کارشناس آزمایشی'});
   expect(created.status).toBe(201);
   const a=created.body;
   const first=await expert.post(`/assessments/${a.id}/items`,{
@@ -99,13 +99,13 @@ it('persists independent parts-clerk decisions and audit, requires reason, block
   expect(review.body).toHaveLength(2);
   const [p1,p2]=review.body;
   expect(p1.status).toBe('pending');
-  expect((await expert.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'accept',expectedVersion:0})).status).toBe(403);
-  expect((await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'return',expectedVersion:0})).status).toBe(422);
-  const accepted=await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'accept',expectedVersion:0});
+  expect((await expert.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'accept',expectedVersion:1})).status).toBe(403);
+  expect((await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'return',expectedVersion:1})).status).toBe(422);
+  const accepted=await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'accept',expectedVersion:1});
   expect(accepted.status).toBe(201);
-  expect((await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'return',reason:'اشتباه',expectedVersion:0})).status).toBe(409);
+  expect((await clerk.post(`/assessment-items/${p1.itemId}/technical-review`,{action:'return',reason:'اشتباه',expectedVersion:1})).status).toBe(409);
   const returned=await clerk.post(`/assessment-items/${p2.itemId}/technical-review`,{
-    action:'return',reason:'شماره فنی برای این خودرو اشتباه است',expectedVersion:0,
+    action:'return',reason:'شماره فنی برای این خودرو اشتباه است',expectedVersion:1,
   });
   expect(returned.status).toBe(201);
   review=await expert.get(`/cases/${caseId}/technical-reviews`);
@@ -119,8 +119,8 @@ it('persists independent parts-clerk decisions and audit, requires reason, block
   expect(review.body[0].status).toBe('accepted');
   expect(review.body[1].status).toBe('pending');
   expect(review.body[1].reason).toBeNull();
-  expect(review.body[1].version).toBe(2);
+  expect(review.body[1].version).toBe(3);
   expect((await clerk.post(`/assessment-items/${p2.itemId}/technical-review`,{
-    action:'accept',expectedVersion:2,
+    action:'accept',expectedVersion:3,
   })).status).toBe(201);
 });
