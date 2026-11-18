@@ -610,7 +610,7 @@ export class AssessmentsService {
     const rows=await this.db.select({i:assessmentItems,a:assessments,r:assessmentTechnicalReviews})
       .from(assessmentItems).innerJoin(assessments,and(eq(assessments.id,assessmentItems.assessmentId),eq(assessments.tenantId,tenantId)))
       .leftJoin(assessmentTechnicalReviews,and(eq(assessmentTechnicalReviews.itemId,assessmentItems.id),eq(assessmentTechnicalReviews.tenantId,tenantId)))
-      .where(and(eq(assessments.caseId,caseId),eq(assessmentItems.tenantId,tenantId),eq(assessments.status,'draft')))
+      .where(and(eq(assessments.caseId,caseId),eq(assessmentItems.tenantId,tenantId)))
       .orderBy(asc(assessmentItems.lineNo));
     return rows.filter(x=>x.i.action==='replace').map(({i,r})=>{
       const fingerprint=technicalReviewFingerprint(i);
