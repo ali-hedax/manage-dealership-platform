@@ -75,7 +75,7 @@ export class DeskService {
         .where(and(eq(tasks.tenantId, tenantId), inArray(tasks.caseId, ids)))
         .orderBy(asc(tasks.sortOrder)),
       db
-        .select({ id: partRequests.id, caseId: partRequests.caseId, status: partRequests.status, source: partRequests.source, consumedAt: partRequests.consumedAt, orderedAt: partRequests.orderedAt, createdAt: partRequests.createdAt, emdadCategory: emdadRequests.statusCategory })
+        .select({ id: partRequests.id, caseId: partRequests.caseId, status: partRequests.status, source: partRequests.source, consumedAt: partRequests.consumedAt, orderedAt: partRequests.orderedAt, createdAt: partRequests.createdAt, stockParallelAt: partRequests.stockParallelAt, emdadCategory: emdadRequests.statusCategory })
         .from(partRequests)
         .leftJoin(emdadRequests, and(eq(emdadRequests.partRequestId, partRequests.id), eq(emdadRequests.tenantId, tenantId)))
         .where(and(eq(partRequests.tenantId, tenantId), inArray(partRequests.caseId, ids), notInArray(partRequests.status, ['cancelled', 'returned']))),
@@ -104,7 +104,7 @@ export class DeskService {
       if (seen.has(p.id)) continue;
       seen.add(p.id);
       const f = facts.get(p.caseId)!;
-      const state = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: p.emdadCategory ?? undefined });
+      const state = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: p.emdadCategory ?? undefined, parallelStock: p.status === 'ordered' && p.source === 'company' && !!p.stockParallelAt });
       const filter = partFlowFilter(state);
       f.parts.total += 1;
       if (filter === 'undecided') f.parts.undecided += 1;

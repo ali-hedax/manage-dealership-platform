@@ -572,6 +572,8 @@ export class CasesService {
         and (upper(regexp_replace(coalesce(vh.vin,''), '[[:space:]_./-]', '', 'g')) = ${identity}
           or upper(regexp_replace(translate(coalesce(vh.chassis_ref,''), '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789'), '[[:space:]_./-]', '', 'g')) = ${identity}))`);
     }
+    // Soft-deleted cases are visible only in the owner's «پرونده‌های حذف‌شده».
+    conditions.push(ne(cases.status, 'deleted'));
     if (q.status !== 'all') conditions.push(eq(cases.status, q.status));
     if (q.stage) conditions.push(eq(cases.stage, q.stage));
     if (q.coverage) conditions.push(eq(cases.coverageType, q.coverage));
@@ -640,7 +642,7 @@ export class CasesService {
       .innerJoin(createdByUser, eq(createdByUser.id, cases.createdBy))
       .where(and(eq(cases.id, id), eq(cases.tenantId, tenantId)))
       .limit(1);
-    if (!r) throw notFound('پرونده');
+    if (!r || (r.c.status === 'deleted' && !actor.user.isOwner)) throw notFound('پرونده');
 
     const canSeePii = actor.user.permissions.has('customer.pii.read');
     const { c, v, cu } = r;

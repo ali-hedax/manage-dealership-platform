@@ -31,15 +31,20 @@ test('flow state is derived from the stored row and the linked Emdad report', ()
   assert.equal(partFlowState({ status: 'handed_over', source: 'stock', consumedAt: '2026-11-10T08:00:00Z' }), 'consumed');
   assert.equal(partFlowState({ status: 'cancelled', source: 'stock' }), 'cancelled');
   assert.equal(partFlowState({ status: 'returned', source: 'stock' }), 'returned');
+  // Stock used while the special-aid request keeps running (owner, 2026-11-18): independent of the report stage.
+  assert.equal(partFlowState({ status: 'ordered', source: 'company', parallelStock: true }), 'stock_parallel');
+  assert.equal(partFlowState({ status: 'ordered', source: 'company', parallelStock: true, emdadCategory: 'in_dealer_stock' }), 'stock_parallel');
+  assert.equal(partFlowState({ status: 'handed_over', source: 'company', parallelStock: true }), 'handed_over');
 });
 
 test('state machine of spec section 7: exactly the allowed buttons, every other action refused', () => {
   const expected: Record<PartFlowState, PartFlowAction[]> = {
     needed: ['reserve', 'emdad', 'market', 'cancel', 'set_price', 'announce_price'],
-    reserved: ['hand_over', 'cancel', 'set_price', 'announce_price'],
-    emdad: ['cancel', 'set_price', 'announce_price'],
+    reserved: ['hand_over', 'release', 'set_price', 'announce_price'],
+    emdad: ['use_stock', 'cancel', 'set_price', 'announce_price'],
     emdad_arrived: ['reserve', 'cancel', 'set_price', 'announce_price'],
     dealer_supply: ['market', 'reserve', 'set_price', 'announce_price'],
+    stock_parallel: ['use_stock', 'hand_over', 'release', 'set_price', 'announce_price'],
     market: ['receive', 'cancel', 'set_price', 'announce_price'],
     ready: ['hand_over', 'cancel', 'set_price', 'announce_price'],
     handed_over: ['return', 'set_price', 'announce_price'],
@@ -52,12 +57,17 @@ test('state machine of spec section 7: exactly the allowed buttons, every other 
     for (const action of PART_FLOW_ACTIONS) assert.equal(isPartActionAllowed(state, action), expected[state].includes(action), `${state}:${action}`);
   }
   // Hand-over appears only when the part is ready (reserved counts as ready).
-  assert.deepEqual(PART_FLOW_STATES.filter((s) => isPartActionAllowed(s, 'hand_over')), ['reserved', 'ready']);
+  assert.deepEqual(PART_FLOW_STATES.filter((s) => isPartActionAllowed(s, 'hand_over')), ['reserved', 'stock_parallel', 'ready']);
+  // «لغو رزرو» exists only where a reservation exists; it never cancels the line itself.
+  assert.deepEqual(PART_FLOW_STATES.filter((s) => isPartActionAllowed(s, 'release')), ['reserved', 'stock_parallel']);
 });
 
-test('the cancel button turns into «لغو رزرو» once reserved; filters group the states', () => {
+test('«لغو رزرو» is its own action; «لغو قطعه» stays the cancellation; filters group the states', () => {
   assert.equal(partActionLabel('needed', 'cancel'), 'لغو قطعه');
-  assert.equal(partActionLabel('reserved', 'cancel'), 'لغو رزرو');
+  assert.equal(partActionLabel('reserved', 'release'), 'لغو رزرو');
+  assert.equal(partActionLabel('ready', 'cancel'), 'لغو قطعه');
+  assert.equal(partActionLabel('emdad', 'use_stock'), 'استفاده از موجودی');
+  assert.equal(partFlowFilter('stock_parallel'), 'ready');
   assert.equal(partFlowFilter('needed'), 'undecided');
   assert.equal(partFlowFilter('emdad'), 'in_progress');
   assert.equal(partFlowFilter('reserved'), 'ready');

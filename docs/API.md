@@ -100,6 +100,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/notifications` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/part-discrepancies/:id/history` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | GET | `/api/v1/part-discrepancies` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
+| GET | `/api/v1/parts/:id/stock-candidates` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/parts/contractors` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/parts/desk` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/parts/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
@@ -189,6 +190,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/transfer` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/cases/:id/workflow` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/code-corrections/:id/resolve` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/apply` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/discard` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/retry` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -202,6 +204,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/part-discrepancies/:id/assign` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/part-discrepancies/:id/resolve` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/parts/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
+| POST | `/api/v1/parts/:id/code-correction` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/parts/:id/flow` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/parts/contractors` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/parts/external-work/:id/actions` | [source](../apps/api/src/parts/parts-operations.controller.ts) |

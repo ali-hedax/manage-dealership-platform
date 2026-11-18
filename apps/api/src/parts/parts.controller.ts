@@ -10,6 +10,10 @@ import {
   partFlowActionSchema,
   partsFromAssessmentSchema,
   priceNoticeResponseSchema,
+  codeCorrectionRequestSchema,
+  codeCorrectionResolveSchema,
+  type CodeCorrectionRequestInput,
+  type CodeCorrectionResolveInput,
   type PartFlowActionInput,
   type PriceNoticeResponseInput,
   type CreatePartInput,
@@ -90,6 +94,27 @@ export class PartsController {
   @RequirePermissions('part.manage')
   flow(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(partFlowActionSchema)) body: PartFlowActionInput) {
     return this.parts.flow(actor, id, body);
+  }
+
+  /** Stock candidates of one line: exact, OEM variants and possible non-OEM matches, each with its location. */
+  @Get('parts/:id/stock-candidates')
+  @RequirePermissions('stock.read')
+  candidates(@CurrentActor() actor: Actor, @IdParam() id: string) {
+    return this.parts.stockCandidates(actor, id);
+  }
+
+  /** «درخواست اصلاح شماره فنی»: the parts clerk returns only this line to the accident expert. */
+  @Post('parts/:id/code-correction')
+  @RequirePermissions('part.manage')
+  requestCorrection(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(codeCorrectionRequestSchema)) body: CodeCorrectionRequestInput) {
+    return this.parts.requestCodeCorrection(actor, id, body);
+  }
+
+  /** «ثبت و ارسال مجدد»: the accident expert enters the corrected technical code. */
+  @Post('code-corrections/:id/resolve')
+  @RequirePermissions('assessment.manage')
+  resolveCorrection(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(codeCorrectionResolveSchema)) body: CodeCorrectionResolveInput) {
+    return this.parts.resolveCodeCorrection(actor, id, body);
   }
 
   /** The parts clerk's desk: vehicles with undecided, in-progress or ready lines (spec section 3). */

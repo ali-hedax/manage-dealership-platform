@@ -145,6 +145,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build and start the stack (synthetic preview data)
+        env:
+          GIT_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           printf 'APP_ENV=preview\nPOSTGRES_PASSWORD=ci-only-db\nSEED_DEMO_PASSWORD=ci-only-demo\nWEB_PORT=3000\n' > .env
           docker compose up -d --build --wait --wait-timeout 180

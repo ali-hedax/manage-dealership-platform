@@ -85,7 +85,7 @@ export class WorkshopService {
   async taskList(actor:Actor,own=false):Promise<WorkshopTask[]> {
     const tid=actor.user.tenantId;
     const rows=await this.db.select({t:tasks,c:cases,v:vehicles,d:departments}).from(tasks)
-      .innerJoin(cases,and(eq(cases.id,tasks.caseId),eq(cases.tenantId,tid)))
+      .innerJoin(cases,and(eq(cases.id,tasks.caseId),eq(cases.tenantId,tid),sql`${cases.status} <> 'deleted'`))
       .innerJoin(vehicles,and(eq(vehicles.id,cases.vehicleId),eq(vehicles.tenantId,tid)))
       .innerJoin(departments,and(eq(departments.id,tasks.departmentId),eq(departments.tenantId,tid)))
       .where(and(eq(tasks.tenantId,tid),own?eq(tasks.assignedUserId,actor.user.id):undefined)).orderBy(asc(tasks.sortOrder),asc(tasks.createdAt));

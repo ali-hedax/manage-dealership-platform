@@ -86,6 +86,8 @@ export const users = pgTable(
     failedLoginCount: integer('failed_login_count').notNull().default(0),
     lockedUntil: ts('locked_until'),
     lastLoginAt: ts('last_login_at'),
+    // Latest release announcement this person acknowledged (vMAJOR.MINOR.PATCH, migration 0028).
+    releaseSeen: text('release_seen'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
@@ -289,6 +291,12 @@ export const cases = pgTable(
     origin: text('origin').notNull().default('manual'),
     importKey: text('import_key'),
     isLegacyEntry: boolean('is_legacy_entry').notNull().default(false),
+    // Owner-only soft deletion (migration 0028): status becomes 'deleted' and the previous
+    // status is kept for the restore; no row of the case or its history is removed.
+    deletedAt: ts('deleted_at'),
+    deletedBy: uuid('deleted_by').references((): AnyPgColumn => users.id),
+    deleteReason: text('delete_reason'),
+    deletedFromStatus: text('deleted_from_status'),
     missingFields: text('missing_fields').array().notNull().default(sql`'{}'::text[]`),
     searchText: text('search_text').notNull().default(''),
     isTest: boolean('is_test').notNull().default(false),
@@ -561,6 +569,11 @@ export const partRequests = pgTable(
     emdadReceivedQuantity: smallint('emdad_received_quantity'),
     // Why an arrived special-aid line is not fully reserved (actionable, Persian).
     emdadReserveNote: text('emdad_reserve_note'),
+    // «استفاده از موجودی» while the special-aid request keeps running (migration 0028).
+    stockParallelAt: ts('stock_parallel_at'),
+    stockParallelBy: uuid('stock_parallel_by').references((): AnyPgColumn => users.id),
+    // The clerk released the reservation of an arrived special-aid line: the daily report does not reserve it again.
+    autoReserveBlockedAt: ts('auto_reserve_blocked_at'),
     orderedAt: ts('ordered_at'),
     etaAt: ts('eta_at'),
     firstEtaAt: ts('first_eta_at'),
@@ -1409,3 +1422,38 @@ export const caseDocuments = pgTable('case_documents', {
   createdBy: uuid('created_by').notNull().references(() => users.id), createdAt: ts('created_at').notNull().defaultNow(),
   isTest: boolean('is_test').notNull().default(false), version: integer('version').notNull().default(1),
 }, t => [uniqueIndex('case_documents_hash_uq').on(t.tenantId, t.caseId, t.sha256)]);
+
+/** Technical-code correction of one part line: parts clerk → accident expert (migration 0028). */
+export const partCodeCorrections = pgTable(
+  'part_code_corrections',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+    caseId: uuid('case_id').notNull().references(() => cases.id),
+    partRequestId: uuid('part_request_id').notNull().references(() => partRequests.id),
+    status: text('status').notNull().default('open'), // open | resolved | withdrawn
+    reason: text('reason').notNull(),
+    originalCode: text('original_code'),
+    correctedCode: text('corrected_code'),
+    previousStatus: text('previous_status').notNull(),
+    requestedBy: uuid('requested_by').notNull().references(() => users.id),
+    requestedAt: ts('requested_at').notNull().defaultNow(),
+    resolvedBy: uuid('resolved_by').references(() => users.id),
+    resolvedAt: ts('resolved_at'),
+    resolutionNote: text('resolution_note'),
+    isTest: boolean('is_test').notNull().default(false),
+    version: integer('version').notNull().default(1),
+  },
+  (t) => [
+    index('part_code_corrections_part_idx').on(t.partRequestId),
+    uniqueIndex('part_code_corrections_open_uq').on(t.partRequestId).where(sql`${t.status} = 'open'`),
+  ],
+);
+
+/** First and latest start of each released version on this installation (deployment record, migration 0028). */
+export const appReleases = pgTable('app_releases', {
+  version: text('version').primaryKey(),
+  commit: text('commit'),
+  firstStartedAt: ts('first_started_at').notNull().defaultNow(),
+  lastStartedAt: ts('last_started_at').notNull().defaultNow(),
+});

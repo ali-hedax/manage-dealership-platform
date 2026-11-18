@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, ne, notExists, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, ne, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   EMDAD_ARRIVED_CATEGORIES,
@@ -201,7 +201,8 @@ export async function applyEmdadToParts(
   for (const { e, partId } of linked) {
     // The line is locked for the whole decision: concurrent reservations and retries see one state.
     let [p] = await tx.select().from(partRequests).where(and(eq(partRequests.id, partId), eq(partRequests.tenantId, tenantId))).for('update');
-    if (!p || p.assessmentRejectedAt || ['cancelled', 'returned', 'handed_over'].includes(p.status)) continue;
+    // A line fulfilled from stock in parallel keeps receiving its special-aid status after the handover.
+    if (!p || p.assessmentRejectedAt || ['cancelled', 'returned'].includes(p.status) || (p.status === 'handed_over' && !p.stockParallelAt)) continue;
     const official = (e.official ?? {}) as EmdadOfficial;
     const toReview = async (note: string) => {
       await tx.update(emdadRequests).set({ partRequestId: null, matchStatus: 'needs_review', matchNote: note, updatedAt: new Date(), version: e.version + 1 })
@@ -224,6 +225,33 @@ export async function applyEmdadToParts(
       continue;
     }
     if (reportNo && !p.emdadNo) patch.emdadNo = reportNo;
+
+    // Owner, 2026-11-18: the vehicle was already supplied from stock («استفاده از موجودی»). The arrival is
+    // recorded with its own warehouse receipt date as a replenishment of that stock; it is never reserved
+    // or handed over to the same vehicle again, and the special-aid request itself is not closed here.
+    if (p.stockParallelAt && p.source === 'company') {
+      const covered = qty(((await tx.execute(sql`select coalesce(sum(quantity), 0)::text as q from stock_reservations where tenant_id = ${tenantId} and part_request_id = ${p.id} and status in ('reserved','issued')`)) as unknown as { rows: { q: string }[] }).rows[0]?.q);
+      if (p.status === 'handed_over' || covered >= p.quantity) {
+        if ((EMDAD_ARRIVED_CATEGORIES as readonly string[]).includes(e.statusCategory)) {
+          const receivedAt = parseReportDate(official.receivedInWarehouseAt);
+          const confirmed = reportQuantity(official, quantityField);
+          const note = 'امداد ویژه رسید و جایگزین موجودی برداشته‌شده برای این خودرو است؛ دوباره رزرو یا تحویل نمی‌شود.';
+          if (p.emdadReceivedAt?.getTime() !== receivedAt?.getTime()) patch.emdadReceivedAt = receivedAt;
+          if (p.emdadReceivedQuantity !== confirmed) patch.emdadReceivedQuantity = confirmed;
+          if (p.emdadReserveNote !== note) patch.emdadReserveNote = note;
+          if (Object.keys(patch).length) {
+            const first = p.emdadReserveNote !== note;
+            const saved = await saveLine(tx, audit, actor, p, patch, 'part.emdad_replenished', { emdadStatus: official.emdadStatus ?? null, receivedAt: receivedAt?.toISOString() ?? null, confirmedQuantity: confirmed, replenishment: true }, reportAt);
+            if (saved && first) result.arrived += 1;
+            if (saved && patch.emdadNo) result.emdadNoFilled += 1;
+          }
+        } else if (patch.emdadNo) {
+          await saveLine(tx, audit, actor, p, patch, 'part.emdad_no_filled', { emdadNo: patch.emdadNo, requestId: e.id });
+          result.emdadNoFilled += 1;
+        }
+        continue;
+      }
+    }
 
     if (p.status !== 'ordered' && p.status !== 'reserved') {
       // Already reserved or received: only the number may still be filled.
@@ -268,7 +296,9 @@ export async function applyEmdadToParts(
       if (quantityNote) note = note ? `${quantityNote} ${note}` : quantityNote;
       else if (!note && !code) note = 'کد تدارکاتی ۱۰ رقمی در گزارش نیامده و سازندهٔ این قطعه هنوز مشخص نیست؛ کدهای هم‌پایه را ببینید، یکی را انتخاب و رزرو کنید.';
       else if (!note && want > 0) {
-        if (!snapshot) note = 'گزارش موجودی فعال ثبت نشده است؛ پس از بارگذاری گزارش موجودی، رزرو را ثبت کنید.';
+        // The clerk released this line's reservation («لغو رزرو»): the report never reserves it again by itself.
+        if (p.autoReserveBlockedAt) note = 'رزرو این قطعه توسط مسئول قطعات لغو شد؛ گزارش روزانه آن را دوباره خودکار رزرو نمی‌کند. برای رزرو دوباره، کد را انتخاب کنید.';
+        else if (!snapshot) note = 'گزارش موجودی فعال ثبت نشده است؛ پس از بارگذاری گزارش موجودی، رزرو را ثبت کنید.';
         else if (!snapshot.reservable) note = 'گزارش موجودی هنوز برای رزرو تأیید نشده است؛ پس از تأیید مالک، رزرو را ثبت کنید.';
         else if (!actor.user.permissions.has('stock.reserve')) note = 'بارگذار گزارش اجازهٔ رزرو ندارد؛ مسئول قطعات کد را رزرو کند.';
         else {
@@ -377,6 +407,6 @@ export async function emdadLines(tx: DbOrTx, tenantId: string): Promise<EmdadLin
     .innerJoin(cases, and(eq(cases.id, partRequests.caseId), eq(cases.tenantId, tenantId)))
     .innerJoin(vehicles, and(eq(vehicles.id, cases.vehicleId), eq(vehicles.tenantId, tenantId)))
     // Special-aid lines, plus still-undecided lines of any source (their report status is shown; only special-aid lines are reserved).
-    .where(and(eq(partRequests.tenantId, tenantId), or(and(eq(partRequests.source, 'company'), inArray(partRequests.status, ['ordered', 'received', 'reserved'])), inArray(partRequests.status, ['needed', 'rejected'])), eq(cases.status, 'open')));
+    .where(and(eq(partRequests.tenantId, tenantId), or(and(eq(partRequests.source, 'company'), inArray(partRequests.status, ['ordered', 'received', 'reserved'])), inArray(partRequests.status, ['needed', 'rejected']), and(eq(partRequests.source, 'company'), eq(partRequests.status, 'handed_over'), isNotNull(partRequests.stockParallelAt))), eq(cases.status, 'open')));
   return rows;
 }
