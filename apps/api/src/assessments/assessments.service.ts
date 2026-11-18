@@ -91,6 +91,10 @@ export class AssessmentsService {
         throw conflict('ASSESSMENT_DRAFT_EXISTS', 'یک پیش‌نویس کارشناسی باز برای این پرونده وجود دارد');
       }
       const latest = versions.at(-1);
+      if(input.kind==='initial'&&input.smartManual&&!['insurance','personal'].includes(kase.coverageType))
+        throw badRequest('SMART_ASSESSMENT_COVERAGE','کارشناسی دستی هوشمند فقط برای بیمه یا پرداخت شخصی فعال است');
+      if(input.kind==='supplement'&&input.smartManual&&!latest?.smartManual)
+        throw badRequest('SMART_ASSESSMENT_KIND','نوع کارشناسی الحاقیه از پرونده قبلی تعیین می‌شود');
       if (input.kind === 'initial' && latest) {
         throw badRequest('ASSESSMENT_EXISTS', 'کارشناسی اولیه قبلاً ثبت شده است؛ برای آسیب پنهان الحاقیه ثبت کنید');
       }
@@ -106,6 +110,7 @@ export class AssessmentsService {
           caseId,
           versionNo: (latest?.versionNo ?? 0) + 1,
           kind: input.kind,
+          smartManual:latest?.smartManual??!!input.smartManual,
           previousId: latest?.id ?? null,
           assessorName: input.assessorName,
           assessorOrg: input.assessorOrg ?? null,
@@ -127,17 +132,27 @@ export class AssessmentsService {
           .where(eq(assessmentItems.assessmentId, latest.id))
           .orderBy(asc(assessmentItems.lineNo));
         if (items.length) {
-          await tx.insert(assessmentItems).values(
-            items.map((i) => ({
-              ...i,
-              id: newId(),
-              assessmentId: id,
-              originItemId: i.id,
-              changed: false,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })),
-          );
+          const copies=items.map(i=>({
+            ...i,id:newId(),assessmentId:id,originItemId:i.id,changed:false,
+            createdAt:new Date(),updatedAt:new Date(),
+          }));
+          await tx.insert(assessmentItems).values(copies);
+          if(row!.smartManual){
+            const prior=await tx.select().from(assessmentTechnicalReviews)
+              .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
+                eq(assessmentTechnicalReviews.assessmentId,latest.id)));
+            const priorById=new Map(prior.map(r=>[r.itemId,r]));
+            const reviews=copies.filter(i=>i.action==='replace').map(i=>{
+              const old=priorById.get(i.originItemId!);
+              const fingerprint=technicalReviewFingerprint(i);
+              const accepted=old?.status==='accepted'&&old.fingerprint===fingerprint;
+              return {itemId:i.id,tenantId,assessmentId:id,
+                fingerprint,status:accepted?'accepted':'pending',
+                reviewedBy:accepted?old.reviewedBy:null,
+                reviewedAt:accepted?old.reviewedAt:null,version:1};
+            });
+            if(reviews.length)await tx.insert(assessmentTechnicalReviews).values(reviews);
+          }
         }
       }
 
@@ -280,12 +295,9 @@ export class AssessmentsService {
         evidence: input.evidence ?? null,
         isTest: actor.user.isTestTenant,
       });
-      // Opt in newly entered insurance/personal parts to review without modifying
-      // existing Golden Card Excel or historical assessment workflows.
-      if(input.action==='replace'){
-        const [ownerCase]=await tx.select({coverageType:cases.coverageType})
-          .from(cases).where(and(eq(cases.id,a.caseId),eq(cases.tenantId,tenantId))).limit(1);
-        if(ownerCase && ['insurance','personal'].includes(ownerCase.coverageType)){
+      // Explicit smart-manual drafts require technical review for every new part.
+      // Legacy drafts and Golden Card Excel retain their established flow.
+      if(input.action==='replace'&&a.smartManual){
           await tx.insert(assessmentTechnicalReviews).values({
             itemId:id,tenantId,assessmentId:a.id,status:'pending',
             fingerprint:technicalReviewFingerprint({
@@ -293,7 +305,6 @@ export class AssessmentsService {
               partNumber:input.partNumber??null,quantity:input.quantity
             }),version:1,
           });
-        }
       }
       const saved = await this.touch(tx, a);
       await this.audit.record(tx, actor, {
@@ -440,7 +451,7 @@ export class AssessmentsService {
       const reviewRows=await tx.select().from(assessmentTechnicalReviews)
         .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
           eq(assessmentTechnicalReviews.assessmentId,a.id)));
-      if(['insurance','personal'].includes(kase.coverageType)&&reviewRows.length){
+      if(a.smartManual){
         const byItem=new Map(reviewRows.map(r=>[r.itemId,r]));
         const awaiting=items.filter(i=>i.action==='replace'&&i.approvalStatus!=='rejected')
           .filter(i=>{
@@ -649,6 +660,7 @@ export class AssessmentsService {
       const i=await this.loadItem(tx,tenantId,itemId);
       const [a]=await tx.select().from(assessments).where(and(eq(assessments.id,i.assessmentId),eq(assessments.tenantId,tenantId))).for('update');
       if(!a) throw notFound('کارشناسی');
+      if(!a.smartManual)throw badRequest('REVIEW_NOT_ENABLED','این پرونده در گردش کارشناسی دستی هوشمند نیست');
       if(a.status!=='draft') throw badRequest('REVIEW_DRAFT_ONLY','بررسی داخلی فقط روی پیش‌نویس کارشناسی انجام می‌شود');
       await this.cases.loadForWrite(tx,tenantId,a.caseId);
       if(i.action!=='replace') throw badRequest('REVIEW_PART_ONLY','اجرت در بررسی شماره فنی قطعات قرار نمی‌گیرد');
@@ -762,6 +774,7 @@ export class AssessmentsService {
         caseId: a.caseId,
         versionNo: a.versionNo,
         kind: a.kind as Assessment['kind'],
+        smartManual:a.smartManual,
         status: a.status as Assessment['status'],
         assessorName: a.assessorName,
         assessorOrg: a.assessorOrg,
