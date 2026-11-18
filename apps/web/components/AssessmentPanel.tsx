@@ -76,7 +76,7 @@ const emptyItem: ItemForm = {
 };
 
 type Mode =
-  | { kind: 'new'; assessmentKind: 'initial' | 'supplement' }
+  | { kind: 'new'; assessmentKind: 'initial' | 'supplement'; smartManual?: boolean }
   | { kind: 'item'; a: Assessment; item: AssessmentItem | null }
   | { kind: 'finalize'; a: Assessment }
   | { kind: 'authorize'; a: Assessment }
@@ -113,17 +113,17 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const list = versions ?? [];
   const current = list.at(-1);
   const older = list.slice(0, -1).reverse();
-  const technicalFlow=kase.coverageType==='insurance'||kase.coverageType==='personal';
+  const technicalFlow=!!current?.smartManual;
   const {data:technicalReviews}=useSWR<Array<{itemId:string;status:string;stale:boolean}>>(
     technicalFlow&&can('part.request')?`/cases/${kase.id}/technical-reviews`:null,fetcher
   );
-  const reviewEnabled=technicalFlow&&(technicalReviews?.length??0)>0;
+  const reviewEnabled=technicalFlow;
   const technicalByItem=new Map((technicalReviews??[]).map(r=>[r.itemId,r]));
   const dispatchLines=current&&requests
     ?assessmentDispatchLines(current.items,list.flatMap(a=>a.items),requests).map(line=>{
       if(!technicalFlow||line.state!=='ready')return line;
       if(!technicalReviews)return {...line,state:'review' as const,message:'در حال بررسی وضعیت تأیید فنی'};
-      if(!reviewEnabled)return line; // Golden Card/legacy flow unaffected
+      if(!reviewEnabled)return line; // Legacy and Golden Card flows unaffected
       const decision=technicalByItem.get(line.itemId);
       if(decision?.status==='accepted'&&!decision.stale)return line;
       return {...line,state:'review' as const,message:decision?.status==='returned'
@@ -197,6 +197,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
           api(`/cases/${kase.id}/assessments`, {
             body: {
               kind: mode.assessmentKind,
+              smartManual:!!mode.smartManual,
               assessorName,
               assessorOrg: assessorOrg || null,
               assessedAt: mode.assessmentKind === 'initial' ? at : undefined,
@@ -282,7 +283,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
     : mode.kind === 'new'
       ? mode.assessmentKind === 'supplement'
         ? 'ثبت الحاقیه (آسیب پنهان)'
-        : 'شروع کارشناسی اولیه'
+        : mode.smartManual ? 'شروع کارشناسی دستی هوشمند' : 'شروع کارشناسی اولیه'
       : mode.kind === 'item'
         ? mode.item
           ? 'ویرایش قلم'
@@ -300,6 +301,13 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
             {!current && (
               <button className="btn btn-sm" onClick={() => start({ kind: 'new', assessmentKind: 'initial' })}>
                 شروع کارشناسی
+              </button>
+            )}
+            {!current && (kase.coverageType==='insurance'||kase.coverageType==='personal') && (
+              <button className="btn btn-sm btn-primary" onClick={() => start({
+                kind: 'new', assessmentKind: 'initial',smartManual:true,
+              })}>
+                ایجاد کارشناسی دستی هوشمند
               </button>
             )}
             {current && current.status !== 'draft' && (
@@ -321,7 +329,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
 
       {current && (
         <>
-        {manage && editable && current.status === 'draft' && (kase.coverageType === 'insurance' || kase.coverageType === 'personal') && (
+        {manage && editable && current.status === 'draft' && current.smartManual && (
           <SmartAssessmentEntry
             kase={kase}
             assessment={current}
@@ -332,7 +340,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
             }}
           />
         )}
-        {editable && current.status === 'draft' && (kase.coverageType === 'insurance' || kase.coverageType === 'personal') && (
+        {editable && current.smartManual && (
           <TechnicalReviewPanel caseId={kase.id} assessment={current} />
         )}
         {manage && editable && current.status === 'draft' && <div className="assessment-import-entry"><button type="button" className="btn btn-sm" onClick={() => setImporting(true)}>دریافت اکسل کارشناسی</button><span className="xs muted">قطعات و اجرت از خروجی PDF</span></div>}
