@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, notExists, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, ne, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   EMDAD_ARRIVED_CATEGORIES,
@@ -213,6 +213,13 @@ export async function applyEmdadToParts(
     const reportNo = official.emdadNo?.trim() || null;
     const patch: Partial<typeof partRequests.$inferInsert> = {};
     if (reportNo && p.emdadNo && emdadNoKey(p.emdadNo) !== emdadNoKey(reportNo)) {
+      // A cancelled request already superseded by a live replacement stays on the line as history.
+      if (e.statusCategory === 'cancelled') {
+        const [live] = await tx.select({ id: emdadRequests.id }).from(emdadRequests).where(and(
+          eq(emdadRequests.tenantId, tenantId), eq(emdadRequests.partRequestId, p.id), eq(emdadRequests.matchStatus, 'matched'),
+          ne(emdadRequests.statusCategory, 'cancelled'), ne(emdadRequests.id, e.id))).limit(1);
+        if (live) continue;
+      }
       await toReview('شمارهٔ امداد ویژهٔ ثبت‌شده روی قطعه با گزارش فرق دارد؛ دستی بررسی کنید');
       continue;
     }

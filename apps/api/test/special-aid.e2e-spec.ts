@@ -319,7 +319,10 @@ it('uses the sole live replacement of an explicitly cancelled SKU with the same 
   expect(await one(p)).toMatchObject({ emdadNo: '0099006', procurementCode: '0033445502', reservedQuantity: 2, emdad: { category: 'received_by_dealer', history: expect.arrayContaining([expect.objectContaining({ statusText: 'ابطال' })]) } });
   expect((await reservationsOf(p.id)).map(r => [r.fullStockCode, Number(r.quantity)])).toEqual([['0033445502', 2]]);
   await publish([row(9905, c, '00334455', old)], -32);
-  expect((await one(p)).emdad?.category).toBe('received_by_dealer');
+  // Republishing only the cancelled request keeps it as history on the line, not as a review item.
+  expect(await one(p)).toMatchObject({ emdadNo: '0099006', emdad: { category: 'received_by_dealer', history: expect.arrayContaining([expect.objectContaining({ statusText: 'ابطال' })]) } });
+  const cancelled = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '0099005'));
+  expect(cancelled.map(r => [r.partRequestId, r.matchStatus])).toEqual([[p.id, 'matched']]);
 });
 
 
@@ -346,4 +349,22 @@ it('leaves competing replacements for review instead of picking the first SKU', 
   expect(await reservationsOf(p.id)).toHaveLength(0);
   const candidates = await h.db.db.select().from(emdadRequests).where(inArray(emdadRequests.emdadNo, ['0099021', '0099022']));
   expect(candidates.map(r => r.matchStatus)).toEqual(['needs_review', 'needs_review']);
+});
+
+it('keeps an existing reservation and blocks handover when its request is cancelled and another SKU appears', async () => {
+  const c = await newCase('939908');
+  const p = await companyPart(c, '00558877', 1, '0099030');
+  const arrived = { 'شماره امداد ویژه': '0099030', 'كد تداركاتي كالا': '0055887702', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '1' };
+  await publish([row(9930, c, '00558877', arrived)], -18);
+  expect(await one(p)).toMatchObject({ flowState: 'reserved', reservedQuantity: 1, procurementCode: '0055887702' });
+  const replacement = row(9931, c, '00558877', { 'شماره امداد ویژه': '0099031', 'كد تداركاتي كالا': '0055887701', 'وضعیت امداد ویژه': 'رسید توسط نمایندگی', 'تعداد اختصاصي': '1' });
+  await publish([row(9930, c, '00558877', { ...arrived, 'وضعیت امداد ویژه': 'ابطال' }), replacement], -16);
+  const now = await one(p);
+  expect(now).toMatchObject({ emdadNo: '0099030', procurementCode: '0055887702', emdad: { category: 'cancelled' } });
+  expect(now.allowedActions).not.toContain('hand_over');
+  expect((await reservationsOf(p.id)).map(r => [r.fullStockCode, r.status, Number(r.quantity)])).toEqual([['0055887702', 'reserved', 1]]);
+  const handover = await parts.post(`/parts/${p.id}/flow`, { action: 'hand_over', expectedVersion: now.version, recipientName: 'کارگاه آزمون' });
+  expect(handover.body.code).toBe('EMDAD_CANCELLED_HANDOVER');
+  const [next] = await h.db.db.select().from(emdadRequests).where(eq(emdadRequests.emdadNo, '0099031'));
+  expect(next.partRequestId).toBeNull();
 });
