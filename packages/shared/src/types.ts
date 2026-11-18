@@ -161,6 +161,7 @@ export interface Assessment {
   caseId: string;
   versionNo: number;
   kind: AssessmentKind;
+  smartManual?: boolean;
   status: AssessmentStatus;
   assessorName: string;
   assessorOrg: string | null;
