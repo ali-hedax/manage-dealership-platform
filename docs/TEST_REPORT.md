@@ -18,6 +18,15 @@
 - After finding a damaged SQL prefilter in current branch, corrected the case-scoped catalog suggestions method; added unit-style HTTP integration coverage in `apps/api/test/smart-assessment.e2e-spec.ts` and a Playwright browser flow in `apps/web/e2e/smart-assessment.spec.ts`. Both use synthetic case/catalog data.
 - **Latest tests not yet verified:** wait for latest PR head CI; resolve failures before merge. Manual real-browser behavior has not been confirmed in this chat. No production deployment.
 
+## 2026-11-18 — نسخهٔ v1.0.0: هشت اصلاح یکپارچه
+
+- شاخهٔ feature/release-v1-eight-improvements از main در 98d8a31. داده‌ها فقط ساختگی روی PGlite محلی.
+- shared: ۶۰/۶۰ (شامل آزمون تازهٔ تطبیق غیرشرکتی و شکل فهرست نسخه‌ها و ماشین وضعیت با use_stock و release).
+- API، هر مجموعه در پردازهٔ جدا (اجرای یک‌جای همهٔ مجموعه‌ها روی این دستگاه ۸ گیگابایتی حافظه را پر کرد و متوقف شد؛ اجرای کامل در CI): release-v1 ۱۳/۱۳، part-flow ۸/۸، special-aid ۱۴/۱۴، daily-reports ۲۵/۲۵، assessment-rejections ۱/۱، guided-migrations ۲/۲ — جمع ۶۳/۶۳.
+- release-v1 پوشش می‌دهد: استفاده از موجودی با امداد فعال، تحویل یک‌باره و ثبت رسیدن امداد به‌عنوان جایگزین (و تکرار گزارش بدون حرکت تازه)، تعداد بیش از یک، هم‌زمانی آخرین واحد (یک موفق، یک 409)، نامزدهای دقیق/شرکتی/غیرشرکتی و ناسازگارها، لغو رزرو با و بدون امداد، دسترسی مستقیم API برای حذف/بازیابی (کارشناس، مسئول قطعات، مدیر سیستم 403)، خروج پرونده از فهرست/جست‌وجو/میز و بازیابی بدون رزرو تازه، نسخه و تأیید اعلان برای هر کاربر، اصلاح شماره فنی و موانع آن، ردیف‌ها و آدرس‌های چک‌لیست برداشت، PDF چندصفحه‌ای، و چک‌لیست بازدید (ترتیب تأخیر، حذف تحویل‌شده و حذف‌شده، فقط‌خواندنی).
+- typecheck و lint برای shared، API و وب، و check-docs پاس. نمونهٔ PDF هر دو چک‌لیست ساخته و دیده شد (RTL، تکرار سرستون، آدرس خالی، ردیف خاکستری، شمارهٔ صفحه).
+- Playwright محلی اجرا نشد؛ آزمون تازهٔ release-v1.spec در CI اجرا می‌شود.
+
 ## 2026-11-18 — تعداد اختصاصی و تحویل تعدادی امداد
 
 - کد `e8ef1a7`. محلی، شش مجموعه و **۵۹/۵۹** آزمون موفق (`special-aid.e2e-spec`، `part-flow.e2e-spec`، `parts-workbench.e2e-spec`، `daily-reports.e2e-spec`، `guided-migrations.e2e-spec` و `report-rows.spec`). همهٔ داده‌ها ساختگی‌اند. پوشش تغییر: تعداد اختصاصی ۳ در برابر تعداد تدارکاتی ۸، خانهٔ خالی، افزایش تعداد از نیاز اولیه، تحویل ۲+۱، نسخهٔ قدیمی و سقف تحویل، جایگزین با شمارهٔ متفاوت و با شمارهٔ یکسان، حفظ ابطال و رد انتخاب بین چند جایگزین. migration ۲۸ مرحله و down روی پایگاه تمرینی بررسی شد.
