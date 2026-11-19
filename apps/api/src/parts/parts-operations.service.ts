@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm';
 import {
   COVERAGE_LABELS, PART_SOURCE_LABELS, deductibleShare,
   type Contractor, type ExternalWork, type PartsOperationsNotice, type PartsStatement, type StatementLine, type StatementSnapshot,
@@ -156,7 +156,7 @@ export class PartsOperationsService {
       this.external(actor, caseId, tx),
       tx.select().from(partsStatements).where(and(eq(partsStatements.tenantId, tenantId), eq(partsStatements.caseId, caseId)))
         .orderBy(asc(partsStatements.version)),
-      tx.select({ status: tasks.status }).from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, caseId))),
+      tx.select({ status: tasks.status }).from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, caseId), ne(tasks.status, 'cancelled'))),
     ]);
     const partLine = (p: (typeof parts)[number]): StatementLine => ({
       id: p.id, code: p.partNumber, description: p.description, quantity: p.quantity,
@@ -312,7 +312,7 @@ export class PartsOperationsService {
     if (forParts) {
       const [unfinished, sent] = await Promise.all([
         this.db.selectDistinct({ caseId: tasks.caseId }).from(tasks).where(and(eq(tasks.tenantId, tenantId),
-          inArray(tasks.caseId, ids), ne(tasks.status, 'approved'))),
+          inArray(tasks.caseId, ids), notInArray(tasks.status, ['approved', 'cancelled']))),
         this.db.selectDistinct({ caseId: partsStatements.caseId }).from(partsStatements).where(and(
           eq(partsStatements.tenantId, tenantId), inArray(partsStatements.caseId, ids))),
       ]);

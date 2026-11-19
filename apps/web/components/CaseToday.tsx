@@ -15,6 +15,7 @@ const STATUS: Record<TaskStatus, { label: string; tone: string; icon: IconName }
   blocked: { label: 'متوقف', tone: 'stop', icon: 'alert' },
   done: { label: 'منتظر تأیید کارشناس', tone: 'wait', icon: 'flag' },
   approved: { label: 'تکمیل‌شده', tone: 'ok', icon: 'check' },
+  cancelled: { label: 'لغوشده', tone: 'mute', icon: 'close' },
 };
 
 function duration(kase: CaseDetail, t: Task): string {
@@ -35,7 +36,7 @@ export function RepairPlanTable({ kase }: { kase: CaseDetail }) {
         <table className="cf-table">
           <thead><tr><th scope="col">عملیات</th><th scope="col">تکنسین مسئول</th><th scope="col">مدت کار</th><th scope="col">وضعیت</th></tr></thead>
           <tbody>
-            {kase.tasks.map((t) => {
+            {kase.tasks.filter((t) => t.status !== 'cancelled').map((t) => {
               const st = STATUS[t.status];
               return (
                 <tr key={t.id}>

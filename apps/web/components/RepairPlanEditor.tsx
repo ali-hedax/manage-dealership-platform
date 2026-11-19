@@ -77,7 +77,7 @@ export function RepairPlanEditor({ kase, onDone }: { kase: CaseDetail; onDone: (
     <div className="panel-body stack repair-plan-editor" role="region" aria-label="ساخت مسیر تعمیر">
       <p className="small muted">
         قدم‌ها را به ترتیب بنویسید. هر قدم پس از قدم قبلی شروع می‌شود، مگر «هم‌زمان با قبلی» را بزنید. یک جایگاه می‌تواند دو بار بیاید.
-        {kase.tasks.some((t) => t.status !== 'approved') ? ' قدم اول پس از کارهای باز فعلی این خودرو شروع می‌شود.' : ''}
+        {kase.tasks.some((t) => t.status !== 'approved' && t.status !== 'cancelled') ? ' قدم اول پس از کارهای باز فعلی این خودرو شروع می‌شود.' : ''}
       </p>
       <ol className="plan-steps">
         {rows.map((r, i) => {

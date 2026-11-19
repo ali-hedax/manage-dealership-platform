@@ -366,7 +366,7 @@ function FlowForm({ kase, part: p, action, onCancel, onDone }: { kase: CaseDetai
     }
   }
 
-  const openTasks = (kase.tasks ?? []).filter((t) => t.status !== 'approved');
+  const openTasks = (kase.tasks ?? []).filter((t) => t.status !== 'approved' && t.status !== 'cancelled');
   const salePlaceholder = p.salePriceRial != null ? toPersianDigits(String(p.salePriceRial)) : '';
   return (
     <form className="m-form" onSubmit={submit} aria-label={partActionLabel(p.flowState, action)}>

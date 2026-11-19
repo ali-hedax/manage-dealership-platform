@@ -57,7 +57,10 @@ export type CaseStage = (typeof CASE_STAGES)[number];
 export const CASE_STATUSES = ['open', 'closed', 'cancelled'] as const;
 export type CaseStatus = (typeof CASE_STATUSES)[number];
 
-export const TASK_STATUSES = ['pending', 'in_progress', 'blocked', 'done', 'approved'] as const;
+// 'cancelled': removed from the active plan (owner, 2026-11-19); kept for history and reversible.
+export const TASK_STATUSES = ['pending', 'in_progress', 'blocked', 'done', 'approved', 'cancelled'] as const;
+export const TASK_CANCEL_REASONS = ['customer_withdrew', 'expert_changed', 'plan_changed', 'entered_by_mistake', 'other'] as const;
+export type TaskCancelReason = (typeof TASK_CANCEL_REASONS)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const TASK_ACTIONS = ['start', 'complete', 'approve', 'reopen'] as const;

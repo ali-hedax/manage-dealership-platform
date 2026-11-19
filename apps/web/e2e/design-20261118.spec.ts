@@ -35,7 +35,7 @@ test('case folder: cream folder, real plate, coverage and «تعویض اتاق�
   await expect(head.getByTestId('body-replacement-badge')).toHaveText('تعویض اتاق');
   const side = page.getByRole('complementary', { name: 'مشخصات خودرو و اقدامات' });
   await expect(side.getByTestId('vehicle-placeholder')).toBeVisible();
-  for (const k of ['مدل', 'سال ساخت', 'رنگ', 'VIN']) await expect(side.getByText(k, { exact: true })).toBeVisible();
+  for (const k of ['مدل', 'سال ساخت', 'رنگ', 'VIN']) await expect(side.getByText(k, { exact: true }).first()).toBeVisible();
   await expect(side.getByRole('link', { name: 'ویرایش پرونده' })).toBeVisible();
   await expect(side.getByRole('button', { name: 'چاپ' })).toBeVisible();
   await side.getByText('بیشتر ⋯').click();
@@ -76,7 +76,7 @@ test('accident desk: rows with case slip and narrow clip, filters, direct inspec
   await page.goto('/accidents/expert');
   await expect(page.getByRole('heading', { level: 1, name: 'میز تصادفات' })).toBeVisible();
   await expect(page.getByTestId('print-inspection')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'پذیرش خودرو' })).toBeVisible();
+  await expect(page.locator('main').getByRole('link', { name: 'پذیرش خودرو' })).toBeVisible();
   const rows = page.getByTestId('accident-row');
   const total = await rows.count();
   expect(total).toBeGreaterThan(0);

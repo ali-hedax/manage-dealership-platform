@@ -5,6 +5,10 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import {
   BLOCKER_REASONS,
+  TASK_CANCEL_REASONS,
+  TASK_CANCEL_REASON_LABELS,
+  TASK_STATUS_LABELS,
+  type TaskCancelReason,
   unionWorkingMinutes,
   BLOCKER_REASON_LABELS,
   type BlockerReason,
@@ -41,7 +45,11 @@ type Pending =
   | { kind: 'block'; task: Task }
   | null;
 
-export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseDetail; onChange: () => void; mode?: 'plan' | 'execution' }) {
+export function TasksPanel({ kase: fullCase, onChange, mode = 'execution' }: { kase: CaseDetail; onChange: () => void; mode?: 'plan' | 'execution' }) {
+  // Cancelled stages («لغوشده») leave the active plan; they stay in «مراحل لغوشده» and the history.
+  const cancelled = fullCase.tasks.filter((t) => t.status === 'cancelled');
+  const kase = cancelled.length ? { ...fullCase, tasks: fullCase.tasks.filter((t) => t.status !== 'cancelled') } : fullCase;
+  const [cancelling, setCancelling] = useState<Task | null>(null);
   const plannedMinutes=kase.repairPlan?unionWorkingMinutes(kase.tasks.filter(t=>t.plannedStartAt&&t.plannedEndAt).map(t=>({start:t.plannedStartAt!,end:t.plannedEndAt!})),kase.repairPlan.calendar.calendar):null;
   const { can } = useAuth();
   const toast = useToast();
@@ -190,7 +198,7 @@ export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseD
 
       {kase.tasks.map((t) => {
         const deps = t.dependsOn.map((id) => byId.get(id)).filter(Boolean) as Task[];
-        const waiting = deps.filter((d) => d.status !== 'approved');
+        const waiting = deps.filter((d) => d.status !== 'approved' && d.status !== 'cancelled');
         const openBlocker = kase.blockers.find((b) => b.taskId === t.id && !b.resolvedAt);
         return (
           <div key={t.id} className={`task${t.status === 'blocked' ? ' is-blocked' : ''}`} data-testid="task">
@@ -260,6 +268,16 @@ export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseD
                   <button className="btn btn-sm" disabled={busy} onClick={() => open({ kind: 'action', task: t, action: 'reopen' })}>
                     بازگشایی
                   </button>
+                )}
+                {(t.status === 'pending' || t.status === 'in_progress' || t.status === 'blocked' || mode === 'plan') && (
+                  <details className="m-menu stage-menu">
+                    <summary className="btn btn-sm" aria-label={`اقدامات مرحلهٔ ${t.stationCode || t.department.name}`}>⋯</summary>
+                    <div className="m-menu-pop" role="group" aria-label="اقدامات مرحله">
+                      {mode === 'execution' && t.status !== 'done' && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { setAdding(false); setEditing(t); }}>ویرایش مرحله</button>}
+                      {(t.status === 'pending' || t.status === 'in_progress' || t.status === 'blocked') && <button type="button" className="btn btn-sm btn-danger" disabled={busy} onClick={() => setCancelling(t)}>لغو مرحله</button>}
+                      <a className="btn btn-sm" href="#case-history">سوابق تغییرات</a>
+                    </div>
+                  </details>
                 )}
                 {(t.status === 'pending' || t.status === 'in_progress') && (
                   <button
@@ -339,7 +357,77 @@ export function TasksPanel({ kase, onChange, mode = 'execution' }: { kase: CaseD
           <textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
       </Dialog>
+      {cancelled.length > 0 && (
+        <details className="cancelled-stages" data-testid="cancelled-stages">
+          <summary>مراحل لغوشده ({faNum(cancelled.length)})</summary>
+          <ul>
+            {cancelled.map((t) => (
+              <li key={t.id} data-testid="cancelled-stage">
+                <div>
+                  <strong>{t.stationCode ? `${t.stationCode} · ${t.stationName}` : t.department.name}</strong> <TaskStatusChip status={t.status} />
+                  {t.cancellation && <div className="small muted">علت: {TASK_CANCEL_REASON_LABELS[t.cancellation.reason]}{t.cancellation.note ? ` — ${t.cancellation.note}` : ''} · {t.cancellation.by?.displayName ?? '—'} · {formatJalali(t.cancellation.at, { time: true })}{t.cancellation.fromStatus !== 'pending' ? ` · پیش از لغو: ${TASK_STATUS_LABELS[t.cancellation.fromStatus]}` : ''}</div>}
+                  {t.actualStartAt && <div className="small muted">کار انجام‌شده حفظ شده است؛ شروع واقعی: {formatJalali(t.actualStartAt, { time: true })}</div>}
+                </div>
+                {manage && editable && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void reactivate(t)}>فعال‌سازی مجدد</button>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {cancelling && <CancelStageDialog task={cancelling} supervisor={can('task.approve')} onClose={() => setCancelling(null)} onDone={(msg) => { setCancelling(null); toast(msg); onChange(); }} />}
     </section>
+  );
+
+  async function reactivate(t: Task) {
+    setBusy(true);
+    try {
+      await api(`/tasks/${t.id}/reactivate`, { body: { expectedVersion: t.version } });
+      toast('مرحله دوباره فعال شد');
+      onChange();
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+}
+
+/** «لغو مرحله»: reason, note and, for a started stage, an explicit stop confirmed by a supervisor. */
+function CancelStageDialog({ task, supervisor, onClose, onDone }: { task: Task; supervisor: boolean; onClose: () => void; onDone: (message: string) => void }) {
+  const [reason, setReason] = useState<TaskCancelReason>('customer_withdrew');
+  const [note, setNote] = useState('');
+  const [stop, setStop] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const started = task.status !== 'pending' || !!task.actualStartAt;
+  const name = task.stationCode ? `${task.stationCode} · ${task.stationName}` : task.department.name;
+  async function submit() {
+    setBusy(true); setError('');
+    try {
+      const r = await api<{ partsToReview: { description: string; handedOver: boolean }[] }>(`/tasks/${task.id}/cancel`, { body: { expectedVersion: task.version, reason, note: note.trim() || null, confirmStop: started ? stop : undefined } });
+      const n = r.partsToReview.length;
+      onDone(`مرحلهٔ «${name}» لغو شد${n ? `؛ ${faNum(n)} قطعهٔ این پرونده برای بررسی مسئول قطعات است (خودکار تغییر نمی‌کند)` : ''}`);
+    } catch (e) {
+      setError(errorMessage(e)); setBusy(false);
+    }
+  }
+  return (
+    <Dialog open title={`لغو مرحلهٔ «${name}»`} onClose={() => !busy && onClose()} footer={<>
+      <button type="button" className="btn btn-danger" disabled={busy || (started && (!stop || !supervisor)) || (reason === 'other' && note.trim().length < 3)} onClick={() => void submit()}>لغو مرحله</button>
+      <button type="button" className="btn" disabled={busy} onClick={onClose}>انصراف</button>
+    </>}>
+      <p className="small">مرحله از برنامهٔ فعال خارج می‌شود و از صف تکنسین حذف می‌شود؛ پرونده، مراحل دیگر، کار انجام‌شده، اجرت، سوابق مالی، رزرو و تحویل قطعات خودکار تغییر نمی‌کنند. بعداً می‌توانید آن را دوباره فعال کنید.</p>
+      <label className="field"><span>علت لغو *</span>
+        <select className="input" value={reason} onChange={(e) => setReason(e.target.value as TaskCancelReason)}>
+          {TASK_CANCEL_REASONS.map((r) => <option key={r} value={r}>{TASK_CANCEL_REASON_LABELS[r]}</option>)}
+        </select>
+      </label>
+      <label className="field"><span>توضیح{reason === 'other' ? ' *' : ''}</span><textarea className="input" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+      {started && (supervisor
+        ? <label className="check"><input type="checkbox" checked={stop} onChange={(e) => setStop(e.target.checked)} />این مرحله شروع شده است؛ توقف کار را تأیید می‌کنم (زمان و کار انجام‌شده حفظ می‌شود).</label>
+        : <p className="callout callout-amber small">این مرحله شروع شده است؛ لغو آن فقط با تأیید سرپرست (کارشناس مسئول) ممکن است.</p>)}
+      {error && <p className="callout callout-red small" role="alert">{error}</p>}
+    </Dialog>
   );
 }
 

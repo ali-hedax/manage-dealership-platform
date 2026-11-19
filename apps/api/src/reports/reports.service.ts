@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, gte, inArray, isNull, like, lt, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, like, lt, ne, sql, type SQL } from 'drizzle-orm';
 import {
   SERVICE_KPIS,
   SERVICE_KPI_KEYS,
@@ -572,7 +572,7 @@ export class ReportsService {
           })
           .from(tasks)
           .innerJoin(departments, eq(departments.id, tasks.departmentId))
-          .where(and(inArray(tasks.caseId, [...byId.keys()]),...(q.stationCode?[sql`${tasks.stationSnapshot}->>'code' = ${q.stationCode}`]:[]), ...(q.departmentId ? [eq(tasks.departmentId, q.departmentId)] : [])))
+          .where(and(inArray(tasks.caseId, [...byId.keys()]), ne(tasks.status, 'cancelled'),...(q.stationCode?[sql`${tasks.stationSnapshot}->>'code' = ${q.stationCode}`]:[]), ...(q.departmentId ? [eq(tasks.departmentId, q.departmentId)] : [])))
       : [];
     const open = rows.filter((r) => r.t.status !== 'approved');
     const by = (s: TaskStatus) => open.filter((r) => r.t.status === s);

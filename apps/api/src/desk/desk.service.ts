@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   coverageTab,
@@ -77,7 +77,7 @@ export class DeskService {
         .from(tasks)
         .innerJoin(departments, eq(departments.id, tasks.departmentId))
         .leftJoin(workshopStations, eq(workshopStations.id, tasks.stationId))
-        .where(and(eq(tasks.tenantId, tenantId), inArray(tasks.caseId, ids)))
+        .where(and(eq(tasks.tenantId, tenantId), inArray(tasks.caseId, ids), ne(tasks.status, 'cancelled')))
         .orderBy(asc(tasks.sortOrder)),
       db
         .select({ id: partRequests.id, caseId: partRequests.caseId, status: partRequests.status, source: partRequests.source, consumedAt: partRequests.consumedAt, orderedAt: partRequests.orderedAt, createdAt: partRequests.createdAt, stockParallelAt: partRequests.stockParallelAt, emdadCategory: emdadRequests.statusCategory })

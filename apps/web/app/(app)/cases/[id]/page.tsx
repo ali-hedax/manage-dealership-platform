@@ -28,7 +28,7 @@ import { CaseWagesPanel } from '@/components/CaseWagesPanel';
 import { BackLink } from '@/components/BackLink';
 import { CaseFolderHeader, SECTION_TAB, type CaseTab } from '@/components/CaseFolderHeader';
 import { AppIcon } from '@/components/AppIcon';
-import { VehicleImage } from '@/components/FolderParts';
+import { VehicleImage, VehicleTechDetails } from '@/components/FolderParts';
 import { ReminderComposer } from '@/components/ReminderComposer';
 import { WorkflowAction } from '@/components/WorkflowAction';
 import { Timeline } from '@/components/Timeline';
@@ -127,12 +127,13 @@ export default function CaseDetailPage() {
       <section className="side-vehicle" aria-label="مشخصات خودرو">
         <VehicleImage vehicle={(v.model || v.brand || kase.vehicleLabel).trim()} size="lg" />
         <dl className="veh-facts">
-          <div><dt><AppIcon name="car" />مدل</dt><dd>{[v.model, v.trim].filter(Boolean).join(' ') || '—'}</dd></div>
+          <div><dt><AppIcon name="car" />مدل</dt><dd>{kase.vehicleSummary ?? (v.model || '—')}</dd></div>
           <div><dt><AppIcon name="calendar" />سال ساخت</dt><dd>{v.modelYear ? toPersianDigits(String(v.modelYear)) : '—'}</dd></div>
           <div><dt><AppIcon name="paint" />رنگ</dt><dd>{v.color ?? '—'}</dd></div>
           <div><dt><AppIcon name="idcard" />VIN</dt><dd><bdi dir="ltr">{v.vin ?? '—'}</bdi></dd></div>
           <div><dt><AppIcon name="receipt" />شمارهٔ پذیرش</dt><dd><bdi>{kase.admissionNo ? toPersianDigits(kase.admissionNo) : '—'}</bdi></dd></div>
         </dl>
+        <VehicleTechDetails brand={v.brand} model={v.model} trim={v.trim} vin={v.vin} />
       </section>
       <nav className="side-actions no-print" aria-label="اقدامات پرونده">
         {can('assessment.manage') && active && workflow?.current === 'assessment' && <a href="#case-assessment" className={`${daily} primary`} onClick={(e) => { e.preventDefault(); goTab('assessment', 'case-assessment'); }}><AppIcon name="clipboard" />شروع کارشناسی</a>}

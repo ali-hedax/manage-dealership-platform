@@ -127,8 +127,10 @@ test('parts clerk: read-only view with masked customer phone and no create actio
 
 test('planned modules are visible as roadmap and expose no actions', async ({ page }) => {
   await login(page, 'manager');
-  await page.getByText('ابزارهای بیشتر',{exact:true}).click();
-  await page.getByRole('link', { name: /انبار، قطعات و تأمین‌کنندگان/ }).click();
+  // Six-module menu: the planned module sits under its module heading, marked «در دست توسعه».
+  const nav = page.getByRole('navigation', { name: 'بخش‌های منیج' });
+  await expect(nav.getByRole('button', { name: 'انبار قطعات یدکی' })).toHaveAttribute('aria-expanded', 'true');
+  await nav.getByRole('link', { name: /انبار، قطعات و تأمین‌کنندگان/ }).click();
   await expect(page.getByText('این بخش در دست توسعه است و هنوز قابل استفاده نیست.')).toBeVisible();
   await expect(page.locator('main').getByRole('button')).toHaveCount(0);
 });

@@ -74,7 +74,7 @@ function ExternalCreate({ kase, done }: { kase: CaseDetail; done: () => void }) 
     </select></label>
     <label className="field">مدت (روز کاری)<input className="input" name="days" inputMode="decimal" required/></label>
     <JalaliInput label="شروع برنامه‌ای، در صورت نیاز" value={start} onChange={setStart} withTime/>
-    {!!kase.tasks.length && <fieldset><legend>پس از تأیید این کارها</legend>{kase.tasks.map(t =>
+    {kase.tasks.some(t => t.status !== 'cancelled') && <fieldset><legend>پس از تأیید این کارها</legend>{kase.tasks.filter(t => t.status !== 'cancelled').map(t =>
       <label key={t.id} className="row"><input type="checkbox" name="dependsOn" value={t.id}/>{t.title ?? t.department.name}</label>)}</fieldset>}
     {error && <p role="alert" className="callout callout-red">{error}</p>}
     <button className="btn btn-primary" disabled={busy}>ثبت مرحله در مسیر تعمیرات</button>

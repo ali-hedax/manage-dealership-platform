@@ -73,6 +73,15 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   blocked: 'دارای مانع',
   done: 'اتمام (منتظر تأیید)',
   approved: 'تأییدشده',
+  cancelled: 'لغوشده',
+};
+
+export const TASK_CANCEL_REASON_LABELS: Record<import('./enums').TaskCancelReason, string> = {
+  customer_withdrew: 'انصراف مشتری',
+  expert_changed: 'تغییر نظر کارشناس',
+  plan_changed: 'تغییر برنامه تعمیر',
+  entered_by_mistake: 'ثبت اشتباه',
+  other: 'سایر موارد',
 };
 
 export const BLOCKER_REASON_LABELS: Record<BlockerReason, string> = {

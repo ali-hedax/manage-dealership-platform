@@ -81,3 +81,23 @@ export function VehicleImage({ vehicle, size = 'md' }: { vehicle: string; size?:
     </span>
   );
 }
+
+/**
+ * «جزئیات فنی خودرو» (owner, 2026-11-19): everyday screens show the vehicle name once;
+ * the full brand, model, trim and VIN stay one click away where parts matching needs them.
+ */
+export function VehicleTechDetails({ brand, model, trim, vin, modelYear }: { brand?: string | null; model?: string | null; trim?: string | null; vin?: string | null; modelYear?: number | null }) {
+  if (!brand && !model && !trim && !vin) return null;
+  return (
+    <details className="veh-tech" data-testid="vehicle-tech-details">
+      <summary>جزئیات فنی خودرو</summary>
+      <dl>
+        {brand && <><dt>برند</dt><dd>{brand}</dd></>}
+        {model && <><dt>مدل کامل</dt><dd>{model}</dd></>}
+        {trim && <><dt>تیپ</dt><dd>{trim}</dd></>}
+        {modelYear && <><dt>سال ساخت</dt><dd>{modelYear}</dd></>}
+        {vin && <><dt>VIN</dt><dd><bdi dir="ltr">{vin}</bdi></dd></>}
+      </dl>
+    </details>
+  );
+}

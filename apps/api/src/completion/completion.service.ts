@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   COMPLETION_ISSUE_LABELS,
   QC_CHECK_LABELS,
@@ -91,7 +91,7 @@ export class CompletionService {
       const work = await tx
         .select({ status: tasks.status, approvedAt: tasks.approvedAt })
         .from(tasks)
-        .where(and(eq(tasks.caseId, caseId), eq(tasks.tenantId, tenantId)));
+        .where(and(eq(tasks.caseId, caseId), eq(tasks.tenantId, tenantId), ne(tasks.status, 'cancelled')));
       const unfinished = work.filter((t) => t.status !== 'approved').length;
       if (unfinished) {
         throw badRequest('QC_WORK_UNFINISHED', 'کنترل کیفیت پس از تأیید همه فعالیت‌ها توسط سرپرست ثبت می‌شود', {
@@ -415,7 +415,7 @@ export class CompletionService {
     const work = await db
       .select({ status: tasks.status, departmentId: tasks.departmentId, updatedAt: tasks.updatedAt })
       .from(tasks)
-      .where(and(eq(tasks.caseId, caseId), eq(tasks.tenantId, tenantId)));
+      .where(and(eq(tasks.caseId, caseId), eq(tasks.tenantId, tenantId), ne(tasks.status, 'cancelled')));
     const unapproved = work.filter((t) => t.status !== 'approved').length;
     if (unapproved) technicalIssues.push(issue('tasks_unapproved', { count: unapproved }));
     const [{ open }] = (await db

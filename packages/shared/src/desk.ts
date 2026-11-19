@@ -79,7 +79,7 @@ export function dayWord(iso: string, now = Date.now()): string {
   return `${faDigits(d)} روز دیگر`;
 }
 
-const isOpenTask = (t: FolderTaskFact) => t.status !== 'done' && t.status !== 'approved';
+const isOpenTask = (t: FolderTaskFact) => t.status !== 'done' && t.status !== 'approved' && t.status !== 'cancelled';
 
 /** Behind schedule: an unfinished step past its planned end, or the official deadline passed. */
 export function folderBehind(f: FolderFacts, now = Date.now()): boolean {
