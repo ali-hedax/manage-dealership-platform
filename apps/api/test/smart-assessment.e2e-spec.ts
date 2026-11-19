@@ -67,6 +67,30 @@ it('searches real imported catalog by Persian phrase, code and case model, then 
   expect(persisted.body.at(-1).items.filter((i: {partNumber:string}) => i.partNumber.startsWith('00123'))).toHaveLength(2);
 });
 
+it('shows 25 verified vehicle-specific results rather than stopping at 20', async () => {
+  const rows = Array.from({length:25},(_,i)=>[String(98760000+i), `سپر محدودیت کارشناسی ${i+1}`, 'ری را']);
+  const workbook = Buffer.from(writeSheet('قطعات', [
+    ['کد فنی','نام قطعه','مصرف خودرو'], ...rows,
+  ])).toString('base64');
+  const preview = await admin.post('/reference-imports', {
+    kind:'parts',fileName:'assessment-limit-25.xlsx',fileBase64:workbook,
+    sheetIndex:0,headerRow:1,mapping:{partNumber:0,description:1,vehicleUse:2},
+  });
+  expect(preview.status).toBe(201);
+  expect((await admin.post(`/reference-imports/${preview.body.id}/apply`)).status).toBe(201);
+  const kase = await admin.post('/cases',{
+    admittedAt:new Date(Date.now()-86400000).toISOString(),
+    vehicle:{model:'ری را'},coverageType:'insurance',
+  });
+  expect(kase.status).toBe(201);
+  const response = await expert.post(`/cases/${kase.body.id}/assessment-catalog/search`,{
+    query:'سپر محدودیت کارشناسی',
+  });
+  expect(response.status).toBe(201);
+  expect(response.body.fitmentVerified).toBe(true);
+  expect(response.body.results.filter((r:{partNumber:string})=>/^987600[0-2][0-9]$/.test(r.partNumber))).toHaveLength(25);
+});
+
 it('rejects readers without assessment permission and unknown cases without disclosing catalog data', async () => {
   const denied = await clerk.post('/cases/00000000-0000-4000-8000-000000000001/assessment-catalog/search', {query:'سپر'});
   expect(denied.status).toBe(403);
