@@ -1,24 +1,30 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Assessment, CaseDetail } from '@manage/shared';
+import { assessmentReference, normalizedPartCode, type Assessment, type AssessmentItem, type CaseDetail } from '@manage/shared';
 import { api, errorMessage } from '@/lib/api';
+import { toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 
 type Suggestion = {
   id: string;
   name: string;
   partNumber: string;
+  reference: string | null;
   vehicleUse: string;
-  vehicleUseHint: boolean;
-  requiresFitmentReview: boolean;
+  common: boolean;
 };
-type Response = { results: Suggestion[]; limited: boolean; fitmentVerified: boolean };
+type Response = { results: Suggestion[]; limited: boolean; fitmentVerified: boolean; family?: string; message?: string };
+
+/** The line's assessment reference: the 8-digit code (or the whole code when it has no 8-digit start). */
+const refOf = (code: string | null | undefined) => assessmentReference(code) ?? normalizedPartCode(code);
 
 /**
- * Case-scoped quick entry for insurance/private-pay assessments.
- * Uses existing versioned assessment mutation; no parallel parts table.
- * Free-text vehicleUse is a hint only, not certified fitment.
+ * Smart accident assessment, quick entry (owner, 2026-11-19). The catalog search returns
+ * only parts verified for this case's vehicle family; a pick is saved with its 8-digit
+ * reference as the line's code and the full catalog code beside it, so the parts clerk
+ * can later choose the exact 10-digit OEM or longer market code. The bordered list below
+ * shows every added part at once with quantity editing and removal.
  */
 export function SmartAssessmentEntry({
   kase, assessment, onSaved,
@@ -29,7 +35,7 @@ export function SmartAssessmentEntry({
 }) {
   const toast = useToast();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Suggestion[]>([]);
+  const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -37,38 +43,42 @@ export function SmartAssessmentEntry({
   const [quantity, setQuantity] = useState(1);
   const [open, setOpen] = useState(false);
   const [version, setVersion] = useState(assessment.version);
+  const [justAdded, setJustAdded] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { setVersion(assessment.version); }, [assessment.id, assessment.version]);
+  const results = data?.results ?? [];
+  const picked = assessment.items.filter((i) => i.action === 'replace');
+  const pickedRefs = new Set(picked.map((i) => refOf(i.partNumber)));
 
   useEffect(() => {
     const value = query.trim();
     if (value.length < 2) {
-      setResults([]); setLoading(false); setOpen(false); return;
+      setData(null); setLoading(false); setOpen(false); return;
     }
     let cancelled = false;
-    const abort = new AbortController();
     const handle = window.setTimeout(async () => {
       setLoading(true); setError('');
       try {
-        // api() has no AbortSignal parameter; ignore stale results on cleanup.
         const response = await api<Response>(`/cases/${kase.id}/assessment-catalog/search`, { body: { query: value } });
-        if (!cancelled && !abort.signal.aborted) {
-          setResults(response.results);
-          setActive(0);
-          setOpen(true);
-        }
+        if (!cancelled) { setData(response); setActive(0); setOpen(true); }
       } catch (e) {
-        if (!cancelled) { setResults([]); setError(errorMessage(e)); setOpen(true); }
+        if (!cancelled) { setData(null); setError(errorMessage(e)); setOpen(true); }
       } finally { if (!cancelled) setLoading(false); }
-    }, 250);
-    return () => { cancelled = true; abort.abort(); window.clearTimeout(handle); };
+    }, 200);
+    return () => { cancelled = true; window.clearTimeout(handle); };
   }, [kase.id, query]);
+
+  async function refresh() {
+    const updated = await onSaved();
+    const fresh = updated?.find((a) => a.id === assessment.id);
+    if (fresh) setVersion(fresh.version);
+    else setVersion((v) => v + 1);
+  }
 
   async function add(s: Suggestion) {
     if (busy) return;
-    const duplicate = assessment.items.find(i => i.action === 'replace' && i.partNumber === s.partNumber);
-    if (duplicate) {
-      toast('این شماره فنی قبلاً در کارشناسی ثبت شده است؛ برای تغییر تعداد، همان قلم را ویرایش کنید.', 'error');
+    if (pickedRefs.has(refOf(s.partNumber))) {
+      toast('این قطعه (همین کد ۸ رقمی) قبلاً اضافه شده است؛ تعداد همان ردیف را تغییر دهید.', 'error');
       return;
     }
     setBusy(true);
@@ -79,7 +89,8 @@ export function SmartAssessmentEntry({
           expectedVersion: version,
           action: 'replace',
           description: s.name,
-          partNumber: s.partNumber,
+          partNumber: refOf(s.partNumber),
+          sourcePartNumber: s.partNumber,
           quantity,
           unitPriceRial: 0,
           labourRial: 0,
@@ -87,26 +98,43 @@ export function SmartAssessmentEntry({
           evidence: null,
         },
       });
-      const updated = await onSaved();
-      const fresh = updated?.find(a => a.id === assessment.id);
-      if (fresh) setVersion(fresh.version);
-      else setVersion(v => v + 1);
-      setQuery(''); setResults([]); setOpen(false); setQuantity(1);
-      toast('قطعه به پیش‌نویس کارشناسی اضافه شد');
+      await refresh();
+      setJustAdded(refOf(s.partNumber));
+      setQuery(''); setData(null); setOpen(false); setQuantity(1);
       inputRef.current?.focus();
     } catch (e) {
       setError(errorMessage(e));
-      // Version conflict must be refreshed and retried by user, never silently overwritten.
+      // A version conflict is refreshed and retried by the user, never silently overwritten.
       await onSaved();
     } finally { setBusy(false); }
   }
 
-  return <div className="panel-body stack" data-testid="smart-assessment-entry" dir="rtl">
+  async function changeQuantity(item: AssessmentItem, value: number) {
+    const q = Math.max(1, Math.min(999, Math.round(value) || 1));
+    if (q === item.quantity || busy) return;
+    setBusy(true); setError('');
+    try {
+      await api(`/assessment-items/${item.id}`, { method: 'PATCH', body: { quantity: q, expectedVersion: version } });
+      await refresh();
+    } catch (e) { setError(errorMessage(e)); await onSaved(); } finally { setBusy(false); }
+  }
+
+  async function remove(item: AssessmentItem) {
+    if (busy) return;
+    setBusy(true); setError('');
+    try {
+      await api(`/assessment-items/${item.id}/remove`, { body: { expectedVersion: version } });
+      await refresh();
+      toast(`«${item.description}» از کارشناسی حذف شد`);
+    } catch (e) { setError(errorMessage(e)); await onSaved(); } finally { setBusy(false); }
+  }
+
+  return <div className="panel-body stack smart-entry" data-testid="smart-assessment-entry" dir="rtl">
     <div>
       <strong>ثبت سریع قطعات از کاتالوگ</strong>
-      <p className="small muted">نام رایج قطعه یا شماره فنی را بنویسید، با کلیدهای جهت‌دار انتخاب کنید و Enter بزنید. پس از ثبت، قطعه بعدی را وارد کنید.</p>
+      <p className="small muted">نام قطعه یا شماره فنی را بنویسید، با کلیدهای جهت‌دار انتخاب کنید و Enter بزنید. فقط قطعات سازگار با همین خودرو نشان داده می‌شوند.</p>
     </div>
-    <div className="grid-2">
+    <div className="smart-search-row">
       <label className="field">
         <span>جست‌وجوی قطعه</span>
         <input
@@ -119,40 +147,66 @@ export function SmartAssessmentEntry({
           aria-activedescendant={open && results[active] ? `smart-part-${results[active].id}` : undefined}
           value={query}
           autoComplete="off"
-          placeholder="مثلاً سپر، سپرجلو، شماره فنی…"
+          placeholder="مثلاً سپر جلو، گلگیر، کاپوت، شماره فنی…"
           disabled={busy}
-          onChange={e => setQuery(e.target.value)}
+          onChange={(e) => setQuery(e.target.value)}
           onFocus={() => { if (results.length) setOpen(true); }}
-          onKeyDown={e => {
+          onKeyDown={(e) => {
             if (!open || !results.length) return;
-            if (e.key === 'ArrowDown') { e.preventDefault(); setActive(i => (i + 1) % results.length); }
-            if (e.key === 'ArrowUp') { e.preventDefault(); setActive(i => (i - 1 + results.length) % results.length); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => (i + 1) % results.length); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => (i - 1 + results.length) % results.length); }
             if (e.key === 'Escape') { e.preventDefault(); setOpen(false); }
             if (e.key === 'Enter') { e.preventDefault(); void add(results[active]!); }
           }}
         />
       </label>
-      <label className="field">
+      <label className="field smart-qty">
         <span>تعداد</span>
         <input className="input ltr-input" type="number" min={1} max={999} value={quantity} disabled={busy}
-          onChange={e => setQuantity(Math.max(1, Math.min(999, Number(e.target.value) || 1)))} />
+          onChange={(e) => setQuantity(Math.max(1, Math.min(999, Number(e.target.value) || 1)))} />
       </label>
     </div>
+    {data?.fitmentVerified && data.family && <p className="xs muted" data-testid="smart-family">قطعات سازگار با خانوادهٔ خودروی «{data.family}» در کاتالوگ</p>}
     {loading && <p className="small muted" role="status">در حال جست‌وجوی کاتالوگ…</p>}
     {error && <p className="callout callout-red small" role="alert">{error}</p>}
-    {open && !loading && <div id="smart-assessment-results" role="listbox" aria-label="قطعات پیشنهادی" style={{maxHeight:280,overflowY:'auto'}}>
-      {results.length === 0 ? <p className="small muted">قطعه‌ای پیدا نشد. نام یا شماره فنی دیگری وارد کنید.</p> :
-        results.map((s,i) => <div key={s.id} id={`smart-part-${s.id}`} role="option" aria-selected={i===active}
-          style={{padding:8,borderBlockEnd:'1px solid var(--border, #ddd)',background:i===active?'var(--surface-2, transparent)':undefined}}>
-          <div className="row" style={{justifyContent:'space-between',alignItems:'center',gap:8}}>
-            <div><strong>{s.name}</strong> <bdi className="small">{s.partNumber}</bdi>
-              {s.vehicleUse && <div className="xs muted">مصرف درج‌شده: {s.vehicleUse}</div>}
-              <div className="xs muted">{s.vehicleUseHint?'نام مدل در اطلاعات مصرف قطعه دیده شد؛ سازگاری قطعی نیست':'سازگاری با خودرو باید بررسی شود'}</div>
+    {open && !loading && data && !data.fitmentVerified && <p className="callout callout-amber small" role="alert" data-testid="smart-fitment-unverified">{data.message}</p>}
+    {open && !loading && data?.fitmentVerified && <div id="smart-assessment-results" className="smart-results" role="listbox" aria-label="قطعات پیشنهادی">
+      {results.length === 0 ? <p className="small muted">قطعهٔ سازگاری با این نام یا شماره پیدا نشد.</p> :
+        results.map((s, i) => {
+          const added = pickedRefs.has(refOf(s.partNumber));
+          return <div key={s.id} id={`smart-part-${s.id}`} role="option" aria-selected={i === active} className={`smart-option${i === active ? ' on' : ''}`}
+            onMouseEnter={() => setActive(i)}>
+            <div className="smart-option-text">
+              <strong>{s.name}</strong>
+              <span className="smart-ref"><bdi dir="ltr">{toPersianDigits(refOf(s.partNumber))}</bdi></span>
+              <span className="xs muted">کد کامل: <bdi dir="ltr">{s.partNumber}</bdi>{s.common ? ' · مشترک همهٔ خودروها' : ` · ${s.vehicleUse}`}</span>
             </div>
-            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void add(s)}>افزودن</button>
-          </div>
-        </div>)}
+            <button type="button" className="btn btn-sm" disabled={busy || added} onClick={() => void add(s)}>{added ? 'افزوده شد' : 'افزودن'}</button>
+          </div>;
+        })}
     </div>}
-    <p className="xs muted">انتخاب قطعه تأیید فنی یا مجوز خرید نیست. کدهای انتخابی باید توسط مسئول قطعات بررسی شوند. مبالغ را بعداً در فرم کارشناسی تکمیل کنید.</p>
+
+    <section className="smart-picked" aria-label="قطعات انتخاب‌شده" data-testid="smart-picked">
+      <div className="smart-picked-head"><strong>قطعات انتخاب‌شده</strong><span className="smart-count">{toPersianDigits(String(picked.length))}</span></div>
+      {picked.length === 0 ? <p className="small muted">هنوز قطعه‌ای اضافه نشده است.</p> : (
+        <ul className="smart-picked-list">
+          {picked.map((item) => (
+            <li key={item.id} className={`smart-picked-row${justAdded && refOf(item.partNumber) === justAdded ? ' fresh' : ''}`} data-testid="smart-picked-row">
+              <span className="smart-picked-name">{item.description}</span>
+              <span className="smart-ref" title={item.sourcePartNumber ? `کد کامل: ${item.sourcePartNumber}` : undefined}><bdi dir="ltr">{toPersianDigits(item.partNumber ?? '—')}</bdi></span>
+              <label className="smart-picked-qty">
+                <span className="sr-only">تعداد {item.description}</span>
+                <input className="input ltr-input" type="number" min={1} max={999} defaultValue={item.quantity} key={`${item.id}-${item.quantity}`} disabled={busy}
+                  onBlur={(e) => void changeQuantity(item, Number(e.target.value))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void changeQuantity(item, Number((e.target as HTMLInputElement).value)); } }} />
+              </label>
+              <span className="smart-added">✓ افزوده شد</span>
+              <button type="button" className="btn btn-sm smart-remove" disabled={busy} aria-label={`حذف ${item.description}`} onClick={() => void remove(item)}>حذف</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+    <p className="xs muted">کد ۸ رقمی مرجع کارشناسی است و کد کامل کاتالوگ کنار آن نگه داشته می‌شود؛ مسئول قطعات بعداً کد دقیق ۱۰ رقمی یا کد بازار را انتخاب می‌کند. انتخاب قطعه مجوز خرید نیست.</p>
   </div>;
 }

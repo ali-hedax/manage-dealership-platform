@@ -159,7 +159,7 @@ export class PrintService {
     const db = this.handle.db;
     const tenantId = actor.user.tenantId;
     const extra = folders.length
-      ? await db.select({ id: cases.id, official: cases.officialDeadlineAt, forecast: cases.forecastDeliveryAt, location: cases.vehicleLocation, trim: vehicles.trim, module: cases.module })
+      ? await db.select({ id: cases.id, official: cases.officialDeadlineAt, forecast: cases.forecastDeliveryAt, location: cases.vehicleLocation, module: cases.module })
         .from(cases).innerJoin(vehicles, eq(vehicles.id, cases.vehicleId))
         .where(and(eq(cases.tenantId, tenantId), inArray(cases.id, folders.map((f) => f.caseId))))
       : [];
@@ -182,7 +182,8 @@ export class PrintService {
       const flags = [late ? 'تأخیر' : '', f.openBlockers ? `${f.openBlockers} مانع` : '', f.parts.undecided ? `${f.parts.undecided} قطعه بی‌تکلیف` : '', f.parts.emdadLate ? 'امداد دیرشده' : ''].filter(Boolean);
       const stage = STAGE_LABELS[f.stage];
       return {
-        cells: ['', String(i + 1), [f.vehicle, e?.trim].filter(Boolean).join(' '), f.plate ?? '', `${f.caseNumber}${f.admissionNo ? `\n${f.admissionNo}` : ''}`, stage, f.next.text, days == null ? '' : String(days), planned ? formatJalaliDateInput(planned) : '', flags.join('، ') || (issue ? 'نیاز به پیگیری' : '—'), ''],
+        // Only the vehicle's name/model (never the long manufacturer trim text) keeps rows short.
+        cells: ['', String(i + 1), f.vehicle, f.plate ?? '', `${f.caseNumber}${f.admissionNo ? `\n${f.admissionNo}` : ''}`, stage, f.next.text, days == null ? '' : String(days), planned ? formatJalaliDateInput(planned) : '', flags.join('، ') || (issue ? 'نیاز به پیگیری' : '—'), ''],
         note: f.place && f.place !== stage ? { column: 5, text: f.place } : e?.location ? { column: 2, text: `محل خودرو: ${e.location}` } : undefined,
       };
     });

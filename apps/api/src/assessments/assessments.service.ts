@@ -19,6 +19,8 @@ import {
   type RecordAuthorizationInput,
   type RemoveAssessmentItemInput,
   type UpdateAssessmentItemInput,
+  assessmentReference,
+  normalizedPartCode,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -268,8 +270,11 @@ export class AssessmentsService {
     return result;
   }
 
-  async addItem(actor: Actor, assessmentId: string, input: AssessmentItemInput): Promise<Assessment> {
+  async addItem(actor: Actor, assessmentId: string, raw: AssessmentItemInput): Promise<Assessment> {
     const tenantId = actor.user.tenantId;
+    // Smart-assessment pick: keep the full catalog code and record its 8-digit reference as the line's code.
+    const source = raw.sourcePartNumber ? normalizedPartCode(raw.sourcePartNumber) || null : null;
+    const input = source ? { ...raw, partNumber: assessmentReference(source) ?? source } : raw;
     await this.db.transaction(async (tx) => {
       const a = await this.loadDraft(tx, tenantId, assessmentId, input.expectedVersion);
       if (input.labourDepartmentId) await this.assertDepartment(tx, tenantId, input.labourDepartmentId);
@@ -288,6 +293,7 @@ export class AssessmentsService {
         action: input.action,
         description: input.description,
         partNumber: input.partNumber ?? null,
+        sourcePartNumber: source,
         quantity: input.quantity,
         unitPriceRial: input.unitPriceRial,
         labourDepartmentId: input.labourDepartmentId ?? null,
@@ -317,6 +323,8 @@ export class AssessmentsService {
           lineNo,
           action: input.action,
           description: input.description,
+          partNumber: input.partNumber ?? null,
+          sourcePartNumber: source,
           quantity: input.quantity,
           unitPriceRial: input.unitPriceRial,
           labourRial: input.labourRial,
@@ -803,6 +811,7 @@ export class AssessmentsService {
           action: i.action as AssessmentItem['action'],
           description: i.description,
           partNumber: i.partNumber,
+          sourcePartNumber: i.sourcePartNumber,
           quantity: i.quantity,
           unitPriceRial: i.unitPriceRial,
           labourDepartment: d ? { id: d.id, name: d.name } : null,

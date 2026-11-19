@@ -38,10 +38,10 @@ it('searches real imported catalog by Persian phrase, code and case model, then 
 
   const searched = await expert.post(suggestionPath, { query: 'سپر' });
   expect(searched.status).toBe(201);
-  expect(searched.body.fitmentVerified).toBe(false);
+  expect(searched.body.fitmentVerified).toBe(true);
   expect(searched.body.vehicle.model).toBe('ری را');
   expect(searched.body.results.map((r: {partNumber: string}) => r.partNumber)).toEqual(['00123001', '00123002']);
-  expect(searched.body.results[0].requiresFitmentReview).toBe(true);
+  expect(searched.body.results[0].requiresFitmentReview).toBe(false);
 
   const codeSearch = await expert.post(suggestionPath, { query: '۰۰۱۲۳۰۰۲' });
   expect(codeSearch.status).toBe(201);
