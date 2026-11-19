@@ -48,6 +48,8 @@ export class ReferenceDataService {
   }else{
    if(data.vin){data.vin=normalizeVin(data.vin);if(!/^[A-HJ-NPR-Z0-9]{17}$/.test(data.vin))fail('VIN کامل باید ۱۷ نویسه معتبر داشته باشد');}
    if(data.chassis)data.chassis=code(data.chassis);
+   // «کد محصول ایساکو» is an identifier: digits Latin, spaces removed, leading zeros kept.
+   if(data.isacoCode){data.isacoCode=code(data.isacoCode);if(data.isacoCode.length>40)fail('کد محصول ایساکو بیش از ۴۰ نویسه است');}
    lookupKey=data.vin||data.chassis||'';
    if(!lookupKey||lookupKey.length<6)fail('VIN کامل یا شماره شاسی حداقل شش نویسه لازم است');
    if(data.phone){const p=toLatinDigits(data.phone).replace(/[\s()-]/g,'');data.phone=p.startsWith('+98')?'0'+p.slice(3):p.startsWith('0098')?'0'+p.slice(4):p;if(!/^09\d{9}$/.test(data.phone)){delete data.phone;messages.push('تلفن نامعتبر در منبع حفظ شد؛ در پیشنهاد خالی می‌ماند و کاربر می‌تواند اصلاح کند');}}

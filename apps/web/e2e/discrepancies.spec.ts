@@ -13,7 +13,7 @@ test('parts clerk reviews a handover-vs-shortage discrepancy and records the out
       : page.request.get(`/api/v1${path}`, { headers: { 'x-manage-client': 'web' } });
   const depts = await (await api('/departments')).json();
   const kase = await (await api('/cases', { vehicle: { model: 'رانا', vin: `TESTVIN${Date.now().toString().slice(-10)}` }, admittedAt: new Date(Date.now() - 86_400_000).toISOString(), coverageType: 'personal' })).json();
-  let part = await (await api(`/cases/${kase.id}/parts`, { description: 'آینه بغل آزمون', source: 'stock' })).json();
+  let part = await (await api(`/cases/${kase.id}/parts`, { description: 'آینه بغل آزمون', partNumber: '00997301', source: 'stock' })).json();
   for (const [action, extra] of [
     ['check_stock', { inStock: true }],
     ['reserve', {}],

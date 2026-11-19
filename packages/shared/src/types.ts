@@ -496,6 +496,10 @@ export interface CaseDetail extends Omit<CaseListItem, 'customerName'> {
     plate: string | null;
     vin: string | null;
     color: string | null;
+    /** «کد محصول ایساکو» from customer-history records of this exact VIN/chassis (only when they agree). */
+    isacoCode?: string | null;
+    /** Matching records carry different ISACO codes; none is shown. */
+    isacoCodeConflict?: boolean;
     /** Chassis number as recorded on the admission sheet (may be short; not a VIN). */
     chassisRef: string | null;
   };

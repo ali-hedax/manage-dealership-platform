@@ -49,7 +49,7 @@ afterAll(async () => {
 describe('parts discrepancy queue', () => {
   it('flags "handover recorded but the unit reports a shortage" once, with the facts, and closes only with a reason', async () => {
     const c = await newCase();
-    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'چراغ جلو آزمون', source: 'stock' })).body;
+    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'چراغ جلو آزمون', partNumber: '00997002', source: 'stock' })).body;
     p = await step(p, 'check_stock', { inStock: true });
     p = await step(p, 'reserve');
     await step(p, 'hand_over', { departmentId: dept('body'), salePriceRial: 1_500_000, recipientName: 'تکنسین آزمون' });
@@ -96,12 +96,12 @@ describe('parts discrepancy queue', () => {
 
   it('flags a wrong or defective part and a contradictory supply record; a vanished condition is marked, not closed', async () => {
     const c = await newCase();
-    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'سپر مشتری', source: 'customer' })).body;
+    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'سپر مشتری', partNumber: '00997003', source: 'customer' })).body;
     p = await step(p, 'order', { supplier: 'مشتری' });
     p = await step(p, 'receive', { inspection: 'defective', note: 'ترک در گوشه' });
     expect(p.status).toBe('rejected');
     // A record that never went through ordering (e.g. entered before Manage): received without an order.
-    let q: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'گلگیر شرکت', source: 'company' })).body;
+    let q: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'گلگیر شرکت', partNumber: '00997004', source: 'company' })).body;
     await h.db.db.update(partRequests).set({ status: 'received', receivedAt: new Date() }).where(eq(partRequests.id, q.id));
 
     const items = (await queue(manager)).filter((d) => d.caseId === c.id);

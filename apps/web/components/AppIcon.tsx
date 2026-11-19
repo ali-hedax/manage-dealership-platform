@@ -7,7 +7,9 @@ export type IconName =
   | 'bell' | 'shopping-cart' | 'folder' | 'search' | 'flag' | 'hammer' | 'paint' | 'battery' | 'history' | 'doc'
   | 'lock' | 'idcard' | 'book' | 'help' | 'logout' | 'menu' | 'close' | 'chevron-down' | 'chevron-left' | 'arrow-left'
   | 'arrow-right' | 'filter' | 'layers' | 'target' | 'login' | 'clipboard' | 'list' | 'return' | 'receipt' | 'spinner'
-  | 'gear' | 'suspension' | 'send' | 'download' | 'print' | 'plus-circle';
+  | 'gear' | 'suspension' | 'send' | 'download' | 'print' | 'plus-circle'
+  // Side-menu set (owner, 2026-11-19): same grid, stroke and caps as the rest of the family.
+  | 'nav-workspace' | 'nav-car' | 'nav-package' | 'nav-calendar' | 'nav-clipboard' | 'nav-heart' | 'nav-chart' | 'nav-settings';
 
 const paths: Record<IconName, string> = {
   home: 'm3 10.5 9-7 9 7M5 9.5V21h14V9.5M9.5 21v-6h5v6',
@@ -69,6 +71,22 @@ const paths: Record<IconName, string> = {
   send: 'M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z',
   print: 'M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 14h10v7H7v-7Z',
   'plus-circle': 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 8v8M8 12h8',
+  // Dashboard tiles: my workspace.
+  'nav-workspace': 'M4 4h7v9H4V4ZM13 4h7v5h-7V4ZM13 11h7v9h-7v-9ZM4 15h7v5H4v-5Z',
+  // Car seen from the front: accident management.
+  'nav-car': 'M5 13.5 6.6 8.4A2 2 0 0 1 8.5 7h7a2 2 0 0 1 1.9 1.4L19 13.5M4 19v-3.5A2 2 0 0 1 6 13.5h12a2 2 0 0 1 2 2V19M4 19h2.5v1.5H4V19ZM17.5 19H20v1.5h-2.5V19ZM7.5 16.5h1M15.5 16.5h1M4 19h16',
+  // Parcel: parts warehouse.
+  'nav-package': 'M20.5 7.8 12 3.5 3.5 7.8v8.4L12 20.5l8.5-4.3V7.8ZM3.5 7.8 12 12l8.5-4.2M12 12v8.5M7.8 5.6l8.4 4.3',
+  // Calendar with days: workshop management.
+  'nav-calendar': 'M4.5 6.5h15v13h-15v-13ZM4.5 10.5h15M8.5 4v4M15.5 4v4M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01',
+  // Clipboard with a check: reception and release.
+  'nav-clipboard': 'M9 4.5h6v2.5H9V4.5ZM15 5.5h3.5v15h-13v-15H9M9 13.5l2 2 4-4.5',
+  // Two hands and a heart: customer satisfaction.
+  'nav-heart': 'M12 8.2c1.6-2.6 6-2 6 1.3 0 2.2-2.6 4-6 6.5-3.4-2.5-6-4.3-6-6.5 0-3.3 4.4-3.9 6-1.3ZM3.5 15.5l3 3.5h5M20.5 15.5l-3 3.5h-5',
+  // Bars and a trend line: service manager.
+  'nav-chart': 'M4 20h16M7 20v-5M11 20v-8M15 20v-6M19 20V9M5 11l4.5-4 3.5 2.5L19 4',
+  // Two sliders: system settings.
+  'nav-settings': 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4M13 7a2 2 0 1 0 4 0 2 2 0 0 0-4 0ZM7 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z',
 };
 
 export function AppIcon({ name, className = '' }: { name: IconName; className?: string }) {

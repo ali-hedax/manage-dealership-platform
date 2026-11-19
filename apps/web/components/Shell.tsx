@@ -58,30 +58,71 @@ export function Shell({ children }: { children: ReactNode }) {
     { href: '/emdad', label: 'پیگیری امداد ویژه', icon: 'truck', show: can('emdad.read') },
     { href: '/', label: 'داشبورد شمارشی', icon: 'chart', show: can('dashboard.read'), match: (p) => p === '/' },
   ];
+  // Side menu (owner, 2026-11-19 — final structure). Every link is an existing route with its
+  // existing permission; nothing duplicates the person's own workspace, and unfinished modules
+  // are shown only to the owner, marked «در دست توسعه». Only one group is open at a time.
   const planned = me.modules.filter((m) => m.status === 'planned');
-  const plannedLink = (key: ModuleKey, icon: IconName): NavItem => ({ href: `/modules/${key}`, label: MODULE_LABELS[key], icon, show: planned.some((m) => m.key === key), planned: true });
-  const byHref = (href: string) => [...primary, ...more].find((i) => i.href === href);
-  const groups: { key: string; label: string; icon: IconName; items: NavItem[] }[] = technicianOnly ? [] : [
-    { key: 'reception', label: 'پذیرش و ترخیص', icon: 'file', items: [byHref('/cases')!, { href: '/cases/new', label: 'پذیرش خودرو', icon: 'add', show: can('case.create'), match: (pp) => pp === '/cases/new' }, plannedLink('reception', 'file')] },
-    { key: 'warehouse', label: 'انبار قطعات یدکی', icon: 'box', items: [byHref('/parts')!, byHref('/stock')!, byHref('/emdad')!, byHref('/daily-reports')!, plannedLink('parts_inventory', 'box')] },
-    { key: 'planning', label: 'برنامه‌ریزی تعمیرات', icon: 'wrench', items: [byHref('/workshop')!, plannedLink('periodic_service', 'wrench'), plannedLink('workforce', 'team')] },
-    { key: 'crm', label: 'رضایت مشتری و CRM', icon: 'user', items: [{ href: '/reminders', label: 'تذکرها و پیگیری', icon: 'bell', show: true, match: (pp) => pp === '/reminders' }, plannedLink('customer_comms', 'send')] },
-    { key: 'accident', label: 'مدیریت تصادفات', icon: 'car', items: [byHref('/accidents')!] },
-    { key: 'management', label: 'مدیریت و گزارش‌ها', icon: 'chart', items: [byHref('/control-room')!, byHref('/reports')!, byHref('/')!, plannedLink('finance', 'money'), plannedLink('warranty', 'shield'), plannedLink('multi_dealership', 'grid'), plannedLink('integrations', 'layers')] },
+  const plannedLink = (key: ModuleKey, icon: IconName): NavItem => ({ href: `/modules/${key}`, label: MODULE_LABELS[key], icon, show: !!me.isOwner && planned.some((m) => m.key === key), planned: true });
+  const byHref = (href: string) => [...primary, ...more].find((i) => i.href === href)!;
+  const manager = can('report.manager');
+  const reports = byHref('/reports');
+  const groups: NavGroupDef[] = technicianOnly ? [] : [
+    { key: 'accident', label: 'مدیریت تصادفات', icon: 'nav-car', items: [
+      { href: '/accidents/expert', label: 'خودروهای تصادفی', icon: 'car', show: desks.some((w) => w.key === 'expert') && home !== '/accidents/expert', match: (p) => p === '/accidents/expert' },
+      { ...byHref('/cases'), label: 'پرونده و کارشناسی', match: (p) => p.startsWith('/cases') && p !== '/cases/new' },
+      { href: '/cases/new', label: 'پذیرش خودرو', icon: 'add', show: can('case.create'), match: (p) => p === '/cases/new' },
+      { ...byHref('/accidents'), label: 'همهٔ میزهای کار تصادفات' },
+      { ...reports, label: 'گزارش‌ها و فرم‌های تصادفات', show: reports.show && !manager },
+    ] },
+    { key: 'parts', label: 'انبار قطعات یدکی', icon: 'nav-package', items: [
+      { ...byHref('/parts'), label: 'درخواست و تأمین قطعات', show: byHref('/parts').show && home !== '/accidents/parts', match: (p) => p === '/parts' },
+      { ...byHref('/stock'), label: 'موجودی و رزرو' },
+      { ...byHref('/emdad'), label: 'امداد ویژه تصادفات' },
+      { ...byHref('/daily-reports'), label: 'گزارش‌های روزانهٔ انبار' },
+      plannedLink('parts_inventory', 'box'),
+    ] },
+    { key: 'workshop', label: 'مدیریت تعمیرگاه', icon: 'nav-calendar', items: [
+      { ...byHref('/workshop'), label: 'برنامه و پیگیری مراحل تعمیر' },
+      plannedLink('periodic_service', 'calendar'),
+      plannedLink('workforce', 'team'),
+    ] },
+    { key: 'reception', label: 'پذیرش و ترخیص', icon: 'nav-clipboard', items: [plannedLink('reception', 'file')] },
+    { key: 'crm', label: 'رضایت مشتری', icon: 'nav-heart', items: [plannedLink('customer_comms', 'send')] },
+    { key: 'manager', label: 'مدیر خدمات', icon: 'nav-chart', items: [
+      { ...byHref('/control-room'), label: 'داشبورد مدیر خدمات', show: manager && home !== '/accidents/manager' && home !== '/accidents/owner' },
+      { ...reports, label: 'گزارش‌های مدیریتی', show: reports.show && manager },
+      { ...byHref('/'), label: 'آمار پرونده‌ها' },
+      plannedLink('finance', 'money'),
+      plannedLink('warranty', 'shield'),
+      plannedLink('multi_dealership', 'grid'),
+      plannedLink('integrations', 'layers'),
+    ] },
+    { key: 'settings', label: 'تنظیمات سیستم', icon: 'nav-settings', items: [
+      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/workshop/settings', '/reference-data'].includes(p) },
+      { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team', show: me.isOwner || can('user.manage'), match: (p) => p === '/users' },
+    ] },
   ];
-  const groupedHrefs = new Set(groups.flatMap((g) => g.items.map((i) => i.href)));
-  const groupVisible = (g: (typeof groups)[number]) => g.items.some((i) => i.show);
+  const isActive = (i: NavItem) => (i.match ? i.match(pathname) : pathname === i.href);
+  const visibleGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).filter((g) => g.items.length);
+  const activeGroup = visibleGroups.find((g) => g.items.some(isActive))?.key ?? null;
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
+  // Navigating keeps the group of the current page open (and only that one).
+  useEffect(() => { setOpenGroup(activeGroup); }, [activeGroup]);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => { try { setCompact(localStorage.getItem('manage-nav-compact') === '1'); } catch { /* storage unavailable */ } }, []);
+  const toggleCompact = () => { const next = !compact; setCompact(next); try { localStorage.setItem('manage-nav-compact', next ? '1' : '0'); } catch { /* storage unavailable */ } };
+  const workspaceItem: NavItem = technicianOnly ? primary[0]! : { href: home, label: 'میزکار من', icon: 'nav-workspace', show: true, match: (p) => p === home || (p.startsWith('/accidents/') && !groups.some((g) => g.items.some((i) => i.show && i.href === p))) };
 
   const link = (i: NavItem) => {
     if (!i.show) return null;
-    const active = i.match ? i.match(pathname) : pathname === i.href;
-    return <Link key={i.href + i.label} href={i.href} className={i.planned ? 'planned' : undefined} aria-current={active ? 'page' : undefined}><AppIcon name={i.icon} /><span>{i.label}</span>{i.planned && <span className="tag-dev">در دست توسعه</span>}</Link>;
+    const active = isActive(i);
+    return <Link key={i.href + i.label} href={i.href} className={i.planned ? 'planned' : undefined} aria-current={active ? 'page' : undefined} title={compact ? i.label : undefined}><AppIcon name={i.icon} /><span>{i.label}</span>{i.planned && <span className="tag-dev">در دست توسعه</span>}</Link>;
   };
   async function logout() { await api('/auth/logout', { method: 'POST' }).catch(() => {}); router.replace('/login'); }
   const back = backTarget(pathname, home);
 
   return (
-    <div className="shell app-shell">
+    <div className={`shell app-shell${compact ? ' side-compact' : ''}`}>
       <a className="skip-link" href="#page-content">رفتن به محتوای صفحه</a>
       {open && mobile && <button type="button" className="nav-scrim" aria-label="بستن منو" onClick={() => { setOpen(false); menu.current?.focus(); }} />}
       <aside className={`sidebar app-side${open ? ' open' : ''}`} aria-label="منوی اصلی" inert={mobile && !open}>
@@ -91,19 +132,15 @@ export function Shell({ children }: { children: ReactNode }) {
           <span className="brand-by">by <b>HEDAX</b></span>
         </Link>
         <nav className="side-nav" id="main-navigation" aria-label="بخش‌های منیج">
-          {primary.filter((i) => !groupedHrefs.has(i.href) && i.href !== '/settings').map(link)}
-          {groups.filter(groupVisible).map((g) => <NavGroup key={g.key} id={g.key} label={g.label} icon={g.icon}>{g.items.filter(Boolean).map(link)}</NavGroup>)}
-          {primary.filter((i) => i.href === '/settings').map(link)}
+          {technicianOnly ? primary.map(link) : link(workspaceItem)}
+          {visibleGroups.map((g) => (
+            <NavGroup key={g.key} id={g.key} label={g.label} icon={g.icon} open={!compact && openGroup === g.key} active={activeGroup === g.key}
+              onToggle={() => { if (compact) { setCompact(false); setOpenGroup(g.key); } else setOpenGroup(openGroup === g.key ? null : g.key); }}>
+              {g.items.map(link)}
+            </NavGroup>
+          ))}
         </nav>
-        {technicianOnly && (more.some((i) => i.show) || planned.length > 0) && (
-          <details className="side-more" open={more.some((i) => i.show && (i.match ? i.match(pathname) : pathname === i.href))}>
-            <summary><AppIcon name="list" /><span>ابزارهای بیشتر</span></summary>
-            <nav className="side-nav sub" aria-label="ابزارهای بیشتر">
-              {more.map(link)}
-              {planned.map((m) => <Link key={m.key} href={`/modules/${m.key}`} className="planned" aria-current={pathname === `/modules/${m.key}` ? 'page' : undefined}><AppIcon name="box" /><span>{MODULE_LABELS[m.key]}</span><span className="tag-dev">در دست توسعه</span></Link>)}
-            </nav>
-          </details>
-        )}
+        {!technicianOnly && <button type="button" className="nav-compact" aria-pressed={compact} onClick={toggleCompact} title={compact ? 'باز کردن منو' : 'جمع کردن منو'}><AppIcon name={compact ? 'arrow-left' : 'arrow-right'} /><span>{compact ? 'باز کردن منو' : 'جمع کردن منو'}</span></button>}
         <div className="side-foot">{me.tenant.name}</div>
       </aside>
       <div className="main">
@@ -144,16 +181,16 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 /** Every page has a way back (spec §12): to the case for its edit page, otherwise to the own desk. Pages with their own back link and the desks themselves get none. */
-/** A collapsible module heading of the side menu; open by default, the choice remembered per browser. */
-function NavGroup({ id, label, icon, children }: { id: string; label: string; icon: IconName; children: ReactNode }) {
-  const key = `manage-nav-${id}`;
-  const [open, setOpen] = useState(true);
-  useEffect(() => { try { if (localStorage.getItem(key) === 'closed') setOpen(false); } catch { /* storage unavailable */ } }, [key]);
-  const toggle = () => { const next = !open; setOpen(next); try { localStorage.setItem(key, next ? 'open' : 'closed'); } catch { /* storage unavailable */ } };
+interface NavGroupDef { key: string; label: string; icon: IconName; items: NavItem[] }
+
+/** A module heading of the side menu (accordion: the parent keeps one group open). */
+function NavGroup({ id, label, icon, open, active, onToggle, children }: { id: string; label: string; icon: IconName; open: boolean; active: boolean; onToggle: () => void; children: ReactNode }) {
   return (
-    <div className={`nav-group${open ? ' open' : ''}`}>
-      <button type="button" className="nav-group-head" aria-expanded={open} onClick={toggle}><AppIcon name={icon} /><span>{label}</span><AppIcon name="chevron-down" className="chev" /></button>
-      {open && <div className="nav-group-items">{children}</div>}
+    <div className={`nav-group${open ? ' open' : ''}${active ? ' active' : ''}`}>
+      <button type="button" className="nav-group-head" aria-expanded={open} aria-controls={`nav-${id}`} onClick={onToggle} title={label}>
+        <AppIcon name={icon} /><span>{label}</span><AppIcon name="chevron-down" className="chev" />
+      </button>
+      {open && <div className="nav-group-items" id={`nav-${id}`} role="group" aria-label={label}>{children}</div>}
     </div>
   );
 }

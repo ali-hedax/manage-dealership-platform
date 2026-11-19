@@ -76,7 +76,7 @@ it('uses the effective calendar for a first plan while preserving already planne
  const after=(await c.get(`/cases/${caseId}`)).body.tasks.find((t:{id:string})=>t.id===taskId);expect(after.plannedEndAt).toBe(old.plannedEndAt);expect(after.baselineEndAt).toBe(old.baselineEndAt);
 });
 it('parts proposes, coordinator records external authorization, only matching approved quote permits purchase',async()=>{
- const part=await c.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون بازار',quantity:1,source:'external'});expect(part.status).toBe(201);partId=part.body.id;
+ const part=await c.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون بازار',partNumber:'00997010',quantity:1,source:'external'});expect(part.status).toBe(201);partId=part.body.id;
  expect((await c.post(`/parts/${partId}/actions`,{action:'order',expectedVersion:1,source:'external',unitPriceRial:1000})).status).toBe(403);
  const quoteBody={expectedVersion:1,unitPriceRial:1000,supplier:'فروشنده آزمون',validUntil:new Date(Date.now()+86400000).toISOString()};
  expect((await p.post(`/workshop/parts/${partId}/quotes`,quoteBody)).status).toBe(201);

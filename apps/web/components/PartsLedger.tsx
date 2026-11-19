@@ -637,10 +637,12 @@ function AddPart({ caseId, onDone }: { caseId: string; onDone: () => Promise<voi
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
   async function addOne(e: React.FormEvent) {
     e.preventDefault();
+    // Both the part name and its technical code are required (owner, 2026-11-19); the code stays a string.
+    if (!desc.trim() || !code.trim()) { setErr(!desc.trim() ? 'نام قطعه را وارد کنید.' : 'کد فنی قطعه را وارد کنید.'); return; }
     setBusy(true);
     setErr('');
     try {
-      await api(`/cases/${caseId}/parts`, { body: { description: desc.trim(), partNumber: code.trim() ? toLatinDigits(code.trim()) : null, quantity: Math.max(1, parseAmount(qty) || 1), source: 'company' } });
+      await api(`/cases/${caseId}/parts`, { body: { description: desc.trim(), partNumber: toLatinDigits(code.trim()), quantity: Math.max(1, parseAmount(qty) || 1), source: 'company' } });
       toast('قطعه به فهرست اضافه شد');
       setDesc('');
       setCode('');
@@ -695,9 +697,10 @@ function AddPart({ caseId, onDone }: { caseId: string; onDone: () => Promise<voi
         <form className="m-form" onSubmit={addOne} style={{ flexBasis: '100%' }} aria-label="افزودن قطعه">
           {can('reference.parts.read') && <details className="compact-disclosure" style={{ flexBasis: '100%' }}><summary>انتخاب از کاتالوگ قطعات</summary><ReferenceLookup kind="parts" onSelect={r => { setCode(r.data.partNumber || ''); setDesc(r.data.description || ''); toast('کد و نام قطعه انتخاب شد؛ تعداد را مشخص کنید'); }} /></details>}
           <label className="m-field">نام قطعه *<input required value={desc} onChange={(e) => setDesc(e.target.value)} /></label>
-          <label className="m-field">کد فنی<input dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} /></label>
+          <label className="m-field">کد فنی قطعه *<input required dir="ltr" maxLength={80} value={code} onChange={(e) => setCode(e.target.value)} /></label>
           <label className="m-field" style={{ flex: '0 1 90px' }}>تعداد<input inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} /></label>
-          <button type="submit" className="m-btn-s" disabled={busy || !desc.trim()}>افزودن</button>
+          <button type="submit" className="m-btn-s" disabled={busy || !desc.trim() || !code.trim()} title={!desc.trim() || !code.trim() ? 'نام قطعه و کد فنی قطعه هر دو الزامی‌اند' : undefined}>افزودن</button>
+          {(!desc.trim() || !code.trim()) && <p className="small muted" style={{ flexBasis: '100%', margin: 0 }}>نام قطعه و کد فنی قطعه هر دو الزامی‌اند.</p>}
           {err && <p className="m-error" role="alert" style={{ flexBasis: '100%', margin: 0 }}>{err}</p>}
         </form>
       )}

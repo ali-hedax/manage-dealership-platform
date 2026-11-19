@@ -420,7 +420,7 @@ export type RecordAuthorizationInput = z.infer<typeof recordAuthorizationSchema>
 
 export const createPartSchema = z.object({
   description: z.string().trim().min(1).max(300),
-  partNumber: optionalText(64),
+  partNumber: optionalText(80),
   quantity: z.number().int().min(1).max(999).default(1),
   source: z.enum(PART_SOURCES),
   // Price accepted by the payer (assessment line); purchases above it need approval.
@@ -428,6 +428,16 @@ export const createPartSchema = z.object({
   notes: optionalText(1000),
 });
 export type CreatePartInput = z.infer<typeof createPartSchema>;
+
+/**
+ * Manual «افزودن قطعه» (owner, 2026-11-19): the part name and its technical code are both required.
+ * The code is a string (leading zeros kept, no fixed length, never truncated). Excel imports, assessment
+ * dispatch and catalog picks keep their own validated rules.
+ */
+export const manualPartSchema = createPartSchema.extend({
+  description: z.string().trim().min(1, 'نام قطعه را وارد کنید').max(300),
+  partNumber: z.string().trim().min(1, 'کد فنی قطعه را وارد کنید').max(80, 'کد فنی بیش از ۸۰ نویسه است'),
+});
 
 export const partsFromAssessmentSchema = z.object({
   source: z.enum(PART_SOURCES).optional(),

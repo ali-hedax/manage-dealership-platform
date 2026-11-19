@@ -133,7 +133,7 @@ export default function CaseDetailPage() {
           <div><dt><AppIcon name="idcard" />VIN</dt><dd><bdi dir="ltr">{v.vin ?? '—'}</bdi></dd></div>
           <div><dt><AppIcon name="receipt" />شمارهٔ پذیرش</dt><dd><bdi>{kase.admissionNo ? toPersianDigits(kase.admissionNo) : '—'}</bdi></dd></div>
         </dl>
-        <VehicleTechDetails brand={v.brand} model={v.model} trim={v.trim} vin={v.vin} />
+        <VehicleTechDetails brand={v.brand} model={v.model} trim={v.trim} vin={v.vin} isacoCode={v.isacoCode} isacoConflict={v.isacoCodeConflict} />
       </section>
       <nav className="side-actions no-print" aria-label="اقدامات پرونده">
         {can('assessment.manage') && active && workflow?.current === 'assessment' && <a href="#case-assessment" className={`${daily} primary`} onClick={(e) => { e.preventDefault(); goTab('assessment', 'case-assessment'); }}><AppIcon name="clipboard" />شروع کارشناسی</a>}
