@@ -176,13 +176,13 @@ export class ReferenceDataService {
     vehicleUse:typeof data.vehicleUse==='string'?data.vehicleUse:'',
     vehicleMatch:'unknown' as const};
   }).filter(row=>row.name&&row.partNumber);
-  const ranked=rankAssessmentCandidates(query,candidates,100);
+  const ranked=rankAssessmentCandidates(query,candidates,250);
   const modelKey=normalizeAssessmentSearch(context.model??'');
   const useById=new Map(candidates.map(row=>[row.id,row.vehicleUse]));
   const ordered=ranked.map(item=>{
    const vehicleUse=useById.get(item.id)??'';
    return {...item,vehicleUse,vehicleUseHint:!!modelKey&&normalizeAssessmentSearch(vehicleUse).includes(modelKey)};
-  }).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score).slice(0,20);
+  }).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score);
   return {caseId,vehicle:{brand:context.brand,model:context.model,trim:context.trim},
    results:ordered,limited:rows.length===250,fitmentVerified:false};
  }
