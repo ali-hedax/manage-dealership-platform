@@ -10,5 +10,9 @@ test('phone width: login, dashboard and case list fit without horizontal scrolli
     expect(overflow, `horizontal overflow on ${path}`).toBeLessThanOrEqual(1);
   }
   await page.getByRole('button', { name: 'منو' }).click();
-  await expect(page.getByRole('navigation', { name: 'بخش‌های منیج' }).getByRole('link', { name: 'پرونده‌ها', exact: true })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'بخش‌های منیج' });
+  await expect(nav.getByRole('link', { name: 'میزکار من', exact: true })).toBeVisible();
+  const accident = nav.getByRole('button', { name: 'مدیریت تصادفات' });
+  if ((await accident.getAttribute('aria-expanded')) !== 'true') await accident.click();
+  await expect(nav.getByRole('link', { name: 'پرونده و کارشناسی', exact: true })).toBeVisible();
 });

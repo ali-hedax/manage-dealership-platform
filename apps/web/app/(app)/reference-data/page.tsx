@@ -1,7 +1,7 @@
 'use client';
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import useSWR from 'swr';
-import {REFERENCE_FIELDS,REFERENCE_OUTCOME_LABELS,type ReferenceKind,type ReferenceField,type ReferenceFileInput,type ReferenceInspection,type ReferenceImport,type ReferenceOutcome} from '@manage/shared';
+import {isacoHeaderIndex,REFERENCE_FIELDS,REFERENCE_OUTCOME_LABELS,type ReferenceKind,type ReferenceField,type ReferenceFileInput,type ReferenceInspection,type ReferenceImport,type ReferenceOutcome} from '@manage/shared';
 import {api,errorMessage,fetcher} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 import {faNum,formatJalali} from '@/lib/format';
@@ -17,6 +17,8 @@ export default function ReferenceDataPage(){
  const manage=can(`reference.${kind}.manage`),read=can(`reference.${kind}.read`);
  const {data:history,mutate}=useSWR<{count:number;imports:{id:string;fileName:string;status:string;createdAt:string}[]}>(manage?`/reference-data/${kind}`:null,fetcher);
  const sheet=inspection?.sheets[sheetIndex],headers=sheet?.rows.find(r=>r.rowNo===headerRow)?.cells||[];
+ // «کد محصول ایساکو»: suggest the column whose header names it; the operator can change it before preview.
+ useEffect(()=>{if(kind!=='customers'||mapping.isacoCode!==undefined)return;const i=isacoHeaderIndex(headers);if(i>=0)setMapping(m=>m.isacoCode===undefined?{...m,isacoCode:i}:m);},[kind,headers,mapping.isacoCode]);
  const ready=result?result.counts.new+result.counts.update:0;
  const allRows=result?.rows.filter(r=>filter==='all'||r.outcome===filter)||[];
  function reset(){setFile(null);setInspection(null);setMapping({});setResult(null);setError('');setSheetIndex(0);setHeaderRow(1);setPage(0);setOffset(0);}

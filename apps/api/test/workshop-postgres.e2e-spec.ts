@@ -23,7 +23,7 @@ suite('repair workflow on real PostgreSQL connections',()=>{
   expect(rs.map(r=>r.status).sort()).toEqual([200,422]);expect(rs.find(r=>r.status===422)?.body.code).toBe('DEPENDENCY_CYCLE');
  });
  it('accepts only one competing quote for the same part version',async()=>{
-  const need=await c.post(`/cases/${caseId}/parts`,{description:'نیاز آزمون هم‌زمانی',source:'external'});expect(need.status).toBe(201);
+  const need=await c.post(`/cases/${caseId}/parts`,{description:'نیاز آزمون هم‌زمانی',partNumber:'00997009',source:'external'});expect(need.status).toBe(201);
   const body={expectedVersion:1,unitPriceRial:1000,supplier:'فروشنده آزمون',validUntil:new Date(Date.now()+86400000).toISOString()};
   const rs=await Promise.all([p.post(`/workshop/parts/${need.body.id}/quotes`,body),p.post(`/workshop/parts/${need.body.id}/quotes`,body)]);
   expect(rs.map(r=>r.status).sort()).toEqual([201,409]);

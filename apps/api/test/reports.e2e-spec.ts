@@ -79,7 +79,7 @@ describe('reports: consistent figures', () => {
       expect((await supervisor.post(`/cases/${c.id}/blockers`, { reason, description: 'آزمون' })).status).toBe(201);
     }
     for (const d of ['چراغ جلو', 'سپر جلو']) {
-      expect((await expert.post(`/cases/${c.id}/parts`, { description: d, source: 'stock', quantity: 2 })).status).toBe(201);
+      expect((await expert.post(`/cases/${c.id}/parts`, { description: d, partNumber: `0099${8000 + d.length}${Math.floor(Math.random() * 9000 + 1000)}`, source: 'stock', quantity: 2 })).status).toBe(201);
     }
     await newCase({ forecastDeliveryAt: daysAgo(2) }); // late only against the forecast
     await newCase(); // no due date at all

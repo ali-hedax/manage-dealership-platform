@@ -15,6 +15,7 @@ import {
   normalizePersian,
   normalizePhone,
   normalizeVin,
+  toLatinDigits,
   searchKey,
   type Blocker,
   type CaseDetail,
@@ -51,6 +52,7 @@ import {
   tasks,
   users,
   vehicles,
+  referenceEntries,
 } from '../db/schema';
 import { buildSearchText, computeMissingFields, formatCaseNumber } from './case-rules';
 import { recordInitialResponsibility, recordResponsibilityChange } from './responsibility';
@@ -650,6 +652,7 @@ export class CasesService {
 
     const canSeePii = actor.user.permissions.has('customer.pii.read');
     const { c, v, cu } = r;
+    const isaco = await this.isacoCodeOf(tenantId, v.vin, v.chassisRef);
     return {
       ...this.baseItem(c, v, r.responsibleName, r.openBlockers, r.progress),
       version: c.version,
@@ -671,6 +674,8 @@ export class CasesService {
         vin: v.vin,
         color: v.color,
         chassisRef: v.chassisRef,
+        isacoCode: isaco.code,
+        isacoCodeConflict: isaco.conflict,
       },
       admissionNo: c.admissionNo,
       repairPlan:c.repairPlan,
@@ -690,6 +695,26 @@ export class CasesService {
       tasks: await this.tasksOf(tenantId, id),
       blockers: await this.blockersOf(tenantId, id),
     };
+  }
+
+  /**
+   * «کد محصول ایساکو» from the dealership's customer-history records with exactly this VIN or
+   * chassis (owner, 2026-11-19). Shown only when every matching record that has a code agrees;
+   * blank cells never count, and nothing is guessed from model or plate.
+   */
+  async isacoCodeOf(tenantId: string, vin: string | null, chassis: string | null): Promise<{ code: string | null; conflict: boolean }> {
+    const keys = [vin ? normalizeVin(vin) : '', chassis ? toLatinDigits(chassis).replace(/\s+/g, '').toUpperCase() : ''].filter((k) => k.length >= 6);
+    if (!keys.length) return { code: null, conflict: false };
+    const list = sql.join(keys.map((k) => sql`${k}`), sql`, `);
+    const rows = await this.db
+      .select({ code: sql<string | null>`${referenceEntries.data}->>'isacoCode'` })
+      .from(referenceEntries)
+      .where(and(eq(referenceEntries.tenantId, tenantId), eq(referenceEntries.kind, 'customers'),
+        sql`(upper(coalesce(${referenceEntries.data}->>'vin','')) in (${list}) or upper(coalesce(${referenceEntries.data}->>'chassis','')) in (${list}))`,
+        sql`coalesce(${referenceEntries.data}->>'isacoCode','') <> ''`))
+      .limit(50);
+    const codes = [...new Set(rows.map((r) => r.code!.trim()).filter(Boolean))];
+    return codes.length === 1 ? { code: codes[0]!, conflict: false } : { code: null, conflict: codes.length > 1 };
   }
 
   async tasksOf(tenantId: string, caseId: string): Promise<Task[]> {

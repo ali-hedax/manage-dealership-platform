@@ -13,7 +13,8 @@ async function as(page: Page, user: string) {
 
 test('service manager: KPI opens its list, filters survive opening a case, charts have tables', async ({ page }) => {
   await as(page, 'manager');
-  await page.getByRole('link', { name: 'گزارش‌ها' }).first().click();
+  await page.getByRole('navigation', { name: 'بخش‌های منیج' }).getByRole('button', { name: 'مدیر خدمات' }).click();
+  await page.getByRole('link', { name: 'گزارش‌های مدیریتی' }).click();
   await expect(page.getByRole('heading', { name: 'گزارش‌ها — مدیر خدمات' })).toBeVisible();
   await expect(page.getByText('داده آزمایشی').first()).toBeVisible();
 

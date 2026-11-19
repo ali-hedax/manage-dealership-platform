@@ -81,7 +81,7 @@ test('supervisor: create a golden-card case, run a repair activity through a blo
   await expect(page.locator('.timeline')).toContainText('کارشناس تصادفات نمونهٔ دوم');
 
   // Search by plate in loose form finds the case.
-  await page.getByRole('link', { name: 'پرونده‌ها', exact: true }).click();
+  await page.getByRole('navigation', { name: 'بخش‌های منیج' }).getByRole('link', { name: 'پرونده و کارشناسی', exact: true }).click();
   await page.getByLabel('جست‌وجوی پرونده').fill('68ط421');
   await page.waitForURL(/q=/);
   await expect(page.locator('tbody tr')).toHaveCount(1);
@@ -127,10 +127,10 @@ test('parts clerk: read-only view with masked customer phone and no create actio
 
 test('planned modules are visible as roadmap and expose no actions', async ({ page }) => {
   await login(page, 'manager');
-  // Six-module menu: the planned module sits under its module heading, marked «در دست توسعه».
+  // Unfinished modules are not in ordinary staff menus (owner, 2026-11-19); the page itself stays read-only.
   const nav = page.getByRole('navigation', { name: 'بخش‌های منیج' });
-  await expect(nav.getByRole('button', { name: 'انبار قطعات یدکی' })).toHaveAttribute('aria-expanded', 'true');
-  await nav.getByRole('link', { name: /انبار، قطعات و تأمین‌کنندگان/ }).click();
+  await expect(nav.getByText('در دست توسعه')).toHaveCount(0);
+  await page.goto('/modules/parts_inventory');
   await expect(page.getByText('این بخش در دست توسعه است و هنوز قابل استفاده نیست.')).toBeVisible();
   await expect(page.locator('main').getByRole('button')).toHaveCount(0);
 });

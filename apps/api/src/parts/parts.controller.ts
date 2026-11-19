@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import {
-  createPartSchema,
+  manualPartSchema,
   partPickupSchema,
   partsWorkbenchActionSchema,
   type PartPickup,
@@ -59,7 +59,7 @@ export class PartsController {
 
   @Post('cases/:id/parts')
   @RequirePermissions('part.request')
-  create(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(createPartSchema)) body: CreatePartInput) {
+  create(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(manualPartSchema)) body: CreatePartInput) {
     return this.parts.create(actor, id, body);
   }
 

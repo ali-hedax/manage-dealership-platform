@@ -171,7 +171,7 @@ describe('acceptance 2: golden card, waiting for a company part', () => {
 
   it('a wrong part is rejected at receipt and re-ordered', async () => {
     const c = await newCase({ coverageType: 'golden_card', goldenCardFileNo: 'GC-TEST-10', officialDeadlineAt: daysAhead(5) });
-    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'چراغ', source: 'company' })).body;
+    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'چراغ', partNumber: '00997005', source: 'company' })).body;
     p = (await partAct(p, 'order', { unitPriceRial: 5_000_000, etaAt: daysAhead(1) })).body;
     const noNote = await partAct(p, 'receive', { inspection: 'wrong' });
     expect(noNote.status).toBe(400);
@@ -445,8 +445,8 @@ describe('Excel import and permissions', () => {
 
   it('enforces part and finance permissions on the server', async () => {
     const c = await newCase({ coverageType: 'personal' });
-    expect((await cashier.post(`/cases/${c.id}/parts`, { description: 'x', source: 'external' })).status).toBe(403);
-    const p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'x', source: 'external' })).body;
+    expect((await cashier.post(`/cases/${c.id}/parts`, { description: 'x', partNumber: '00997006', source: 'external' })).status).toBe(403);
+    const p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'x', partNumber: '00997007', source: 'external' })).body;
     expect((await partAct(p, 'cancel', { note: 'x' }, expert)).status).toBe(403);
     expect((await parts.post(`/cases/${c.id}/finance/approvals`, { kind: 'advance', amountRial: 1, reason: 'x' })).status).toBe(403);
     expect((await supervisor.get(`/cases/${c.id}/finance`)).status).toBe(200);
@@ -454,7 +454,7 @@ describe('Excel import and permissions', () => {
 
   it('dashboard counts match the new case-list filters', async () => {
     const c = await newCase({ coverageType: 'golden_card', goldenCardFileNo: 'GC-TEST-12', officialDeadlineAt: daysAhead(9) });
-    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'رادیاتور', source: 'company' })).body;
+    let p: Part = (await expert.post(`/cases/${c.id}/parts`, { description: 'رادیاتور', partNumber: '00997008', source: 'company' })).body;
     p = (await partAct(p, 'order', { unitPriceRial: 1, etaAt: daysAgo(1) })).body;
     expect(p.overdue).toBe(true);
     const d = (await manager.get('/dashboard')).body;

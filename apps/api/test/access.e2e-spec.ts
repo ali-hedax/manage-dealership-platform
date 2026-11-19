@@ -12,11 +12,11 @@ it('preserves default roles and restricts access administration to the actual ow
  expect((await qc.get('/access')).status).toBe(403);expect((await admin.get('/access')).status).toBe(403);expect((await admin.get('/access/presets')).status).toBe(200);
  expect((await qc.get('/auth/me')).body.permissions.sort()).toEqual([...permissionsFor(['technician'])].sort());
  const me=(await owner.get('/auth/me')).body;expect(me.isOwner).toBe(true);expect(me.permissions.sort()).toEqual([...PERMISSIONS].sort());
- expect((await qc.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون',source:'company'})).status).toBe(403);
+ expect((await qc.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون',partNumber:'00997000',source:'company'})).status).toBe(403);
 });
 it('applies per-user additions/removals to existing sessions, including actual mutations and PII masking',async()=>{
  expect((await update({allow:['case.read','part.request','reference.parts.read','customer.pii.read'],deny:['task.execute']})).status).toBe(200);
- expect((await qc.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون سفارشی',source:'company'})).status).toBe(201);
+ expect((await qc.post(`/cases/${caseId}/parts`,{description:'قطعه آزمون سفارشی',partNumber:'00997001',source:'company'})).status).toBe(201);
  expect((await qc.get(`/cases/${caseId}`)).body.customer.phone).toBe('09000000001');
  expect((await qc.post('/reference-data/parts/search',{query:'TEST-PART'})).status).toBe(201);
  expect((await qc.get('/auth/me')).body.permissions).not.toContain('task.execute');

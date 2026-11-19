@@ -12,7 +12,7 @@ test('imports a parts catalog, then selects a technical code while adding a case
  const cases=await page.request.get('/api/v1/cases');const first=(await cases.json()).items[0];await page.goto(`/cases/${first.id}`);await openCaseSections(page,'parts');
  await page.getByRole('button',{name:'افزودن قطعه',exact:true}).click();
  await page.getByRole('form',{name:'افزودن قطعه',exact:true}).getByText('انتخاب از کاتالوگ قطعات',{exact:true}).click();await page.getByLabel('کد فنی یا نام قطعه',{exact:true}).fill('00042');await page.getByRole('button',{name:'جست‌وجو در اطلاعات پایه',exact:true}).click();await page.getByRole('button',{name:'انتخاب این قطعه',exact:true}).click();
- await expect(page.getByLabel('نام قطعه *',{exact:true})).toHaveValue('چراغ آزمون مرجع');await expect(page.getByLabel('کد فنی',{exact:true})).toHaveValue('00042');
+ await expect(page.getByLabel('نام قطعه *',{exact:true})).toHaveValue('چراغ آزمون مرجع');await expect(page.getByLabel('کد فنی قطعه *',{exact:true})).toHaveValue('00042');
 });
 
 test('historical customer lookup fills only empty fields and works on a phone width',async({page})=>{
