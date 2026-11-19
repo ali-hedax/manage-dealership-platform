@@ -67,6 +67,35 @@ it('searches real imported catalog by Persian phrase, code and case model, then 
   expect(persisted.body.at(-1).items.filter((i: {partNumber:string}) => i.partNumber.startsWith('00123'))).toHaveLength(2);
 });
 
+it('returns more than 20 matching smart assessment suggestions', async () => {
+  const rows = Array.from({length: 25}, (_, index) => [
+    String(98760000 + index),
+    `سپر آزمون سقف بیست ${index + 1}`,
+    'ری را',
+  ]);
+  const workbook = Buffer.from(writeSheet('قطعات', [
+    ['کد فنی', 'نام قطعه', 'مصرف خودرو'],
+    ...rows,
+  ])).toString('base64');
+  const preview = await admin.post('/reference-imports', {
+    kind: 'parts', fileName: 'assessment-over-20.xlsx', fileBase64: workbook,
+    sheetIndex: 0, headerRow: 1,
+    mapping: { partNumber: 0, description: 1, vehicleUse: 2 },
+  });
+  expect(preview.status).toBe(201);
+  expect((await admin.post(`/reference-imports/${preview.body.id}/apply`)).status).toBe(201);
+  const kase = await admin.post('/cases', {
+    admittedAt: new Date(Date.now() - 86_400_000).toISOString(),
+    vehicle: { model: 'ری را' }, coverageType: 'insurance',
+  });
+  expect(kase.status).toBe(201);
+  const result = await expert.post(`/cases/${kase.body.id}/assessment-catalog/search`, {query: 'سپر آزمون سقف بیست'});
+  expect(result.status).toBe(201);
+  const matching = result.body.results.filter((item: {partNumber: string}) =>
+    /^987600[0-2][0-9]$/.test(item.partNumber));
+  expect(matching).toHaveLength(25);
+});
+
 it('rejects readers without assessment permission and unknown cases without disclosing catalog data', async () => {
   const denied = await clerk.post('/cases/00000000-0000-4000-8000-000000000001/assessment-catalog/search', {query:'سپر'});
   expect(denied.status).toBe(403);
