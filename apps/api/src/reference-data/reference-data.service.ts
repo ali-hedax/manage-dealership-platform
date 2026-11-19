@@ -206,7 +206,7 @@ export class ReferenceDataService {
     vehicleMatch:(fitmentKey(vehicleUse)===fit.family||isCommonFitment(vehicleUse)?'verified':'incompatible') as 'verified'|'incompatible'};
   }).filter(row=>row.name&&row.partNumber&&row.vehicleMatch==='verified');
   const useById=new Map(candidates.map(row=>[row.id,row.vehicleUse]));
-  const results=rankAssessmentCandidates(query,candidates,20).map(item=>{
+  const results=rankAssessmentCandidates(query,candidates,100).map(item=>{
    const vehicleUse=useById.get(item.id)??'';
    return {...item,vehicleUse,common:isCommonFitment(vehicleUse),reference:assessmentReference(item.partNumber)};
   });
