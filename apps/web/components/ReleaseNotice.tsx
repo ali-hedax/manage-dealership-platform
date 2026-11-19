@@ -16,7 +16,7 @@ import { formatJalali } from '@/lib/format';
 const KEY = '/releases/current';
 const useCurrent = () => useSWR<VersionInfo>(KEY, fetcher, { refreshInterval: 5 * 60_000, revalidateOnFocus: true });
 
-const label = (v: VersionInfo | undefined) => (v ? v.version ?? `${v.line}.x` : '…');
+const label = (v: VersionInfo | undefined) => (v ? v.version ?? `${v.line}.x${v.commit ? ` · build ${v.commit.slice(0, 7)}` : ''}` : '…');
 
 export function VersionChip() {
   const { data } = useCurrent();
