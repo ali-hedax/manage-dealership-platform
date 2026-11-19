@@ -38,7 +38,7 @@ export async function caseAndBayRecipients(tx: DbOrTx, tenantId: string, caseId:
   const open = await tx
     .select({ assigned: tasks.assignedUserId })
     .from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, caseId), notInArray(tasks.status, ['approved'])));
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, caseId), notInArray(tasks.status, ['approved', 'cancelled'])));
   return [kase?.responsible, ...open.map((t) => t.assigned)].filter((x): x is string => !!x);
 }
 

@@ -108,6 +108,8 @@ export interface Task {
   actualEndAt: string | null;
   approvedAt: string | null;
   approvedBy: UserRef | null;
+  /** Set when the stage was removed from the active plan («لغو مرحله»). */
+  cancellation?: { at: string; by: UserRef | null; reason: import('./enums').TaskCancelReason; note: string | null; fromStatus: TaskStatus } | null;
   dependsOn: string[];
   /** QC round whose failed item opened this corrective activity. */
   qcInspectionId: string | null;

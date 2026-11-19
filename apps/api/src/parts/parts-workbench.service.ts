@@ -4,6 +4,7 @@ import {
   manageSupplyAdvice, handedOverQuantity, emdadNoKey, parseJalali, parseBasePartNumber, parseStockCode, workingMinutesBetween,
   type PartPickup, type PartsWorkbench, type PartsWorkbenchAction, type PartsWorkbenchLine,
   workingDayMinutes,
+  shortVehicleName,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -131,7 +132,7 @@ export class PartsWorkbenchService {
       // Multiple different prices are ambiguous: never silently choose a company price.
       const inferredPrice = prices.length === 1 && Number.isSafeInteger(prices[0]) ? prices[0]! : null;
       const card = cards.get(c.id) ?? {
-        card: { id: c.id, caseNumber: c.caseNumber, model: [v.brand, v.model, v.trim].filter(Boolean).join(' '),
+        card: { id: c.id, caseNumber: c.caseNumber, model: shortVehicleName(v.brand, v.model),
           plate: v.plate, color: v.color, coverage: c.coverageType as PartsWorkbench['cards'][number]['coverage'],
           admissionNo: c.admissionNo, vin: v.vin, chassisRef: v.chassisRef,
           emdadRefs: [], waiting: null, items: [] },

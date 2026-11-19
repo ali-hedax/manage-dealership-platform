@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 import { addWorkingMinutes,workingDayMinutes,nextWorkingInstant } from '@manage/shared';
 import { calendarAt } from '../workshop/work-calendar';
-import { stepDependencies, type CreateTaskInput, type RepairPlanStepsInput, type Task, type TaskActionInput, type TaskStatus, type UpdateTaskInput } from '@manage/shared';
+import { stepDependencies, TASK_CANCEL_REASON_LABELS, type CancelTaskInput, type ReactivateTaskInput, type CreateTaskInput, type RepairPlanStepsInput, type Task, type TaskActionInput, type TaskStatus, type UpdateTaskInput } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { assertNotFuture, taskStartBlockers, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
@@ -10,7 +10,7 @@ import { badRequest, forbidden, notFound, versionConflict } from '../common/erro
 import { requireSupportReason } from '../auth/support-reason';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { departments, externalWork, taskDependencies, tasks, technicianWages, workshopStations, users } from '../db/schema';
+import { departments, externalWork, partRequests, taskDependencies, tasks, technicianWages, workshopStations, users } from '../db/schema';
 
 type TaskRow = typeof tasks.$inferSelect;
 
@@ -147,7 +147,7 @@ export class TasksService {
   /** Unfinished tasks of a case that nothing else waits for: where a new plan step naturally continues. */
   private async openTail(tx: DbOrTx, tenantId: string, caseId: string): Promise<string[]> {
     const rows = await tx.select({ id: tasks.id, status: tasks.status }).from(tasks).where(and(eq(tasks.caseId, caseId), eq(tasks.tenantId, tenantId)));
-    const open = rows.filter((r) => !FINISHED.includes(r.status as TaskStatus) ).map((r) => r.id);
+    const open = rows.filter((r) => !FINISHED.includes(r.status as TaskStatus) && r.status !== 'cancelled').map((r) => r.id);
     if (!open.length) return [];
     const deps = await tx.select().from(taskDependencies).where(inArray(taskDependencies.dependsOnTaskId, open));
     const waitedOn = new Set(deps.filter((d) => open.includes(d.taskId)).map((d) => d.dependsOnTaskId));
@@ -160,6 +160,7 @@ export class TasksService {
     await this.db.transaction(async (tx) => {
       const task = await this.loadForWrite(tx, tenantId, taskId, input.expectedVersion);
       caseId = task.caseId;
+      if (task.status === 'cancelled') throw badRequest('STAGE_CANCELLED', 'این مرحله لغو شده است؛ برای ویرایش ابتدا «فعال‌سازی مجدد» کنید');
       // Any change of a recorded job by a system administrator is a correction with a reason.
       requireSupportReason(actor, input.scheduleReason);
       const kase = await this.cases.loadForWrite(tx, tenantId, task.caseId);
@@ -251,7 +252,7 @@ export class TasksService {
     if (input.action === 'start' && status === 'pending') {
       // Every missing prerequisite is explained with a stable code, the next step and who can act.
       const w = kase.workflow?.guided ? await this.cases.workflow(actor, kase.id, tx) : null;
-      const plan = w ? await tx.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, kase.id))) : [];
+      const plan = w ? await tx.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, kase.id), ne(tasks.status, 'cancelled'))) : [];
       const unfinished = await this.unfinishedDependencies(tx, tenantId, taskId);
       const found = taskStartBlockers(kase.id, w, plan, taskId, unfinished.length);
       if (found.length) {
@@ -311,6 +312,89 @@ export class TasksService {
       await this.cases.applyStage(tx, actor, kase, { stage: 'in_repair' }, 'خودکار: شروع اولین فعالیت تعمیر');
     }
     return updated;
+  }
+
+  /**
+   * «لغو مرحله» (owner, 2026-11-19). The stage leaves the active plan but is never deleted:
+   * not started → task.manage; in progress → supervisor (task.approve) and an explicit stop;
+   * finished stages go through «بازگشایی», and a technically or financially closed case
+   * through its correction process. Wages, finance, parts reservations, deliveries and
+   * stock are never changed here; the case's open and handed-over parts are returned for
+   * the parts clerk to review. Repeating the request changes nothing (idempotent).
+   */
+  async cancel(actor: Actor, taskId: string, input: CancelTaskInput): Promise<{ task: Task; partsToReview: { id: string; description: string; partNumber: string | null; status: string; handedOver: boolean }[]; alreadyCancelled: boolean }> {
+    const tenantId = actor.user.tenantId;
+    const result = await this.db.transaction(async (tx) => {
+      const current = await this.loadForWrite(tx, tenantId, taskId);
+      if (current.status === 'cancelled') return { task: current, alreadyCancelled: true };
+      if (current.version !== input.expectedVersion) throw versionConflict(current.version);
+      const status = current.status as TaskStatus;
+      if (FINISHED.includes(status)) throw badRequest('STAGE_COMPLETED', 'این مرحله انجام شده است؛ کار انجام‌شده حذف نمی‌شود. برای اصلاح، ابتدا «بازگشایی» را با علت ثبت کنید.');
+      const kase = await this.cases.loadForWrite(tx, tenantId, current.caseId);
+      if (kase.status !== 'open' || kase.stage === 'delivered') throw badRequest('CASE_NOT_OPEN', 'پرونده باز نیست؛ مرحله را نمی‌توان لغو کرد');
+      if (kase.financialClosedAt || kase.technicalClosedAt) throw badRequest('STAGE_INVOICED', 'پرونده بستهٔ فنی یا مالی شده است؛ تغییر مراحل فقط از مسیر اصلاح مالی مجاز است و سوابق مالی دست نمی‌خورد.');
+      const started = status !== 'pending' || !!current.actualStartAt;
+      if (started) {
+        if (!actor.user.permissions.has('task.approve')) throw forbidden('لغو مرحلهٔ شروع‌شده فقط با تأیید سرپرست (کارشناس مسئول) ممکن است');
+        if (!input.confirmStop) throw badRequest('STOP_CONFIRM_REQUIRED', 'این مرحله شروع شده است؛ توقف کار را صریحاً تأیید کنید. زمان و کار انجام‌شده حفظ می‌شود.');
+      }
+      const now = new Date();
+      const updated = await this.save(tx, current, {
+        status: 'cancelled',
+        cancelledAt: now,
+        cancelledBy: actor.user.id,
+        cancelReason: input.reason,
+        cancelNote: input.note ?? null,
+        cancelledFromStatus: status,
+      });
+      await this.audit.record(tx, actor, {
+        entityType: 'task',
+        entityId: taskId,
+        caseId: current.caseId,
+        action: 'task.cancelled',
+        reason: [TASK_CANCEL_REASON_LABELS[input.reason], input.note].filter(Boolean).join(' — '),
+        before: { status, actualStartAt: current.actualStartAt?.toISOString() ?? null },
+        after: { status: 'cancelled', reason: input.reason },
+        snapshot: { version: updated.version, row: updated },
+      });
+      return { task: updated, alreadyCancelled: false };
+    });
+    const t = result.task;
+    const parts = await this.db
+      .select({ id: partRequests.id, description: partRequests.description, partNumber: partRequests.partNumber, status: partRequests.status, dept: partRequests.handedOverDepartmentId })
+      .from(partRequests)
+      .where(and(eq(partRequests.tenantId, tenantId), eq(partRequests.caseId, t.caseId), notInArray(partRequests.status, ['cancelled', 'returned'])));
+    const partsToReview = parts
+      .filter((p) => p.status !== 'handed_over' || p.dept === t.departmentId)
+      .map((p) => ({ id: p.id, description: p.description, partNumber: p.partNumber, status: p.status, handedOver: p.status === 'handed_over' }));
+    return { task: await this.get(actor, t.caseId, t.id), partsToReview, alreadyCancelled: result.alreadyCancelled };
+  }
+
+  /** «فعال‌سازی مجدد»: a cancelled stage returns to the plan in the state it was cancelled from (never as finished). */
+  async reactivate(actor: Actor, taskId: string, input: ReactivateTaskInput): Promise<Task> {
+    const tenantId = actor.user.tenantId;
+    const t = await this.db.transaction(async (tx) => {
+      const current = await this.loadForWrite(tx, tenantId, taskId);
+      if (current.status !== 'cancelled') return current;
+      if (current.version !== input.expectedVersion) throw versionConflict(current.version);
+      const kase = await this.cases.loadForWrite(tx, tenantId, current.caseId);
+      if (kase.status !== 'open' || kase.stage === 'delivered' || kase.financialClosedAt || kase.technicalClosedAt) throw badRequest('CASE_NOT_OPEN', 'پرونده باز نیست؛ مرحله را نمی‌توان دوباره فعال کرد');
+      const back = (current.cancelledFromStatus === 'in_progress' || current.cancelledFromStatus === 'blocked') ? 'in_progress' : 'pending';
+      if (back === 'in_progress' && !actor.user.permissions.has('task.approve')) throw forbidden('فعال‌سازی مرحلهٔ شروع‌شده با تأیید سرپرست است');
+      const updated = await this.save(tx, current, { status: back, cancelledAt: null, cancelledBy: null, cancelReason: null, cancelNote: null, cancelledFromStatus: null });
+      await this.audit.record(tx, actor, {
+        entityType: 'task',
+        entityId: taskId,
+        caseId: current.caseId,
+        action: 'task.reactivated',
+        reason: input.note ?? null,
+        before: { status: 'cancelled', reason: current.cancelReason, cancelledAt: current.cancelledAt?.toISOString() ?? null },
+        after: { status: back },
+        snapshot: { version: updated.version, row: updated },
+      });
+      return updated;
+    });
+    return this.get(actor, t.caseId, t.id);
   }
 
   async get(actor: Actor, caseId: string, taskId: string): Promise<Task> {
@@ -381,7 +465,7 @@ export class TasksService {
       .from(taskDependencies)
       .innerJoin(tasks, eq(tasks.id, taskDependencies.dependsOnTaskId))
       .where(and(eq(taskDependencies.taskId, taskId),eq(tasks.tenantId,tenantId)));
-    return rows.filter((r) => r.status !== 'approved').map((r) => r.id);
+    return rows.filter((r) => r.status !== 'approved' && r.status !== 'cancelled').map((r) => r.id);
   }
 
   private async assertDepartment(tx: DbOrTx, tenantId: string, departmentId: string) {

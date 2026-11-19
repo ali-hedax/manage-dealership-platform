@@ -354,6 +354,12 @@ export const tasks = pgTable(
     completedBy: uuid('completed_by').references(() => users.id),
     approvedAt: ts('approved_at'),
     approvedBy: uuid('approved_by').references(() => users.id),
+    // Stage cancelled from the active plan (owner, 2026-11-19; migration 0032): soft, reversible, with reason.
+    cancelledAt: ts('cancelled_at'),
+    cancelledBy: uuid('cancelled_by').references(() => users.id),
+    cancelReason: text('cancel_reason'),
+    cancelNote: text('cancel_note'),
+    cancelledFromStatus: text('cancelled_from_status'),
     weight: smallint('weight').notNull().default(1),
     sortOrder: integer('sort_order').notNull().default(0),
     notes: text('notes'),

@@ -10,7 +10,7 @@ import { faNum } from '@/lib/format';
 import { AppIcon } from './AppIcon';
 import { PartsLedger } from './PartsLedger';
 import { PartsWorkbench } from './PartsWorkbench';
-import { VehicleImage } from './FolderParts';
+import { VehicleImage, VehicleTechDetails } from './FolderParts';
 import { PlateText } from './Plate';
 
 // Parts desk (spec §3, §7; owner reference «میز قطعات»): the cars that have part lines
@@ -79,6 +79,7 @@ export function PartsDesk() {
           )}
         </aside>
         <div className="pdesk-main">
+          {kase && <VehicleTechDetails brand={kase.vehicle.brand} model={kase.vehicle.model} trim={kase.vehicle.trim} vin={kase.vehicle.vin} modelYear={kase.vehicle.modelYear} />}
           {kase ? (
             <PartsLedger key={kase.id} kase={kase} title={`قطعات ${selected?.vehicle ?? 'این خودرو'}`} onChange={() => void mutate()} onFocusPart={setFocus} />
           ) : selected ? <p className="m-empty" role="status">در حال باز کردن پوشهٔ خودرو…</p> : null}

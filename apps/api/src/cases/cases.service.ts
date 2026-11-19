@@ -31,6 +31,8 @@ import {
   type Role,
   type Task,
   type UpdateCaseInput,
+  type TaskCancelReason,
+  shortVehicleName,
 } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -120,7 +122,7 @@ export const caseSql = {
   hasOpenBlocker: sql`exists (select 1 from blockers b where b.case_id = ${cases.id} and b.resolved_at is null)`,
   openBlockers: sql<number>`(select count(*)::int from blockers b where b.case_id = ${cases.id} and b.resolved_at is null)`,
   // Weighted progress: sum of weights of completed tasks / total weight.
-  progress: sql<number>`(select coalesce(round(100.0 * sum(case when t.status in ('done','approved') then t.weight else 0 end) / nullif(sum(t.weight), 0)), 0)::int from tasks t where t.case_id = ${cases.id})`,
+  progress: sql<number>`(select coalesce(round(100.0 * sum(case when t.status in ('done','approved') then t.weight else 0 end) / nullif(sum(t.weight), 0)), 0)::int from tasks t where t.case_id = ${cases.id} and t.status <> 'cancelled')`,
 };
 
 export const flagConditions: Record<string, () => SQL> = {
@@ -391,7 +393,7 @@ export class CasesService {
     if (!c) throw notFound('پرونده');
     const [versions, work, qc] = await Promise.all([
       db.select().from(assessments).where(and(eq(assessments.tenantId, tenantId), eq(assessments.caseId, id))).orderBy(desc(assessments.versionNo)),
-      db.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, id))),
+      db.select().from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.caseId, id), ne(tasks.status, 'cancelled'))),
       db.select().from(qcInspections).where(and(eq(qcInspections.tenantId, tenantId), eq(qcInspections.caseId, id))).orderBy(desc(qcInspections.round)),
     ]);
     const record = c.workflow ?? {};
@@ -433,7 +435,7 @@ export class CasesService {
       const c = await this.loadForWrite(tx, actor.user.tenantId, id, expectedVersion);
       const progress = await this.workflow(actor, id, tx);
       if (progress.requirements.execution.length) throw badRequest('REPAIR_PLAN_INCOMPLETE', progress.requirements.execution.join('؛ '), { blockers: progress.blockers?.execution ?? [] });
-      const work = await tx.select().from(tasks).where(and(eq(tasks.tenantId, actor.user.tenantId), eq(tasks.caseId, id)));
+      const work = await tx.select().from(tasks).where(and(eq(tasks.tenantId, actor.user.tenantId), eq(tasks.caseId, id), ne(tasks.status, 'cancelled')));
       await this.applyPatch(tx, actor, c, { workflow: { ...c.workflow, guided: true, planConfirmedAt: new Date().toISOString(), planTaskIds: work.map(t => t.id), planSignature: planSignature(work) }, stage: 'in_repair' }, 'case.plan_confirmed', null);
     });
     return this.workflow(actor, id);
@@ -692,7 +694,7 @@ export class CasesService {
 
   async tasksOf(tenantId: string, caseId: string): Promise<Task[]> {
     const rows = await this.db
-      .select({ t: tasks, d: departments, approvedByName: approvedByUser.displayName })
+      .select({ t: tasks, d: departments, approvedByName: approvedByUser.displayName, cancelledByName: sql<string | null>`(select u.display_name from users u where u.id = ${tasks.cancelledBy})` })
       .from(tasks)
       .innerJoin(departments, eq(departments.id, tasks.departmentId))
       .leftJoin(approvedByUser, eq(approvedByUser.id, tasks.approvedBy))
@@ -702,7 +704,7 @@ export class CasesService {
     const deps = ids.length
       ? await this.db.select().from(taskDependencies).where(inArray(taskDependencies.taskId, ids))
       : [];
-    return rows.map(({ t, d, approvedByName }) => ({
+    return rows.map(({ t, d, approvedByName, cancelledByName }) => ({
       id: t.id,
       caseId: t.caseId,
       department: { id: d.id, code: d.code, name: d.name },
@@ -717,6 +719,9 @@ export class CasesService {
       actualEndAt: iso(t.actualEndAt),
       approvedAt: iso(t.approvedAt),
       approvedBy: t.approvedBy ? { id: t.approvedBy, displayName: approvedByName! } : null,
+      cancellation: t.status === 'cancelled' && t.cancelledAt
+        ? { at: t.cancelledAt.toISOString(), by: t.cancelledBy ? { id: t.cancelledBy, displayName: cancelledByName ?? '' } : null, reason: t.cancelReason as TaskCancelReason, note: t.cancelNote, fromStatus: (t.cancelledFromStatus ?? 'pending') as Task['status'] }
+        : null,
       dependsOn: deps.filter((x) => x.taskId === t.id).map((x) => x.dependsOnTaskId),
       qcInspectionId: t.qcInspectionId,
       weight: t.weight,
@@ -790,7 +795,8 @@ export class CasesService {
       vehicleLabel: [v.brand, v.model, v.trim].filter(Boolean).join(' ') || 'خودرو (مدل نامشخص)',
       // Some manufacturer model cells include explicit engine/gearbox metadata.
       // Keep the model name before those terms; never derive it from trim.
-      vehicleSummary: [v.brand, v.model?.split(/\s+(?:با\s+)?(?:موتور|گیربکس)(?=\s|[a-z0-9])/iu)[0]?.trim() || 'مدل نامشخص'].filter(Boolean).join(' '),
+      // One concise name for every list (owner, 2026-11-19): the model, never brand + trim repeats.
+      vehicleSummary: v.model || v.brand ? shortVehicleName(v.brand, v.model) : 'مدل نامشخص',
       plate: v.plate,
       vin: v.vin,
       responsible: c.responsibleUserId ? { id: c.responsibleUserId, displayName: responsibleName! } : null,

@@ -32,6 +32,7 @@ const TASK_TONE: Record<TaskStatus, string> = {
   blocked: 'chip-red',
   done: 'chip-amber',
   approved: 'chip-green',
+  cancelled: 'chip-muted',
 };
 
 export function TaskStatusChip({ status }: { status: TaskStatus }) {

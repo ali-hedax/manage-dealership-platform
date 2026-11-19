@@ -6,6 +6,10 @@ import {
   changeStageSchema,
   createBlockerSchema,
   createCaseSchema,
+  cancelTaskSchema,
+  reactivateTaskSchema,
+  type CancelTaskInput,
+  type ReactivateTaskInput,
   createTaskSchema,
   repairPlanStepsSchema,
   resolveBlockerSchema,
@@ -153,6 +157,20 @@ export class TasksController {
     @Body(new ZodPipe(taskActionSchema)) body: TaskActionInput,
   ) {
     return this.tasks.act(actor, id, body);
+  }
+
+  /** «لغو مرحله»: removes the stage from the active plan with a reason (never deletes it). */
+  @Post(':id/cancel')
+  @RequirePermissions('task.manage')
+  cancel(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(cancelTaskSchema)) body: CancelTaskInput) {
+    return this.tasks.cancel(actor, id, body);
+  }
+
+  /** «فعال‌سازی مجدد» of a cancelled stage. */
+  @Post(':id/reactivate')
+  @RequirePermissions('task.manage')
+  reactivate(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(reactivateTaskSchema)) body: ReactivateTaskInput) {
+    return this.tasks.reactivate(actor, id, body);
   }
 }
 

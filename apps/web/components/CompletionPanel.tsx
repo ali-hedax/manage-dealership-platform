@@ -103,7 +103,7 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
   }
 
   const latest = c.qc.at(-1);
-  const workDone = kase.tasks.every((t) => t.status === 'approved');
+  const workDone = kase.tasks.every((t) => t.status === 'approved' || t.status === 'cancelled');
   const technicalBlocking = c.technical.issues.filter((i) => !i.warning);
   const balance = c.financial.issues.find((i) => i.code === 'balance_due');
   const financialOthers = c.financial.issues.filter((i) => !i.warning && i.code !== 'balance_due');

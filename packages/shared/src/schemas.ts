@@ -27,6 +27,7 @@ import {
   CASE_STATUSES,
   COVERAGE_TYPES,
   TASK_ACTIONS,
+  TASK_CANCEL_REASONS,
 } from './enums';
 
 // Request contracts validated by the API. All timestamps travel as ISO-8601
@@ -272,6 +273,22 @@ export const taskActionSchema = z
     path: ['note'],
   });
 export type TaskActionInput = z.infer<typeof taskActionSchema>;
+
+/** «لغو مرحله»: removes a stage from the active plan; never deletes it (owner, 2026-11-19). */
+export const cancelTaskSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    reason: z.enum(TASK_CANCEL_REASONS),
+    note: optionalText(1000),
+    /** Required for a stage already in progress: the supervisor confirms that work stops. */
+    confirmStop: z.boolean().optional(),
+  })
+  .refine((v) => v.reason !== 'other' || (v.note ?? '').trim().length >= 3, { message: 'برای «سایر موارد» توضیح بنویسید', path: ['note'] });
+export type CancelTaskInput = z.infer<typeof cancelTaskSchema>;
+
+/** «فعال‌سازی مجدد» of a cancelled stage. */
+export const reactivateTaskSchema = z.object({ expectedVersion: z.number().int().min(1), note: optionalText(1000) });
+export type ReactivateTaskInput = z.infer<typeof reactivateTaskSchema>;
 
 export const createBlockerSchema = z.object({
   reason: z.enum(BLOCKER_REASONS),

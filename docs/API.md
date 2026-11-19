@@ -234,7 +234,9 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/stock/reservations/:id/actions` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/tasks/:id/cancel` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/tasks/:id/part-pickup` | [source](../apps/api/src/parts/parts.controller.ts) |
+| POST | `/api/v1/tasks/:id/reactivate` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/vehicle-imports/:id/apply` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | POST | `/api/v1/vehicle-imports` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
 | POST | `/api/v1/workshop/calendar` | [source](../apps/api/src/workshop/workshop.controller.ts) |

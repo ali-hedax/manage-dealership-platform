@@ -17,7 +17,7 @@ import { ReleaseNotice, VersionChip } from './ReleaseNotice';
 // App shell of the approved design (owner references, Nov 2026): brand and five
 // destinations on the inline-start side, a top bar with the global search (Ctrl+K),
 // reminders and the account menu. The control room switches the shell to the dark space.
-interface NavItem { href: string; label: string; icon: IconName; show: boolean; match?: (p: string) => boolean }
+interface NavItem { href: string; label: string; icon: IconName; show: boolean; match?: (p: string) => boolean; planned?: boolean }
 
 export function Shell({ children }: { children: ReactNode }) {
   const { me, can } = useAuth();
@@ -59,10 +59,23 @@ export function Shell({ children }: { children: ReactNode }) {
     { href: '/', label: 'داشبورد شمارشی', icon: 'chart', show: can('dashboard.read'), match: (p) => p === '/' },
   ];
   const planned = me.modules.filter((m) => m.status === 'planned');
+  const plannedLink = (key: ModuleKey, icon: IconName): NavItem => ({ href: `/modules/${key}`, label: MODULE_LABELS[key], icon, show: planned.some((m) => m.key === key), planned: true });
+  const byHref = (href: string) => [...primary, ...more].find((i) => i.href === href);
+  const groups: { key: string; label: string; icon: IconName; items: NavItem[] }[] = technicianOnly ? [] : [
+    { key: 'reception', label: 'پذیرش و ترخیص', icon: 'file', items: [byHref('/cases')!, { href: '/cases/new', label: 'پذیرش خودرو', icon: 'add', show: can('case.create'), match: (pp) => pp === '/cases/new' }, plannedLink('reception', 'file')] },
+    { key: 'warehouse', label: 'انبار قطعات یدکی', icon: 'box', items: [byHref('/parts')!, byHref('/stock')!, byHref('/emdad')!, byHref('/daily-reports')!, plannedLink('parts_inventory', 'box')] },
+    { key: 'planning', label: 'برنامه‌ریزی تعمیرات', icon: 'wrench', items: [byHref('/workshop')!, plannedLink('periodic_service', 'wrench'), plannedLink('workforce', 'team')] },
+    { key: 'crm', label: 'رضایت مشتری و CRM', icon: 'user', items: [{ href: '/reminders', label: 'تذکرها و پیگیری', icon: 'bell', show: true, match: (pp) => pp === '/reminders' }, plannedLink('customer_comms', 'send')] },
+    { key: 'accident', label: 'مدیریت تصادفات', icon: 'car', items: [byHref('/accidents')!] },
+    { key: 'management', label: 'مدیریت و گزارش‌ها', icon: 'chart', items: [byHref('/control-room')!, byHref('/reports')!, byHref('/')!, plannedLink('finance', 'money'), plannedLink('warranty', 'shield'), plannedLink('multi_dealership', 'grid'), plannedLink('integrations', 'layers')] },
+  ];
+  const groupedHrefs = new Set(groups.flatMap((g) => g.items.map((i) => i.href)));
+  const groupVisible = (g: (typeof groups)[number]) => g.items.some((i) => i.show);
+
   const link = (i: NavItem) => {
     if (!i.show) return null;
     const active = i.match ? i.match(pathname) : pathname === i.href;
-    return <Link key={i.href + i.label} href={i.href} aria-current={active ? 'page' : undefined}><AppIcon name={i.icon} /><span>{i.label}</span></Link>;
+    return <Link key={i.href + i.label} href={i.href} className={i.planned ? 'planned' : undefined} aria-current={active ? 'page' : undefined}><AppIcon name={i.icon} /><span>{i.label}</span>{i.planned && <span className="tag-dev">در دست توسعه</span>}</Link>;
   };
   async function logout() { await api('/auth/logout', { method: 'POST' }).catch(() => {}); router.replace('/login'); }
   const back = backTarget(pathname, home);
@@ -77,8 +90,12 @@ export function Shell({ children }: { children: ReactNode }) {
           <span className="brand-word">Manage</span>
           <span className="brand-by">by <b>HEDAX</b></span>
         </Link>
-        <nav className="side-nav" id="main-navigation" aria-label="بخش‌های منیج">{primary.map(link)}</nav>
-        {(more.some((i) => i.show) || planned.length > 0) && (
+        <nav className="side-nav" id="main-navigation" aria-label="بخش‌های منیج">
+          {primary.filter((i) => !groupedHrefs.has(i.href) && i.href !== '/settings').map(link)}
+          {groups.filter(groupVisible).map((g) => <NavGroup key={g.key} id={g.key} label={g.label} icon={g.icon}>{g.items.filter(Boolean).map(link)}</NavGroup>)}
+          {primary.filter((i) => i.href === '/settings').map(link)}
+        </nav>
+        {technicianOnly && (more.some((i) => i.show) || planned.length > 0) && (
           <details className="side-more" open={more.some((i) => i.show && (i.match ? i.match(pathname) : pathname === i.href))}>
             <summary><AppIcon name="list" /><span>ابزارهای بیشتر</span></summary>
             <nav className="side-nav sub" aria-label="ابزارهای بیشتر">
@@ -127,6 +144,20 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 /** Every page has a way back (spec §12): to the case for its edit page, otherwise to the own desk. Pages with their own back link and the desks themselves get none. */
+/** A collapsible module heading of the side menu; open by default, the choice remembered per browser. */
+function NavGroup({ id, label, icon, children }: { id: string; label: string; icon: IconName; children: ReactNode }) {
+  const key = `manage-nav-${id}`;
+  const [open, setOpen] = useState(true);
+  useEffect(() => { try { if (localStorage.getItem(key) === 'closed') setOpen(false); } catch { /* storage unavailable */ } }, [key]);
+  const toggle = () => { const next = !open; setOpen(next); try { localStorage.setItem(key, next ? 'open' : 'closed'); } catch { /* storage unavailable */ } };
+  return (
+    <div className={`nav-group${open ? ' open' : ''}`}>
+      <button type="button" className="nav-group-head" aria-expanded={open} onClick={toggle}><AppIcon name={icon} /><span>{label}</span><AppIcon name="chevron-down" className="chev" /></button>
+      {open && <div className="nav-group-items">{children}</div>}
+    </div>
+  );
+}
+
 export function backTarget(pathname: string, home: string): { href: string; label: string } | null {
   if (pathname === home || pathname === '/launch' || pathname === '/control-room') return null;
   // Sidebar destinations are top-level places: no «back» link above them.
