@@ -52,7 +52,7 @@ test('smart assessment: rapid catalog selection persists two lines and prevents 
 
   await search.fill(codeB);
   await expect(picker.getByRole('option')).toHaveCount(1);
-  await picker.getByLabel('تعداد').fill('2');
+  await picker.getByLabel('تعداد', { exact: true }).fill('2');
   await search.press('Enter');
   await expect(search).toHaveValue('');
   await expect(panel.getByTestId('assessment-item')).toHaveCount(2);
@@ -65,6 +65,36 @@ test('smart assessment: rapid catalog selection persists two lines and prevents 
   await openCaseTab(page, 'کارشناسی');
   await expect(page.getByTestId('assessment-item')).toHaveCount(2);
   await expect(page.getByTestId('assessment-panel')).toContainText(codeB);
+  // Bordered selected-parts list: name, 8-digit reference, quantity and «افزوده شد»; quantity edit and removal.
+  const picked = page.getByTestId('smart-picked');
+  await expect(picked.getByTestId('smart-picked-row')).toHaveCount(2);
+  await expect(picked.getByTestId('smart-picked-row').first()).toContainText('افزوده شد');
+  await expect(picked).toContainText('۰۰۹۹۸۸۱۱');
+  const qty = picked.getByRole('spinbutton', { name: /تعداد سپر جلو/ });
+  await qty.fill('3');
+  await qty.press('Enter');
+  await expect(picked.getByRole('spinbutton', { name: /تعداد سپر جلو/ })).toHaveValue('3');
+  await picked.getByRole('button', { name: /حذف دیاق/ }).click();
+  await expect(picked.getByTestId('smart-picked-row')).toHaveCount(1);
+  await page.screenshot({ path: test.info().outputPath('smart-picked.png'), fullPage: false });
+});
+
+test('smart assessment: a vehicle that cannot be matched to a catalog family gets no suggestions', async ({ page }) => {
+  await login(page, 'admin');
+  const headers = { 'x-manage-client': 'e2e' };
+  const created = await page.request.post('/api/v1/cases', { headers, data: { admittedAt: new Date(Date.now() - 86_400_000).toISOString(), vehicle: { model: 'خودروی ناشناخته آزمون' }, coverageType: 'insurance' } });
+  const { id } = (await created.json()) as { id: string };
+  await page.goto(`/cases/${id}`);
+  await openCaseTab(page, 'کارشناسی');
+  const panel = page.getByTestId('assessment-panel');
+  await panel.getByRole('button', { name: 'ایجاد کارشناسی دستی هوشمند' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('نام کارشناس *').fill('کارشناس نمونه');
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  const picker = panel.getByTestId('smart-assessment-entry');
+  await picker.getByRole('combobox', { name: 'جست‌وجوی قطعه' }).fill('سپر');
+  await expect(picker.getByTestId('smart-fitment-unverified')).toContainText('قابل تشخیص نیست');
+  await expect(picker.getByRole('option')).toHaveCount(0);
 });
 
 test('parts clerk reviews individual draft lines and returns only a disputed technical code', async ({ page }) => {

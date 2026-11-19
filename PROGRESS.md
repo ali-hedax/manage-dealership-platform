@@ -1,3 +1,8 @@
+## 2026-11-19 — کارشناسی هوشمند: قطعات سازگار، کد ۸ رقمی، فهرست انتخاب‌شده، چاپ بازدید
+
+- شاخهٔ fix/smart-assessment-fitment از main در 6c710c4؛ بخش ۲۰ سند جامع. migration افزایشی 0031 (assessment_items.source_part_number). یادداشت تغییر smart-fitment-2026-11-19؛ نسخهٔ بعد پس از تأیید انتشار v1.0.2.
+- آزمون‌ها: docs/TEST_REPORT.md. قدم بعد: CI، ادغام، انتشار با پوشهٔ مشتق از design-20261118 و confirm-release.
+
 ## 2026-11-18 — طرح مصوب میزها، تعویض اتاق، چهار شاخص و شماره‌گذاری خودکار نسخه
 
 - شاخهٔ `feature/approved-design-20261118` از main در `b27a512`؛ بخش ۱۹ سند جامع. چهار تصویر مرجع در `docs/design/mockups/approved-2026-11-18` و اسکرین‌شات واقعی در `docs/screenshots/approved-2026-11-18`.

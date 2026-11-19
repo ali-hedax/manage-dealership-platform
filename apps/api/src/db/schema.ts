@@ -496,6 +496,8 @@ export const assessmentItems = pgTable(
     action: text('action').notNull(),
     description: text('description').notNull(),
     partNumber: text('part_number'),
+    // Full catalog code of a smart-assessment pick; part_number holds its 8-digit reference (migration 0031).
+    sourcePartNumber: text('source_part_number'),
     quantity: smallint('quantity').notNull().default(1),
     unitPriceRial: bigint('unit_price_rial', { mode: 'number' }).notNull().default(0),
     labourDepartmentId: uuid('labour_department_id').references(() => departments.id),

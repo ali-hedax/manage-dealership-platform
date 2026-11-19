@@ -138,7 +138,10 @@ export interface AssessmentItem {
   lineNo: number;
   action: AssessmentItemAction;
   description: string;
+  /** Technical code of the line (for smart-assessment picks: the 8-digit reference). */
   partNumber: string | null;
+  /** Full catalog code the reference came from (smart assessment); null for older lines. */
+  sourcePartNumber?: string | null;
   quantity: number;
   unitPriceRial: number;
   labourDepartment: { id: string; name: string } | null;

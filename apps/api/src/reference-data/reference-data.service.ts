@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, sql, inArray } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, rankAssessmentCandidates, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
+import { assessmentReference, fitmentKey, isCommonFitment, resolveVehicleFamily, REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, rankAssessmentCandidates, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
@@ -144,22 +144,49 @@ export class ReferenceDataService {
   return {truncated:found.length>20,records};
  }
 
+ /** «مصرف خودرو» labels of the tenant's catalog, cached briefly (one small grouped read). */
+ private labelCache=new Map<string,{at:number;labels:string[]}>();
+ private async fitmentLabels(tenantId:string):Promise<string[]>{
+  const hit=this.labelCache.get(tenantId);
+  if(hit&&Date.now()-hit.at<60_000)return hit.labels;
+  const rows=await this.db.select({label:sql<string>`coalesce(${referenceEntries.data}->>'vehicleUse','')`})
+   .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts')))
+   .groupBy(sql`1`);
+  const labels=rows.map(r=>r.label);
+  this.labelCache.set(tenantId,{at:Date.now(),labels});
+  return labels;
+ }
+
  /**
-  * Read-only suggestions for the accident expert. Reuses existing reference
-  * part records, checks case tenancy and never creates case parts.
-  *
-  * The free-text vehicleUse field is only a ranking hint, NOT verified fitment.
-  * A separate authoritative catalog/VIN mapping is needed before confirming it.
+  * Read-only suggestions for the accident expert (owner, 2026-11-19). Only parts whose
+  * catalog «مصرف خودرو» is the case's own vehicle family (or explicitly common to every
+  * platform) are returned. The family comes from the case's model/trim and, when the VIN
+  * or chassis is in the admission records, from that record; if it cannot be verified
+  * or the two disagree, nothing is suggested (vehicle-fitment.ts). Never creates parts.
   */
  async suggestAssessmentParts(actor:Actor,caseId:string,query:string){
   if(!actor.user.permissions.has('assessment.manage')||!actor.user.permissions.has('case.read'))throw forbidden();
   const tenantId=actor.user.tenantId;
-  const [context]=await this.db.select({model:vehicles.model,trim:vehicles.trim,brand:vehicles.brand})
+  const [context]=await this.db.select({model:vehicles.model,trim:vehicles.trim,brand:vehicles.brand,vin:vehicles.vin,chassis:vehicles.chassisRef})
    .from(cases).innerJoin(vehicles,and(eq(vehicles.id,cases.vehicleId),eq(vehicles.tenantId,tenantId)))
    .where(and(eq(cases.id,caseId),eq(cases.tenantId,tenantId))).limit(1);
   if(!context)throw notFound('پرونده خودرو');
   const normalized=normalizeAssessmentSearch(query);
   if(normalized.length<2)throw badRequest('ASSESSMENT_SEARCH_SHORT','حداقل دو نویسه از نام یا شماره فنی وارد کنید');
+  const vehicle={brand:context.brand,model:context.model,trim:context.trim,vin:context.vin};
+  // Admission records of the same VIN / chassis (dealership data) as a second, independent source.
+  const ids=[context.vin?normalizeVin(context.vin):'',context.chassis?toLatinDigits(context.chassis).replace(/\s+/g,'').toUpperCase():''].filter(x=>x.length>=6);
+  const admissions=ids.length?await this.db.select({data:referenceEntries.data}).from(referenceEntries)
+   .where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'customers'),
+    sql`(upper(coalesce(${referenceEntries.data}->>'vin','')) in (${sql.join(ids.map(x=>sql`${x}`),sql`, `)}) or upper(coalesce(${referenceEntries.data}->>'chassis','')) in (${sql.join(ids.map(x=>sql`${x}`),sql`, `)}))`)).limit(20):[];
+  const vinTexts=admissions.flatMap(r=>{const d=r.data as Record<string,unknown>;return [String(d.model??''),String(d.trim??'')];});
+  const labels=await this.fitmentLabels(tenantId);
+  const fit=resolveVehicleFamily([context.model,context.trim],vinTexts,labels);
+  if(fit.status!=='verified'){
+   return {caseId,vehicle,fitment:fit,results:[],limited:false,fitmentVerified:false,
+    message:fit.status==='conflict'?'مدل ثبت‌شده در پرونده با سابقهٔ پذیرش همین VIN یکی نیست؛ سازگاری قطعات قابل تأیید نیست. مدل خودرو را در پرونده اصلاح کنید.':'خانوادهٔ این خودرو در کاتالوگ قطعات قابل تشخیص نیست؛ برای جلوگیری از قطعهٔ نامرتبط، پیشنهادی نمایش داده نمی‌شود. مدل خودرو را در پرونده کامل کنید یا قلم را دستی ثبت کنید.'};
+  }
+  const allowed=labels.filter(l=>fitmentKey(l)===fit.family||isCommonFitment(l));
   // Bounded SQL prefilter avoids reading the entire catalog per keystroke.
   const folded=sql`replace(replace(replace(replace(replace(lower(coalesce(${referenceEntries.data}->>'description','')),'ي','ی'),'ك','ک'),' ',''),chr(8204),''),'-','')`;
   const fragment=normalized.slice(0,Math.min(3,normalized.length));
@@ -168,23 +195,23 @@ export class ReferenceDataService {
    ? sql`(${folded} like ${'%'+fragment+'%'} or ${referenceEntries.lookupKey} like ${codeQuery+'%'})`
    : sql`${folded} like ${'%'+fragment+'%'}`;
   const rows=await this.db.select({id:referenceEntries.id,data:referenceEntries.data})
-   .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts'),prefilter))
+   .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts'),
+    inArray(sql<string>`coalesce(${referenceEntries.data}->>'vehicleUse','')`,allowed),prefilter))
    .orderBy(referenceEntries.lookupKey).limit(250);
   const candidates=rows.map(row=>{
    const data=row.data as Record<string,unknown>;
-   return {id:row.id,name:String(data.description??''),partNumber:String(data.partNumber??''),
-    vehicleUse:typeof data.vehicleUse==='string'?data.vehicleUse:'',
-    vehicleMatch:'unknown' as const};
-  }).filter(row=>row.name&&row.partNumber);
-  const ranked=rankAssessmentCandidates(query,candidates,100);
-  const modelKey=normalizeAssessmentSearch(context.model??'');
+   const vehicleUse=typeof data.vehicleUse==='string'?data.vehicleUse:'';
+   return {id:row.id,name:String(data.description??''),partNumber:String(data.partNumber??''),vehicleUse,
+    // Defence in depth: only the verified family or an explicitly common part.
+    vehicleMatch:(fitmentKey(vehicleUse)===fit.family||isCommonFitment(vehicleUse)?'verified':'incompatible') as 'verified'|'incompatible'};
+  }).filter(row=>row.name&&row.partNumber&&row.vehicleMatch==='verified');
   const useById=new Map(candidates.map(row=>[row.id,row.vehicleUse]));
-  const ordered=ranked.map(item=>{
+  const results=rankAssessmentCandidates(query,candidates,20).map(item=>{
    const vehicleUse=useById.get(item.id)??'';
-   return {...item,vehicleUse,vehicleUseHint:!!modelKey&&normalizeAssessmentSearch(vehicleUse).includes(modelKey)};
-  }).sort((a,b)=>Number(b.vehicleUseHint)-Number(a.vehicleUseHint)||b.score-a.score).slice(0,20);
-  return {caseId,vehicle:{brand:context.brand,model:context.model,trim:context.trim},
-   results:ordered,limited:rows.length===250,fitmentVerified:false};
+   return {...item,vehicleUse,common:isCommonFitment(vehicleUse),reference:assessmentReference(item.partNumber)};
+  });
+  return {caseId,vehicle,fitment:fit,family:allowed.find(l=>fitmentKey(l)===fit.family)??fit.family,
+   results,limited:rows.length===250,fitmentVerified:true};
  }
 
  private record(e:Entry,fileName:string):ReferenceRecord{return {id:e.id,kind:e.kind as ReferenceKind,data:e.data as ReferenceRecord['data'],fileName,importedAt:e.updatedAt.toISOString(),version:e.version};}

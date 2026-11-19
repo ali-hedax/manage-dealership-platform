@@ -324,6 +324,8 @@ const assessmentItemFields = {
   action: z.enum(ASSESSMENT_ITEM_ACTIONS),
   description: z.string().trim().min(1).max(300),
   partNumber: optionalText(64),
+  /** Full catalog code picked in the smart assessment; the line's partNumber becomes its 8-digit reference. */
+  sourcePartNumber: optionalText(64),
   quantity: z.number().int().min(1).max(999).default(1),
   unitPriceRial: rial.default(0),
   labourDepartmentId: uuid.nullish(),
