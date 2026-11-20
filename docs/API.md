@@ -107,6 +107,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/parts/desk` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/parts/external-work` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/parts/operations/notices` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| GET | `/api/v1/parts/picking-batches/:id/picking.pdf` | [source](../apps/api/src/parts/parts-picking.controller.ts) |
+| GET | `/api/v1/parts/picking-batches` | [source](../apps/api/src/parts/parts-picking.controller.ts) |
 | GET | `/api/v1/parts/workbench/notices` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | GET | `/api/v1/parts/workbench` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/price-notices` | [source](../apps/api/src/parts/parts.controller.ts) |
@@ -218,6 +220,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/parts/:id/flow` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/parts/contractors` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/parts/external-work/:id/actions` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| POST | `/api/v1/parts/picking-batches/:id/close` | [source](../apps/api/src/parts/parts-picking.controller.ts) |
+| POST | `/api/v1/parts/picking-batches` | [source](../apps/api/src/parts/parts-picking.controller.ts) |
 | POST | `/api/v1/parts/workbench/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/price-notices/:id/respond` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/reference-data/:kind/search` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |

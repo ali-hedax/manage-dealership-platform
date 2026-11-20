@@ -196,3 +196,7 @@ Existing rows keep NULL and behave as before. Old application code ignores the n
 `0031_assessment_source_code.sql` (owner 2026-11-19) is additive only: nullable `assessment_items.source_part_number` — the full catalog code of a smart-assessment pick, while `part_number` holds its 8-digit reference. Existing lines keep NULL and their codes unchanged.
 
 `0032_task_cancellation.sql` (owner 2026-11-19) is additive only: nullable `tasks.cancelled_at`, `cancelled_by`, `cancel_reason`, `cancel_note`, `cancelled_from_status`, and the task status value `cancelled` («لغوشده»). A cancelled stage is kept with its history and excluded from active plans, queues, progress and indicators; reactivation clears the fields and returns it to its earlier state (never as finished). After a rollback to an image older than this release, cancelled stages would show as an unknown status, so cancellations should pause until a compatible version returns.
+
+### Staged warehouse picking
+
+`0033_staged_parts_picking.sql` adds `picking_batches`. The tenant-scoped record stores the selected part versions, quantities, destinations and exact shelf allocations as a snapshot. Closing records the actor, time, recipient and new version. Creating and printing a batch leave part and stock rows intact. Delivery uses the existing handover action and commits all selected lines and the batch close in one transaction. The down migration is for development and recovery rehearsal. Image rollback keeps the table and its history.

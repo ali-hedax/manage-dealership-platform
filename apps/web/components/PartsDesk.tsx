@@ -8,6 +8,7 @@ import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum } from '@/lib/format';
 import { AppIcon } from './AppIcon';
+import { PartsPicking } from './PartsPicking';
 import { PartsLedger } from './PartsLedger';
 import { PartsWorkbench } from './PartsWorkbench';
 import { VehicleImage, VehicleTechDetails } from './FolderParts';
@@ -47,6 +48,7 @@ export function PartsDesk() {
       </header>
       {notices?.filter(n => n.key.startsWith('invoice-')).map(n => <div key={n.key} className="panel panel-body invoice-pending"><strong>● جمع‌آوری فاکتورها · <bdi>{n.caseNumber}</bdi></strong> <Link className="btn" href={`/cases/${n.caseId}#case-invoice`}>باز کردن صورت فاکتورها</Link></div>)}
       {error && <p role="alert" className="m-error">فهرست خودروها خوانده نشد. <button type="button" className="m-btn-s" onClick={() => void reload()}>تلاش دوباره</button></p>}
+      {manage && can('case.read') && can('stock.read') && <PartsPicking />}
       <div className="pdesk-grid">
         <aside className="pdesk-side" aria-label="خودروها و وضعیت">
           <section className="side-card">

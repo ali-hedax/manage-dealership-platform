@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import request from 'supertest';
-import { formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part, type StockCandidate } from '@manage/shared';
+import { formatJalaliDateInput, formatTimeInput, type CaseDetail, type DailyImport, type Part, type PickingBatch, type StockCandidate } from '@manage/shared';
 import { appVersions, auditEvents, cases, emdadRequests, partCodeCorrections, partRequests, stockReservations, users } from '../src/db/schema';
 import { buildEmdadXml, buildStockXlsx, emdadRow, type StockRow } from '../src/daily-reports/fixtures';
+import { pickingBatchRows } from '../src/parts/parts-picking.service';
 import { PrintService } from '../src/print/print.service';
 import { ReleasesService } from '../src/releases/releases.service';
 import { Client, createHarness, daysAgo, type Harness } from './harness';
@@ -437,5 +439,94 @@ describe('8 · daily inspection checklist', () => {
     // Read-only: printing changed no case.
     const [after] = await h.db.db.select({ version: cases.version }).from(cases).where(eq(cases.id, delayed.id));
     expect((await h.db.db.select({ version: cases.version }).from(cases).where(inArray(cases.id, [delayed.id])))[0]).toEqual(after);
+  });
+});
+
+describe('9 · staged multi-vehicle picking and handover', () => {
+  const path = '/parts/picking-batches';
+  const item = (p: Part, quantity = 1, departmentId: string | null = null) =>
+    ({ partId: p.id, expectedVersion: p.version, quantity, departmentId });
+  const deliver = (id: string, prices: { partId: string; saleUnitRial: number }[] = []) =>
+    parts.post(`${path}/${id}/close`, { action: 'deliver', expectedVersion: 1, recipientName: 'تعمیرکار آزمون', prices });
+
+  async function marketPart(c: CaseDetail, code: string, name: string) {
+    const draft = await newPart(c, code, 1, name);
+    const bought = await flow(draft, { action: 'market', purchaseUnitRial: 1000, saleUnitRial: 2000, supplier: 'فروشنده آزمون' });
+    expect(bought.status).toBe(201);
+    const received = await flow(bought.body, { action: 'receive' });
+    expect(received.status).toBe(201);
+    return received.body as Part;
+  }
+
+  it('prints only selected lines from two vehicles and issues selected quantities exactly once', async () => {
+    const first = await newCase('970070');
+    const second = await newCase('970071');
+    const draft = await newPart(first, '00515151', 2, 'گلگیر نوبت اول');
+    const reserved = await flow(draft, { action: 'reserve', snapshotId, fullStockCode: '0051515101', locationAddress: 'C-02-01' });
+    expect(reserved.status).toBe(201);
+    const stock = reserved.body as Part;
+    const market = await marketPart(second, '00707070', 'چراغ نوبت اول');
+    const unselected = await marketPart(second, '00707071', 'قطعه انتخاب‌نشده');
+    const list = await parts.get(path);
+    expect(list.status).toBe(200);
+    expect(list.body.items).toEqual(expect.arrayContaining([expect.objectContaining({ partId: stock.id }), expect.objectContaining({ partId: market.id })]));
+    const department = list.body.departments[0] as { id: string; name: string };
+    const id = randomUUID();
+    const body = { id, items: [item(stock, 1, department.id), item(market, 1, department.id)] };
+
+    expect((await expert.post(path, body)).status).toBe(403);
+    expect((await parts.post(path, { ...body, items: [item(stock), item(stock)] })).status).toBe(400);
+    const created = await parts.post(path, body);
+    expect(created.status).toBe(201);
+    const batch = created.body as PickingBatch;
+    expect(pickingBatchRows(batch).map(({ cells }) => [cells[2], cells[3], cells[4], cells[5], cells[8]])).toEqual([
+      ['C-02-01', stock.description, '0051515101', '1', department.name],
+      ['', market.description, '00707070', '1', department.name],
+    ]);
+    expect(batch.items.map((line) => line.caseId)).toEqual([first.id, second.id]);
+    expect((await parts.post(path, body)).body.id).toBe(id);
+    expect((await parts.post(path, { ...body, id: randomUUID() })).body.code).toBe('PICKING_ALREADY_PENDING');
+
+    const originalStock = await reservationsOf(stock.id);
+    const pdf = await pdfOf(parts, `${path}/${id}/picking.pdf`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    expect(Buffer.from(pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    expect((await expert.get(`${path}/${id}/picking.pdf`)).status).toBe(403);
+    expect(await reservationsOf(stock.id)).toEqual(originalStock);
+    expect(await one(stock)).toMatchObject({ version: stock.version, handedOverQuantity: 0 });
+    expect(await one(market)).toMatchObject({ version: market.version, handedOverQuantity: 0 });
+
+    const deliveries = await Promise.all([deliver(id), deliver(id)]);
+    expect(deliveries.map((res) => res.status).sort()).toEqual([201, 409]);
+    expect(await one(stock)).toMatchObject({ handedOverQuantity: 1, deliverableQuantity: 1, handedOverDepartment: department });
+    expect(await one(market)).toMatchObject({ flowState: 'handed_over', handedOverQuantity: 1 });
+    expect(await one(unselected)).toMatchObject({ flowState: 'ready', handedOverQuantity: 0 });
+    expect((await reservationsOf(stock.id)).map((r) => [r.status, Number(r.quantity)]).sort()).toEqual([['issued', 1], ['reserved', 1]]);
+    const history = await parts.get(path + '?history=1');
+    expect(history.body.batches).toEqual(expect.arrayContaining([expect.objectContaining({ id, status: 'delivered', recipientName: 'تعمیرکار آزمون' })]));
+
+    const remainder = await one(stock);
+    const next = randomUUID();
+    expect((await parts.post(path, { id: next, items: [item(remainder)] })).status).toBe(201);
+    expect((await deliver(next)).status).toBe(201);
+    expect(await one(stock)).toMatchObject({ handedOverQuantity: 2, flowState: 'handed_over' });
+  });
+
+  it('rejects a stale batch without delivering other lines and makes them selectable after cancellation', async () => {
+    const c = await newCase('970072');
+    const a = await marketPart(c, '00707072', 'قلم سالم');
+    const b = await marketPart(c, '00707073', 'قلم تحویل تکی');
+    const id = randomUUID();
+    expect((await parts.post(path, { id, items: [item(a), item(b)] })).status).toBe(201);
+    expect((await flow(b, { action: 'hand_over', recipientName: 'تحویل تکی قبلی' })).status).toBe(201);
+    expect((await parts.get(`${path}/${id}/picking.pdf`)).status).toBe(409);
+    expect((await deliver(id)).body.code).toBe('PICKING_PART_CHANGED');
+    expect(await one(a)).toMatchObject({ version: a.version, handedOverQuantity: 0 });
+    expect((await parts.post(`${path}/${id}/close`, { action: 'cancel', expectedVersion: 1 })).status).toBe(201);
+    expect((await deliver(id)).body.code).toBe('PICKING_BATCH_CLOSED');
+    const list = await parts.get(path);
+    expect(list.body.items).toEqual(expect.arrayContaining([expect.objectContaining({ partId: a.id })]));
+    expect(list.body.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ partId: b.id })]));
   });
 });

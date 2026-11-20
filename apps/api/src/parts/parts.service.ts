@@ -72,6 +72,13 @@ function rejectedNeedActions<T extends string>(p: { assessmentRejectedAt: Date |
   return p.assessmentRejectedAt && p.status === 'needed' ? actions.filter((a) => a === 'cancel') : actions;
 }
 
+export function remainingHandover(p: PartRow, quantities: { quantity: string }[]): number {
+  const handed = handedOverQuantity(p);
+  const target = p.stockParallelAt ? p.quantity : Math.min(p.quantity, p.emdadReceivedQuantity ?? p.quantity);
+  const held = quantities.reduce((sum, row) => sum + Number(row.quantity), 0);
+  return quantities.length ? Math.min(target - handed, held) : p.emdadReceivedQuantity == null ? p.quantity - handed : 0;
+}
+
 const createdByUser = alias(users, 'part_created_by');
 const noticeBy = alias(users, 'price_notice_by');
 const noticeAnswerBy = alias(users, 'price_notice_answer_by');
@@ -344,9 +351,7 @@ export class PartsService {
           eq(stockReservations.tenantId, tenantId), eq(stockReservations.partRequestId, id), eq(stockReservations.status, 'reserved'),
         )).orderBy(asc(stockReservations.id));
         const handed = handedOverQuantity(p);
-        const target = p.stockParallelAt ? p.quantity : Math.min(p.quantity, p.emdadReceivedQuantity ?? p.quantity);
-        const held = reservations.reduce((n, r) => n + Number(r.quantity), 0);
-        const available = reservations.length ? Math.min(target - handed, held) : p.emdadReceivedQuantity == null ? p.quantity - handed : 0;
+        const available = remainingHandover(p, reservations);
         const delivery = input.deliveryQuantity ?? available;
         if (!Number.isInteger(delivery) || delivery < 1 || delivery > available) throw badRequest('DELIVERY_QUANTITY_INVALID', `تعداد تحویل باید بین یک و ${available} عددِ باقی‌مانده و آماده باشد`);
         let left = delivery;
@@ -418,7 +423,7 @@ export class PartsService {
   // ------------------------------------------------------- unified list (spec 7)
 
   /** Latest official Emdad category linked to each line (by match or by request number). */
-  private async emdadByPart(db: DbOrTx, tenantId: string, partIds: string[], withHistory = false) {
+  async emdadByPart(db: DbOrTx, tenantId: string, partIds: string[], withHistory = false) {
     const out = new Map<string, NonNullable<Part['emdad']>>();
     if (!partIds.length) return out;
     const rows = await db
