@@ -33,21 +33,21 @@ export default function RemindersPage() {
       <BackLink href={workspaceHome(me)} />
       <header className="page-head">
         <div>
-          <h1>تذکرهای من</h1>
-          <p className="muted">تذکر کوتاه برای یک نفر، چند نفر یا یک نقش؛ گفت‌وگو نیست و هر تغییر وضعیت در تاریخچه می‌ماند.</p>
+          <h1>فیدبک‌های من</h1>
+          <p className="muted">فیدبک کوتاه برای یک نفر، چند نفر یا یک نقش؛ گفت‌وگو نیست و هر تغییر وضعیت در تاریخچه می‌ماند.</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setComposing(true)}>تذکر تازه</button>
+        <button type="button" className="btn btn-primary" onClick={() => setComposing(true)}>فیدبک تازه</button>
       </header>
       <ReminderCards />
-      <nav className="segmented" aria-label="نوع تذکرها">
+      <nav className="segmented" aria-label="نوع فیدبک‌ها">
         <button type="button" aria-pressed={tab === 'received'} onClick={() => setTab('received')}>دریافتی ({toPersianDigits(data?.received.length ?? 0)})</button>
         <button type="button" aria-pressed={tab === 'sent'} onClick={() => setTab('sent')}>فرستاده ({toPersianDigits(data?.sent.length ?? 0)})</button>
       </nav>
-      {error && <p role="alert" className="callout callout-red">تذکرها دریافت نشد. <button type="button" className="btn btn-sm" onClick={refresh}>تلاش دوباره</button></p>}
-      {!data && !error && <p role="status" className="muted">در حال دریافت تذکرها…</p>}
+      {error && <p role="alert" className="callout callout-red">فیدبک‌ها دریافت نشد. <button type="button" className="btn btn-sm" onClick={refresh}>تلاش دوباره</button></p>}
+      {!data && !error && <p role="status" className="muted">در حال دریافت فیدبک‌ها…</p>}
       {data && tab === 'received' && (
-        <section className="panel" aria-label="تذکرهای دریافتی">
-          {data.received.length === 0 && <p className="panel-body muted">تذکری نرسیده است.</p>}
+        <section className="panel" aria-label="فیدبک‌های دریافتی">
+          {data.received.length === 0 && <p className="panel-body muted">فیدبکی نرسیده است.</p>}
           <ul className="reminder-list">
             {data.received.map((r) => (
               <li key={r.id}>
@@ -65,8 +65,8 @@ export default function RemindersPage() {
         </section>
       )}
       {data && tab === 'sent' && (
-        <section className="panel" aria-label="تذکرهای فرستاده">
-          {data.sent.length === 0 && <p className="panel-body muted">هنوز تذکری نفرستاده‌اید.</p>}
+        <section className="panel" aria-label="فیدبک‌های فرستاده">
+          {data.sent.length === 0 && <p className="panel-body muted">هنوز فیدبکی نفرستاده‌اید.</p>}
           <ul className="reminder-list">
             {data.sent.map((s) => (
               <li key={s.id}>

@@ -51,7 +51,6 @@ export function Shell({ children }: { children: ReactNode }) {
         { href: '/settings', label: 'تنظیمات', icon: 'gear', show: me.isOwner || can('user.manage') || can('calendar.manage') || can('workshop.manage') || can('settings.manage') || can('reference.parts.read') || can('daily_reports.upload') || can('workshop.read'), match: (p) => ['/settings', '/users', '/workshop/settings', '/reference-data', '/daily-reports'].includes(p) },
       ];
   const more: NavItem[] = technicianOnly ? [] : [
-    { href: '/accidents', label: 'همهٔ میزهای کار', icon: 'desk', show: desks.length > 1, match: (p) => p === '/accidents' },
     { href: '/workshop', label: 'برنامه و گزارش تعمیر', icon: 'wrench', show: can('workshop.read'), match: (p) => p === '/workshop' },
     { href: '/daily-reports', label: 'گزارش‌های روزانه', icon: 'upload', show: can('daily_reports.upload') || can('daily_reports.apply') },
     { href: '/stock', label: 'موجودی و رزرو', icon: 'layers', show: can('stock.read') },
@@ -60,7 +59,7 @@ export function Shell({ children }: { children: ReactNode }) {
   ];
   // Side menu (owner, 2026-11-19 — final structure). Every link is an existing route with its
   // existing permission; nothing duplicates the person's own workspace, and unfinished modules
-  // are shown only to the owner, marked «در دست توسعه». Only one group is open at a time.
+  // are grouped in the owner-only roadmap. Only one group is open at a time.
   const planned = me.modules.filter((m) => m.status === 'planned');
   const plannedLink = (key: ModuleKey, icon: IconName): NavItem => ({ href: `/modules/${key}`, label: MODULE_LABELS[key], icon, show: !!me.isOwner && planned.some((m) => m.key === key), planned: true });
   const byHref = (href: string) => [...primary, ...more].find((i) => i.href === href)!;
@@ -71,7 +70,6 @@ export function Shell({ children }: { children: ReactNode }) {
       { href: '/accidents/expert', label: 'خودروهای تصادفی', icon: 'car', show: desks.some((w) => w.key === 'expert') && home !== '/accidents/expert', match: (p) => p === '/accidents/expert' },
       { ...byHref('/cases'), label: 'پرونده و کارشناسی', match: (p) => p.startsWith('/cases') && p !== '/cases/new' },
       { href: '/cases/new', label: 'پذیرش خودرو', icon: 'add', show: can('case.create'), match: (p) => p === '/cases/new' },
-      { ...byHref('/accidents'), label: 'همهٔ میزهای کار تصادفات' },
       { ...reports, label: 'گزارش‌ها و فرم‌های تصادفات', show: reports.show && !manager },
     ] },
     { key: 'parts', label: 'انبار قطعات یدکی', icon: 'nav-package', items: [
@@ -79,27 +77,29 @@ export function Shell({ children }: { children: ReactNode }) {
       { ...byHref('/stock'), label: 'موجودی و رزرو' },
       { ...byHref('/emdad'), label: 'امداد ویژه تصادفات' },
       { ...byHref('/daily-reports'), label: 'گزارش‌های روزانهٔ انبار' },
-      plannedLink('parts_inventory', 'box'),
     ] },
     { key: 'workshop', label: 'مدیریت تعمیرگاه', icon: 'nav-calendar', items: [
       { ...byHref('/workshop'), label: 'برنامه و پیگیری مراحل تعمیر' },
-      plannedLink('periodic_service', 'calendar'),
-      plannedLink('workforce', 'team'),
     ] },
-    { key: 'reception', label: 'پذیرش و ترخیص', icon: 'nav-clipboard', items: [plannedLink('reception', 'file')] },
-    { key: 'crm', label: 'رضایت مشتری', icon: 'nav-heart', items: [plannedLink('customer_comms', 'send')] },
     { key: 'manager', label: 'مدیر خدمات', icon: 'nav-chart', items: [
       { ...byHref('/control-room'), label: 'داشبورد مدیر خدمات', show: manager && home !== '/accidents/manager' && home !== '/accidents/owner' },
       { ...reports, label: 'گزارش‌های مدیریتی', show: reports.show && manager },
       { ...byHref('/'), label: 'آمار پرونده‌ها' },
-      plannedLink('finance', 'money'),
-      plannedLink('warranty', 'shield'),
-      plannedLink('multi_dealership', 'grid'),
-      plannedLink('integrations', 'layers'),
     ] },
     { key: 'settings', label: 'تنظیمات سیستم', icon: 'nav-settings', items: [
       { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/workshop/settings', '/reference-data'].includes(p) },
       { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team', show: me.isOwner || can('user.manage'), match: (p) => p === '/users' },
+    ] },
+    { key: 'roadmap', label: 'نقشهٔ راه', icon: 'layers', items: [
+      plannedLink('parts_inventory', 'box'),
+      plannedLink('periodic_service', 'calendar'),
+      plannedLink('workforce', 'team'),
+      plannedLink('reception', 'file'),
+      plannedLink('customer_comms', 'send'),
+      plannedLink('finance', 'money'),
+      plannedLink('warranty', 'shield'),
+      plannedLink('multi_dealership', 'grid'),
+      plannedLink('integrations', 'layers'),
     ] },
   ];
   const isActive = (i: NavItem) => (i.match ? i.match(pathname) : pathname === i.href);
@@ -111,7 +111,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [compact, setCompact] = useState(false);
   useEffect(() => { try { setCompact(localStorage.getItem('manage-nav-compact') === '1'); } catch { /* storage unavailable */ } }, []);
   const toggleCompact = () => { const next = !compact; setCompact(next); try { localStorage.setItem('manage-nav-compact', next ? '1' : '0'); } catch { /* storage unavailable */ } };
-  const workspaceItem: NavItem = technicianOnly ? primary[0]! : { href: home, label: 'میزکار من', icon: 'nav-workspace', show: true, match: (p) => p === home || (p.startsWith('/accidents/') && !groups.some((g) => g.items.some((i) => i.show && i.href === p))) };
+  const workspaceItem: NavItem = technicianOnly ? primary[0]! : { href: home, label: 'میزکار من', icon: 'nav-workspace', show: true, match: (p) => p === home };
 
   const link = (i: NavItem) => {
     if (!i.show) return null;
@@ -119,7 +119,7 @@ export function Shell({ children }: { children: ReactNode }) {
     return <Link key={i.href + i.label} href={i.href} className={i.planned ? 'planned' : undefined} aria-current={active ? 'page' : undefined} title={compact ? i.label : undefined}><AppIcon name={i.icon} /><span>{i.label}</span>{i.planned && <span className="tag-dev">در دست توسعه</span>}</Link>;
   };
   async function logout() { await api('/auth/logout', { method: 'POST' }).catch(() => {}); router.replace('/login'); }
-  const back = backTarget(pathname, home);
+  const back = backTarget(pathname, home, desks.length > 1);
 
   return (
     <div className={`shell app-shell${compact ? ' side-compact' : ''}`}>
@@ -133,6 +133,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </Link>
         <nav className="side-nav" id="main-navigation" aria-label="بخش‌های منیج">
           {technicianOnly ? primary.map(link) : link(workspaceItem)}
+          {desks.length > 1 && link({ href: '/launch', label: 'انتخاب میزکار', icon: 'desk', show: true })}
           {visibleGroups.map((g) => (
             <NavGroup key={g.key} id={g.key} label={g.label} icon={g.icon} open={!compact && openGroup === g.key} active={activeGroup === g.key}
               onToggle={() => { if (compact) { setCompact(false); setOpenGroup(g.key); } else setOpenGroup(openGroup === g.key ? null : g.key); }}>
@@ -152,14 +153,14 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="top-end">
             <VersionChip />
             <span className="top-tenant" title="نمایندگی">{me.tenant.name}</span>
-            <Link href="/reminders" className="icon-btn bell" aria-label={unseen ? `تذکرها و اعلان‌ها، ${unseen.toLocaleString('fa-IR')} مورد تازه` : 'تذکرها و اعلان‌ها'} aria-current={pathname === '/reminders' ? 'page' : undefined}>
+            <Link href="/reminders" className="icon-btn bell" aria-label={unseen ? `فیدبک‌ها و اعلان‌ها، ${unseen.toLocaleString('fa-IR')} مورد تازه` : 'فیدبک‌ها و اعلان‌ها'} aria-current={pathname === '/reminders' ? 'page' : undefined}>
               <AppIcon name="bell" />{unseen > 0 && <span className="dot" aria-hidden="true" />}
             </Link>
             <details className="account-menu">
               <summary aria-label={`حساب ${me.displayName}`}><span className="avatar" aria-hidden="true">{initials(me.displayName)}</span><span className="who">{me.displayName}</span><AppIcon name="chevron-down" className="chev" /></summary>
               <div className="account-pop" role="group" aria-label="حساب کاربری">
                 <div className="account-head"><strong>{me.displayName}</strong><span>{me.isOwner ? 'مالک سامانه' : me.roles.map((r) => ROLE_LABELS[r]).join('، ')}</span><span>{me.tenant.name}</span></div>
-                <Link href="/reminders">تذکرهای من</Link>
+                <Link href="/reminders">فیدبک‌های من</Link>
                 <InstallButton />
                 <button type="button" className="m-btn2-s" onClick={logout}><AppIcon name="logout" />خروج</button>
               </div>
@@ -195,8 +196,9 @@ function NavGroup({ id, label, icon, open, active, onToggle, children }: { id: s
   );
 }
 
-export function backTarget(pathname: string, home: string): { href: string; label: string } | null {
+export function backTarget(pathname: string, home: string, canChooseDesk = false): { href: string; label: string } | null {
   if (pathname === home || pathname === '/launch' || pathname === '/control-room') return null;
+  if (canChooseDesk && /^\/accidents\/[^/]+$/.test(pathname)) return { href: '/launch', label: 'بازگشت به انتخاب میزکار' };
   // Sidebar destinations are top-level places: no «back» link above them.
   if (['/reminders', '/reports/people', '/workshop/technician/work', '/parts', '/settings', '/reports', '/cases'].includes(pathname)) return null;
   if (/^\/cases\/(?!new$|import$)[^/]+$/.test(pathname)) return null;
@@ -206,7 +208,7 @@ export function backTarget(pathname: string, home: string): { href: string; labe
   return { href: home, label: 'بازگشت به میز کار' };
 }
 
-const PAGE_TITLES: [RegExp, string][] = [[/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'تذکرها']];
+const PAGE_TITLES: [RegExp, string][] = [[/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
 /** Browser tab title for each area, so several open tabs can be told apart. */
 export function pageTitle(pathname: string): string {
   const module = /^\/modules\/([^/]+)/.exec(pathname)?.[1];

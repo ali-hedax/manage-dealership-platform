@@ -31,8 +31,8 @@ test('accident expert: folder desk → case folder → tabs and «قدم بعد�
   await expect(rows.first()).toBeVisible();
   await expect(rows.first().locator('.arow-next')).toContainText('قدم بعدی');
   await shots(page, 'expert-desk', (n) => info.outputPath(n));
-  // A row opens only through its own «پرونده» link (one clear action per row; rare ones in «⋯»).
-  await rows.first().getByRole('link', { name: /باز کردن پرونده/ }).click();
+  // A row opens only through its own «کارهای ضروری» link (one clear action per row; rare ones in «⋯»).
+  await rows.first().getByRole('link', { name: /^کارهای ضروری/ }).click();
   await expect(page.locator('.case-hero')).toBeVisible();
   await expect(page.getByRole('list', { name: 'مسیر خودرو' }).getByRole('listitem')).toHaveCount(6);
   for (const tab of ['قطعات', 'مدارک', 'تاریخچه']) await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible();
@@ -68,7 +68,7 @@ test('technician on a phone: month wage on top and one big button', async ({ pag
   await page.screenshot({ path: info.outputPath('technician-390.png'), fullPage: true });
 });
 
-test('service manager: control room with four numbers, funnel, map and «تذکر»', async ({ page }, info) => {
+test('service manager: control room with four numbers, funnel, map and «فیدبک»', async ({ page }, info) => {
   await login(page, 'manager');
   await page.goto('/accidents/manager');
   const room = page.getByTestId('control-room');
@@ -87,7 +87,7 @@ test('service manager: control room with four numbers, funnel, map and «تذک�
   await page.keyboard.press('Enter');
   await expect(bay).toHaveAttribute('aria-pressed', 'true');
   await expect(room.getByTestId('bay-detail')).toBeVisible();
-  await room.getByRole('button', { name: 'ارسال تذکر', exact: true }).click();
+  await room.getByRole('button', { name: 'ارسال فیدبک', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   // Display only: no operational button anywhere in the room.
   await page.keyboard.press('Escape');

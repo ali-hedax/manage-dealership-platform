@@ -36,12 +36,12 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await expect(wages).toContainText('۴۵,۰۰۰,۰۰۰ ریال');
   await openCaseSections(page, 'tasks');
   await expect(page.getByTestId('responsibility-bar')).toContainText('کارشناس تصادفات نمونه');
-  await page.getByRole('button', { name: 'تذکر', exact: true }).click();
-  const compose = page.getByRole('dialog', { name: 'فرستادن تذکر' });
+  await page.getByRole('button', { name: 'فیدبک', exact: true }).click();
+  const compose = page.getByRole('dialog', { name: 'فرستادن فیدبک' });
   await compose.getByRole('checkbox', { name: /تکنسین نمونه/ }).check();
   await compose.getByRole('button', { name: 'لطفاً امروز پیگیری کن.', exact: true }).click();
   await compose.getByRole('button', { name: 'فوری', exact: true }).click();
-  await compose.getByRole('button', { name: 'فرستادن تذکر', exact: true }).click();
+  await compose.getByRole('button', { name: 'فرستادن فیدبک', exact: true }).click();
   await expect(compose).toBeHidden();
 
   // Technician on a phone: the reminder card on top, the own wage on the job card, "I have a problem".
@@ -51,7 +51,7 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await expect(page.getByRole('heading', { level: 1, name: /^سلام/ })).toBeVisible();
   await expect(page.getByRole('link', { name: 'اجرت این ماه' })).toBeVisible();
   const card = page.getByTestId('reminder-card').filter({ hasText: 'لطفاً امروز پیگیری کن.' });
-  await expect(card).toContainText('تذکر از کارشناس تصادفات نمونه');
+  await expect(card).toContainText('فیدبک از کارشناس تصادفات نمونه');
   await card.getByRole('button', { name: 'دیدم', exact: true }).click();
   await card.getByRole('button', { name: 'انجام شد', exact: true }).click();
   await expect(card).toHaveCount(0);
@@ -108,12 +108,12 @@ test('service manager sends a reminder from a report row to the executive role a
   await login(page, 'manager');
   await page.goto('/reports?view=accident');
   await expect(page.getByTestId('work-row').first()).toBeVisible();
-  const button = page.getByRole('button', { name: /^تذکر دربارهٔ/ }).first();
+  const button = page.getByRole('button', { name: /^فیدبک دربارهٔ/ }).first();
   await expect(button).toBeVisible();
   await button.click();
-  const compose = page.getByRole('dialog', { name: 'فرستادن تذکر' });
-  await expect(compose.getByRole('textbox', { name: 'متن تذکر' })).toHaveValue(/^پیگیری: /);
-  await compose.getByRole('button', { name: 'فرستادن تذکر', exact: true }).click();
+  const compose = page.getByRole('dialog', { name: 'فرستادن فیدبک' });
+  await expect(compose.getByRole('textbox', { name: 'متن فیدبک' })).toHaveValue(/^پیگیری: /);
+  await compose.getByRole('button', { name: 'فرستادن فیدبک', exact: true }).click();
   await expect(compose).toBeHidden();
   const sent = (await (await page.request.get('/api/v1/reminders')).json()).sent;
   expect(sent[0].source).toBe('manager_report');

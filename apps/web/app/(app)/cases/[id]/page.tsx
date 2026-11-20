@@ -140,7 +140,7 @@ export default function CaseDetailPage() {
         {can('case.update') && kase.status === 'open' && <Link className={daily} href={`/cases/${kase.id}/edit`}><AppIcon name="settings" />ویرایش پرونده</Link>}
         <button className={daily} type="button" onClick={() => window.print()}><AppIcon name="print" />چاپ</button>
         <button className={daily} type="button" onClick={() => goTab('docs')}><AppIcon name="doc" />مدارک</button>
-        <button className={daily} type="button" onClick={() => setReminding(true)}><AppIcon name="bell" />تذکر</button>
+        <button className={daily} type="button" onClick={() => setReminding(true)}><AppIcon name="bell" />فیدبک</button>
         {can('case.create') && (
           <details className="more-menu">
             <summary className={daily}><AppIcon name="list" />بیشتر ⋯</summary>

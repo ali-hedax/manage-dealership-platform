@@ -10,8 +10,8 @@ import {useToast} from '@/lib/toast';
 import {DailyStatusPanel} from '@/components/DailyStatusPanel';
 import {EmdadDetail} from '@/components/EmdadDetail';
 
-function Emdad(){
- const {can}=useAuth();const toast=useToast();const params=useSearchParams();
+function Emdad({params}:{params:ReturnType<typeof useSearchParams>}){
+ const {can}=useAuth();const toast=useToast();
  const [term,setTerm]=useState(params.get('q')??''),[q,setQ]=useState(params.get('q')??''),[status,setStatus]=useState<EmdadStatusCategory|''>(''),[match,setMatch]=useState<EmdadMatchStatus|''>((params.get('match') as EmdadMatchStatus)||'');
  const [assignee,setAssignee]=useState<''|'me'|'none'>(params.get('assignee')==='me'?'me':''),[openOnly,setOpenOnly]=useState(params.get('openOnly')==='1'),[codeIssue,setCodeIssue]=useState(false),[stale,setStale]=useState(false),[page,setPage]=useState(1),[open,setOpen]=useState<string|null>(null);
  const [dueToday,setDueToday]=useState(params.get('dueToday')==='1'),[review,setReview]=useState(params.get('review')==='1');
@@ -39,4 +39,8 @@ function Emdad(){
   <div className="row no-print"><button type="button" className="btn btn-sm" disabled={page<=1} onClick={()=>setPage(page-1)}>صفحه قبل</button><span className="small">صفحه {faNum(page)} از {faNum(pages)}</span><button type="button" className="btn btn-sm" disabled={page>=pages} onClick={()=>setPage(page+1)}>صفحه بعد</button></div></div></section>
  {open&&<EmdadDetail id={open} onClose={()=>setOpen(null)} onChange={()=>void mutate()}/>}</div>;
 }
-export default function Page(){return <Suspense><Emdad/></Suspense>;}
+function FilteredEmdad(){
+ const params=useSearchParams();
+ return <Emdad key={params.toString()} params={params}/>;
+}
+export default function Page(){return <Suspense><FilteredEmdad/></Suspense>;}

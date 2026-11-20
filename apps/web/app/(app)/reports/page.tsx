@@ -280,11 +280,11 @@ function ReportsPage() {
           </div>
 
           {can('report.manager') && view === 'manager' && data.kpis.some((k) => k.value > 0) && (
-            <div className="kpi-reminders no-print" role="group" aria-label="تذکر دربارهٔ یافته‌ها">
-              <span className="xs muted">تذکر دربارهٔ یافته‌ها:</span>
+            <div className="kpi-reminders no-print" role="group" aria-label="فیدبک دربارهٔ یافته‌ها">
+              <span className="xs muted">فیدبک دربارهٔ یافته‌ها:</span>
               {data.kpis.filter((k) => k.value > 0).map((k) => (
                 <button key={k.key} type="button" className="btn btn-sm" onClick={() => setRemind({ role: /part|قطعه/.test(k.key + k.label) ? 'parts_clerk' : 'accident_expert', source: 'manager_report', body: `${k.label}: ${faNum(k.value)} ${k.unit}؛ لطفاً امروز پیگیری کن.`.slice(0, 300) })}>
-                  تذکر · {k.label}
+                  فیدبک · {k.label}
                 </button>
               ))}
             </div>
@@ -371,7 +371,7 @@ function ReportsPage() {
                               {i.nextAction}
                               {can('report.manager') && (
                                 <div className="no-print">
-                                  <button type="button" className="btn btn-sm" aria-label={`تذکر دربارهٔ ${i.caseNumber}`} onClick={() => remindRow(i)}>تذکر</button>
+                                  <button type="button" className="btn btn-sm" aria-label={`فیدبک دربارهٔ ${i.caseNumber}`} onClick={() => remindRow(i)}>فیدبک</button>
                                 </div>
                               )}
                             </td>

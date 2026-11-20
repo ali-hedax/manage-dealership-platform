@@ -56,7 +56,7 @@ test('phase 3 screenshots', async ({ page }, info) => {
   await page.request.post(`/api/v1/cases/${first.id}/transfer`, { headers, data: { toUserId: supervisor.id, reason: 'تقسیم کار هفتگی', expectedVersion: version } });
 
   await page.goto('/reminders');
-  await expect(page.getByRole('heading', { name: 'تذکرهای من' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'فیدبک‌های من' })).toBeVisible();
   await page.getByRole('button', { name: /^فرستاده/ }).click();
   await shoot(page, 'reminders');
 
