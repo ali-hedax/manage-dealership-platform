@@ -1,3 +1,5 @@
+import { PartsPickingController } from '../parts/parts-picking.controller';
+import { PartsPickingService } from '../parts/parts-picking.service';
 import { CaseDocumentsController } from '../cases/case-documents.controller';
 import { CaseDeletionController } from '../cases/case-deletion.controller';
 import { CaseDeletionService } from '../cases/case-deletion.service';
@@ -64,6 +66,7 @@ import {
     DashboardController,
     AssessmentsController,
     PartsController,
+    PartsPickingController,
     PartsOperationsController,
     FinanceController,
     CompletionController,
@@ -86,6 +89,7 @@ import {
     DashboardService,
     AssessmentsService,
     PartsService,
+    PartsPickingService,
     PartsWorkbenchService,
     PartsOperationsService,
     FinanceService,

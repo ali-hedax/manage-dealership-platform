@@ -28,7 +28,12 @@ it('six parts-supply staff sign in with their own PIN, act independently and are
   for (const [i, username] of names.entries()) {
     const r = await admin.post('/staff/technicians', { displayName: `مسئول قطعات آزمون ${i + 1}`, username, pin: `25${i}${i}`, role: 'parts_clerk' });
     expect(r.status).toBe(201);
-    expect(JSON.stringify(r.body)).not.toContain(`25${i}${i}`);
+    // An unrelated UUID can contain the same four digits.
+    const withoutIds = (r.body as { id: string; username: string }[]).map(({ id, ...staff }) => {
+      expect(id).toMatch(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
+      return staff;
+    });
+    expect(JSON.stringify(withoutIds)).not.toContain(`25${i}${i}`);
   }
   const rows = await h.db.db.select().from(users).where(inArray(users.username, names));
   expect(rows).toHaveLength(6);

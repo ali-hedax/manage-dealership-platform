@@ -1498,3 +1498,19 @@ export const appVersions = pgTable('app_versions', {
   noteKeys: jsonb('note_keys').$type<string[]>().notNull().default([]),
   confirmedAt: ts('confirmed_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('app_versions_number_unique').on(t.major, t.minor, t.patch)]);
+
+export const pickingBatches = pgTable('picking_batches', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  items: jsonb('items').$type<import('@manage/shared').PickingBatchLine[]>().notNull(),
+  status: text('status').$type<import('@manage/shared').PickingBatch['status']>().notNull().default('pending'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  closedAt: ts('closed_at'),
+  closedBy: uuid('closed_by').references(() => users.id),
+  recipientName: text('recipient_name'),
+  isTest: boolean('is_test').notNull().default(false),
+  version: integer('version').notNull().default(1),
+}, (t) => [
+  index('picking_batches_tenant_status_created_idx').on(t.tenantId, t.status, t.createdAt),
+]);

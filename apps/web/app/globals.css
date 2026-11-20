@@ -1937,3 +1937,7 @@ tr.is-late td { background:var(--red-soft); }
 .technician-confirm { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; }
 .technician-confirm > strong { flex-basis:100%; }
 .technician-confirm-actions, .technician-actions { display:flex; flex-wrap:wrap; gap:8px; }
+
+.picking-controls { flex-wrap: wrap; align-items: end; gap: .75rem; }
+.picking-vehicle summary { padding-block: .3rem; }
+.picking-quantity { inline-size: 6rem; }

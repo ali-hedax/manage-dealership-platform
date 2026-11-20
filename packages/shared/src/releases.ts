@@ -32,6 +32,18 @@ export const RELEASE_LINE = { major: 1, minor: 0 } as const;
 /** Newest first. Add one note per user-visible change set in the PR that ships it. */
 export const CHANGE_NOTES: readonly ChangeNote[] = [
   {
+    key: 'picking',
+    date: '2026-11-20',
+    summary: 'انتخاب چندگانهٔ قطعات آمادهٔ چند خودرو و چاپ PDF برای جمع‌آوری و تحویل مرحله‌ای از میز قطعات.',
+    sections: [{
+      title: 'میز قطعات',
+      items: [
+        'قطعات آماده را تکی، گروهی یا با صافی بخش کاری انتخاب کنید و برای هر نوبت PDF همان قطعات را بگیرید.',
+        'تعداد، مقصد و تحویل‌گیرندهٔ هر نوبت ثبت می‌شود و ثبت تکراری تحویل امکان ندارد. چاپ برگه فقط‌خواندنی است.',
+      ],
+    }],
+  },
+  {
     key: 'sidebar-isaco-2026-11-19',
     date: '2026-11-19',
     summary: 'منوی کناری ساده و یکدست با «میزکار من» در ابتدا، کد محصول ایساکو در جزئیات فنی خودرو و الزام نام و کد فنی هنگام افزودن دستی قطعه.',
