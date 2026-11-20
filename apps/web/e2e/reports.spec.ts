@@ -19,7 +19,7 @@ test('service manager: KPI opens its list, filters survive opening a case, chart
   await expect(page.getByText('داده آزمایشی').first()).toBeVisible();
 
   // The "blocked" figure equals the case list it opens.
-  const blocked = page.locator('.kpi', { hasText: 'دارای مانع' });
+  const blocked = page.locator('.kpi', { hasText: 'مانع ثبت‌شده' });
   const value = (await blocked.locator('.kpi-value').innerText()).trim();
   await blocked.click();
   await expect(page).toHaveURL(/\/cases\?flag=blocked/);
