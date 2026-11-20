@@ -96,7 +96,16 @@ export class PartsPickingService {
       const category = emdad.get(p.id)?.category;
       const state = partFlowState({ status: p.status, source: p.source, consumedAt: p.consumedAt, emdadCategory: category, parallelStock: parallel });
       const reservations = byPart.get(p.id) ?? [];
-      const available = Math.min(999, Math.floor(remainingHandover(p, reservations.map(({ r }) => r))));
+      // The existing issue action consumes shelf reservations by ID and accepts whole pieces.
+      // If a legacy reservation is fractional, only its whole portion can be issued in that pass.
+      let wholeFromShelves = 0;
+      for (const { r } of reservations) {
+        const quantity = Number(r.quantity);
+        wholeFromShelves += Math.floor(quantity);
+        if (!Number.isInteger(quantity)) break;
+      }
+      const available = Math.min(999, remainingHandover(p, reservations.map(({ r }) => r)),
+        reservations.length ? wholeFromShelves : 999);
       if ((p.status === 'reserved' && !reservations.length) || (parallel && !reservations.length)) return [];
       if (available < 1 || !isPartActionAllowed(state, 'hand_over') || (!parallel && p.source === 'company' && category === 'cancelled')) return [];
       const linked = linkedDepartments.get(p.id);

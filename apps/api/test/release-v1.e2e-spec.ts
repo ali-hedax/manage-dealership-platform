@@ -83,6 +83,7 @@ beforeAll(async () => {
     sku('0031313101', '1', 'B-02-01', 'سپر جلو'),
     sku('0041414101', '2', '', 'براکت سپر'),
     sku('0051515101', '5', 'C-02-01', 'گلگیر راست'),
+    sku('0080828201', '5', 'D-01-02', 'قطعه آزمون برداشت تعدادی'),
   ]));
   const applied = await apply(stock, -300);
   expect(applied.status).toBe(201);
@@ -511,6 +512,27 @@ describe('9 · staged multi-vehicle picking and handover', () => {
     expect((await parts.post(path, { id: next, items: [item(remainder)] })).status).toBe(201);
     expect((await deliver(next)).status).toBe(201);
     expect(await one(stock)).toMatchObject({ handedOverQuantity: 2, flowState: 'handed_over' });
+  });
+
+  it('prints only whole units that the existing stock handover can issue', async () => {
+    const c = await newCase('970073');
+    const draft = await newPart(c, '00808282', 2, 'قلم رزرو اعشاری قدیمی');
+    const reserved = await flow(draft, { action: 'reserve', snapshotId, fullStockCode: '0080828201', locationAddress: 'D-01-02' });
+    expect(reserved.status).toBe(201);
+    const p = reserved.body as Part;
+    const [original] = await reservationsOf(p.id);
+    await h.db.db.update(stockReservations).set({ quantity: '1.5' }).where(eq(stockReservations.id, original!.id));
+    await h.db.db.insert(stockReservations).values({ ...original!, id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', quantity: '0.5' });
+
+    const list = await parts.get(path);
+    expect(list.body.items).toEqual(expect.arrayContaining([expect.objectContaining({ partId: p.id, available: 1 })]));
+    expect((await parts.post(path, { id: randomUUID(), items: [item(p, 2)] })).body.code).toBe('PICKING_PART_CHANGED');
+    const id = randomUUID();
+    const batch = await parts.post(path, { id, items: [item(p)] });
+    expect(batch.status).toBe(201);
+    expect(pickingBatchRows(batch.body)[0]?.cells[5]).toBe('1');
+    expect((await deliver(id)).status).toBe(201);
+    expect(await one(p)).toMatchObject({ handedOverQuantity: 1 });
   });
 
   it('rejects a stale batch without delivering other lines and makes them selectable after cancellation', async () => {
