@@ -9,3 +9,6 @@
 # 2026-11-07 release record, reworded in c682adf. Image tags, not secrets.
 ce5f8de2ab1fe19eb5a635398c2d8a0b1e7ccb49:docs/DEPLOYMENT.md:generic-api-key:10
 ce5f8de2ab1fe19eb5a635398c2d8a0b1e7ccb49:docs/RELEASE_INTEGRATION_20261107.md:generic-api-key:30
+# Change-note key "vehicle-family-2026-11-21" (a release-note name in releases.ts),
+# renamed to "family-match" in the next commit. A label, not a secret.
+4e1af52e2b9fa1461c2b07078c54905d0a645d07:packages/shared/src/releases.ts:generic-api-key:35
