@@ -116,11 +116,12 @@ export function CaseFolderHeader({ kase, tab, onTab, actions, chips, side, child
 const ACTOR_LABEL: Record<NextActor, string> = { accident_expert: 'کارشناس تصادفات', parts_clerk: 'مسئول قطعات', technician: 'تکنسین جایگاه', none: '' };
 
 /** What happens after the step, and where it is done. */
-function help(text: string, actor: NextActor): { why: string; tab: CaseTab; anchor: string; cta: string } {
+export function nextStepHelp(text: string, actor: NextActor): { why: string; tab: CaseTab; anchor: string; cta: string } {
   if (text.includes('تمام شد —')) return { why: 'با تأیید شما، کار روی گوشی تکنسین بعدی ظاهر می‌شود و اجرت این قدم قطعی می‌شود.', tab: 'execution', anchor: 'case-tasks', cta: 'بررسی و تأیید' };
   if (text.startsWith('برآورد')) return { why: 'با ورود برآورد (تکی یا اکسل)، فهرست قطعات ساخته می‌شود و مسئول قطعات تعیین تکلیف می‌کند.', tab: 'assessment', anchor: 'case-assessment', cta: 'ورود برآورد کارشناسی' };
   if (text.startsWith('مسیر تعمیر')) return { why: 'قدم‌ها را به ترتیب بنویسید؛ کار هر قدم روی گوشی تکنسین همان جایگاه می‌آید.', tab: 'plan', anchor: 'case-plan', cta: 'ساخت مسیر تعمیر' };
-  if (text.includes('آمادهٔ تحویل —') || text.includes('کنترل نهایی')) return { why: 'پس از کنترل نهایی و «پایان کار»، پرونده بسته می‌شود و قطعاتش دیگر از موجودی کم نمی‌شوند.', tab: 'quality', anchor: 'case-quality', cta: 'کنترل نهایی و پایان کار' };
+  if (text.startsWith('آمادهٔ تحویل —')) return { why: 'هماهنگی با مشتری و ثبت مشخصات تحویل‌گیرنده در بخش تکمیل پرونده انجام می‌شود.', tab: 'completion', anchor: 'case-completion', cta: 'هماهنگی و تحویل خودرو' };
+  if (text.includes('کنترل نهایی')) return { why: 'پس از کنترل نهایی و «پایان کار»، پرونده بسته می‌شود و قطعاتش دیگر از موجودی کم نمی‌شوند.', tab: 'quality', anchor: 'case-quality', cta: 'کنترل نهایی و پایان کار' };
   if (text.startsWith('تکنسین:') || text.includes('متوقف')) return { why: 'پاسخ بدهید یا علت توقف را ثبت کنید؛ مدت انتظار در اتاق کنترل دیده می‌شود.', tab: 'execution', anchor: 'case-blockers', cta: 'موانع و پیگیری' };
   if (actor === 'parts_clerk') return { why: 'هر قلم را در فهرست قطعات تعیین تکلیف کنید؛ آمادهٔ تحویل که شد، کارشناس و جایگاه خبر می‌گیرند.', tab: 'parts', anchor: 'case-parts', cta: 'فهرست قطعات' };
   if (actor === 'technician') return { why: 'این قدم را تکنسین جایگاه روی گوشی خود پیش می‌برد؛ شروع، پایان و تأخیر هر قدم در جدول «برنامهٔ تعمیرات» دیده می‌شود.', tab: 'execution', anchor: 'case-tasks', cta: 'برنامهٔ تعمیر' };
@@ -147,7 +148,7 @@ export function NextStepCard({ kase, onTab, onChange }: { kase: CaseDetail; onTa
   const [remind, setRemind] = useState<ReminderDefaults | null>(null);
   if (!f || f.next.actor === 'none') return null;
   const mine = myActors(me.roles).includes(f.next.actor);
-  const h = help(f.next.text, f.next.actor);
+  const h = nextStepHelp(f.next.text, f.next.actor);
   const done = kase.tasks.find((t) => t.status === 'done');
   const approve = mine && !!done && h.cta === 'بررسی و تأیید' && can('task.approve');
   return (
@@ -161,7 +162,7 @@ export function NextStepCard({ kase, onTab, onChange }: { kase: CaseDetail; onTa
         </div>
       ) : (
         <div className="cf-next-actions">
-          <button type="button" className="m-btn2" onClick={() => setRemind(nudge(kase, f.next.actor, f.next.text))}><AppIcon name="bell" />تذکر به {ACTOR_LABEL[f.next.actor]}</button>
+          <button type="button" className="m-btn2" onClick={() => setRemind(nudge(kase, f.next.actor, f.next.text))}><AppIcon name="bell" />فیدبک به {ACTOR_LABEL[f.next.actor]}</button>
         </div>
       )}
       <ReminderComposer open={!!remind} onClose={() => setRemind(null)} defaults={remind ?? undefined} />

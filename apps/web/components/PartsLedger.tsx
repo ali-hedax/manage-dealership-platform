@@ -292,7 +292,7 @@ function PartRow({ index, kase, part: p, manage, expanded, onToggle, onDone }: {
           )}
           {manage && form && <FlowForm kase={kase} part={p} action={form} onCancel={() => setForm(null)} onDone={async () => { setForm(null); await onDone(); }} />}
           <div className="m-actions">
-            <button type="button" className="m-btn2-s" onClick={() => setReminding(true)}>تذکر دربارهٔ این قطعه</button>
+            <button type="button" className="m-btn2-s" onClick={() => setReminding(true)}>فیدبک دربارهٔ این قطعه</button>
             {manage && !['cancelled', 'returned', 'consumed'].includes(p.flowState) && p.codeCorrection?.status !== 'open' && <PartMenu part={p} onDone={onDone} />}
           </div>
         </div>

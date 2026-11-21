@@ -36,7 +36,7 @@ export function ReminderCards({ compact = false }: { compact?: boolean }) {
     try {
       await api(`/reminders/${r.id}/respond`, { body: { action, expectedVersion: r.version, ...(reply && action !== 'seen' ? { reply } : {}) } });
       if (action !== 'seen') setReplies((x) => ({ ...x, [r.id]: '' }));
-      toast(action === 'seen' ? 'دیدن تذکر ثبت شد' : action === 'done' ? 'انجام تذکر ثبت شد' : 'جواب فرستاده شد');
+      toast(action === 'seen' ? 'دیدن فیدبک ثبت شد' : action === 'done' ? 'انجام فیدبک ثبت شد' : 'جواب فرستاده شد');
     } catch (e) {
       toast(errorMessage(e), 'error');
     } finally {
@@ -46,13 +46,13 @@ export function ReminderCards({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <section className={`reminder-cards no-print${compact ? ' compact' : ''}`} aria-label="تذکرهای رسیده" data-testid="reminder-cards">
+    <section className={`reminder-cards no-print${compact ? ' compact' : ''}`} aria-label="فیدبک‌های رسیده" data-testid="reminder-cards">
       {data.map((r) => (
         <article key={r.id} className={`reminder-card${r.urgency === 'urgent' ? ' urgent' : ''}${r.status === 'seen' ? ' seen' : ''}`} data-testid="reminder-card">
           <span className="reminder-icon"><MessageIcon /></span>
           <div className="reminder-text">
             <p className="reminder-from">
-              تذکر از {r.sender.displayName}{r.sender.roleLabel ? ` · ${r.sender.roleLabel}` : ''}
+              فیدبک از {r.sender.displayName}{r.sender.roleLabel ? ` · ${r.sender.roleLabel}` : ''}
               {r.urgency === 'urgent' && <span className="chip chip-red">فوری</span>}
               {r.overdue && <span className="chip chip-amber">دو ساعت کاری دیده نشده</span>}
             </p>

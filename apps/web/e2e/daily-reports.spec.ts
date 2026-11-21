@@ -32,6 +32,26 @@ async function noSidewaysScroll(page: Page, path: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${path} at phone width`).toBe(true);
 }
 
+test('owner can switch between all five desks, with planned modules in the roadmap', async ({ page }) => {
+  await login(page, 'manager');
+  const nav = page.getByRole('navigation', { name: 'بخش‌های منیج' });
+  for (const desk of [
+    { label: 'کارشناس تصادفات', path: 'expert' },
+    { label: 'مسئول قطعات', path: 'parts' },
+    { label: 'مدیر خدمات', path: 'manager' },
+    { label: 'مدیر سیستم', path: 'admin' },
+    { label: 'مالک', path: 'owner' },
+  ]) {
+    await nav.getByRole('link', { name: 'انتخاب میزکار', exact: true }).click();
+    await expect(page).toHaveURL(/\/launch$/);
+    await page.getByRole('navigation', { name: 'میزهای کار مجاز من' }).getByRole('link', { name: new RegExp('^' + desk.label) }).click();
+    await expect(page).toHaveURL(new RegExp('/accidents/' + desk.path + '$'));
+  }
+  await expect(nav.getByRole('button', { name: 'پذیرش و ترخیص' })).toHaveCount(0);
+  await nav.getByRole('button', { name: 'نقشهٔ راه' }).click();
+  await expect(nav.getByRole('link', { name: /پذیرش و خدمات عمومی/ })).toBeVisible();
+});
+
 test('daily stock and Emdad files, exact option choice, reservation steps and history', async ({ page }, info) => {
   await login(page, 'manager');
   await page.goto('/daily-reports');
@@ -144,6 +164,15 @@ test('daily stock and Emdad files, exact option choice, reservation steps and hi
 
   // Emdad: official text, code issue label, history of the status change, kept follow-up.
   await login(page, 'parts');
+  await page.goto('/emdad');
+  const cards = page.getByRole('navigation', { name: 'کارهای امروز قطعات' });
+  const openOnly = page.getByRole('checkbox', { name: 'فقط باز' });
+  const review = page.getByRole('checkbox', { name: 'نیازمند بررسی اتصال یا وضعیت' });
+  await cards.getByRole('link', { name: /پیگیری شرکت/ }).click();
+  await expect(openOnly).toBeChecked();
+  await cards.getByRole('link', { name: /مغایرت و نیازمند بررسی/ }).click();
+  await expect(review).toBeChecked();
+  await expect(openOnly).not.toBeChecked();
   await page.goto('/emdad');
   await expect(page.getByTestId('emdad-row')).toHaveCount(2);
   await expect(page.getByTestId('emdad-list')).toContainText('مغایرت کد');

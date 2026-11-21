@@ -13,7 +13,7 @@ import { WorkshopScene } from './WorkshopScene';
 
 // Control room (spec §10, owner reference «اتاق کنترل مدیر خدمات»): dark
 // petrol space, display and analysis only. The single action anywhere on this
-// page is «تذکر»; the workshop drawing comes from the live bays.
+// page is «فیدبک»; the workshop drawing comes from the live bays.
 const fa1 = (n: number | null | undefined) => (n == null ? '—' : toPersianDigits(String(Math.round(n * 10) / 10).replace('.', '٫')));
 const hours = (h: number) => (h >= 48 ? `${faNum(Math.round(h / 24))} روز` : `${faNum(h)} ساعت`);
 const ROLE_TEXT = { accident_expert: 'کارشناس تصادفات', parts_clerk: 'مسئول قطعات', station: 'جایگاه' } as const;
@@ -45,7 +45,15 @@ export function ControlRoom({ title = 'اتاق کنترل مدیر خدمات',
     source: 'manager_report',
   });
   const max = data ? Math.max(1, ...data.funnel.map((x) => x.count)) : 1;
-  const alerts = data ? (allAlerts ? data.alerts : data.alerts.slice(0, ALERTS_SHOWN)) : [];
+  const alertsByCase = new Map<string, UnansweredAlert[]>();
+  for (const [index, alert] of (data?.alerts ?? []).entries()) {
+    const key = alert.caseId ?? `unlinked-${index}`;
+    const group = alertsByCase.get(key) ?? [];
+    group.push(alert);
+    alertsByCase.set(key, group);
+  }
+  const groups = [...alertsByCase.entries()];
+  const visibleGroups = allAlerts ? groups : groups.slice(0, ALERTS_SHOWN);
 
   const kpi = data?.service.find((k) => k.key === openKpi) ?? null;
   return (
@@ -74,6 +82,7 @@ export function ControlRoom({ title = 'اتاق کنترل مدیر خدمات',
         </p>
       )}
       {!data && !error && <div className="sd-strip sd-skel" role="status"><span className="sr-only">در حال خواندن وضعیت تعمیرگاه…</span></div>}
+      {extra}
       {data && <>
         <section className="sd-strip" aria-label="چهار شاخص مدیر خدمات">
           {data.service.map((k) => (
@@ -154,7 +163,6 @@ export function ControlRoom({ title = 'اتاق کنترل مدیر خدمات',
         </div>
 
         <div className="cr cr-deck">
-        {extra}
         <section className="cr-kpis cr-secondary" aria-label="شاخص‌های جریان کار">
           <div className="cr-glass cr-kpi2 teal">
             <span className="cr-kpi-head"><AppIcon name="car" /><span className="cr-lbl">پذیرش و تحویل</span></span>
@@ -201,7 +209,7 @@ export function ControlRoom({ title = 'اتاق کنترل مدیر خدمات',
             <div className="cr-folder-tab"><AppIcon name="chart" /><h2>تحلیل امروز</h2></div>
             <div className="cr-folder-sheet">
               <ul className="cr-analysis">{data.analysis.map((s) => <li key={s}>{s}</li>)}</ul>
-              <button type="button" className="cr-btn" onClick={() => setRemind({ role: 'parts_clerk', source: 'manager_report' })}><AppIcon name="send" />ارسال تذکر</button>
+              <button type="button" className="cr-btn" onClick={() => setRemind({ role: 'parts_clerk', source: 'manager_report' })}><AppIcon name="send" />ارسال فیدبک</button>
             </div>
           </section>
 
@@ -212,26 +220,43 @@ export function ControlRoom({ title = 'اتاق کنترل مدیر خدمات',
                 <table className="cr-table">
                   <caption className="sr-only">هشدارهای بی‌پاسخ، قدیمی‌ترین بالا</caption>
                   <thead>
-                    <tr><th scope="col">پرونده</th><th scope="col">خودرو</th><th scope="col">نوع هشدار</th><th scope="col">مدت انتظار</th><th scope="col"><span className="sr-only">اقدام</span></th></tr>
+                    <tr><th scope="col">پرونده</th><th scope="col">خودرو</th><th scope="col">هشدار و مسئول پیگیری</th><th scope="col">بیشترین انتظار</th></tr>
                   </thead>
                   <tbody>
-                    {alerts.map((a, i) => (
-                      <tr key={`${a.kind}:${a.caseId}:${i}`} data-testid="unanswered-alert">
-                        <td data-label="پرونده">{a.caseId ? <Link href={`/cases/${a.caseId}`}>{a.caseNumber ? <bdi dir="ltr">{toPersianDigits(a.caseNumber)}</bdi> : 'باز کردن'}</Link> : '—'}</td>
-                        <td data-label="خودرو">{a.vehicle ?? '—'}{a.plate && <small><PlateText value={a.plate} /></small>}</td>
-                        <td data-label="نوع هشدار">{ALERT_TABLE[a.kind].label}{detailOf(a) && <small>{detailOf(a)}</small>}</td>
-                        <td data-label="مدت انتظار"><span className={`cr-wait ${a.waitingHours >= 24 ? 'hot' : 'warm'}`}>{hours(a.waitingHours)}</span></td>
-                        <td><button type="button" className="cr-remind" title={`گیرنده: ${a.recipient}`} onClick={() => setRemind(alertRemind(a))} aria-label={`تذکر به ${a.recipient} دربارهٔ ${ALERT_TABLE[a.kind].label}${a.vehicle ? ` — ${a.vehicle}` : ''}`}>تذکر</button></td>
-                      </tr>
-                    ))}
+                    {visibleGroups.map(([key, group]) => {
+                      const first = group[0]!;
+                      const longest = Math.max(...group.map((alert) => alert.waitingHours));
+                      const renderAlert = (alert: UnansweredAlert, index: number) => (
+                        <div key={index} className="cr-alert-item" data-testid="unanswered-alert">
+                          <strong>{ALERT_TABLE[alert.kind].label}</strong>
+                          {detailOf(alert) && <small>{detailOf(alert)}</small>}
+                          <small>{alert.recipient} · {hours(alert.waitingHours)}</small>
+                          <button type="button" className="cr-remind" onClick={() => setRemind(alertRemind(alert))} aria-label={`فیدبک به ${alert.recipient} دربارهٔ ${ALERT_TABLE[alert.kind].label}`}>فیدبک</button>
+                        </div>
+                      );
+                      return (
+                        <tr key={key}>
+                          <td data-label="پرونده">{first.caseId ? <Link href={`/cases/${first.caseId}`}>{first.caseNumber ? <bdi dir="ltr">{toPersianDigits(first.caseNumber)}</bdi> : 'باز کردن'}</Link> : '—'}</td>
+                          <td data-label="خودرو">{first.vehicle ?? '—'}{first.plate && <small><PlateText value={first.plate} /></small>}</td>
+                          <td data-label="هشدار و مسئول پیگیری">
+                            {renderAlert(first, 0)}
+                            {group.length > 1 && <details className="cr-alert-more">
+                              <summary>{faNum(group.length - 1)} هشدار دیگر این پرونده</summary>
+                              {group.slice(1).map((alert, index) => renderAlert(alert, index + 1))}
+                            </details>}
+                          </td>
+                          <td data-label="بیشترین انتظار"><span className={`cr-wait ${longest >= 24 ? 'hot' : 'warm'}`}>{hours(longest)}</span></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               ) : (
                 <p className="cr-muted cr-ok-line"><AppIcon name="check" />هشدار بی‌پاسخی نیست؛ همه پاسخ گرفته‌اند.</p>
               )}
-              {data.alerts.length > ALERTS_SHOWN && (
+              {groups.length > ALERTS_SHOWN && (
                 <button type="button" className="cr-link" aria-expanded={allAlerts} onClick={() => setAllAlerts((v) => !v)}>
-                  {allAlerts ? 'نمایش کمتر' : `نمایش همهٔ ${faNum(data.alerts.length)} هشدار`}
+                  {allAlerts ? 'نمایش کمتر' : `نمایش ${faNum(groups.length - ALERTS_SHOWN)} ردیف دیگر`}
                 </button>
               )}
             </div>
@@ -249,7 +274,7 @@ export function ControlRoom({ title = 'اتاق کنترل مدیر خدمات',
                     {p.avgDays != null && <span className="cr-lbl">میانگین {fa1(p.avgDays)} روز</span>}
                     {p.late > 0 ? <span className="cr-chip warm">{faNum(p.late)} تأخیر</span> : <span className="cr-chip ok">طبق برنامه</span>}
                     {p.unanswered > 0 && <span className="cr-chip hot">{faNum(p.unanswered)} هشدار بی‌پاسخ</span>}
-                    {p.userId && <button type="button" className="cr-remind" onClick={() => setRemind({ userIds: [p.userId!], source: 'manager_report' })} aria-label={`تذکر به ${p.name}`}>تذکر</button>}
+                    {p.userId && <button type="button" className="cr-remind" onClick={() => setRemind({ userIds: [p.userId!], source: 'manager_report' })} aria-label={`فیدبک به ${p.name}`}>فیدبک</button>}
                   </div>
                 </li>
               ))}

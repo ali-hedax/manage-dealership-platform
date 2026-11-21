@@ -20,7 +20,7 @@ export const SERVICE_KPIS: Record<ServiceKpiKey, ServiceKpiDefinition> = {
   present: { label: 'خودروهای حاضر', unit: 'خودرو', definition: 'خودروهای متمایز دارای پروندهٔ باز و تحویل‌نشده؛ هر خودرو یک بار', listQuery: '' },
   overdue_official: { label: 'گذشته از مهلت رسمی', unit: 'پرونده', definition: 'پرونده‌های فعالی که مهلت رسمی ثبت‌شده‌شان گذشته است (پیش‌بینی داخلی حساب نمی‌شود)', listQuery: 'flag=overdue_official' },
   unassigned: { label: 'بدون مسئول', unit: 'پرونده', definition: 'پرونده‌های فعالی که مسئول پرونده ندارند', listQuery: 'flag=unassigned' },
-  blocked: { label: 'دارای مانع', unit: 'خودرو', definition: 'خودروهای متمایز با حداقل یک مانع باز ثبت‌شده؛ هر خودرو یک بار', listQuery: 'flag=blocked' },
+  blocked: { label: 'مانع ثبت‌شده', unit: 'خودرو', definition: 'خودروهای متمایز با حداقل یک مانع باز ثبت‌شده؛ هر خودرو یک بار', listQuery: 'flag=blocked' },
 };
 
 export interface ServiceKpiRow {

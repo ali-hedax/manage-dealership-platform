@@ -10,8 +10,8 @@ import {DailyStatusPanel} from '@/components/DailyStatusPanel';
 import {ReservationsTable} from '@/components/ReservationsTable';
 import {StockOptionsTable} from '@/components/StockOptions';
 
-function Stock(){
- const {can}=useAuth();const params=useSearchParams();
+function Stock({params}:{params:ReturnType<typeof useSearchParams>}){
+ const {can}=useAuth();
  const [term,setTerm]=useState(''),[query,setQuery]=useState(''),[needsMapping,setNeedsMapping]=useState(false);
  const [status,setStatus]=useState<ReservationStatus|''>((params.get('status') as ReservationStatus)||''),[reconcile,setReconcile]=useState(params.get('reconcile')==='1'),[shortOnly,setShortOnly]=useState(false),[page,setPage]=useState(1);
  const q=new URLSearchParams({page:String(page)});if(status)q.set('status',status);if(reconcile)q.set('reconcile','true');
@@ -29,4 +29,8 @@ function Stock(){
   {data&&!items.length&&<p className="muted small">رزروی با این فیلتر نیست.</p>}{!!items.length&&<ReservationsTable items={items} onChange={()=>void mutate()}/>}
   <div className="row"><button type="button" className="btn btn-sm" disabled={page<=1} onClick={()=>setPage(page-1)}>صفحه قبل</button><span className="small">صفحه {faNum(page)}</span><button type="button" className="btn btn-sm" disabled={(data?.items.length??0)<200} onClick={()=>setPage(page+1)}>صفحه بعد</button></div></div></section></div>;
 }
-export default function Page(){return <Suspense><Stock/></Suspense>;}
+function FilteredStock(){
+ const params=useSearchParams();
+ return <Stock key={params.toString()} params={params}/>;
+}
+export default function Page(){return <Suspense><FilteredStock/></Suspense>;}

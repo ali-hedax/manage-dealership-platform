@@ -122,9 +122,9 @@ export default function TechnicianPage() {
           </ul>
         </section>
       )}
-      <nav className="tc-links no-print" aria-label="کارکرد و تذکرها">
+      <nav className="tc-links no-print" aria-label="کارکرد و فیدبک‌ها">
         <Link href="/workshop/technician/work">کارکرد ماه</Link>
-        <Link href="/reminders">تذکرهای من</Link>
+        <Link href="/reminders">فیدبک‌های من</Link>
       </nav>
 
       <Dialog open={!!problemFor} title="مشکل دیگر" onClose={() => !busy && setProblemFor(null)} footer={<button type="button" className="btn" disabled={busy} onClick={() => setProblemFor(null)}>انصراف</button>}>

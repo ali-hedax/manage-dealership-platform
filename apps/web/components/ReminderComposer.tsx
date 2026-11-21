@@ -67,7 +67,7 @@ export function ReminderComposer({ open, onClose, defaults, onSent }: { open: bo
     if (busy) return;
     setError('');
     if (mode === 'people' && !userIds.length) return setError('حداقل یک گیرنده انتخاب کنید.');
-    if (!body.trim()) return setError('متن تذکر را بنویسید یا یکی از متن‌های آماده را انتخاب کنید.');
+    if (!body.trim()) return setError('متن فیدبک را بنویسید یا یکی از متن‌های آماده را انتخاب کنید.');
     setBusy(true);
     try {
       const res = await api<{ recipients: number }>('/reminders', {
@@ -80,7 +80,7 @@ export function ReminderComposer({ open, onClose, defaults, onSent }: { open: bo
           source: defaults?.source ?? 'manual',
         },
       });
-      toast(`تذکر برای ${toPersianDigits(res.recipients)} نفر فرستاده شد`);
+      toast(`فیدبک برای ${toPersianDigits(res.recipients)} نفر فرستاده شد`);
       onSent?.();
       onClose();
     } catch (e) {
@@ -93,12 +93,12 @@ export function ReminderComposer({ open, onClose, defaults, onSent }: { open: bo
   return (
     <Dialog
       open={open}
-      title="فرستادن تذکر"
+      title="فرستادن فیدبک"
       onClose={() => !busy && onClose()}
       footer={
         <>
           <button type="button" className="btn" disabled={busy} onClick={onClose}>انصراف</button>
-          <button type="button" className="btn btn-primary" disabled={busy || remaining < 0} onClick={() => void send()}>{busy ? 'در حال فرستادن…' : 'فرستادن تذکر'}</button>
+          <button type="button" className="btn btn-primary" disabled={busy || remaining < 0} onClick={() => void send()}>{busy ? 'در حال فرستادن…' : 'فرستادن فیدبک'}</button>
         </>
       }
     >
@@ -128,7 +128,7 @@ export function ReminderComposer({ open, onClose, defaults, onSent }: { open: bo
             <select className="input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
               {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
             </select>
-            <span className="hint">همهٔ همکاران فعال این نقش در همین نمایندگی تذکر را می‌گیرند.</span>
+            <span className="hint">همهٔ همکاران فعال این نقش در همین نمایندگی فیدبک را می‌گیرند.</span>
           </label>
         )}
         {defaults?.caseId && (
@@ -145,7 +145,7 @@ export function ReminderComposer({ open, onClose, defaults, onSent }: { open: bo
           {REMINDER_PRESETS.map((p) => <button key={p} type="button" className="btn btn-sm" aria-pressed={body === p} onClick={() => setBody(p)}>{p}</button>)}
         </div>
         <label className="field">
-          <span>متن تذکر</span>
+          <span>متن فیدبک</span>
           <textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} aria-describedby="reminder-count" />
           <span id="reminder-count" className={`hint${remaining < 0 ? ' tone-red' : ''}`}>{remaining >= 0 ? `${toPersianDigits(remaining)} حرف باقی مانده` : `${toPersianDigits(-remaining)} حرف بیشتر از حد مجاز`}</span>
         </label>

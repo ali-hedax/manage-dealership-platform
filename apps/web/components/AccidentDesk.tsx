@@ -9,6 +9,7 @@ import { faNum, toPersianDigits } from '@/lib/format';
 import { AppIcon } from './AppIcon';
 import { BodyBadge, CoverageBadge, RowClip, VehicleImage } from './FolderParts';
 import { Plate } from './Plate';
+import { nextStepHelp } from './CaseFolderHeader';
 
 // Accident desk in the approved design (owner, 2026-11-18; «Persian Accident Case
 // Management Desk»): one row per case folder — the case-number slip with its narrow
@@ -99,6 +100,8 @@ export function AccidentDesk({ intro }: { intro?: ReactNode }) {
 
 function AccidentRow({ f, mine }: { f: DeskFolder; mine: boolean }) {
   const href = `/cases/${f.caseId}`;
+  const step = nextStepHelp(f.next.text, f.next.actor);
+  const actionHref = f.next.actor === 'none' ? href : `${href}#${step.anchor}`;
   return (
     <li className={`arow${f.behind ? ' behind' : ''}${mine ? ' mine' : ''}`} data-testid="accident-row" aria-label={`پروندهٔ ${f.vehicle}${f.plate ? `، پلاک ${toPersianDigits(f.plate)}` : ''}`}>
       <div className="arow-slip">
@@ -121,12 +124,13 @@ function AccidentRow({ f, mine }: { f: DeskFolder; mine: boolean }) {
         <details className="more-menu">
           <summary className="arow-more" aria-label={`بیشتر — ${f.vehicle}`}>⋯</summary>
           <div className="more-pop" role="group" aria-label="اقدامات بیشتر">
+            <Link href={href}><AppIcon name="folder" />نمای کلی پرونده</Link>
             <Link href={`${href}#case-parts`}><AppIcon name="box" />قطعات</Link>
             <Link href={`${href}#case-info`}><AppIcon name="doc" />مدارک</Link>
             <Link href={`${href}#case-history`}><AppIcon name="history" />تاریخچه</Link>
           </div>
         </details>
-        <Link href={href} className="arow-open" aria-label={`باز کردن پروندهٔ ${f.vehicle}${f.plate ? ` با پلاک ${toPersianDigits(f.plate)}` : ''}`}><AppIcon name="folder" />پرونده</Link>
+        <Link href={actionHref} className="arow-open" title={f.next.text} aria-label={`کارهای ضروری — ${f.vehicle}${f.plate ? ` با پلاک ${toPersianDigits(f.plate)}` : ''}`}><AppIcon name="folder" />کارهای ضروری</Link>
       </div>
     </li>
   );

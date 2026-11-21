@@ -94,6 +94,8 @@ test('accident desk: rows with case slip and narrow clip, filters, direct inspec
   await rows.first().locator('summary').click();
   await expect(rows.first().getByRole('link', { name: 'قطعات' })).toBeVisible();
   await rows.first().locator('summary').click();
+  const essential = rows.first().getByRole('link', { name: /^کارهای ضروری/ });
+  await expect(essential).toHaveAttribute('href', /\/cases\/[^#]+#case-/);
   await shot(page, 'accident-desk-desktop', (n) => info.outputPath(n));
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await noSideScroll(page)).toBe(true);
@@ -126,7 +128,7 @@ test('service manager: one graphite strip of four numbers, each opening its exac
   const room = page.getByTestId('control-room');
   const strip = room.getByRole('region', { name: 'چهار شاخص مدیر خدمات' });
   await expect(strip.locator('.sd-kpi')).toHaveCount(4);
-  for (const t of ['خودروهای حاضر', 'گذشته از مهلت رسمی', 'بدون مسئول', 'دارای مانع']) await expect(strip).toContainText(t);
+  for (const t of ['خودروهای حاضر', 'گذشته از مهلت رسمی', 'بدون مسئول', 'مانع ثبت‌شده']) await expect(strip).toContainText(t);
   for (const key of ['present', 'overdue_official', 'unassigned', 'blocked']) {
     const n = Number((await room.getByTestId(`kpi-${key}`).locator('b').innerText()).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
     await room.getByTestId(`kpi-${key}`).click();
