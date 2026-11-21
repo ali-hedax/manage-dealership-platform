@@ -50,6 +50,11 @@ test('owner examples on the real catalog labels', () => {
   assert.deepEqual(real('دانگ فنگ شاین مکس G35 هیبریدی'), ['دانگ فنگ شاین مکس (G35)', 'دانگفنگشاینمکسg35هیبریدی']);
   assert.deepEqual(real('شاین مکس G35'), ['دانگ فنگ شاین مکس (G35)', null]);
   assert.deepEqual(real('پارس'), ['پژو پارس', 'پژوپارس']);
+  // Long manufacturer trims mention «برقی» (throttle, steering): never the «دانگ فنگ برقی» car.
+  assert.deepEqual(real('سورن ELX با موتورEF7 بنزینی', '5751901 سورن پلاس (مدل سال) با موتور EF7 بنزینی دریچه گاز برقی، EMS زیمنس، مالتی پلکس اکوماکس کروز'), ['سورن', 'سورنپلاس']);
+  assert.deepEqual(real('سورن پلاس بنزینی با موتور XU7P و گیربکس دستی BE', '5840407 سورن پلاس با موتورXU7P بنزینی با دریچه گاز برقی'), ['سورن', 'سورنپلاس']);
+  assert.deepEqual(real('دنا پلاس', 'فرمان برقی فراوری ساخت'), ['دنا', 'دناپلاس']);
+  assert.deepEqual(real('دانگ فنگ برقی'), ['دانگ فنگ برقی', 'دانگفنگبرقی']);
 });
 
 test('unrelated families and look-alike numbers or words are never matched', () => {

@@ -120,12 +120,18 @@ function matchIds(texts: readonly (string | null | undefined)[], entries: readon
 /** Normalized aliases of a catalog label: the label, and without a leading/trailing make word. */
 function labelAliases(key: string): string[] {
   const out = new Set([key]);
+  const add = (rest: string) => { if (rest.length >= 3 && !GENERIC_WORDS.has(rest)) out.add(rest); };
   for (const w of MAKE_WORDS) {
-    if (key.startsWith(w) && key.length - w.length >= 3) out.add(key.slice(w.length));
-    if (key.endsWith(w) && key.length - w.length >= 3) out.add(key.slice(0, -w.length));
+    if (key.startsWith(w)) add(key.slice(w.length));
+    if (key.endsWith(w)) add(key.slice(0, -w.length));
   }
   return [...out];
 }
+/**
+ * Ordinary trim words that are not a vehicle name once the make word is removed
+ * («دانگ فنگ برقی» → «برقی» would match every «فرمان برقی» or «دریچه گاز برقی»).
+ */
+const GENERIC_WORDS = new Set(['برقی', 'بنزینی', 'هیبریدی', 'دیزلی', 'دوگانهسوز', 'اتوماتیک', 'دستی', 'توربو', 'پلاس'].map((x) => normalizeAssessmentSearch(x)));
 
 const DEFS = FAMILY_DEFS.map((d) => ({ key: fitmentKey(d.name), name: d.name, aliases: d.aliases.map(fitmentKey) }));
 

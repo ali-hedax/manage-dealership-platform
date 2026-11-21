@@ -32,6 +32,17 @@ export const RELEASE_LINE = { major: 1, minor: 0 } as const;
 /** Newest first. Add one note per user-visible change set in the PR that ships it. */
 export const CHANGE_NOTES: readonly ChangeNote[] = [
   {
+    key: 'trim-words',
+    date: '2026-11-21',
+    summary: 'کارشناسی هوشمند خودروهایی را که در شرح تیپ «فرمان برقی» یا «دریچه گاز برقی» دارند درست تشخیص می‌دهد.',
+    sections: [{
+      title: 'کارشناسی هوشمند',
+      items: [
+        'واژه‌های عمومی تیپ مانند «برقی»، «بنزینی» یا «اتوماتیک» دیگر نام خودرو حساب نمی‌شوند؛ پیش از این، شرح بلند تیپ برخی پرونده‌های سورن، دنا، تارا و ری را خانوادهٔ خودرو را نامشخص می‌کرد.',
+      ],
+    }],
+  },
+  {
     key: 'family-match',
     date: '2026-11-21',
     summary: 'کارشناسی هوشمند قطعات کل خانوادهٔ خودرو را نشان می‌دهد؛ پسوند تیپ مانند ELX، توربو یا 207i دیگر نتایج را پنهان نمی‌کند.',
