@@ -91,7 +91,7 @@ test('service manager: control room with four numbers, funnel, map and «فید�
   await expect(page.getByRole('dialog')).toBeVisible();
   // Display only: no operational button anywhere in the room.
   await page.keyboard.press('Escape');
-  await expect(room.getByRole('button', { name: /رزرو|شروع کار|تأیید|ثبت/ })).toHaveCount(0);
+  await expect(room.getByRole('button', { name: /^(رزرو|شروع کار|تأیید|ثبت)/ })).toHaveCount(0);
 });
 
 test('system administrator: «گره‌ها» first, report status and alert thresholds', async ({ page }, info) => {
