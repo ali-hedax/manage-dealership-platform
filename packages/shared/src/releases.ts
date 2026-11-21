@@ -32,7 +32,7 @@ export const RELEASE_LINE = { major: 1, minor: 0 } as const;
 /** Newest first. Add one note per user-visible change set in the PR that ships it. */
 export const CHANGE_NOTES: readonly ChangeNote[] = [
   {
-    key: 'vehicle-family-2026-11-21',
+    key: 'family-match',
     date: '2026-11-21',
     summary: 'کارشناسی هوشمند قطعات کل خانوادهٔ خودرو را نشان می‌دهد؛ پسوند تیپ مانند ELX، توربو یا 207i دیگر نتایج را پنهان نمی‌کند.',
     sections: [{
