@@ -79,6 +79,39 @@ test('smart assessment: rapid catalog selection persists two lines and prevents 
   await page.screenshot({ path: test.info().outputPath('smart-picked.png'), fullPage: false });
 });
 
+test('smart assessment: «سورن ELX» shows the Soren family parts with a trim check and keeps quick entry', async ({ page }) => {
+  await login(page, 'admin');
+  const headers = { 'x-manage-client': 'e2e' };
+  const sheet = Buffer.from(writeSheet('قطعات', [
+    ['کد فنی', 'نام قطعه', 'مصرف خودرو'],
+    ['0077331101', 'چراغ جلو خانواده آزمون', 'سورن پلاس'],
+    ['0077331201', 'چراغ جلو خانواده آزمون دیگر', 'تارا'],
+  ])).toString('base64');
+  const imp = await (await page.request.post('/api/v1/reference-imports', { headers, data: { kind: 'parts', fileName: 'synthetic-family.xlsx', fileBase64: sheet, sheetIndex: 0, headerRow: 1, mapping: { partNumber: 0, description: 1, vehicleUse: 2 } } })).json() as { id: string };
+  expect((await page.request.post(`/api/v1/reference-imports/${imp.id}/apply`, { headers, data: {} })).status()).toBe(201);
+  const created = await page.request.post('/api/v1/cases', { headers, data: { admittedAt: new Date(Date.now() - 86_400_000).toISOString(), vehicle: { model: 'سورن ELX' }, coverageType: 'insurance' } });
+  const { id } = (await created.json()) as { id: string };
+  await page.goto(`/cases/${id}`);
+  await openCaseTab(page, 'کارشناسی');
+  const panel = page.getByTestId('assessment-panel');
+  await panel.getByRole('button', { name: 'ایجاد کارشناسی دستی هوشمند' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('نام کارشناس *').fill('کارشناس نمونه');
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  const picker = panel.getByTestId('smart-assessment-entry');
+  const search = picker.getByRole('combobox', { name: 'جست‌وجوی قطعه' });
+  await search.fill('چراغ جلو خانواده');
+  await expect(picker.getByRole('option')).toHaveCount(1);
+  const family = picker.getByTestId('smart-family');
+  await expect(family).toContainText('خودروی پرونده:سورن ELX');
+  await expect(family).toContainText('خانوادهٔ شناسایی‌شده:سورن');
+  await expect(family).toContainText('قطعات مرتبط با خانوادهٔ سورن');
+  await expect(picker.getByTestId('smart-fit-note')).toHaveText('نیازمند بررسی تطابق با تیپ خودرو');
+  await search.press('Enter');
+  await expect(panel.getByTestId('assessment-item')).toHaveCount(1);
+  await expect(page.getByTestId('smart-picked')).toContainText('۰۰۷۷۳۳۱۱');
+});
+
 test('smart assessment: a vehicle that cannot be matched to a catalog family gets no suggestions', async ({ page }) => {
   await login(page, 'admin');
   const headers = { 'x-manage-client': 'e2e' };

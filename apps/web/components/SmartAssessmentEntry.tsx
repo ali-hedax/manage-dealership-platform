@@ -13,8 +13,10 @@ type Suggestion = {
   reference: string | null;
   vehicleUse: string;
   common: boolean;
+  /** «نیازمند بررسی تطابق با تیپ خودرو» for another trim of the family; null otherwise. */
+  fitmentNote?: string | null;
 };
-type Response = { results: Suggestion[]; limited: boolean; fitmentVerified: boolean; family?: string; message?: string };
+type Response = { results: Suggestion[]; limited: boolean; fitmentVerified: boolean; family?: string; caseVehicle?: string | null; trimReview?: boolean; message?: string };
 
 /** The line's assessment reference: the 8-digit code (or the whole code when it has no 8-digit start). */
 const refOf = (code: string | null | undefined) => assessmentReference(code) ?? normalizedPartCode(code);
@@ -166,7 +168,12 @@ export function SmartAssessmentEntry({
           onChange={(e) => setQuantity(Math.max(1, Math.min(999, Number(e.target.value) || 1)))} />
       </label>
     </div>
-    {data?.fitmentVerified && data.family && <p className="xs muted" data-testid="smart-family">قطعات سازگار با خانوادهٔ خودروی «{data.family}» در کاتالوگ</p>}
+    {data?.fitmentVerified && data.family && <dl className="smart-family xs" data-testid="smart-family">
+      {data.caseVehicle && <div><dt>خودروی پرونده:</dt><dd>{data.caseVehicle}</dd></div>}
+      <div><dt>خانوادهٔ شناسایی‌شده:</dt><dd>{data.family}</dd></div>
+      <div><dt>نتایج:</dt><dd>قطعات مرتبط با خانوادهٔ {data.family}</dd></div>
+    </dl>}
+    {data?.fitmentVerified && data.trimReview && <p className="xs muted" data-testid="smart-trim-review">تیپ این خودرو در کاتالوگ جدا ثبت نشده است؛ پیش از ثبت، تطابق هر قطعه را با تیپ خودرو بررسی کنید.</p>}
     {loading && <p className="small muted" role="status">در حال جست‌وجوی کاتالوگ…</p>}
     {error && <p className="callout callout-red small" role="alert">{error}</p>}
     {open && !loading && data && !data.fitmentVerified && <p className="callout callout-amber small" role="alert" data-testid="smart-fitment-unverified">{data.message}</p>}
@@ -180,6 +187,7 @@ export function SmartAssessmentEntry({
               <strong>{s.name}</strong>
               <span className="smart-ref"><bdi dir="ltr">{toPersianDigits(refOf(s.partNumber))}</bdi></span>
               <span className="xs muted">کد کامل: <bdi dir="ltr">{s.partNumber}</bdi>{s.common ? ' · مشترک همهٔ خودروها' : ` · ${s.vehicleUse}`}</span>
+              {s.fitmentNote && <span className="smart-fit-note" data-testid="smart-fit-note">{s.fitmentNote}</span>}
             </div>
             <button type="button" className="btn btn-sm" disabled={busy || added} onClick={() => void add(s)}>{added ? 'افزوده شد' : 'افزودن'}</button>
           </div>;
