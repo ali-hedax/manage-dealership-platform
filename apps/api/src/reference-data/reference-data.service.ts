@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, sql, inArray } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { assessmentReference, fitmentKey, isCommonFitment, resolveVehicleFamily, REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, rankAssessmentCandidates, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
+import { assessmentReference, fitmentCatalog, partFitment, resolveVehicleFamily, TRIM_REVIEW_LABEL, REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, rankAssessmentCandidates, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
@@ -101,6 +101,11 @@ export class ReferenceDataService {
   return {id:r.id,kind:r.kind as ReferenceKind,fileName:r.fileName,sheetName:r.sheetName,headerRow:r.headerRow,status:r.status as ReferenceImport['status'],createdAt:r.createdAt.toISOString(),appliedAt:r.appliedAt?.toISOString()||null,counts:counts(rows),rows,offset:meta.offset||0,totalRows:meta.totalRows||rows.length,batchSize:meta.batchSize||5000};
  }
  async apply(actor:Actor,id:string){
+  try{return await this.applyImport(actor,id);}
+  // A new catalog may add «مصرف خودرو» labels: the next assessment search reads them fresh.
+  finally{this.labelCache.delete(actor.user.tenantId);}
+ }
+ private async applyImport(actor:Actor,id:string){
   await this.db.transaction(async tx=>{
    const [imp]=await tx.select().from(referenceImports).where(and(eq(referenceImports.id,id),eq(referenceImports.tenantId,actor.user.tenantId))).for('update');
    if(!imp)throw notFound('ورود اطلاعات پایه');const kind=imp.kind as ReferenceKind;this.allow(actor,kind,true);
@@ -160,11 +165,13 @@ export class ReferenceDataService {
  }
 
  /**
-  * Read-only suggestions for the accident expert (owner, 2026-11-19). Only parts whose
-  * catalog «مصرف خودرو» is the case's own vehicle family (or explicitly common to every
-  * platform) are returned. The family comes from the case's model/trim and, when the VIN
-  * or chassis is in the admission records, from that record; if it cannot be verified
-  * or the two disagree, nothing is suggested (vehicle-fitment.ts). Never creates parts.
+  * Read-only suggestions for the accident expert (owner, 2026-11-19; families 2026-11-21).
+  * Only parts whose catalog «مصرف خودرو» belongs to the case's vehicle family (or is
+  * explicitly common to every platform) are returned; a label of another trim of the family
+  * carries «نیازمند بررسی تطابق با تیپ خودرو». The family comes from the case's model/trim
+  * and, when the VIN or chassis is in the admission records, from that record; if it cannot
+  * be verified or the two name different families, nothing is suggested
+  * (vehicle-fitment.ts). Never creates parts.
   */
  async suggestAssessmentParts(actor:Actor,caseId:string,query:string){
   if(!actor.user.permissions.has('assessment.manage')||!actor.user.permissions.has('case.read'))throw forbidden();
@@ -183,12 +190,16 @@ export class ReferenceDataService {
     sql`(upper(coalesce(${referenceEntries.data}->>'vin','')) in (${sql.join(ids.map(x=>sql`${x}`),sql`, `)}) or upper(coalesce(${referenceEntries.data}->>'chassis','')) in (${sql.join(ids.map(x=>sql`${x}`),sql`, `)}))`)).limit(20):[];
   const vinTexts=admissions.flatMap(r=>{const d=r.data as Record<string,unknown>;return [String(d.model??''),String(d.trim??'')];});
   const labels=await this.fitmentLabels(tenantId);
-  const fit=resolveVehicleFamily([context.model,context.trim],vinTexts,labels);
+  const catalog=fitmentCatalog(labels);
+  const fit=resolveVehicleFamily([context.model,context.trim],vinTexts,labels,catalog);
+  const caseVehicle=[context.model,context.brand].find(x=>x&&x.trim())?.trim()??null;
   if(fit.status!=='verified'){
-   return {caseId,vehicle,fitment:fit,results:[],limited:false,fitmentVerified:false,
+   return {caseId,vehicle,caseVehicle,fitment:fit,results:[],limited:false,fitmentVerified:false,
     message:fit.status==='conflict'?'مدل ثبت‌شده در پرونده با سابقهٔ پذیرش همین VIN یکی نیست؛ سازگاری قطعات قابل تأیید نیست. مدل خودرو را در پرونده اصلاح کنید.':'خانوادهٔ این خودرو در کاتالوگ قطعات قابل تشخیص نیست؛ برای جلوگیری از قطعهٔ نامرتبط، پیشنهادی نمایش داده نمی‌شود. مدل خودرو را در پرونده کامل کنید یا قلم را دستی ثبت کنید.'};
   }
-  const allowed=labels.filter(l=>fitmentKey(l)===fit.family||isCommonFitment(l));
+  // Every catalog label of the vehicle family (trim variants included) plus explicitly common parts.
+  const allowed=labels.filter(l=>partFitment(l,fit,catalog)!==null);
+  const exact=allowed.filter(l=>partFitment(l,fit,catalog)!=='review');
   // Bounded SQL prefilter avoids reading the entire catalog per keystroke.
   const folded=sql`replace(replace(replace(replace(replace(lower(coalesce(${referenceEntries.data}->>'description','')),'ي','ی'),'ك','ک'),' ',''),chr(8204),''),'-','')`;
   const fragment=normalized.slice(0,Math.min(3,normalized.length));
@@ -199,20 +210,25 @@ export class ReferenceDataService {
   const rows=await this.db.select({id:referenceEntries.id,data:referenceEntries.data})
    .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts'),
     inArray(sql<string>`coalesce(${referenceEntries.data}->>'vehicleUse','')`,allowed),prefilter))
-   .orderBy(referenceEntries.lookupKey).limit(250);
+   // The vehicle's own catalog label first, so other trims of a large family never crowd it out of the bounded read.
+   .orderBy(...(exact.length?[sql`case when coalesce(${referenceEntries.data}->>'vehicleUse','') in (${sql.join(exact.map(x=>sql`${x}`),sql`, `)}) then 0 else 1 end`]:[]),referenceEntries.lookupKey).limit(250);
   const candidates=rows.map(row=>{
    const data=row.data as Record<string,unknown>;
    const vehicleUse=typeof data.vehicleUse==='string'?data.vehicleUse:'';
-   return {id:row.id,name:String(data.description??''),partNumber:String(data.partNumber??''),vehicleUse,
-    // Defence in depth: only the verified family or an explicitly common part.
-    vehicleMatch:(fitmentKey(vehicleUse)===fit.family||isCommonFitment(vehicleUse)?'verified':'incompatible') as 'verified'|'incompatible'};
-  }).filter(row=>row.name&&row.partNumber&&row.vehicleMatch==='verified');
-  const useById=new Map(candidates.map(row=>[row.id,row.vehicleUse]));
+   const fitment=partFitment(vehicleUse,fit,catalog);
+   return {id:row.id,name:String(data.description??''),partNumber:String(data.partNumber??''),vehicleUse,fitment,
+    // Defence in depth: another vehicle is never offered; another trim of the family ranks after the exact label.
+    vehicleMatch:(fitment===null?'incompatible':fitment==='review'?'unknown':'verified') as 'verified'|'unknown'|'incompatible'};
+  }).filter(row=>row.name&&row.partNumber&&row.fitment!==null);
+  const byId=new Map(candidates.map(row=>[row.id,row]));
   const results=rankAssessmentCandidates(query,candidates,100).map(item=>{
-   const vehicleUse=useById.get(item.id)??'';
-   return {...item,vehicleUse,common:isCommonFitment(vehicleUse),reference:assessmentReference(item.partNumber)};
+   const row=byId.get(item.id)!;
+   return {...item,vehicleUse:row.vehicleUse,fitment:row.fitment,common:row.fitment==='common',
+    fitmentNote:row.fitment==='review'?TRIM_REVIEW_LABEL:null,reference:assessmentReference(item.partNumber)};
   });
-  return {caseId,vehicle,fitment:fit,family:allowed.find(l=>fitmentKey(l)===fit.family)??fit.family,
+  return {caseId,vehicle,caseVehicle,fitment:fit,family:fit.familyName,
+   // No catalog label names this exact trim: every family part is shown with the trim-check note.
+   trimReview:fit.label===null,
    results,limited:rows.length===250,fitmentVerified:true};
  }
 

@@ -399,6 +399,9 @@ body, .app-shell, .main { background: var(--g-warm); }
 .smart-option:last-child { border-block-end: 0; }
 .smart-option.on { background: var(--g-petrol-soft); }
 .smart-option-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-inline-size: 0; }
+.smart-family { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; color: var(--muted, #5b6468); }
+.smart-family div { display: flex; gap: 4px; } .smart-family dt { font-weight: 700; } .smart-family dd { margin: 0; }
+.smart-fit-note { font-size: 12px; padding: 1px 8px; border-radius: 6px; background: #FBF1DC; border: 1px solid #E8C98A; color: #6B4A0E; }
 .smart-ref { display: inline-block; padding: 1px 8px; border-radius: 6px; background: #F1EEE7; border: 1px solid #DAD5CB; font-weight: 800; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
 .smart-picked { border: 1.5px solid var(--g-petrol); border-radius: 14px; background: #FFFEFB; padding: 10px 12px; }
 .smart-picked-head { display: flex; align-items: center; justify-content: space-between; margin-block-end: 6px; }

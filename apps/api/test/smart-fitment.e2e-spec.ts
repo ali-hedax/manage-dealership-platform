@@ -38,11 +38,19 @@ beforeAll(async () => {
     ['0088800101', 'بست سپر عمومی', 'خودروهای رایج-صرفنظراز پلتفرم'],
     ['0099900101', 'سپر جلو بدون مصرف', 'نامشخص'],
     ['0012300101', 'کاپوت', 'پژو207'],
+    ['0012300201', 'کاپوت', 'پژو 2008'],
+    ['0055500201', 'سپر جلو', 'دنا پلاس اتوماتیک توربو'],
+    ['0044400101', 'درب موتور', 'رانا'],
+    // The catalog names Soren only as «سورن پلاس»: 120 synthetic Soren parts, more than one page.
+    ...Array.from({ length: 120 }, (_, i) => [`0033${String(i).padStart(4, '0')}01`, `درب جلو سورن ${i + 1}`, 'سورن پلاس']),
   ], { partNumber: 0, description: 1, vehicleUse: 2 });
   await importSheet('customers', [
     ['VIN', 'مدل', 'تیپ', 'نام'],
     ['TESTVNA0000099001', 'پژو پارس TU5', 'پارس ری استایل', 'مشتری ساختگی'],
     ['TESTVNA0000099002', 'تارا موتور TU5P', 'تارا V1P گیربکس دستی', 'مشتری ساختگی دو'],
+    ['TESTVNA0000099003', 'سورن پلاس بنزینی با موتور XU7P', 'سورن پلاس', 'مشتری ساختگی سه'],
+    ['TESTVNA0000099004', 'دنا پلاس موتور EF7PNA', 'دناپلاس', 'مشتری ساختگی چهار'],
+    ['TESTVNA0000099005', 'دنا پلاس موتور EF7PNA', 'دناپلاس', 'مشتری ساختگی پنج'],
   ], { vin: 0, model: 1, trim: 2, fullName: 3 });
 });
 afterAll(async () => { await h?.close(); });
@@ -53,17 +61,67 @@ describe('vehicle-specific catalog search', () => {
     const r = await search(plus.id, 'سپر');
     expect(r.status).toBe(201);
     expect(r.body.fitmentVerified).toBe(true);
-    expect(codes(r)).toEqual(['0055500101', '0088800101']);
-    expect(r.body.family).toBe('دنا پلاس');
+    // The whole Dena family is offered; only the exact «دنا پلاس» label (and common parts) without a trim check.
+    expect(codes(r)).toEqual(['0021436501', '0021436502', '0055500101', '0055500201', '0088800101']);
+    expect(r.body).toMatchObject({ family: 'دنا', caseVehicle: 'دنا پلاس موتور EF7PNA', trimReview: false });
+    const note = (code: string) => r.body.results.find((x: { partNumber: string }) => x.partNumber === code)?.fitmentNote ?? null;
+    expect([note('0055500101'), note('0088800101')]).toEqual([null, null]);
+    expect([note('0021436501'), note('0055500201')]).toEqual(['نیازمند بررسی تطابق با تیپ خودرو', 'نیازمند بررسی تطابق با تیپ خودرو']);
+    // The exact label ranks before other trims of the family.
+    expect(r.body.results[0].partNumber).toBe('0055500101');
 
     const dena = await newCase({ model: 'دنا' });
-    expect(codes(await search(dena.id, 'سپر'))).toEqual(['0021436501', '0021436502', '0088800101']);
+    const d = await search(dena.id, 'سپر');
+    expect(codes(d)).toEqual(['0021436501', '0021436502', '0055500101', '0055500201', '0088800101']);
+    expect(d.body.results.filter((x: { fitmentNote: string | null }) => x.fitmentNote).map((x: { partNumber: string }) => x.partNumber).sort()).toEqual(['0055500101', '0055500201']);
     // A code of another vehicle is not offered even when typed exactly.
     expect(codes(await search(dena.id, '0066600101'))).toEqual([]);
     // «207» is matched as a whole number only, and only for its own family.
     const p207 = await newCase({ model: '207', trim: '6001014 پژو 207 P7L پاناروما' });
     expect(codes(await search(p207.id, 'کاپوت'))).toEqual(['0012300101']);
     expect(codes(await search(dena.id, 'کاپوت'))).toEqual([]);
+    // «207i» and «پژو ۲۰۷ اتوماتیک» are the 207 family; «2008» stays its own car.
+    for (const model of ['پژو 207i HB موتور TU5 گیربکس دستی 5 دنده', 'پژو ۲۰۷ اتوماتیک پانوراما']) {
+      const c = await newCase({ model });
+      const s = await search(c.id, 'کاپوت');
+      expect(codes(s)).toEqual(['0012300101']);
+      expect(s.body.family).toBe('پژو 207');
+    }
+  });
+
+  it('a trim suffix never hides the family: «سورن ELX» gets the Soren parts with a trim check, up to 100', async () => {
+    const elx = await newCase({ model: 'سورن ELX با موتورEF7 بنزینی' });
+    const s = await search(elx.id, 'درب جلو');
+    expect(s.body).toMatchObject({ fitmentVerified: true, family: 'سورن', caseVehicle: 'سورن ELX با موتورEF7 بنزینی', trimReview: true });
+    expect(s.body.results).toHaveLength(100);
+    expect(s.body.results.every((x: { vehicleUse: string; fitmentNote: string }) => x.vehicleUse === 'سورن پلاس' && x.fitmentNote === 'نیازمند بررسی تطابق با تیپ خودرو')).toBe(true);
+    // Never another car's part.
+    expect(codes(await search(elx.id, 'درب موتور'))).toEqual([]);
+    expect(codes(await search(elx.id, 'سپر'))).toEqual(['0088800101']);
+    // The exact trim needs no check.
+    const plus = await newCase({ model: 'سورن پلاس' });
+    const p = await search(plus.id, 'درب جلو');
+    expect(p.body.results).toHaveLength(100);
+    expect(p.body.results.every((x: { fitmentNote: string | null }) => x.fitmentNote === null)).toBe(true);
+    // Unrelated look-alikes are not a family.
+    for (const model of ['ستارا', 'پژو 2007']) {
+      const u = await newCase({ model });
+      expect((await search(u.id, 'سپر')).body).toMatchObject({ fitmentVerified: false, results: [] });
+    }
+  });
+
+  it('VIN record of another trim of the same family is not a conflict; another family still is', async () => {
+    const sameFamily = await newCase({ model: 'سورن ELX', vin: 'TESTVNA0000099003' });
+    const a = await search(sameFamily.id, 'درب جلو');
+    expect(a.body.fitment).toMatchObject({ status: 'verified', source: 'case+vin', familyName: 'سورن' });
+    expect(a.body.results.length).toBeGreaterThan(20);
+    // Case «دنا» but the VIN record says «دنا پلاس»: same family, every part asks for a trim check.
+    const trims = await newCase({ model: 'دنا', vin: 'TESTVNA0000099004' });
+    const b = await search(trims.id, 'سپر');
+    expect(b.body).toMatchObject({ fitmentVerified: true, family: 'دنا', trimReview: true });
+    expect(b.body.results.filter((x: { fitmentNote: string | null }) => !x.fitmentNote).map((x: { partNumber: string }) => x.partNumber)).toEqual(['0088800101']);
+    const other = await newCase({ model: 'سورن ELX', vin: 'TESTVNA0000099005' });
+    expect((await search(other.id, 'سپر')).body).toMatchObject({ fitmentVerified: false, results: [], fitment: { status: 'conflict' } });
   });
 
   it('shows nothing when the vehicle cannot be verified, or when the VIN record disagrees', async () => {
