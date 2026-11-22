@@ -1,22 +1,24 @@
 import { z } from 'zod';
 
-export const REFERENCE_KINDS = ['parts', 'customers'] as const;
+export const REFERENCE_KINDS = ['parts', 'customers', 'appointments'] as const;
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 export const REFERENCE_FIELDS = {
   parts: { partNumber: 'کد فنی', description: 'نام قطعه', vehicleUse:'مصرف خودرو', quantity: 'موجودی فایل', unit: 'واحد شمارش', location: 'محل انبار' },
   customers: { chassis: 'شماره شاسی ثبت‌شده', vin: 'VIN کامل', fullName: 'نام مشتری', phone: 'تلفن همراه', plate: 'پلاک', model: 'مدل خودرو', trim: 'شرح تیپ خودرو', admissionNo: 'شماره کارت پذیرش ایران‌خودرو', customerNo: 'شماره مشتری', visitedOn: 'تاریخ سابقه (عین فایل)', isacoCode: 'کد محصول ایساکو' },
+  // «لیست نوبت پذیرش» (ISACO): tracking only; Manage never creates or moves an appointment.
+  appointments: { appointmentNo: 'شماره نوبت', vin: 'VIN کامل', chassis: 'شماره شاسی', admissionNo: 'شماره پذیرش', appointmentDate: 'تاریخ نوبت', appointmentTime: 'ساعت نوبت', status: 'وضعیت نوبت', serviceType: 'نوع خدمت', fullName: 'نام مشتری', phone: 'تلفن همراه', plate: 'پلاک' },
 } as const;
-export type ReferenceField = keyof typeof REFERENCE_FIELDS.parts | keyof typeof REFERENCE_FIELDS.customers;
+export type ReferenceField = keyof typeof REFERENCE_FIELDS.parts | keyof typeof REFERENCE_FIELDS.customers | keyof typeof REFERENCE_FIELDS.appointments;
 export const referenceFileSchema = z.object({
   kind: z.enum(REFERENCE_KINDS),
-  fileName: z.string().trim().min(1).max(200).regex(/\.xlsx$/i),
+  fileName: z.string().trim().min(1).max(200).regex(/\.(xlsx|xls|xml|html?)$/i, 'فایل xlsx یا خروجی xls ایساکو را انتخاب کنید'),
   fileBase64: z.string().min(4).max(6_670_000).regex(/^[A-Za-z0-9+/]*={0,2}$/),
 });
 export const referencePreviewSchema = referenceFileSchema.extend({
   sheetIndex: z.number().int().min(0).max(30),
   headerRow: z.number().int().min(1).max(100),
   offset: z.number().int().min(0).max(100_000).default(0),
-  mapping: z.partialRecord(z.enum(['partNumber','description','vehicleUse','quantity','unit','location','chassis','vin','fullName','phone','plate','model','trim','admissionNo','customerNo','visitedOn','isacoCode']),z.number().int().min(0).max(511)),
+  mapping: z.partialRecord(z.enum(['partNumber','description','vehicleUse','quantity','unit','location','chassis','vin','fullName','phone','plate','model','trim','admissionNo','customerNo','visitedOn','isacoCode','appointmentNo','appointmentDate','appointmentTime','status','serviceType']),z.number().int().min(0).max(511)),
 });
 export const referenceSearchSchema = z.object({ query: z.string().trim().min(2).max(100) });
 /**
@@ -67,3 +69,11 @@ export function isacoHeaderIndex(headers: readonly string[]): number {
   const wanted = ISACO_HEADER_ALIASES.map(n);
   return headers.findIndex((h) => wanted.includes(n(h ?? '')));
 }
+
+/** Normalized header text of one sheet row; the saved signature recognizes the same report next time. */
+export function headerSignature(cells: readonly string[]): string {
+  const n = (x: string) => x.replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\s\u200c_-]+/g, '').toLowerCase();
+  return cells.map((c) => n(c ?? '')).filter(Boolean).join('|');
+}
+/** Column mapping remembered after the first confirmed import of a report layout. */
+export interface SavedReferenceMapping { signature: string; headerRow: number; sheetIndex: number; mapping: Partial<Record<ReferenceField, number>>; savedAt: string }

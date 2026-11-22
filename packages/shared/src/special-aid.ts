@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TEHRAN_OFFSET_MINUTES } from './jalali';
+import { TEHRAN_OFFSET_MINUTES, parseJalali } from './jalali';
 
 // «پیگیری امداد ویژه» — the standalone Special Aid follow-up module (owner, 2026-11-22;
 // docs/PRODUCT_SPEC_FA.md section 25). One dossier per valid VIN for every dealership
@@ -86,7 +86,7 @@ export const CONTACT_OUTCOME_LABELS: Record<ContactOutcome, string> = {
 
 /** Follow-up rules (owner, 2026-11-22). Calendar days on the Tehran calendar. */
 export const SPECIAL_AID_RULES = {
-  /** An arrived part should be announced to the customer by the end of the next day. */
+  /** An arrived part is announced to the customer by the end of the next WORKING day (owner, 2026-11-22). */
   informWithinDays: 1,
   /** Repeat the call every ten days while the part waits for the vehicle. */
   recurringContactDays: 10,
@@ -132,6 +132,19 @@ export interface AidDossierFacts {
   postponedUntil?: string | null;
   /** Attendance already confirmed after the latest promise or appointment. */
   attendedAt?: string | null;
+  /** Working-day calendar (Friday and recorded holidays are not working days). Default: every day except Friday. */
+  isWorkingDay?: (day: string) => boolean;
+}
+
+/** Default when no workshop calendar is passed: Friday is the only weekly day off. */
+export const defaultWorkingDay = (day: string) => new Date(day + 'T12:00:00Z').getUTCDay() !== 5;
+/** Last instant of the next working day after the instant's Tehran day (the customer-notice deadline). */
+export function endOfNextWorkingDay(at: Date | string, isWorkingDay: (day: string) => boolean = defaultWorkingDay): Date {
+  for (let n = 1; n <= 30; n++) {
+    const start = tehranDayStart(at, n);
+    if (isWorkingDay(tehranDay(start))) return new Date(tehranDayStart(at, n + 1).getTime() - 1);
+  }
+  return new Date(tehranDayStart(at, 2).getTime() - 1);
 }
 
 export const SPECIAL_AID_TASK_KINDS = ['age_review', 'escalation', 'inform_arrival', 'promised_visit', 'no_answer_retry', 'recurring_contact', 'age_warning', 'age_approaching', 'group_decision'] as const;
@@ -237,7 +250,7 @@ export function dossierTasks(d: AidDossierFacts, now: Date): SpecialAidTask[] {
   const last = sortedContacts.at(-1) ?? null;
   if (uninformed.length) {
     const first = uninformed.map((i) => arrivalOf(i).at ?? nowIso).sort()[0]!;
-    const due = tehranDayStart(first, SPECIAL_AID_RULES.informWithinDays + 1).getTime() - 1;
+    const due = endOfNextWorkingDay(first, d.isWorkingDay).getTime();
     // After a no-answer today the retry belongs to another day (attempts must be on separate days).
     if (!(last?.outcome === 'no_answer' && tehranDay(last.at) === today)) {
       if (last?.outcome === 'no_answer') add('no_answer_retry', tehranDayStart(last.at, 1), uninformed.map((i) => i.id), true);
@@ -353,6 +366,9 @@ export interface SpecialAidItem {
   holdNote: string | null;
   /** Linked accident part line: its reservation and delivery stay with the parts desk. */
   accidentCaseId: string | null;
+  /** Earlier request of the same vehicle this one replaces (e.g. a wrong part number); both stay in history. */
+  replacesItemId: string | null;
+  replacedByItemId: string | null;
   accidentCaseNumber: string | null;
   version: number;
 }
@@ -380,6 +396,10 @@ export interface SpecialAidDossier extends SpecialAidDossierRow {
   postponedUntil: string | null;
   postponeReason: string | null;
   failedAttemptDays: number;
+  appointments: SpecialAidAppointment[];
+  appointmentState: AppointmentState;
+  cards: SpecialAidCard[];
+  feedback: SpecialAidFeedback[];
 }
 export interface SpecialAidTodayEntry { dossier: SpecialAidDossierRow; tasks: SpecialAidTask[] }
 export interface SpecialAidSupplyRow {
@@ -399,4 +419,128 @@ export interface SpecialAidSummary {
   averageSupplyDays: number | null;
   unresolvedTechnical: number;
   weekly: { week: string; registered: number; arrived: number; installed: number }[];
+  /** Pending requests whose official status has not changed for 14+ days (stalled in purchasing). */
+  stalledSupply: number;
+  feedbackOpen: number;
+  warningsIssued: number;
 }
+
+// ------------------------------------------------------------------ replacement request
+
+/** Links a new request (correct part number) to the earlier one of the same vehicle; nothing is overwritten. */
+export const replacementSchema = z.object({ replacesItemId: z.uuid().nullable(), expectedVersion: z.number().int().min(1) });
+export type ReplacementInput = z.infer<typeof replacementSchema>;
+
+// ------------------------------------------------------------------ appointments (tracking only)
+
+/**
+ * Appointments live in ISACO only; Manage reads the imported «لیست نوبت پذیرش» report and
+ * never schedules. An appointment of the same VIN is not assumed to be for special aid:
+ * the operator confirms «مرتبط» or «نامرتبط».
+ */
+export const APPOINTMENT_STATES = ['confirmed', 'ambiguous', 'none_recent', 'stale', 'attended', 'passed_unverified', 'no_report'] as const;
+export type AppointmentState = (typeof APPOINTMENT_STATES)[number];
+export const APPOINTMENT_STATE_LABELS: Record<AppointmentState, string> = {
+  confirmed: 'نوبت مرتبط در گزارش ایساکو',
+  ambiguous: 'نوبت پیدا شد؛ ارتباط با امداد ویژه تأیید نشده',
+  none_recent: 'در گزارش اخیر نوبتی پیدا نشد',
+  stale: 'گزارش نوبت قدیمی است',
+  attended: 'مشتری مراجعه کرد',
+  passed_unverified: 'روز نوبت گذشت؛ مراجعه تأیید نشده',
+  no_report: 'گزارش نوبت هنوز وارد نشده',
+};
+/** An appointment report older than this many days is shown as outdated. */
+export const APPOINTMENT_STALE_DAYS = 3;
+export type AppointmentRelation = 'related' | 'unrelated';
+export interface AidAppointmentFacts { id: string; at: string | null; relation: AppointmentRelation | null }
+
+/** Parses the file's appointment date (Jalali or ISO) and optional time; null when unreadable. */
+export function appointmentInstant(dateText: string | undefined, timeText?: string): string | null {
+  if (!dateText) return null;
+  const time = /^\d{1,2}:\d{2}/.exec(timeText?.trim() ?? '')?.[0] ?? '00:00';
+  // Gregorian ISO dates (19xx/20xx) first: a Jalali year is 13xx/14xx.
+  if (/^(19|20)\d\d-\d\d-\d\d/.test(dateText.trim())) {
+    const iso = Date.parse(dateText);
+    return Number.isNaN(iso) ? null : new Date(iso).toISOString();
+  }
+  const [datePart, inlineTime] = dateText.trim().split(/\s+/);
+  const jalali = parseJalali(datePart!, timeText ? time : /^\d{1,2}:\d{2}$/.test(inlineTime ?? '') ? inlineTime! : '00:00');
+  return jalali ? jalali.toISOString() : null;
+}
+
+/** The appointment picture of one dossier, from the latest imported report and the operator's decisions. */
+export function appointmentState(input: { appointments: readonly AidAppointmentFacts[]; lastReportAt: string | null; attendedAt: string | null; now: Date }): AppointmentState {
+  const { now } = input;
+  if (!input.lastReportAt) return 'no_report';
+  const today = tehranDay(now);
+  const candidates = input.appointments.filter((a) => a.relation !== 'unrelated' && a.at);
+  const future = candidates.filter((a) => tehranDay(a.at!) >= today);
+  if (future.some((a) => a.relation === 'related')) return 'confirmed';
+  const past = candidates.filter((a) => tehranDay(a.at!) < today && a.relation === 'related').sort((a, b) => b.at!.localeCompare(a.at!))[0];
+  if (!future.length && input.attendedAt && (!past || input.attendedAt >= tehranDayStart(past.at!).toISOString())) return 'attended';
+  if (future.length) return 'ambiguous';
+  if (daysBetween(input.lastReportAt, now) > APPOINTMENT_STALE_DAYS) return 'stale';
+  if (past) return 'passed_unverified';
+  return 'none_recent';
+}
+export const appointmentRelationSchema = z.object({ relation: z.enum(['related', 'unrelated']).nullable() });
+export interface SpecialAidAppointment {
+  id: string; at: string | null; dateText: string | null; timeText: string | null;
+  status: string | null; serviceType: string | null; admissionNo: string | null; appointmentNo: string | null;
+  relation: AppointmentRelation | null; relationByName: string | null; fileName: string; importedAt: string;
+}
+
+// ------------------------------------------------------------------ admission card archive
+
+export const CARD_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
+export const CARD_MAX_BYTES = 4_000_000;
+export const cardUploadSchema = z.object({
+  files: z.array(z.object({
+    fileName: z.string().trim().min(1).max(200),
+    mime: z.enum(CARD_MIME_TYPES),
+    dataBase64: z.string().min(4).max(5_400_000).regex(/^[A-Za-z0-9+/]*={0,2}$/),
+    /** Optional numbers typed by the uploader (administrator-assisted matching). */
+    admissionNo: z.string().trim().max(40).optional(),
+    vin: z.string().trim().max(40).optional(),
+  })).min(1).max(20),
+});
+export type CardUploadInput = z.infer<typeof cardUploadSchema>;
+export const cardMatchSchema = z.object({
+  admissionNo: z.string().trim().max(40).optional(),
+  vin: z.string().trim().max(40).optional(),
+  expectedVersion: z.number().int().min(1),
+}).refine((v) => !!v.admissionNo || !!v.vin, { message: 'شمارهٔ پذیرش یا VIN را وارد کنید', path: ['admissionNo'] });
+export type CardMatchInput = z.infer<typeof cardMatchSchema>;
+export type CardState = 'unmatched' | 'matched';
+export interface SpecialAidCard {
+  id: string; fileName: string; mime: string; size: number; sha256: string;
+  state: CardState; admissionNo: string | null; vin: string | null; dossierId: string | null;
+  extraction: { provider: string; admissionNo: string | null; vin: string | null } | null;
+  uploadedByName: string; uploadedAt: string; matchedAt: string | null; version: number;
+}
+
+// ------------------------------------------------------------------ technical feedback and formal warnings
+
+export const FEEDBACK_KINDS = ['feedback', 'warning'] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+export const FEEDBACK_KIND_LABELS: Record<FeedbackKind, string> = { feedback: 'بازخورد فنی', warning: 'تذکر رسمی' };
+export const feedbackSchema = z.object({
+  recipientId: z.uuid(),
+  kind: z.enum(FEEDBACK_KINDS),
+  reason: z.enum(NON_CONSUMPTION_REASONS).optional(),
+  dossierId: z.uuid().optional(),
+  itemId: z.uuid().optional(),
+  message: z.string().trim().min(3).max(1000),
+});
+export type FeedbackInput = z.infer<typeof feedbackSchema>;
+/** Acknowledging receipt is not accepting fault; an optional reply is kept with it. */
+export const feedbackAckSchema = z.object({ reply: z.string().trim().max(1000).optional(), expectedVersion: z.number().int().min(1) });
+export type FeedbackAckInput = z.infer<typeof feedbackAckSchema>;
+export interface SpecialAidFeedback {
+  id: string; kind: FeedbackKind; reason: NonConsumptionReason | null; message: string;
+  recipientId: string; recipientName: string; issuedByName: string; issuedAt: string;
+  dossierId: string | null; vin: string | null; itemId: string | null;
+  acknowledgedAt: string | null; reply: string | null; version: number;
+}
+/** A VIN that cannot open a dossier (not 17 valid characters): kept for review, never guessed. */
+export interface SpecialAidReviewRow { requestId: string; vinText: string | null; emdadNo: string | null; admissionNo: string | null; description: string | null; officialStatus: string; lastReportAt: string | null }

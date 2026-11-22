@@ -14,7 +14,7 @@ export const PERMISSION_LABELS: Record<Permission,string> = {
  'case.import':'ورود خودروهای موجود از اکسل','report.manager':'گزارش جامع مدیر خدمات','dashboard.read':'مشاهده داشبورد',
  'audit.read':'مشاهده تاریخچه پرونده','user.manage':'دعوت و مدیریت کارکنان','settings.manage':'تنظیمات سامانه',
  'reference.parts.read':'جست‌وجوی کاتالوگ قطعات','reference.parts.manage':'ورود و اصلاح کاتالوگ قطعات',
- 'reference.customers.read':'جست‌وجوی سوابق مشتری و خودرو','reference.customers.manage':'ورود سوابق ماهانه پذیرش',
+ 'reference.customers.read':'جست‌وجوی سوابق مشتری و خودرو','reference.customers.manage':'ورود سوابق ماهانه پذیرش','reference.appointments.read':'مشاهدهٔ نوبت‌های پذیرش ایساکو','reference.appointments.manage':'ورود گزارش لیست نوبت پذیرش',
  'daily_reports.upload':'بارگذاری و پیش‌نمایش گزارش‌های روزانه','daily_reports.apply':'ثبت نهایی گزارش روزانه','daily_reports.settings':'تنظیم یادآور گزارش‌های روزانه',
  'stock.read':'مشاهده موجودی روزانه و رزروها','stock.reserve':'رزرو کد کامل برای نیاز قطعه','stock.release':'آزادکردن رزرو و لغو خروج','stock.issue':'ثبت خروج از انبار و انعکاس آن',
  'emdad.read':'مشاهده پیگیری امداد ویژه','emdad.manage':'پیگیری و بررسی اتصال امداد ویژه',
@@ -32,12 +32,14 @@ export const PERMISSION_GROUPS: {title:string;permissions:Permission[]}[] = [
  {title:'پیگیری امداد ویژه',permissions:['special_aid.read','special_aid.operate','special_aid.supply','special_aid.release','special_aid.report','special_aid.warn']},
  {title:'مالی و صندوق',permissions:['finance.propose','finance.approve','finance.payment','finance.close']},
  {title:'کنترل کیفیت و تحویل',permissions:['qc.inspect','case.technical_close','case.deliver','case.release_authorize']},
- {title:'گزارش، اطلاعات پایه و مدیریت',permissions:['dashboard.read','report.manager','wage.report','audit.read','reference.customers.read','reference.customers.manage','report_center.manage','user.manage','settings.manage']},
+ {title:'گزارش، اطلاعات پایه و مدیریت',permissions:['dashboard.read','report.manager','wage.report','audit.read','reference.customers.read','reference.customers.manage','reference.appointments.read','reference.appointments.manage','report_center.manage','user.manage','settings.manage']},
 ];
+/** Job titles shown beside the name (a person may hold several); free text, not permissions. */
+export const jobTitleList = z.array(z.string().trim().min(2).max(60)).max(6).refine(v=>new Set(v).size===v.length,'عنوان شغلی تکراری است');
 const permissionList = z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length).refine(v=>new Set(v).size===v.length,'دسترسی تکراری است');
-export const accessUpdateSchema = z.object({expectedVersion:z.number().int().positive(),expectedTemplateVersion:z.number().int().positive(),roles:z.array(z.enum(ROLES)).min(1).max(ROLES.length),allow:permissionList,deny:permissionList}).strict().refine(v=>!v.allow.some(p=>v.deny.includes(p)),'یک دسترسی نمی‌تواند هم مجاز و هم ممنوع باشد');
+export const accessUpdateSchema = z.object({expectedVersion:z.number().int().positive(),expectedTemplateVersion:z.number().int().positive(),roles:z.array(z.enum(ROLES)).min(1).max(ROLES.length),allow:permissionList,deny:permissionList,jobTitles:jobTitleList.optional(),accessExpiresAt:z.iso.datetime({offset:true}).nullable().optional()}).strict().refine(v=>!v.allow.some(p=>v.deny.includes(p)),'یک دسترسی نمی‌تواند هم مجاز و هم ممنوع باشد');
 export const templateUpdateSchema = z.object({expectedVersion:z.number().int().positive(),permissions:permissionList}).strict();
 export type AccessUpdate = z.infer<typeof accessUpdateSchema>;
 export type TemplateUpdate = z.infer<typeof templateUpdateSchema>;
-export interface StaffAccess {id:string;displayName:string;email:string|null;roles:Role[];isOwner:boolean;isActive:boolean;version:number;overrides:PermissionOverrides;permissions:Permission[]}
+export interface StaffAccess {id:string;displayName:string;email:string|null;roles:Role[];isOwner:boolean;isActive:boolean;version:number;overrides:PermissionOverrides;permissions:Permission[];jobTitles:string[];accessExpiresAt:string|null}
 export interface AccessCatalog {version:number;templates:PermissionTemplates;staff:StaffAccess[]}

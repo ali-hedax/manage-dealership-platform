@@ -34,6 +34,8 @@ export const PERMISSIONS = [
   'reference.parts.manage',
   'reference.customers.read',
   'reference.customers.manage',
+  'reference.appointments.read', // «لیست نوبت پذیرش» records (tracking only; appointments stay in ISACO)
+  'reference.appointments.manage',
   'daily_reports.upload', // upload and preview the daily stock and Emdad files (no customer contact data)
   'daily_reports.apply', // publish a previewed daily file
   'daily_reports.settings', // reminder time/assignee; stock confirmations also need the owner
@@ -65,7 +67,7 @@ const PARTS_CLERK: readonly Permission[] = ['special_aid.read','case.read','bloc
 // The service manager only views, analyses and sends reminders (reminders need no permission).
 const SERVICE_MANAGER: readonly Permission[] = ['case.read','report.manager','dashboard.read','audit.read','workshop.read','stock.read','emdad.read','wage.report','special_aid.read','special_aid.report','special_aid.warn'];
 // Special Aid operator: most of the module's daily work, including the customer's phone number.
-const SPECIAL_AID_OPERATOR: readonly Permission[] = ['special_aid.read','special_aid.operate','customer.pii.read','emdad.read','stock.read','reference.customers.read'];
+const SPECIAL_AID_OPERATOR: readonly Permission[] = ['special_aid.read','special_aid.operate','customer.pii.read','emdad.read','stock.read','reference.customers.read','reference.appointments.read'];
 // Supply follow-up expert: official statuses, idle requests and the export for the company.
 const SPECIAL_AID_SUPPLY: readonly Permission[] = ['special_aid.read','special_aid.supply','emdad.read','stock.read'];
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
@@ -75,6 +77,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   service_manager: SERVICE_MANAGER,
   special_aid_operator: SPECIAL_AID_OPERATOR,
   special_aid_supply: SPECIAL_AID_SUPPLY,
+  // Guest: read-only special-aid view without customer phone numbers; access ends at the account's expiry.
+  guest: ['special_aid.read'],
   // Unblocks work and may act for any role. Inviting staff (user.manage) is on by
   // default and the owner can take it away per administrator (owner controls).
   system_admin: PERMISSIONS,
@@ -99,7 +103,7 @@ export function hasPermission(roles: readonly string[], permission: Permission):
 }
 
 /** Roles that sign in with username + 4-digit PIN on a trusted device. Never the owner or a system administrator. */
-export const PIN_LOGIN_ROLES = ['accident_expert', 'parts_clerk', 'technician', 'service_manager', 'special_aid_operator', 'special_aid_supply'] as const satisfies readonly Role[];
+export const PIN_LOGIN_ROLES = ['accident_expert', 'parts_clerk', 'technician', 'service_manager', 'special_aid_operator', 'special_aid_supply', 'guest'] as const satisfies readonly Role[];
 export type PinLoginRole = (typeof PIN_LOGIN_ROLES)[number];
 export const isPinEligible = (roles: readonly string[], isOwner = false) => {
   const current = normalizeRoles(roles);

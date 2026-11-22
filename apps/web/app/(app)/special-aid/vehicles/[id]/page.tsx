@@ -15,6 +15,7 @@ import { AppIcon } from '@/components/AppIcon';
 import { Dialog } from '@/components/Dialog';
 import { Plate } from '@/components/Plate';
 import { ContactDialog, ItemStateTag, PostponeDialog, SpecialAidTabs, VinText, dayText } from '@/components/SpecialAid';
+import { AppointmentStateTag, AppointmentsPanel, CardList, CardUpload, FeedbackForm, FeedbackList } from '@/components/SpecialAidRecords';
 
 /** One vehicle: every admission and special-aid part together, filterable; one call covers several parts. */
 export default function SpecialAidDossierPage() {
@@ -50,7 +51,7 @@ export default function SpecialAidDossierPage() {
           <Plate value={d.vehicle.plate} size="xl" />
         </div>
         <div className="folder-row"><VinText vin={d.vin} /><span className="folder-id">پذیرش: {faNum(d.admissionCount)}</span></div>
-        <div className="folder-counts"><span className="cnt cnt-ok">رسیده {faNum(d.arrived)}</span><span className="cnt">در حال تأمین {faNum(d.pending)}</span>{d.failedAttemptDays > 0 && <span className="cnt cnt-warn">بی‌پاسخ در {faNum(d.failedAttemptDays)} روز</span>}{d.postponedUntil && <span className="cnt">پیگیری از {formatJalali(d.postponedUntil)} · {d.postponeReason}</span>}</div>
+        <div className="folder-counts"><AppointmentStateTag state={d.appointmentState} /><span className="cnt cnt-ok">رسیده {faNum(d.arrived)}</span><span className="cnt">در حال تأمین {faNum(d.pending)}</span>{d.failedAttemptDays > 0 && <span className="cnt cnt-warn">بی‌پاسخ در {faNum(d.failedAttemptDays)} روز</span>}{d.postponedUntil && <span className="cnt">پیگیری از {formatJalali(d.postponedUntil)} · {d.postponeReason}</span>}</div>
         {operate && <div className="row no-print">
           <button type="button" className="btn btn-primary" onClick={() => setContact([])}><AppIcon name="send" />ثبت تماس</button>
           <button type="button" className="btn" onClick={() => setPostpone(true)}>تعویق پیگیری</button>
@@ -82,7 +83,10 @@ export default function SpecialAidDossierPage() {
               </div>
               {i.holdNote && <p className="callout callout-amber small">{i.holdNote}</p>}
               {i.accidentCaseId && <p className="small">این قطعه به <Link href={`/cases/${i.accidentCaseId}#case-parts`}>پروندهٔ تصادفی <bdi>{toPersianDigits(i.accidentCaseNumber ?? '')}</bdi></Link> وصل است؛ رزرو و تحویل در میز قطعات انجام می‌شود.</p>}
+              {i.replacesItemId && <p className="small">جایگزین درخواست قبلی: <bdi>{toPersianDigits(d.items.find((x) => x.id === i.replacesItemId)?.emdadNo ?? '')}</bdi> (درخواست قبلی در تاریخچه می‌ماند)</p>}
+              {i.replacedByItemId && <p className="small">درخواست تازه با شمارهٔ درست: <bdi>{toPersianDigits(d.items.find((x) => x.id === i.replacedByItemId)?.emdadNo ?? '')}</bdi></p>}
               {i.nonConsumptionReason && <p className="small">علت مصرف‌نشدن: <b>{NON_CONSUMPTION_LABELS[i.nonConsumptionReason]}</b>{i.nonConsumptionNote && ` — ${i.nonConsumptionNote}`}</p>}
+              {operate && d.items.length > 1 && <Replacement item={i} items={d.items} busy={busy} onSave={(replacesItemId) => run(`/special-aid/items/${i.id}/replacement`, { replacesItemId, expectedVersion: i.version }, 'پیوند درخواست ثبت شد')} />}
               {operate && !i.accidentCaseId && i.state !== 'installed' && <NonConsumption item={i} busy={busy} onSave={(reason, note) => run(`/special-aid/items/${i.id}/non-consumption`, { reason, note, expectedVersion: i.version }, 'علت ثبت شد؛ رزرو تغییری نکرد')} />}
             </div>
             <div className="aid-item-actions no-print">{i.allowedActions.filter((a) => a !== 'release' ? operate : can('special_aid.release')).map((a) => (
@@ -103,6 +107,18 @@ export default function SpecialAidDossierPage() {
       <section className="panel" aria-labelledby="aid-contacts"><div className="panel-head"><h2 id="aid-contacts">تماس‌ها</h2></div><div className="panel-body">
         {d.contacts.length ? <ul className="stack">{d.contacts.map((c) => <li key={c.id} className="small"><b>{CONTACT_OUTCOME_LABELS[c.outcome]}</b> · {formatJalali(c.at, { time: true })} · {c.byName}{c.promisedAt && ` · روز: ${dayText(c.promisedAt)}`} · {faNum(c.itemIds.length)} قطعه{c.note && <div className="xs muted">{c.note}</div>}</li>)}</ul> : <p className="muted small">هنوز تماسی ثبت نشده است.</p>}
       </div></section>
+
+      {can('reference.appointments.read') && <AppointmentsPanel d={d} busy={busy} onRelation={(entryId, relation) => void run(`/special-aid/dossiers/${d.id}/appointments/${entryId}`, { relation }, relation ? 'ثبت شد' : 'تصمیم برداشته شد')} />}
+
+      <section className="panel" aria-labelledby="aid-cards"><div className="panel-head"><div><h2 id="aid-cards">کارت پذیرش</h2><p className="muted small">اصل فایل با نام بارگذاری‌کننده و زمان نگه داشته می‌شود.</p></div></div><div className="panel-body stack">
+        <CardList cards={d.cards} onChanged={() => void mutate()} />
+        {operate && <CardUpload vin={d.vin} admissionNo={d.admissions.length === 1 ? d.admissions[0]!.admissionNo : undefined} onDone={() => void mutate()} />}
+      </div></section>
+
+      {(can('special_aid.warn') || can('special_aid.report')) && <section className="panel" aria-labelledby="aid-feedback"><div className="panel-head"><h2 id="aid-feedback">بازخورد فنی و تذکر</h2></div><div className="panel-body stack">
+        <FeedbackList items={d.feedback} onChanged={() => void mutate()} />
+        {can('special_aid.warn') && <FeedbackForm d={d} onSaved={() => void mutate()} />}
+      </div></section>}
 
       {contact && <ContactDialog dossier={d} open onClose={() => setContact(null)} onSaved={saved} preselect={contact} />}
       {postpone && <PostponeDialog dossier={d} open onClose={() => setPostpone(false)} onSaved={saved} />}
@@ -125,6 +141,20 @@ function NonConsumption({ item, busy, onSave }: { item: SpecialAidItem; busy: bo
         <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void onSave(reason || null, note.trim() || undefined)}>ثبت</button>
       </div>
       {reason === 'wrong_part_number' && <p className="xs muted">درخواست قبلی در ایساکو ویرایش نمی‌شود؛ کارشناس فنی درخواست تازه ثبت می‌کند و هر دو در تاریخچه می‌مانند.</p>}
+    </details>
+  );
+}
+
+/** Links a new request with the correct part number to the earlier one; neither is overwritten. */
+function Replacement({ item, items, busy, onSave }: { item: SpecialAidItem; items: SpecialAidItem[]; busy: boolean; onSave: (replacesItemId: string | null) => Promise<boolean> }) {
+  const [value, setValue] = useState(item.replacesItemId ?? '');
+  const others = items.filter((x) => x.id !== item.id && x.replacesItemId !== item.id);
+  return (
+    <details className="small no-print"><summary>جایگزین درخواست قبلی است؟</summary>
+      <div className="row">
+        <select className="input" aria-label="درخواست قبلی" value={value} onChange={(e) => setValue(e.target.value)}><option value="">جایگزین نیست</option>{others.map((x) => <option key={x.id} value={x.id}>{x.description ?? 'قطعه'} · {toPersianDigits(x.emdadNo ?? '')}{x.nonConsumptionReason ? ` · ${NON_CONSUMPTION_LABELS[x.nonConsumptionReason]}` : ''}</option>)}</select>
+        <button type="button" className="btn btn-sm" disabled={busy || value === (item.replacesItemId ?? '')} onClick={() => void onSave(value || null)}>ثبت</button>
+      </div>
     </details>
   );
 }

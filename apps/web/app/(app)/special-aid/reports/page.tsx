@@ -34,6 +34,12 @@ export default function SpecialAidReports() {
           {kpi('میانگین روز تأمین (رسمی)', s.averageSupplyDays == null ? '—' : faNum(s.averageSupplyDays))}
           {kpi('اطلاع به‌موقع به مشتری', pct(s.contactCompliance.onTime, s.contactCompliance.due))}
           {kpi('مسئلهٔ فنی حل‌نشده', faNum(s.unresolvedTechnical))}
+          {kpi('مانده در مرحلهٔ خرید (۱۴+ روز بدون تغییر)', faNum(s.stalledSupply), '/special-aid/supply')}
+          {kpi('شمارهٔ فنی اشتباه', faNum(s.reasons.wrong_part_number))}
+          {kpi('تشخیص فنی اشتباه', faNum(s.reasons.wrong_diagnosis))}
+          {kpi('عدم مراجعهٔ مشتری', faNum(s.reasons.customer_no_show))}
+          {kpi('تذکر رسمی ثبت‌شده', faNum(s.warningsIssued), '/special-aid/feedback')}
+          {kpi('بازخورد بدون تأیید دریافت', faNum(s.feedbackOpen), '/special-aid/feedback')}
         </section>
         <section className="panel" aria-labelledby="aid-reasons"><div className="panel-head"><h2 id="aid-reasons">علت مصرف‌نشدن قطعه</h2></div><div className="panel-body">
           <table className="table static"><thead><tr><th>علت</th><th>تعداد</th><th>نوع</th></tr></thead><tbody>{NON_CONSUMPTION_REASONS.map((r) => <tr key={r}><td>{NON_CONSUMPTION_LABELS[r]}</td><td>{faNum(s.reasons[r])}</td><td className="small">{TECHNICAL_REASONS.includes(r) ? 'فنی' : 'مشتری یا تأمین'}</td></tr>)}</tbody></table>

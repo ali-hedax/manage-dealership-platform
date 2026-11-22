@@ -79,7 +79,7 @@ export function Shell({ children }: { children: ReactNode }) {
       { href: '/special-aid', label: 'کارهای امروز', icon: 'calendar', show: can('special_aid.read') && home !== '/special-aid', match: (p) => p === '/special-aid' },
       { href: '/special-aid/vehicles', label: 'پرونده خودروها', icon: 'folder', show: can('special_aid.read'), match: (p) => p.startsWith('/special-aid/vehicles') },
       { href: '/special-aid/supply', label: 'پیگیری تأمین قطعات', icon: 'truck', show: can('special_aid.supply'), match: (p) => p === '/special-aid/supply' },
-      { href: '/special-aid/reports', label: 'گزارش‌ها', icon: 'chart', show: can('special_aid.report'), match: (p) => p === '/special-aid/reports' },
+      { href: '/special-aid/reports', label: 'گزارش‌ها', icon: 'chart', show: can('special_aid.report'), match: (p) => p === '/special-aid/reports' || p === '/special-aid/feedback' },
     ] },
     { key: 'workshop', label: 'مدیریت تعمیرگاه', icon: 'nav-calendar', items: [
       { ...byHref('/workshop'), label: 'برنامه و پیگیری مراحل تعمیر' },
@@ -211,7 +211,7 @@ export function backTarget(pathname: string, home: string, canChooseDesk = false
   return { href: home, label: 'بازگشت به میز کار' };
 }
 
-const PAGE_TITLES: [RegExp, string][] = [[/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
+const PAGE_TITLES: [RegExp, string][] = [[/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid\/feedback/, 'بازخورد فنی و تذکر'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
 /** Browser tab title for each area, so several open tabs can be told apart. */
 export function pageTitle(pathname: string): string {
   const module = /^\/modules\/([^/]+)/.exec(pathname)?.[1];

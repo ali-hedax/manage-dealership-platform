@@ -1,14 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   EMDAD_ARRIVED_CATEGORIES, NON_CONSUMPTION_REASONS, SPECIAL_AID_FINAL_STATES, SPECIAL_AID_RULES,
-  TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, failedAttemptDays, maskPhone, nextItemState,
+  TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isWorkingDay, maskPhone, nextItemState,
   parseProcurementCode, assessmentCodeOf, shortVehicleName, tehranDay,
   type AidContactFacts, type AidItemFacts, type ContactInput, type DossierSearchInput, type ItemActionInput, type NonConsumptionInput,
   type NonConsumptionReason, type Paged, type Permission, type PostponeInput, type SpecialAidContact, type SpecialAidDossier, type SpecialAidDossierRow,
   type SpecialAidItem, type SpecialAidItemState, type SpecialAidSummary, type SpecialAidSupplyRow, type SpecialAidTodayEntry,
-  type SpecialAidVehicle, type SupplySearchInput,
+  type ReplacementInput, type SpecialAidVehicle, type SupplySearchInput,
 } from '@manage/shared';
+import { calendarAt } from '../workshop/work-calendar';
+import { SpecialAidRecordsService } from './special-aid-records.service';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
@@ -31,6 +33,8 @@ const withoutTasks = <T extends { tasks: unknown }>(r: T): Omit<T, 'tasks'> => {
 type RequestRow = typeof emdadRequests.$inferSelect;
 const ARRIVED = EMDAD_ARRIVED_CATEGORIES as readonly string[];
 const HOLD_ACTIVE = ['reserved', 'issued'];
+/** A pending request without an observed status change for this many days counts as stalled in purchasing. */
+const SPECIAL_AID_STALLED_DAYS = 14;
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 const off = (r: RequestRow) => (r.official ?? {}) as Partial<EmdadOfficial>;
 
@@ -43,6 +47,8 @@ interface Loaded {
   admissions: SpecialAidDossier['admissions'];
   vehicle: SpecialAidVehicle;
   search: string;
+  /** The dealership's working days (workshop calendar with recorded holidays). */
+  isWorkingDay: (day: string) => boolean;
 }
 
 /**
@@ -54,7 +60,7 @@ interface Loaded {
 @Injectable()
 export class SpecialAidService {
   private readonly log = new Logger(SpecialAidService.name);
-  constructor(@Inject(DATABASE) private readonly handle: DatabaseHandle, private readonly audit: AuditService) {}
+  constructor(@Inject(DATABASE) private readonly handle: DatabaseHandle, private readonly audit: AuditService, private readonly records: SpecialAidRecordsService) {}
   private get db() { return this.handle.db; }
   private need(actor: Actor, p: Permission) { if (!actor.user.permissions.has(p)) throw forbidden(); }
 
@@ -70,16 +76,22 @@ export class SpecialAidService {
     return this.db.transaction(async (tx) => {
       const tenantId = actor.user.tenantId;
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`special-aid:${tenantId}`}))`);
-      const result = { dossiers: 0, admissions: 0, items: 0, statusChanges: 0, arrived: 0, held: 0, holdReview: 0, invalidVin: 0 };
-      const rows = await tx.select({ r: emdadRequests, i: specialAidItems }).from(emdadRequests)
+      const result = { dossiers: 0, admissions: 0, items: 0, statusChanges: 0, arrived: 0, held: 0, holdReview: 0, invalidVin: 0, reconciled: 0, cardsMatched: 0 };
+      const rows = await tx.select({ r: emdadRequests, i: specialAidItems, dVin: specialAidDossiers.vin, aKey: specialAidAdmissions.admissionKey }).from(emdadRequests)
         .leftJoin(specialAidItems, eq(specialAidItems.requestId, emdadRequests.id))
-        .where(and(eq(emdadRequests.tenantId, tenantId), or(isNull(specialAidItems.id), sql`${specialAidItems.observedCategory} is distinct from ${emdadRequests.statusCategory}`, isNull(specialAidItems.admissionId))))
+        .leftJoin(specialAidDossiers, eq(specialAidDossiers.id, specialAidItems.dossierId))
+        .leftJoin(specialAidAdmissions, eq(specialAidAdmissions.id, specialAidItems.admissionId))
+        .where(eq(emdadRequests.tenantId, tenantId))
         .orderBy(emdadRequests.id);
       const dossierIds = new Map<string, string>();
-      for (const { r, i } of rows) {
+      for (const { r, i, dVin, aKey } of rows) {
         const vin = idKey(r.chassis ?? '');
-        if (!isFullVin(vin)) { result.invalidVin += 1; continue; }
-        let dossierId = i?.dossierId ?? dossierIds.get(vin);
+        // Each admission number of the VIN is its own admission; a non-unique placeholder is none.
+        const admKey = r.admissionNo && !isNonUniqueAdmission(r.admissionNo) ? idKey(r.admissionNo) : '';
+        if (i && i.observedCategory === r.statusCategory && dVin === vin && (aKey ?? '') === admKey) continue;
+        // An invalid VIN never opens a dossier (review queue); an existing line is not moved onto it.
+        if (!isFullVin(vin)) { if (!i) result.invalidVin += 1; continue; }
+        let dossierId = i && dVin === vin ? i.dossierId : dossierIds.get(vin);
         if (!dossierId) {
           const inserted = await tx.insert(specialAidDossiers).values({ id: newId(), tenantId, vin, isTest: actor.user.isTestTenant }).onConflictDoNothing().returning({ id: specialAidDossiers.id });
           if (inserted.length) result.dossiers += 1;
@@ -87,14 +99,21 @@ export class SpecialAidService {
           dossierId = d!.id;
           dossierIds.set(vin, dossierId);
         }
-        // Each admission number of the VIN is its own admission; a non-unique placeholder is none.
-        let admissionId = i?.admissionId ?? null;
-        if (!admissionId && r.admissionNo && !isNonUniqueAdmission(r.admissionNo) && idKey(r.admissionNo)) {
-          const key = idKey(r.admissionNo);
-          const ins = await tx.insert(specialAidAdmissions).values({ id: newId(), tenantId, dossierId, admissionKey: key, admissionNo: r.admissionNo.trim(), admissionDate: off(r).admissionDate || null }).onConflictDoNothing().returning({ id: specialAidAdmissions.id });
+        // A corrected VIN or admission number in a later report moves the line; history stays in the audit.
+        const moved = !!i && i.dossierId !== dossierId;
+        let admissionId = i && !moved && (aKey ?? '') === admKey ? i.admissionId : null;
+        if (!admissionId && admKey) {
+          const ins = await tx.insert(specialAidAdmissions).values({ id: newId(), tenantId, dossierId, admissionKey: admKey, admissionNo: r.admissionNo!.trim(), admissionDate: off(r).admissionDate || null }).onConflictDoNothing().returning({ id: specialAidAdmissions.id });
           if (ins.length) result.admissions += 1;
-          const [a] = await tx.select({ id: specialAidAdmissions.id }).from(specialAidAdmissions).where(and(eq(specialAidAdmissions.tenantId, tenantId), eq(specialAidAdmissions.dossierId, dossierId), eq(specialAidAdmissions.admissionKey, key)));
+          const [a] = await tx.select({ id: specialAidAdmissions.id }).from(specialAidAdmissions).where(and(eq(specialAidAdmissions.tenantId, tenantId), eq(specialAidAdmissions.dossierId, dossierId), eq(specialAidAdmissions.admissionKey, admKey)));
           admissionId = a!.id;
+        }
+        if (i && (moved || i.admissionId !== admissionId)) {
+          await tx.update(specialAidItems).set({ dossierId, admissionId, groupId: moved ? null : i.groupId, updatedAt: new Date(), version: i.version + 1 }).where(and(eq(specialAidItems.id, i.id), eq(specialAidItems.version, i.version)));
+          await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: i.id, action: 'special_aid.reconciled', before: { vin: dVin, admissionKey: aKey ?? null, dossierId: i.dossierId }, after: { vin, admissionKey: admKey || null, dossierId } });
+          result.reconciled += 1;
+          i.version += 1; i.dossierId = dossierId; i.admissionId = admissionId;
+          if (i.observedCategory === r.statusCategory) continue;
         }
         const arrived = ARRIVED.includes(r.statusCategory);
         if (!i) {
@@ -110,7 +129,6 @@ export class SpecialAidService {
           continue;
         }
         const patch: Partial<ItemRow> = { updatedAt: new Date(), version: i.version + 1 };
-        if (!i.admissionId && admissionId) patch.admissionId = admissionId;
         if (i.observedCategory !== r.statusCategory) {
           patch.observedCategory = r.statusCategory;
           patch.statusObservedAt = r.lastReportAt;
@@ -128,6 +146,8 @@ export class SpecialAidService {
           if (held.ok) result.held += 1; else result.holdReview += 1;
         }
       }
+      // New admissions may identify archived cards that did not match before.
+      result.cardsMatched = await this.records.retryCards(tx, tenantId);
       return result;
     });
   }
@@ -192,6 +212,9 @@ export class SpecialAidService {
       this.db.select().from(specialAidGroups).where(and(eq(specialAidGroups.tenantId, tenantId), inArray(specialAidGroups.dossierId, ids))),
     ]);
     const holdOf = new Map(holds.map((h) => [h.itemId!, h.id]));
+    const calendar = (await calendarAt(this.db, tenantId, new Date().toISOString())).calendar;
+    const working = (day: string) => isWorkingDay(day, calendar);
+    const replacedBy = new Map(itemRows.filter((x) => x.i.replacesItemId).map((x) => [x.i.replacesItemId!, x.i.id]));
     const vehicleOf = await this.vehicles(tenantId, dossiers.map((d) => d.vin), canSeePhone);
     return dossiers.map((dossier) => {
       const mine = itemRows.filter((x) => x.i.dossierId === dossier.id);
@@ -206,14 +229,15 @@ export class SpecialAidService {
           receivedAt: iso(parseReportDate(o.receivedInWarehouseAt)), arrivalObservedAt: iso(i.arrivalObservedAt), statusObservedAt: iso(i.statusObservedAt),
           state: i.state as SpecialAidItemState, allowedActions: accident ? [] : allowedItemActions(i.state as SpecialAidItemState),
           informedAt: iso(i.informedAt), groupId: i.groupId, nonConsumptionReason: i.nonConsumptionReason as NonConsumptionReason | null, nonConsumptionNote: i.nonConsumptionNote,
-          holdId: holdOf.get(i.id) ?? null, holdNote: i.holdNote, accidentCaseId: accident, accidentCaseNumber: accident ? caseNumber : null, version: i.version,
+          holdId: holdOf.get(i.id) ?? null, holdNote: i.holdNote, accidentCaseId: accident, accidentCaseNumber: accident ? caseNumber : null,
+          replacesItemId: i.replacesItemId, replacedByItemId: replacedBy.get(i.id) ?? null, version: i.version,
         };
       });
       const facts: AidItemFacts[] = items.map((x) => ({ id: x.id, state: x.state, receivedAt: x.receivedAt, arrivalObservedAt: x.arrivalObservedAt, informedAt: x.informedAt, groupId: x.groupId, officialCancelled: x.officialCategory === 'cancelled' }));
       const myAdmissions = admissions.filter((a) => a.dossierId === dossier.id).map((a) => ({ id: a.id, admissionNo: a.admissionNo, admissionDate: a.admissionDate, itemCount: items.filter((x) => x.admissionId === a.id).length }));
       const vehicle = vehicleOf.get(dossier.vin) ?? { customerName: null, phone: null, model: null, plate: null };
       return {
-        dossier, items, facts, admissions: myAdmissions, vehicle,
+        dossier, items, facts, admissions: myAdmissions, vehicle, isWorkingDay: working,
         contacts: contacts.filter((c) => c.c.dossierId === dossier.id).map(({ c, byName }) => ({ id: c.id, outcome: c.outcome as SpecialAidContact['outcome'], note: c.note, promisedAt: iso(c.promisedAt), itemIds: c.itemIds, byName, at: c.createdAt.toISOString() })),
         groups: groups.filter((g) => g.dossierId === dossier.id).map((g) => ({ id: g.id, label: g.label, decision: g.decision as 'wait' | 'partial' | null, itemIds: items.filter((x) => x.groupId === g.id).map((x) => x.id), version: g.version })).filter((g) => g.itemIds.length),
         search: idKey([dossier.vin, vehicle.customerName, vehicle.plate, vehicle.model, ...items.flatMap((x) => [x.emdadNo, x.admissionNo, x.assessmentCode, x.procurementCode, x.description])].filter(Boolean).join(' ')),
@@ -253,7 +277,7 @@ export class SpecialAidService {
     };
   }
   private factsOf(l: Loaded) {
-    return { items: l.facts, contacts: l.contacts.map((c): AidContactFacts => ({ at: c.at, outcome: c.outcome, promisedAt: c.promisedAt, itemIds: c.itemIds })), groups: l.groups, postponedUntil: iso(l.dossier.postponedUntil), attendedAt: iso(l.dossier.attendedAt) };
+    return { items: l.facts, contacts: l.contacts.map((c): AidContactFacts => ({ at: c.at, outcome: c.outcome, promisedAt: c.promisedAt, itemIds: c.itemIds })), groups: l.groups, postponedUntil: iso(l.dossier.postponedUntil), attendedAt: iso(l.dossier.attendedAt), isWorkingDay: l.isWorkingDay };
   }
 
   async list(actor: Actor, q: DossierSearchInput): Promise<Paged<SpecialAidDossierRow>> {
@@ -283,8 +307,19 @@ export class SpecialAidService {
     this.need(actor, 'special_aid.read');
     const [l] = await this.load(actor.user.tenantId, [id], actor.user.permissions.has('customer.pii.read'));
     if (!l) throw notFound('پروندهٔ امداد ویژه');
-    const { tasks, ...row } = this.row(l, new Date());
-    return { ...row, tasks, admissions: l.admissions, items: l.items, contacts: [...l.contacts].reverse(), groups: l.groups, postponedUntil: iso(l.dossier.postponedUntil), postponeReason: l.dossier.postponeReason, failedAttemptDays: failedAttemptDays(this.factsOf(l).contacts) };
+    const now = new Date();
+    const { tasks, ...row } = this.row(l, now);
+    const tenantId = actor.user.tenantId;
+    const canAppointments = actor.user.permissions.has('reference.appointments.read');
+    const [appointments, cards, feedback] = await Promise.all([
+      canAppointments ? this.records.appointmentsOf(tenantId, l.dossier.id, l.dossier.vin, l.dossier.attendedAt, now) : Promise.resolve({ appointments: [], state: 'no_report' as const }),
+      this.records.cardsOf(tenantId, l.dossier.id),
+      actor.user.permissions.has('special_aid.warn') || actor.user.permissions.has('special_aid.report') ? this.records.feedback(actor, { dossierId: l.dossier.id }) : Promise.resolve([]),
+    ]);
+    return {
+      ...row, tasks, admissions: l.admissions, items: l.items, contacts: [...l.contacts].reverse(), groups: l.groups, postponedUntil: iso(l.dossier.postponedUntil), postponeReason: l.dossier.postponeReason,
+      failedAttemptDays: failedAttemptDays(this.factsOf(l).contacts), appointments: appointments.appointments, appointmentState: appointments.state, cards, feedback,
+    };
   }
 
   // ------------------------------------------------------------------ operator actions
@@ -383,10 +418,14 @@ export class SpecialAidService {
       if (input.action === 'deliver' || input.action === 'release') {
         if (!hold) throw badRequest('SPECIAL_AID_NO_HOLD', 'رزرو فعالی برای این قطعه نیست');
       }
+      // Installed completes the consumption once: an issued hold stops lowering the usable quantity
+      // (the business report shows the consumption from now on). Leaving the warehouse alone never does.
+      if (input.action === 'installed' && hold && (hold.status !== 'issued' || hold.reflectedAt)) throw badRequest('SPECIAL_AID_NOT_ISSUED', 'قطعه هنوز از انبار تحویل کارگاه نشده یا مصرف آن قبلاً ثبت شده است');
+      const snap = input.action === 'installed' && hold ? (await tx.select({ id: stockSnapshots.id }).from(stockSnapshots).where(and(eq(stockSnapshots.tenantId, tenantId), eq(stockSnapshots.status, 'active'))))[0] : undefined;
       if (hold) {
         const holdPatch: Partial<typeof stockReservations.$inferInsert> =
           input.action === 'deliver' ? { status: 'issued', issuedAt: now, issuedBy: actor.user.id }
-          : input.action === 'installed' ? { reflectedAt: now, reflectedBy: actor.user.id }
+          : input.action === 'installed' ? { reflectedAt: now, reflectedBy: actor.user.id, reflectedSnapshotId: snap?.id ?? null }
           : input.action === 'return_to_stock_hold' ? { status: 'reserved', issuedAt: null, issuedBy: null }
           : input.action === 'release' ? { status: 'released', closedAt: now, closedBy: actor.user.id, reason: input.reason ?? null }
           : {};
@@ -397,7 +436,7 @@ export class SpecialAidService {
       }
       const [saved] = await tx.update(specialAidItems).set({ state: to, updatedAt: now, version: i.version + 1 }).where(and(eq(specialAidItems.id, i.id), eq(specialAidItems.version, i.version))).returning();
       if (!saved) throw versionConflict();
-      await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: i.id, action: `special_aid.${input.action}`, reason: input.reason ?? null, before: { state: from }, after: { state: to, reservationId: hold?.id ?? null }, snapshot: { version: saved.version, row: saved } });
+      await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: i.id, action: `special_aid.${input.action}`, reason: input.reason ?? null, before: { state: from }, after: { state: to, reservationId: hold?.id ?? null, consumed: input.action === 'installed' && !!hold }, snapshot: { version: saved.version, row: saved } });
       return i.dossierId;
     });
     return this.get(actor, dossierId);
@@ -416,6 +455,28 @@ export class SpecialAidService {
         .where(and(eq(specialAidItems.id, i.id), eq(specialAidItems.version, i.version))).returning();
       if (!saved) throw versionConflict();
       await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: i.id, action: 'special_aid.non_consumption', before: { reason: i.nonConsumptionReason, note: i.nonConsumptionNote }, after: { reason: input.reason, note: input.note ?? null }, snapshot: { version: saved.version, row: saved } });
+      return i.dossierId;
+    });
+    return this.get(actor, dossierId);
+  }
+
+  /** Links the corrected request to the earlier one of the same vehicle; both stay in history. */
+  async replacement(actor: Actor, itemId: string, input: ReplacementInput) {
+    this.need(actor, 'special_aid.operate');
+    const dossierId = await this.db.transaction(async (tx) => {
+      const [i] = await tx.select().from(specialAidItems).where(and(eq(specialAidItems.id, itemId), eq(specialAidItems.tenantId, actor.user.tenantId))).for('update');
+      if (!i) throw notFound('قطعهٔ امداد ویژه');
+      if (i.version !== input.expectedVersion) throw versionConflict(i.version);
+      if (input.replacesItemId) {
+        if (input.replacesItemId === i.id) throw badRequest('SPECIAL_AID_REPLACEMENT', 'یک درخواست جایگزین خودش نیست');
+        const [old] = await this.itemsOf(tx, actor, i.dossierId, [input.replacesItemId]);
+        if (old!.replacesItemId === i.id) throw badRequest('SPECIAL_AID_REPLACEMENT', 'این دو درخواست برعکس به هم وصل شده‌اند');
+        const [taken] = await tx.select({ id: specialAidItems.id }).from(specialAidItems).where(and(eq(specialAidItems.tenantId, actor.user.tenantId), eq(specialAidItems.replacesItemId, input.replacesItemId)));
+        if (taken && taken.id !== i.id) throw badRequest('SPECIAL_AID_REPLACEMENT', 'درخواست قبلی به جایگزین دیگری وصل است');
+      }
+      const [saved] = await tx.update(specialAidItems).set({ replacesItemId: input.replacesItemId, updatedAt: new Date(), version: i.version + 1 }).where(and(eq(specialAidItems.id, i.id), eq(specialAidItems.version, i.version))).returning();
+      if (!saved) throw versionConflict();
+      await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: i.id, action: 'special_aid.replacement_linked', before: { replacesItemId: i.replacesItemId }, after: { replacesItemId: input.replacesItemId }, snapshot: { version: saved.version, row: saved } });
       return i.dossierId;
     });
     return this.get(actor, dossierId);
@@ -493,15 +554,19 @@ export class SpecialAidService {
     const reasons = Object.fromEntries(NON_CONSUMPTION_REASONS.map((r) => [r, 0])) as Record<NonConsumptionReason, number>;
     for (const i of items) if (i.nonConsumptionReason) reasons[i.nonConsumptionReason] += 1;
     const supplyDays = items.map((i) => (i.receivedAt && i.officialRegisteredAt ? daysBetween(i.officialRegisteredAt, i.receivedAt) : null)).filter((x): x is number => x != null && x >= 0);
-    // Contact compliance: arrived parts whose first announcement was due; on time = by the end of the next day.
+    // Contact compliance: arrived parts whose first announcement was due; on time = by the end of the next working day.
+    const working = loaded[0]?.isWorkingDay;
     let due = 0, onTime = 0;
     for (const i of items) {
       const start = i.receivedAt ?? i.arrivalObservedAt;
       if (!start || i.state === 'pending') continue;
-      if (daysBetween(start, now) < SPECIAL_AID_RULES.informWithinDays) continue;
+      const deadline = endOfNextWorkingDay(start, working).toISOString();
+      if (deadline > now.toISOString() && !i.informedAt) continue;
       due += 1;
-      if (i.informedAt && daysBetween(start, i.informedAt) <= SPECIAL_AID_RULES.informWithinDays) onTime += 1;
+      if (i.informedAt && i.informedAt <= deadline) onTime += 1;
     }
+    const stalled = loaded.flatMap((l) => l.items).filter((i) => i.state === 'pending' && !['cancelled', 'supplied_by_dealer'].includes(i.officialCategory) && !!i.statusObservedAt && daysBetween(i.statusObservedAt, now) >= SPECIAL_AID_STALLED_DAYS).length;
+    const fb = await this.records.openFeedbackCounts(actor.user.tenantId);
     const weekKey = (v: string) => { const d = new Date(tehranDay(v)); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 1) % 7)); return d.toISOString().slice(0, 10); };
     const weeks = new Map<string, { week: string; registered: number; arrived: number; installed: number }>();
     const bucket = (v: string | null, k: 'registered' | 'arrived' | 'installed') => { if (!v || daysBetween(v, now) > 7 * 8) return; const w = weekKey(v); const e = weeks.get(w) ?? { week: w, registered: 0, arrived: 0, installed: 0 }; e[k] += 1; weeks.set(w, e); };
@@ -519,6 +584,9 @@ export class SpecialAidService {
       averageSupplyDays: supplyDays.length ? Math.round((supplyDays.reduce((a, b) => a + b, 0) / supplyDays.length) * 10) / 10 : null,
       unresolvedTechnical: items.filter((i) => i.nonConsumptionReason && TECHNICAL_REASONS.includes(i.nonConsumptionReason) && !SPECIAL_AID_FINAL_STATES.includes(i.state)).length,
       weekly: [...weeks.values()].sort((a, b) => a.week.localeCompare(b.week)),
+      stalledSupply: stalled,
+      feedbackOpen: fb.open,
+      warningsIssued: fb.warnings,
     };
   }
 

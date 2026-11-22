@@ -38,7 +38,7 @@ export const tenants = pgTable('tenants', {
   permissionTemplates: jsonb('permission_templates').$type<import('@manage/shared').PermissionTemplates>().notNull().default({}),
   permissionVersion: integer('permission_version').notNull().default(1),
   /** Owner/system-admin settings such as the parts-amount alert threshold (Rial). */
-  settings: jsonb('settings').$type<{ partsAlertThresholdRial?: number; reportCenter?: Record<string, unknown> } & Record<string, unknown>>().notNull().default({}),
+  settings: jsonb('settings').$type<{ partsAlertThresholdRial?: number; reportCenter?: Record<string, unknown>; referenceMappings?: Record<string, unknown> } & Record<string, unknown>>().notNull().default({}),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 
@@ -89,6 +89,9 @@ export const users = pgTable(
     lastLoginAt: ts('last_login_at'),
     // Latest release announcement this person acknowledged (vMAJOR.MINOR.PATCH, migration 0028).
     releaseSeen: text('release_seen'),
+    // Job titles shown beside the name (several allowed) and the end of guest/temporary access (migration 0035).
+    jobTitles: text('job_titles').array().notNull().default(sql`'{}'::text[]`),
+    accessExpiresAt: ts('access_expires_at'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
     version: integer('version').notNull().default(1),
@@ -1587,6 +1590,8 @@ export const specialAidItems = pgTable('special_aid_items', {
   nonConsumptionAt: ts('non_consumption_at'),
   /** Why the automatic hold was not (fully) placed, shown to the operator. */
   holdNote: text('hold_note'),
+  /** Earlier request of the same vehicle this one replaces (wrong part number); both stay in history. */
+  replacesItemId: uuid('replaces_item_id').references((): AnyPgColumn => specialAidItems.id),
   isTest: boolean('is_test').notNull().default(false),
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
@@ -1610,3 +1615,64 @@ export const specialAidContacts = pgTable('special_aid_contacts', {
   createdAt: ts('created_at').notNull().defaultNow(),
   isTest: boolean('is_test').notNull().default(false),
 }, (t) => [index('special_aid_contacts_dossier_idx').on(t.tenantId, t.dossierId, t.createdAt)]);
+
+/** Admission card evidence (originals kept byte-for-byte, tenant-scoped; migration 0035). */
+export const specialAidCards = pgTable('special_aid_cards', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  fileName: text('file_name').notNull(),
+  mime: text('mime').notNull(),
+  sha256: text('sha256').notNull(),
+  size: integer('size').notNull(),
+  dataBase64: text('data_base64').notNull(),
+  /** unmatched | matched */
+  state: text('state').notNull().default('unmatched'),
+  admissionNo: text('admission_no'),
+  vin: text('vin'),
+  dossierId: uuid('dossier_id').references(() => specialAidDossiers.id),
+  admissionId: uuid('admission_id').references(() => specialAidAdmissions.id),
+  /** Result of the configured text extractor (none by default); numbers only, never trusted without a match. */
+  extraction: jsonb('extraction').$type<{ provider: string; admissionNo: string | null; vin: string | null }>(),
+  uploadedBy: uuid('uploaded_by').notNull().references(() => users.id),
+  uploadedAt: ts('uploaded_at').notNull().defaultNow(),
+  matchedBy: uuid('matched_by').references(() => users.id),
+  matchedAt: ts('matched_at'),
+  isTest: boolean('is_test').notNull().default(false),
+  version: integer('version').notNull().default(1),
+}, (t) => [
+  uniqueIndex('special_aid_cards_hash_uq').on(t.tenantId, t.sha256),
+  index('special_aid_cards_state_idx').on(t.tenantId, t.state),
+  index('special_aid_cards_dossier_idx').on(t.tenantId, t.dossierId),
+]);
+
+/** Technical feedback and formal warnings from the service manager; the recipient acknowledges receipt. */
+export const specialAidFeedback = pgTable('special_aid_feedback', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  kind: text('kind').notNull(),
+  reason: text('reason'),
+  message: text('message').notNull(),
+  recipientId: uuid('recipient_id').notNull().references(() => users.id),
+  dossierId: uuid('dossier_id').references(() => specialAidDossiers.id),
+  itemId: uuid('item_id').references(() => specialAidItems.id),
+  issuedBy: uuid('issued_by').notNull().references(() => users.id),
+  issuedAt: ts('issued_at').notNull().defaultNow(),
+  acknowledgedAt: ts('acknowledged_at'),
+  reply: text('reply'),
+  isTest: boolean('is_test').notNull().default(false),
+  version: integer('version').notNull().default(1),
+}, (t) => [index('special_aid_feedback_recipient_idx').on(t.tenantId, t.recipientId, t.issuedAt)]);
+
+/** The operator's decision whether an imported appointment of the VIN belongs to the special-aid dossier. */
+export const specialAidAppointmentLinks = pgTable('special_aid_appointment_links', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  dossierId: uuid('dossier_id').notNull().references(() => specialAidDossiers.id),
+  /** The «لیست نوبت پذیرش» record (reference_entries kind appointments). */
+  entryId: uuid('entry_id').notNull().references(() => referenceEntries.id),
+  relation: text('relation').notNull(),
+  decidedBy: uuid('decided_by').notNull().references(() => users.id),
+  decidedAt: ts('decided_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+  version: integer('version').notNull().default(1),
+}, (t) => [uniqueIndex('special_aid_appointment_links_uq').on(t.dossierId, t.entryId)]);

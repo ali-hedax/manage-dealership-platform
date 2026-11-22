@@ -256,7 +256,7 @@ it('report center: three ISACO reports, last import, editable guide only with re
   const emdad = list.body[0];
   expect(emdad).toMatchObject({ isacoPath: 'خدمات ← گزارش ← امداد ویژه', supported: true, pastDays: 150 });
   expect(emdad.lastImport.rows).toBeGreaterThan(0);
-  expect(list.body[2]).toMatchObject({ supported: false, pastDays: 30, futureDays: 30 });
+  expect(list.body[2]).toMatchObject({ supported: true, pastDays: 30, futureDays: 30, lastImport: null, stale: true, layoutConfirmed: false });
   const body = { kind: 'appointments', guide: 'راهنمای آزمونی برای گزارش نوبت با بازهٔ تازه', pastDays: 20, futureDays: 40 };
   expect((await parts.put('/report-center', body)).status).toBe(403);
   expect((await operator.get('/report-center')).status).toBe(403);

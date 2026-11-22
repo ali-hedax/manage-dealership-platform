@@ -31,7 +31,7 @@ it('upgrades the previous schema without rewriting existing cases and rehearses 
     expect((await client.query('select workflow from cases where tenant_id=$1 and id=$2', [tenant, kase])).rows).toEqual([{ workflow: null }]);
     expect((await client.query("select to_jsonb(c)-'workflow'-'deleted_at'-'deleted_by'-'delete_reason'-'deleted_from_status'-'body_replacement' as data from cases c where tenant_id=$1 and id=$2", [tenant, kase])).rows).toEqual(before);
     expect((await client.query("select to_regclass('public.case_documents') as name")).rows).toEqual([{ name: 'case_documents' }]);
-    for (const name of ['0034_special_aid_module', '0032_task_cancellation', '0031_assessment_source_code', '0030_body_replacement_versions', '0029_smart_assessment', '0028_pretty_chamber', '0027_low_praxagora', '0026_broad_wildside', '0025_freezing_alex_power', '0024_fat_zaran']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
+    for (const name of ['0035_special_aid_completion', '0034_special_aid_module', '0032_task_cancellation', '0031_assessment_source_code', '0030_body_replacement_versions', '0029_smart_assessment', '0028_pretty_chamber', '0027_low_praxagora', '0026_broad_wildside', '0025_freezing_alex_power', '0024_fat_zaran']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
     expect((await client.query('select to_jsonb(c) as data from cases c where tenant_id=$1 and id=$2', [tenant, kase])).rows).toEqual(before);
   } finally {
     await client.close();
@@ -102,7 +102,10 @@ it('0034 keeps every accident reservation, allows a special-aid hold only with i
     // A reservation without its owner is impossible.
     await expect(client.query("insert into stock_reservations(id,tenant_id,full_stock_code,quantity,snapshot_id,reserved_by) values ($1,$2,'0012345601',1,$3,$4)", [randomUUID(), tenant, snap, user])).rejects.toThrow();
     expect((await client.query('select count(*)::int as n from notifications where urgent')).rows).toEqual([{ n: 0 }]);
-    await client.exec(readFileSync(join(source, '../down', '0034_special_aid_module.sql'), 'utf8'));
+    // 0035 also checks users: job titles default to none and guest expiry is empty for existing staff.
+    expect((await client.query('select job_titles, access_expires_at from users where id=$1', [user])).rows).toEqual([{ job_titles: [], access_expires_at: null }]);
+    for (const name of ['0035_special_aid_completion', '0034_special_aid_module']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
+    expect((await client.query("select count(*)::int as n from information_schema.columns where table_name='users' and column_name in ('job_titles','access_expires_at')")).rows).toEqual([{ n: 0 }]);
     expect((await client.query('select to_jsonb(r) as data from stock_reservations r where id=$1', [res])).rows).toEqual(before);
     expect((await client.query("select to_regclass('public.special_aid_items') as name")).rows).toEqual([{ name: null }]);
   } finally {
