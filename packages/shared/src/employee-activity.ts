@@ -41,7 +41,7 @@ export function aggregateStaffActivity(events:readonly StaffAuditEvent[]):Activi
     const outcome=MEANINGFUL_STAFF_EVENTS[event.action as keyof typeof MEANINGFUL_STAFF_EVENTS];
     if(!outcome){ignored++;continue;}
     if(!event.actorUserId?.trim()){unattributed++;continue;}
-    const current=byId.get(event.actorUserId)??{employeeId:event.actorUserId,counts:{},total:0};
+    const current:IndividualActivity=byId.get(event.actorUserId)??{employeeId:event.actorUserId,counts:{},total:0};
     current.counts[outcome]=(current.counts[outcome]??0)+1;
     current.total++;
     byId.set(event.actorUserId,current);
