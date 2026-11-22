@@ -1,6 +1,8 @@
 import type {Me,Permission} from '@manage/shared';
 import type {IconName} from '@/components/AppIcon';
-export type Workspace={key:string;label:string;icon:IconName;description:string;permissions:Permission[];owner?:boolean;queue:string;queueLabel:string;actions:Action[]};
+export type Workspace={key:string;label:string;icon:IconName;description:string;permissions:Permission[];owner?:boolean;queue:string;queueLabel:string;actions:Action[];/** Own module page instead of /accidents/<key> (Special Aid, spec section 25). */href?:string};
+/** Address of a workspace (its own module page, otherwise the accident desk of that key). */
+export const workspaceHref=(w:Pick<Workspace,'key'|'href'>)=>w.href??`/accidents/${w.key}`;
 export type Action={label:string;detail:string;href:string;icon:IconName;permission?:Permission;group?:string};
 const dailyUpload:Action={label:'به‌روزرسانی گزارش‌های روزانه',detail:'بارگذاری، پیش‌نمایش و ثبت موجودی و امداد ویژه',href:'/daily-reports',icon:'clock',permission:'daily_reports.upload'};
 const stockDesk:Action={label:'موجودی روزانه و رزرو',detail:'گزینه‌های هر کد پایه، رزرو، خروج و کسری',href:'/stock',icon:'box',permission:'stock.read'};
@@ -24,16 +26,17 @@ export const WORKSPACES:Workspace[]=[
   {label:'اطلاعات پایه',detail:'کاتالوگ قطعات و سوابق پذیرش خودرو',href:'/reference-data',icon:'database',permission:'reference.parts.read',group:'نظارت و پشتیبانی'},
   {label:'تقویم و جایگاه‌ها',detail:'تنظیم ساعات کاری و کد جایگاه‌های تعمیر',href:'/workshop/settings',icon:'settings',permission:'workshop.read',group:'نظارت و پشتیبانی'},
   {label:'کارکنان و دعوت',detail:'ساخت حساب و پیگیری فعال‌سازی کارکنان',href:'/users',icon:'team',permission:'user.manage',group:'نظارت و پشتیبانی'}]},
+ {key:'special_aid',label:'پیگیری امداد ویژه',icon:'truck',href:'/special-aid',description:'کارهای امروز، پرونده خودروها، پیگیری تأمین قطعات و گزارش‌های امداد ویژه',permissions:['special_aid.read'],queue:'',queueLabel:'خودروهای نیازمند پیگیری',actions:[]},
  {key:'owner',label:'مالک',icon:'shield',description:'مدیریت دسترسی کارکنان و نمای کامل واحدها',permissions:[],owner:true,queue:'',queueLabel:'همه پرونده‌های باز',actions:[{label:'نبض تعمیرگاه',detail:'مسیر تعمیر و گزارش توقف‌ها',href:'/workshop',icon:'chart',permission:'workshop.read'},{label:'تقویم و جایگاه‌ها',detail:'ساعات کاری و جایگاه‌های دارای کد',href:'/workshop/settings',icon:'settings',permission:'workshop.read'},dailyUpload,stockDesk,emdadDesk,{label:'دسترسی کارکنان',detail:'تغییر مجوز هر نفر و الگوهای سمت',href:'/users#access-control',icon:'shield'},{label:'گزارش جامع',detail:'وضعیت عملیاتی و تعهدات',href:'/reports?view=manager',icon:'chart',permission:'report.manager'},{label:'اجرت و مسئولیت',detail:'اجرت تعمیرکاران در برابر کارشناسی و سهم هر مسئول',href:'/reports/people',icon:'money',permission:'wage.report'},{label:'مرز مالک و مدیر سیستم',detail:'دسترسی دعوت مدیر سیستم و گزارش اقدامات او',href:'/users#owner-admin',icon:'shield'},{label:'اطلاعات پایه',detail:'کاتالوگ قطعات و سوابق پذیرش',href:'/reference-data',icon:'database',permission:'reference.parts.read'},cases]},
 ];
-export function workspaceVisible(w:Workspace,me:Me){if(me.isOwner)return true;const roles:Record<string,string[]>={expert:['accident_expert'],manager:['service_manager'],parts:['parts_clerk'],admin:['system_admin']};return !w.owner&&(me.roles.includes('system_admin')||(roles[w.key]??[]).some(r=>me.roles.includes(r as typeof me.roles[number])))&&w.permissions.some(p=>me.permissions.includes(p));}
+export function workspaceVisible(w:Workspace,me:Me){if(me.isOwner)return true;const roles:Record<string,string[]>={expert:['accident_expert'],manager:['service_manager'],parts:['parts_clerk'],admin:['system_admin'],special_aid:['special_aid_operator','special_aid_supply']};return !w.owner&&(me.roles.includes('system_admin')||(roles[w.key]??[]).some(r=>me.roles.includes(r as typeof me.roles[number])))&&w.permissions.some(p=>me.permissions.includes(p));}
 export function visibleWorkspaces(me:Me){return WORKSPACES.filter(w=>workspaceVisible(w,me));}
 export function workspaceHome(me:Me){
  if(me.isOwner)return '/accidents/owner';
  if(me.roles.length===1&&me.roles[0]==='technician')return '/workshop/technician';
- const desks=visibleWorkspaces(me);if(desks.length===1)return `/accidents/${desks[0].key}`;
+ const desks=visibleWorkspaces(me);if(desks.length===1)return workspaceHref(desks[0]);
  if(me.roles.length!==1)return '/accidents';
- const preferred:Record<string,string>={accident_expert:'expert',service_manager:'manager',parts_clerk:'parts',system_admin:'admin'};
+ const preferred:Record<string,string>={accident_expert:'expert',service_manager:'manager',parts_clerk:'parts',system_admin:'admin',special_aid_operator:'special_aid',special_aid_supply:'special_aid'};
  const key=preferred[me.roles[0]];
- return visibleWorkspaces(me).some(w=>w.key===key)?`/accidents/${key}`:'/accidents';
+ const chosen=visibleWorkspaces(me).find(w=>w.key===key);return chosen?workspaceHref(chosen):'/accidents';
 }
