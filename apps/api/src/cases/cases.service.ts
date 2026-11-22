@@ -600,6 +600,15 @@ export class CasesService {
       .from(cases)
       .where(where)) as [{ total: number }];
 
+    // Stable ordering happens before LIMIT/OFFSET, so pagination never reorders only one page.
+    const order = q.sort === 'case_number_desc'
+      ? [desc(cases.caseNumber), desc(cases.admittedAt), desc(cases.id)]
+      : q.sort === 'case_number_asc'
+        ? [asc(cases.caseNumber), asc(cases.admittedAt), asc(cases.id)]
+        : q.sort === 'admitted_asc'
+          ? [asc(cases.admittedAt), asc(cases.caseNumber), asc(cases.id)]
+          : [desc(cases.admittedAt), desc(cases.caseNumber), desc(cases.id)];
+
     const rows = await this.db
       .select({
         c: cases,
@@ -614,7 +623,7 @@ export class CasesService {
       .leftJoin(customers, eq(customers.id, cases.customerId))
       .leftJoin(responsibleUser, eq(responsibleUser.id, cases.responsibleUserId))
       .where(where)
-      .orderBy(desc(cases.admittedAt), desc(cases.id))
+      .orderBy(...order)
       .limit(q.pageSize)
       .offset((q.page - 1) * q.pageSize);
 
