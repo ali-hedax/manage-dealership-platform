@@ -38,7 +38,7 @@ export const tenants = pgTable('tenants', {
   permissionTemplates: jsonb('permission_templates').$type<import('@manage/shared').PermissionTemplates>().notNull().default({}),
   permissionVersion: integer('permission_version').notNull().default(1),
   /** Owner/system-admin settings such as the parts-amount alert threshold (Rial). */
-  settings: jsonb('settings').$type<{ partsAlertThresholdRial?: number }>().notNull().default({}),
+  settings: jsonb('settings').$type<{ partsAlertThresholdRial?: number; reportCenter?: Record<string, unknown> } & Record<string, unknown>>().notNull().default({}),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 

@@ -124,6 +124,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reminders/inbox` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reminders/people` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |
+| GET | `/api/v1/report-center` | [source](../apps/api/src/special-aid/report-center.controller.ts) |
 | GET | `/api/v1/reports/export` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/pdf` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/responsibility` | [source](../apps/api/src/people/people.controllers.ts) |
@@ -271,6 +272,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PUT | `/api/v1/access/users/:id/staff-admin` | [source](../apps/api/src/people/people.controllers.ts) |
 | PUT | `/api/v1/access/users/:id` | [source](../apps/api/src/auth/access.controller.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
+| PUT | `/api/v1/report-center` | [source](../apps/api/src/special-aid/report-center.controller.ts) |
 | PUT | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/active` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/expert-code` | [source](../apps/api/src/auth/technicians.controller.ts) |

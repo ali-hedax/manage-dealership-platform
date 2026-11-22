@@ -90,7 +90,7 @@ export function Shell({ children }: { children: ReactNode }) {
       { ...byHref('/'), label: 'آمار پرونده‌ها' },
     ] },
     { key: 'settings', label: 'تنظیمات سیستم', icon: 'nav-settings', items: [
-      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/workshop/settings', '/reference-data'].includes(p) },
+      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/settings/reports', '/workshop/settings', '/reference-data'].includes(p) },
       { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team', show: me.isOwner || can('user.manage'), match: (p) => p === '/users' },
     ] },
     { key: 'roadmap', label: 'نقشهٔ راه', icon: 'layers', items: [
@@ -207,11 +207,11 @@ export function backTarget(pathname: string, home: string, canChooseDesk = false
   if (/^\/cases\/(?!new$|import$)[^/]+$/.test(pathname)) return null;
   const edit = /^\/cases\/([^/]+)\/edit$/.exec(pathname);
   if (edit) return { href: `/cases/${edit[1]}`, label: 'بازگشت به پرونده' };
-  if (['/users', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
+  if (['/users', '/settings/reports', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
   return { href: home, label: 'بازگشت به میز کار' };
 }
 
-const PAGE_TITLES: [RegExp, string][] = [[/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
+const PAGE_TITLES: [RegExp, string][] = [[/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
 /** Browser tab title for each area, so several open tabs can be told apart. */
 export function pageTitle(pathname: string): string {
   const module = /^\/modules\/([^/]+)/.exec(pathname)?.[1];

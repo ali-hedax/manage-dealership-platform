@@ -248,3 +248,20 @@ it('notification center: reading is not completing; urgent stays counted until r
   // History is kept; another user cannot resolve it.
   expect((await operator.post('/notifications/resolve', { ids: [esc[0]!.id] })).body.items.some((n: { id: string }) => n.id === esc[0]!.id)).toBe(false);
 });
+
+it('report center: three ISACO reports, last import, editable guide only with report_center.manage', async () => {
+  const list = await parts.get('/report-center');
+  expect(list.status).toBe(200);
+  expect(list.body.map((e: { kind: string }) => e.kind)).toEqual(['emdad', 'reception', 'appointments']);
+  const emdad = list.body[0];
+  expect(emdad).toMatchObject({ isacoPath: 'خدمات ← گزارش ← امداد ویژه', supported: true, pastDays: 150 });
+  expect(emdad.lastImport.rows).toBeGreaterThan(0);
+  expect(list.body[2]).toMatchObject({ supported: false, pastDays: 30, futureDays: 30 });
+  const body = { kind: 'appointments', guide: 'راهنمای آزمونی برای گزارش نوبت با بازهٔ تازه', pastDays: 20, futureDays: 40 };
+  expect((await parts.put('/report-center', body)).status).toBe(403);
+  expect((await operator.get('/report-center')).status).toBe(403);
+  const saved = await admin.put('/report-center', body);
+  expect(saved.status).toBe(200);
+  expect(saved.body[2]).toMatchObject({ guide: body.guide, pastDays: 20, futureDays: 40 });
+  expect((await admin.put('/report-center', { ...body, futureDays: 400 })).status).toBe(400);
+});
