@@ -13,7 +13,17 @@ Base main at creation: `b3bfc8f6bab6889c031f828cc72a05fad30638a8`
 4. E2E regression test: insurance/personal cases accept Smart Manual Assessment while Golden Card rejects it. Existing backend and UI already implement this eligibility rule.
 5. Shared `calculateEmployeeScore`: deterministic 30/25/25/20 weights, stable identity, insufficient-evidence response, formula version, input validation; unit tests. This is a **standalone calculation core**, not yet connected to real events, manager UI, or role-specific calibrated metric generation.
 
-6. Shared `advanceAssessmentPackage`: guarded draft → submitted → review → finalized transition rules and unsafe deletion guard; tests. This is a **pure state machine**, NOT YET connected to API or UI.\n7. Shared `aggregateStaffActivity`: allowlisted event attribution by authenticated employee ID, deduplication, unknown-actor and test-event exclusions; tests. This is **not yet connected to SQL aggregation or a manager report**.\n\n## Not implemented — DO NOT CLAIM COMPLETE
+6. Shared `advanceAssessmentPackage`: guarded draft → submitted → review → finalized transition rules and unsafe deletion guard; tests. This is a **pure state machine**, NOT YET connected to API or UI.\n7. Shared `aggregateStaffActivity`: allowlisted event attribution by authenticated employee ID, deduplication, unknown-actor and test-event exclusions; tests. This is **not yet connected to SQL aggregation or a manager report**.\n\n## Additions: guided flow and legacy ISACO (same PR, later checkpoint)
+8. After a successful assessment-to-parts dispatch, stay in the same case and open the finalization dialog instead of redirecting to the Parts tab. After successful finalization navigate to the repair-plan stage. No existing backend authorization is bypassed.
+9. Case tab navigation now scrolls to the relevant stage and moves keyboard focus to the section summary when present.
+10. Two subtle top/bottom page controls for long pages, respecting reduced motion and hiding when the page is short or printed.
+11. Case folder header now shows brand, model, verified ISACO product code (or missing/conflict), then trim, with corresponding styling.
+12. Regression test for a **legacy case created before** a matching historical customer import, confirming the case-detail lookup derives its code after import without rewriting the case.
+
+## Legacy ISACO known limitation
+The current `CasesService.isacoCodeOf` already performs a **read-time, exact VIN/chassis** lookup on every old and new case. The new regression test demonstrates this intended scenario, but **cannot prove real production historical cases have valid VIN/chassis and a matching source row**. Backfilling missing identifiers or repairing ambiguous codes requires a read-only audit of real production data followed by a separately verified, non-destructive reconciliation strategy. Never guess a product code from the model or plate.
+
+## Not implemented — DO NOT CLAIM COMPLETE
 - Pause/resume lifecycle: task status and event/schema/API/technician UI, lifecycle tests.
 - Full-assessment submission to Parts Specialist; direct technical corrections, safe deletes, audit and whole-assessment finalization.
 - Optional sectioned labour-entry UX and printout integration.
