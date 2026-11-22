@@ -5,6 +5,7 @@
 - migration 0034: ارتقا از 0033، حفظ ردیف رزرو قبلی، رد رزرو بدون مالک، down و بازگشت ردیف: پاس (guided-migrations ۳/۳ همراه 0024–0032).
 - رگرسیون: special-aid، daily-reports، part-flow، parts-workbench، access، system-admin-access، release-v1، technician-pin ۸۷/۸۷؛ staff-invitations، people، staff-usernames، accident، parts-staff، discrepancies، smart-scope، demo-seed ۶۵/۶۵؛ پس از مرکز اعلان daily-reports و people همراه ماژول ۵۰/۵۰.
 - typecheck API و وب، lint فایل‌های تغییرکردهٔ API، بررسی مستندات (۲۱۸ مسیر) پاس. ساخت وب همهٔ مسیرهای `/special-aid` را ساخت و سپس مثل قبل به بررسی امنیتی نسخهٔ Next.js خورد (مسئلهٔ قبلی، جدا از این تغییر).
+- CI روی head `1350f8a` ([run 45009464497](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/45009464497)): هر شش job سبز — lint/typecheck/build/unit+integration، ممیزی وابستگی و secret، مستندات، Playwright (Chromium)، Docker و compose، migration و demo seed روی PostgreSQL 16.
 - **اجرا نشده در این محیط:** Playwright (محدودیت سوکت Chromium محلی؛ در CI)، کل مجموعهٔ API یکجا (حافظه)، سه مجموعهٔ PostgreSQL (در CI). اسکرین‌شات مقایسه‌ای صفحه‌های تازه با صفحه‌های موجود هنوز گرفته نشده است.
 
 ## 2026-11-21 — تطبیق خانوادهٔ خودرو در کارشناسی هوشمند
