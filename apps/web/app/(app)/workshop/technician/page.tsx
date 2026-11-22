@@ -34,6 +34,8 @@ export default function TechnicianPage() {
   const { data: month } = useSWR<MyWorkMonth>(can('task.execute') ? '/workshop/my-work' : null, fetcher, { refreshInterval: 120000 });
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [failure, setFailure] = useState('');
   const [problemFor, setProblemFor] = useState<WorkshopTask | null>(null);
+  // Selecting a vehicle never changes its job status or closes another active job.
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   // A refused «شروع کار» explains each missing prerequisite; «تلاش دوباره» repeats the same action.
   const [blocked, setBlocked] = useState<{ blockers: WorkflowBlocker[]; retry?: () => void; opener?: HTMLElement | null } | null>(null);
   const confirmed = useRef(new Set<string>());
@@ -78,7 +80,7 @@ export default function TechnicianPage() {
 
   if (!can('task.execute')) return <p className="callout">کارتابل تعمیرکار برای شما فعال نیست.</p>;
   const open = (data ?? []).filter((t) => t.status !== 'approved');
-  const current = open.find((t) => t.status === 'in_progress') ?? open.find((t) => t.status === 'pending' && t.canStart) ?? open.find((t) => t.status !== 'done') ?? open[0];
+  const current = open.find((t) => t.id === selectedTaskId) ?? open.find((t) => t.status === 'in_progress') ?? open.find((t) => t.status === 'pending' && t.canStart) ?? open.find((t) => t.status !== 'done') ?? open[0];
   const next = open.filter((t) => t.id !== current?.id);
   const place = current ? [current.departmentName, current.stationName ?? current.stationCode].filter(Boolean).join(' · ') : 'کارتابل تعمیرکار';
 
@@ -106,8 +108,8 @@ export default function TechnicianPage() {
       {data && !open.length && <div className="tc-card tc-empty"><h2>کار بازی ندارید</h2><p>وقتی کاری به شما ارجاع شود، همین‌جا می‌آید.</p></div>}
 
       {next.length > 0 && (
-        <section aria-label="کارهای بعدی">
-          <h2 className="tc-sub">بعدی</h2>
+        <section aria-label="همه خودروهای من">
+          <h2 className="tc-sub">سایر خودروهای من</h2>
           <ul className="tc-next">
             {next.map((t) => (
               <li key={t.id} className="tc-mini">
@@ -115,6 +117,7 @@ export default function TechnicianPage() {
                   <strong>{t.vehicleLabel}</strong>
                   <span><PlateText value={t.plate} /> · {t.title || t.departmentName}{t.status === 'done' ? ' · منتظر تأیید کارشناس' : ''}</span>
                   {t.status === 'pending' && !t.canStart && !!t.startBlockers?.length && <span className="tc-note">{t.startBlockers[0]!.message} <button type="button" className="m-btn-s" onClick={() => why(t)}>چرا و چه باید کرد؟</button></span>}
+                  <button type="button" className="m-btn-s" disabled={busy} onClick={() => setSelectedTaskId(t.id)} aria-label={`باز کردن کار ${t.vehicleLabel}`}>باز کردن کار</button>
                 </div>
                 {t.wage && <b>{faNum(t.wage.amountRial)}</b>}
               </li>
@@ -180,7 +183,7 @@ function CurrentJob({ t, busy, onAct, onPickup, onWageSeen, onNoPart, onProblem,
       )}
       {waiting && (
         <p className="tc-note">
-          {t.startBlockers?.[0]?.message ?? 'منتظر تأیید کار قبلی توسط کارشناس.'}{' '}
+          {t.startBlockers?.[0]?.message ?? 'پیش‌نیاز شروع این کار هنوز تکمیل نشده است.'}{' '}
           {!!t.startBlockers?.length && <button type="button" className="m-btn-s" onClick={() => onWhy(t)}>چرا و چه باید کرد؟</button>}
         </p>
       )}
