@@ -16,7 +16,7 @@
 - رگرسیون یکجا (۱۸ مجموعه، `--runInBand`): ۱۷ مجموعه و ۱۵۳ آزمون پاس — guided-migrations، access، accident، daily-reports، daily-reports-large، isaco-parts، parts-staff، parts-workbench، parts-finance، people، personal-auth، reference-data، release-v1، system-admin-access، technician-pin، technician-timing، special-aid-completion. در همان اجرا hook آغاز special-aid-module (نخستین مجموعه) پس از ۶۰ ثانیه timeout خورد؛ همان مجموعه تنها دوباره اجرا شد و ۱۲/۱۲ در ۲۰ ثانیه پاس شد.
 - اشکال پیدا و رفع‌شده در آزمون: خواندن نام کاربر روی اتصال دیگر درون تراکنش تطبیق کارت (قفل PGlite)؛ تاریخ ISO که جلالی خوانده می‌شد؛ قاعدهٔ VIN نوبت که با قاعدهٔ پرونده یکی نبود.
 - lint کل مخزن (eslint API، tsc وب و shared) پاس؛ بررسی مستندات ۲۳۱ مسیر پاس.
-- **اجرا نشده در این محیط:** Playwright (از جمله `special-aid-module.spec.ts` با اسکرین‌شات‌ها)، مجموعه‌های PostgreSQL و Docker — در CI. نتیجهٔ CI پس از push در PR ثبت می‌شود.
+- **اجرا نشده در این محیط:** Playwright (از جمله `special-aid-module.spec.ts` با اسکرین‌شات‌ها)، مجموعه‌های PostgreSQL و Docker — در CI. CI روی `11052e8` ([run 45032495359](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/45032495359)): هر شش job سبز، از جمله Playwright با `special-aid-module.spec.ts` (هم‌خوانی فونت، رنگ زمینه و متن صفحه‌های تازه با «پرونده‌ها»؛ کارت پوشه و پلاک موجود) و artifact نُه اسکرین‌شات «special-aid-screenshots» (دو صفحهٔ موجود برای مقایسه و هفت صفحهٔ تازه). اجرای قبلی (`136afae`) فقط در همین آزمون تازه شکست خورد (کلیک روی کارت به‌جای پیوند «باز کردن پرونده»)؛ آزمون اصلاح شد.
 
 ## 2026-11-21 — تطبیق خانوادهٔ خودرو در کارشناسی هوشمند
 
