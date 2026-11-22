@@ -112,6 +112,17 @@ function CasesList() {
             aria-label="جست‌وجوی پرونده"
             autoFocus
           />
+          <div className="row" style={{alignItems:'center',gap:8}}>
+            <label htmlFor="case-list-sort" className="small">مرتب‌سازی پرونده‌ها</label>
+            <select id="case-list-sort" className="input" style={{width:'auto',maxWidth:'100%'}}
+              value={params.get('sort') ?? 'admitted_desc'}
+              onChange={(e)=>update({sort:e.target.value==='admitted_desc'?null:e.target.value,page:null})}>
+              <option value="admitted_desc">جدیدترین پذیرش</option>
+              <option value="case_number_desc">بالاترین شماره پرونده</option>
+              <option value="admitted_asc">قدیمی‌ترین پذیرش</option>
+              <option value="case_number_asc">پایین‌ترین شماره پرونده</option>
+            </select>
+          </div>
           {(flag||params.get('stage')||params.get('coverage')||params.get('status'))&&<div className="row" aria-label="فیلترهای فعال">{flag&&<span className="chip chip-blue">{FLAGS.find(f=>f.key===flag)?.label??flag}</span>}{params.get('stage')&&<span className="chip">{STAGE_LABELS[params.get('stage') as keyof typeof STAGE_LABELS]??params.get('stage')}</span>}{params.get('coverage')&&<span className="chip">{COVERAGE_LABELS[params.get('coverage') as keyof typeof COVERAGE_LABELS]??params.get('coverage')}</span>}{params.get('status')&&<span className="chip">وضعیت: {({open:'باز',closed:'بسته',cancelled:'لغوشده',all:'همه'} as Record<string,string>)[params.get('status')!]??params.get('status')}</span>}<button type="button" className="btn btn-sm" onClick={()=>update({flag:null,stage:null,coverage:null,status:null,page:null})}>برداشتن فیلتر</button></div>}
           <details className="case-filters compact-disclosure"><summary>فیلترها{[flag,params.get('stage'),params.get('coverage'),params.get('status')].filter(Boolean).length?' (فعال)':''}</summary><div className="stack">
           <div className="row">
