@@ -93,8 +93,8 @@ export class AssessmentsService {
         throw conflict('ASSESSMENT_DRAFT_EXISTS', 'یک پیش‌نویس کارشناسی باز برای این پرونده وجود دارد');
       }
       const latest = versions.at(-1);
-      if(input.kind==='initial'&&input.smartManual&&!['insurance','personal'].includes(kase.coverageType))
-        throw badRequest('SMART_ASSESSMENT_COVERAGE','کارشناسی دستی هوشمند فقط برای بیمه یا پرداخت شخصی فعال است');
+      if(input.kind==='initial'&&input.smartManual&&kase.coverageType==='golden_card')
+        throw badRequest('SMART_ASSESSMENT_COVERAGE','کارشناسی دستی هوشمند برای کارت طلایی غیرفعال است؛ از مسیر رسمی کارشناسی کارت طلایی استفاده کنید');
       if(input.kind==='supplement'&&input.smartManual&&!latest?.smartManual)
         throw badRequest('SMART_ASSESSMENT_KIND','نوع کارشناسی الحاقیه از پرونده قبلی تعیین می‌شود');
       if (input.kind === 'initial' && latest) {
