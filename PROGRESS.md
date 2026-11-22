@@ -8,6 +8,8 @@
 
 ## 2026-11-22 — ماژول امداد ویژه (PR #119) — ادغام در main به دستور مالک؛ نصب Production در انتظار
 
+- **نامزد انتشار: main = `f8a1ca156186459da2306f47bfaf4dd825271c94`** (merge commit PR #119؛ درخت آن با head آزموده‌شدهٔ `9c117d6` یکی است). CI main سبز ([run 45039397063](https://github.com/ali-hedax/manage-dealership-platform/actions/runs/45039397063)) با artifactهای `preview-images-f8a1ca156186459da2306f47bfaf4dd825271c94` (تصاویر Docker برای نصب)، `migration-rehearsal-evidence` و `special-aid-screenshots`. Production هنوز v1.0.8 (`b3bfc8f`) است؛ هیچ تغییری روی سرور داده نشده.
+
 - پیش‌انتشار: پیشنهاد ستون نخستین ورود، اسکریپت تمرین `rehearse-special-aid` و شواهد CI (نسخهٔ ساختگی و پایگاه دموی v1.0.8، هر دو `ok`)، [راهنمای گزارش‌های ایساکو](docs/ISACO_REPORTS_GUIDE_FA.md)، دستور نصب کامل با پشتیبان رمزگذاری‌شده و فهرست نقش‌ها.
 - قدم دقیق بعد (فقط با تأیید مالک): پشتیبان رمزگذاری‌شده → بازیابی در پایگاه جدا → `rehearse-special-aid` روی آن (باید ok بدهد) → نصب artifact همان SHA main → سلامت → `confirm-healthy-release.sh` → «خواندن دوباره از گزارش‌های ثبت‌شده» → نقش‌ها.
 
