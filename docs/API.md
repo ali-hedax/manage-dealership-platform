@@ -132,6 +132,9 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reports/wages` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reports` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
+| GET | `/api/v1/special-aid/dossiers/:id` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| GET | `/api/v1/special-aid/summary` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| GET | `/api/v1/special-aid/today` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
 | GET | `/api/v1/staff/technicians` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | GET | `/api/v1/stock/options` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/stock/reservations/export` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -233,6 +236,17 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reminders/:id/respond` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/reminders/parts-ready/:id` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |
+| POST | `/api/v1/special-aid/dossiers/:id/attended` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/dossiers/:id/contacts` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/dossiers/:id/groups` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/dossiers/:id/postpone` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/dossiers/search` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/groups/:id/decision` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/items/:id/action` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/items/:id/non-consumption` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/supply/export` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/supply/search` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| POST | `/api/v1/special-aid/sync` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
 | POST | `/api/v1/staff/technicians/:id/sign-out` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | POST | `/api/v1/staff/technicians` | [source](../apps/api/src/auth/technicians.controller.ts) |
 | POST | `/api/v1/stock/aliases` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |

@@ -39,6 +39,7 @@ import { PARSER_VERSION, emdadKey, emdadStatusCategory, parseEmdadSheet, parseSt
 import { safeCell } from './safe-cell';
 import { detectFormat, FORMAT_ERRORS, readHtmlTable, readSpreadsheetML, SpreadsheetError } from './spreadsheet-formats';
 import { StockService } from './stock.service';
+import { SpecialAidService } from '../special-aid/special-aid.service';
 
 type ImportRow = typeof dailyReportImports.$inferSelect;
 type Profile = typeof dailyReportProfiles.$inferSelect;
@@ -74,6 +75,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
     private readonly emdad: EmdadService,
     private readonly stock: StockService,
     private readonly tasks: DailyTasksService,
+    private readonly specialAid: SpecialAidService,
   ) {}
   private get db() {
     return this.handle.db;
@@ -434,6 +436,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
     const precision = input.reportTime ? 'minute' : 'day';
     if (reportAt.getTime() > now.getTime() + 5 * 60_000) throw badRequest('DAILY_REPORT_FUTURE', 'تاریخ گزارش نمی‌تواند در آینده باشد');
     let result: Record<string, unknown> = {};
+    let published: DailyReportKind | null = null;
     await this.db.transaction(async (tx) => {
       const [job] = await tx
         .select()
@@ -469,6 +472,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
           .set({ headerSignature: diag.headerSignature as string, updatedBy: actor.user.id, updatedAt: now, version: profile.version + 1 })
           .where(eq(dailyReportProfiles.id, profile.id));
       }
+      published = kind;
       const task = await this.tasks.completeWith(tx, actor, kind, id, reportAt, identical, now);
       result.task = task;
       await this.audit.record(tx, actor, {
@@ -478,6 +482,8 @@ export class DailyReportsService implements OnApplicationBootstrap {
         after: { kind, reportAt: reportAt.toISOString(), precision, counts: result.counts, templateAccepted: !!diag.templateChanged, identical, declaredToday: !!input.declaredToday, task },
       });
     });
+    // Special Aid follow-up reads the published rows in its own transaction; the report stays published either way.
+    if (published === 'emdad') await this.specialAid.afterEmdadPublished(actor);
     return { import: await this.get(actor, id), ...result };
   }
 
