@@ -211,6 +211,42 @@ export function partFitment(vehicleUse: string | null | undefined, fit: FitmentR
 }
 
 /**
+ * Compatibility of a catalog part with the CASE vehicle, whatever scope found it:
+ * verified (own label or explicitly common), trim-review (another trim of the family),
+ * other-family (another vehicle, or the case family is not known) and unknown (the catalog
+ * names no vehicle). A shared platform is never taken as interchangeability.
+ */
+export type PartCompatibility = 'verified' | 'trim-review' | 'other-family' | 'unknown';
+export function partCompatibility(vehicleUse: string | null | undefined, fit: FitmentResolution, catalog: FitmentCatalog): PartCompatibility {
+  const f = partFitment(vehicleUse, fit, catalog);
+  if (f === 'exact' || f === 'common') return 'verified';
+  if (f === 'review') return 'trim-review';
+  return hasFitment(vehicleUse) ? 'other-family' : 'unknown';
+}
+/** Shown on a part of another vehicle family (or when the case family is not known). */
+export const OTHER_FAMILY_LABEL = 'خودروی دیگر؛ سازگاری با خودروی پرونده تأیید نشده و نیازمند بررسی فنی است';
+/** Shown on a part whose catalog entry names no vehicle. */
+export const UNKNOWN_FITMENT_LABEL = 'کاربرد خودرو در کاتالوگ نامشخص است؛ نیازمند بررسی فنی';
+export const COMPATIBILITY_NOTES: Record<PartCompatibility, string | null> = {
+  verified: null, 'trim-review': TRIM_REVIEW_LABEL, 'other-family': OTHER_FAMILY_LABEL, unknown: UNKNOWN_FITMENT_LABEL,
+};
+
+/** A vehicle family of the catalog with its «مصرف خودرو» labels (for the vehicle picker). */
+export interface CatalogFamily { key: string; name: string; labels: string[] }
+/** The catalog's families, each with its own labels; common and unlabelled parts belong to none. */
+export function catalogFamilies(labels: readonly string[], catalog: FitmentCatalog = fitmentCatalog(labels)): CatalogFamily[] {
+  const out = new Map<string, CatalogFamily>();
+  for (const label of labels) {
+    const f = catalog.familyOf(label);
+    if (!f) continue;
+    const e = out.get(f.key) ?? { key: f.key, name: f.name, labels: [] };
+    if (!e.labels.includes(label)) e.labels.push(label);
+    out.set(f.key, e);
+  }
+  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+}
+
+/**
  * Assessment reference of a technical code: the first 8 digits of the normalized code
  * («0021436501» → «00214365»). Codes that do not start with 8 digits have no reference
  * and are kept as typed. The full code is always kept beside it.
