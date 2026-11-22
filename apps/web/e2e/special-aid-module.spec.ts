@@ -54,7 +54,8 @@ test('special-aid workspaces use the existing design system; screenshots of the 
   await expect(folders.locator('.folder.cov-own').first()).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/02-vehicles.png`, fullPage: true });
 
-  await folders.locator('.folder').filter({ hasText: VIN.slice(-6) }).first().click();
+  await folders.locator('.folder').filter({ hasText: VIN.slice(-6) }).first().getByRole('link', { name: 'باز کردن پرونده' }).click();
+  await page.waitForURL(//special-aid/vehicles/[0-9a-f-]+$/);
   await expect(page.getByTestId('aid-items').getByTestId('aid-item')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'کارت پذیرش' })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/03-dossier.png`, fullPage: true });
