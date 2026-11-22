@@ -400,6 +400,8 @@ export class StockService {
     const tenantId = actor.user.tenantId;
     const [r] = await tx.select().from(stockReservations).where(and(eq(stockReservations.id, id), eq(stockReservations.tenantId, tenantId))).for('update');
     if (!r) throw notFound('رزرو');
+    // A special-aid hold (another vehicle, no case) is managed only in the Special Aid module.
+    if (!r.partRequestId || !r.caseId) throw badRequest('SPECIAL_AID_HOLD', 'این رزرو برای قطعهٔ امداد ویژهٔ خودروی دیگری نگه داشته شده است و فقط از «پیگیری امداد ویژه» با مجوز آزاد کردن تغییر می‌کند');
     if (r.version !== expectedVersion) throw versionConflict(r.version);
     if (r.status !== 'reserved' || !Number.isInteger(quantity) || quantity < 1 || quantity > Number(r.quantity)) throw badRequest('DELIVERY_QUANTITY_INVALID', 'تعداد تحویل باید بین یک و تعداد رزروشده باشد');
     let version = r.version;
@@ -429,6 +431,8 @@ export class StockService {
       .where(and(eq(stockReservations.id, id), eq(stockReservations.tenantId, tenantId)))
       .for('update');
     if (!r) throw notFound('رزرو');
+    // A special-aid hold (another vehicle, no case) is managed only in the Special Aid module.
+    if (!r.partRequestId || !r.caseId) throw badRequest('SPECIAL_AID_HOLD', 'این رزرو برای قطعهٔ امداد ویژهٔ خودروی دیگری نگه داشته شده است و فقط از «پیگیری امداد ویژه» با مجوز آزاد کردن تغییر می‌کند');
     if (r.version !== input.expectedVersion) throw versionConflict(r.version);
     const now = new Date();
     const invalid = () => conflict('INVALID_RESERVATION_STEP', 'این اقدام در وضعیت فعلی رزرو ممکن نیست');
@@ -531,10 +535,11 @@ export class StockService {
     const short = await this.shortfallKeys(tenantId, snap);
     return rows.map(({ r, caseNumber, admissionNo, need, reservedByName }) => ({
       id: r.id,
-      caseId: r.caseId,
+      // Inner joins above: only accident reservations are listed here.
+      caseId: r.caseId!,
       caseNumber,
       admissionNo,
-      partRequestId: r.partRequestId,
+      partRequestId: r.partRequestId!,
       partDescription: need.description,
       partNumber: need.partNumber,
       needQuantity: need.quantity,

@@ -1,14 +1,18 @@
 'use client';
-import {useEffect,useState} from 'react';
+import {Suspense,useEffect,useState} from 'react';
+import {useSearchParams} from 'next/navigation';
 import useSWR from 'swr';
-import {isacoHeaderIndex,REFERENCE_FIELDS,REFERENCE_OUTCOME_LABELS,type ReferenceKind,type ReferenceField,type ReferenceFileInput,type ReferenceInspection,type ReferenceImport,type ReferenceOutcome} from '@manage/shared';
+import {isacoHeaderIndex,suggestReferenceMapping,REFERENCE_FIELDS,REFERENCE_OUTCOME_LABELS,type ReferenceKind,type ReferenceField,type ReferenceFileInput,type ReferenceInspection,type ReferenceImport,type ReferenceOutcome} from '@manage/shared';
 import {api,errorMessage,fetcher} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 import {faNum,formatJalali} from '@/lib/format';
 import {ReferenceLookup} from '@/components/ReferenceLookup';
 
-export default function ReferenceDataPage(){
- const {can}=useAuth();const [kind,setKind]=useState<ReferenceKind>(can('reference.parts.manage')?'parts':'customers');
+export default function Page(){return <Suspense><ReferenceDataPage/></Suspense>;}
+
+function ReferenceDataPage(){
+ const {can}=useAuth();const asked=useSearchParams().get('kind');
+ const [kind,setKind]=useState<ReferenceKind>(asked==='customers'||asked==='appointments'||asked==='parts'?asked:can('reference.parts.manage')?'parts':'customers');
  const [file,setFile]=useState<ReferenceFileInput|null>(null),[inspection,setInspection]=useState<ReferenceInspection|null>(null);
  const [sheetIndex,setSheetIndex]=useState(0),[headerRow,setHeaderRow]=useState(1),[mapping,setMapping]=useState<Partial<Record<ReferenceField,number>>>({});
  const [result,setResult]=useState<ReferenceImport|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -18,10 +22,13 @@ export default function ReferenceDataPage(){
  const {data:history,mutate}=useSWR<{count:number;imports:{id:string;fileName:string;status:string;createdAt:string}[]}>(manage?`/reference-data/${kind}`:null,fetcher);
  const sheet=inspection?.sheets[sheetIndex],headers=sheet?.rows.find(r=>r.rowNo===headerRow)?.cells||[];
  // «کد محصول ایساکو»: suggest the column whose header names it; the operator can change it before preview.
+ // First import of a layout: columns suggested from common header names; the administrator confirms each one.
+ const [suggested,setSuggested]=useState(false);
+ useEffect(()=>{if(kind==='parts'||!headers.length||Object.keys(mapping).length)return;const m=suggestReferenceMapping(kind,headers);if(Object.keys(m).length){setMapping(m);setSuggested(true);}},[kind,headers,mapping]);
  useEffect(()=>{if(kind!=='customers'||mapping.isacoCode!==undefined)return;const i=isacoHeaderIndex(headers);if(i>=0)setMapping(m=>m.isacoCode===undefined?{...m,isacoCode:i}:m);},[kind,headers,mapping.isacoCode]);
  const ready=result?result.counts.new+result.counts.update:0;
  const allRows=result?.rows.filter(r=>filter==='all'||r.outcome===filter)||[];
- function reset(){setFile(null);setInspection(null);setMapping({});setResult(null);setError('');setSheetIndex(0);setHeaderRow(1);setPage(0);setOffset(0);}
+ function reset(){setSuggested(false);setFile(null);setInspection(null);setMapping({});setResult(null);setError('');setSheetIndex(0);setHeaderRow(1);setPage(0);setOffset(0);}
  async function choose(f:File|undefined){
   reset();if(!f)return;if(f.size>5_000_000){setError('فایل کمتر از پنج مگابایت باشد');return;}
   setBusy(true);try{const bytes=new Uint8Array(await f.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));const input={kind,fileName:f.name,fileBase64:btoa(binary)};const meta=await api<ReferenceInspection>('/reference-imports/inspect',{body:input});setFile(input);setInspection(meta);}catch(e){setError(errorMessage(e));}finally{setBusy(false);}
@@ -29,16 +36,16 @@ export default function ReferenceDataPage(){
  async function preview(nextOffset=offset){if(!file)return;setError('');setBusy(true);try{setResult(await api<ReferenceImport>('/reference-imports',{body:{...file,kind,sheetIndex,headerRow,mapping,offset:nextOffset}}));setOffset(nextOffset);setPage(0);setFilter('all');await mutate();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
  async function apply(){if(!result||!window.confirm(`${faNum(ready)} ردیف جدید و به‌روزرسانی در اطلاعات پایه ثبت شود؟ پرونده یا رزرو انبار ایجاد نمی‌شود.`))return;setBusy(true);setError('');try{setResult(await api<ReferenceImport>(`/reference-imports/${result.id}/apply`,{body:{}}));await mutate();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
  async function loadResult(id:string){setBusy(true);setError('');try{setResult(await api<ReferenceImport>(`/reference-imports/${id}`));setFilter('all');setPage(0);}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
- if(!can('reference.parts.read')&&!can('reference.customers.read'))return <p>دسترسی به اطلاعات پایه ندارید.</p>;
+ if(!can('reference.parts.read')&&!can('reference.customers.read')&&!can('reference.appointments.read'))return <p>دسترسی به اطلاعات پایه ندارید.</p>;
  return <div className="stack"><div className="page-head"><div><h1>اطلاعات پایه</h1><p className="muted">فهرست قطعات و سوابق مشتریان، برای کاهش ورود تکراری اطلاعات.</p></div></div>
-  <nav className="row" aria-label="نوع اطلاعات پایه">{(['parts','customers'] as const).filter(k=>can(`reference.${k}.read`)).map(k=><button key={k} className="btn" disabled={busy} aria-pressed={kind===k} onClick={()=>{reset();setKind(k);}}>{k==='parts'?'کاتالوگ قطعات':'سوابق مشتری و خودرو'}</button>)}</nav>
+  <nav className="row" aria-label="نوع اطلاعات پایه">{(['parts','customers','appointments'] as const).filter(k=>can(`reference.${k}.read`)).map(k=><button key={k} className="btn" disabled={busy} aria-pressed={kind===k} onClick={()=>{reset();setKind(k);}}>{k==='parts'?'کاتالوگ قطعات':k==='customers'?'سوابق مشتری و خودرو':'نوبت‌های پذیرش ایساکو'}</button>)}</nav>
   {read&&<section className="panel"><div className="panel-body"><ReferenceLookup key={kind} kind={kind}/></div></section>}
   {manage&&<><section className="panel"><div className="panel-head"><h2>۱. ورود فایل اکسل</h2><a className="btn btn-sm" href={`/api/v1/reference-data/${kind}/sample`} download>دریافت قالب خالی</a></div><div className="panel-body stack">
-   <p className="small">فقط فایل xlsx؛ حداکثر پنج مگابایت. فایل‌های بزرگ در بخش‌های حداکثر ۵۰۰۰ ردیفی بررسی می‌شوند؛ پس از ثبت هر بخش، بخش بعدی را ادامه دهید. کد فنی، شاسی و تلفن را در اکسل به‌صورت متن نگه دارید.</p>
-   <p className="callout callout-amber small">{kind==='parts'?'موجودی اکسل یک تصویر از فایل است؛ ورود فایل رزرو یا گردش انبار ایجاد نمی‌کند.':'این فایل سابقه مشتری است؛ ورود آن پرونده تعمیر یا مالکیت فعلی خودرو را ایجاد و تغییر نمی‌دهد.'}</p>
-   <label className="field"><span>فایل اکسل اطلاعات پایه</span><input key={kind} className="input" name="reference-file" type="file" accept=".xlsx" disabled={busy} onChange={e=>void choose(e.target.files?.[0])}/></label>
+   <p className="small">فایل xlsx یا خروجی xls ایساکو (قالب از محتوا شناخته می‌شود)؛ حداکثر پنج مگابایت. پس از نخستین ثبت، ستون‌های همین گزارش به خاطر سپرده می‌شوند و در «مرکز گزارش‌ها» خودکار شناخته می‌شود. فایل‌های بزرگ در بخش‌های حداکثر ۵۰۰۰ ردیفی بررسی می‌شوند؛ پس از ثبت هر بخش، بخش بعدی را ادامه دهید. کد فنی، شاسی و تلفن را در اکسل به‌صورت متن نگه دارید.</p>
+   <p className="callout callout-amber small">{kind==='parts'?'موجودی اکسل یک تصویر از فایل است؛ ورود فایل رزرو یا گردش انبار ایجاد نمی‌کند.':kind==='customers'?'این فایل سابقه مشتری است؛ ورود آن پرونده تعمیر یا مالکیت فعلی خودرو را ایجاد و تغییر نمی‌دهد.':'این فهرست فقط نوبت‌های ثبت‌شده در ایساکو را نشان می‌دهد؛ منیج نوبت نمی‌دهد و نوبت را جابه‌جا نمی‌کند. ارتباط هر نوبت با امداد ویژه را اپراتور تأیید می‌کند.'}</p>
+   <label className="field"><span>فایل اکسل اطلاعات پایه</span><input key={kind} className="input" name="reference-file" type="file" accept=".xlsx,.xls,.xml,.html" disabled={busy} onChange={e=>void choose(e.target.files?.[0])}/></label>
    {inspection&&<><div className="grid-2"><label className="field"><span>برگه فایل</span><select className="input" name="reference-sheet" disabled={busy} value={sheetIndex} onChange={e=>{setSheetIndex(Number(e.target.value));setMapping({});setHeaderRow(1);setResult(null);}}>{inspection.sheets.map(s=><option value={s.index} key={s.index}>{s.name||`برگه ${s.index+1}`}</option>)}</select></label><label className="field"><span>ردیف عنوان ستون‌ها</span><select className="input" name="reference-header" disabled={busy} value={headerRow} onChange={e=>{setHeaderRow(Number(e.target.value));setMapping({});setResult(null);}}>{sheet?.rows.filter(r=>r.cells.some(Boolean)).map(r=><option key={r.rowNo} value={r.rowNo}>{faNum(r.rowNo)} — {r.cells.join(' | ').slice(0,100)}</option>)}</select></label></div>
-    <fieldset className="stack"><legend>۲. انتخاب ستون‌ها</legend><div className="grid-2">{Object.entries(REFERENCE_FIELDS[kind]).map(([key,label])=><label className="field" key={key}><span>{label}</span><select className="input" name={`mapping-${key}`} disabled={busy} value={mapping[key as ReferenceField]??''} onChange={e=>{setMapping(m=>{const n={...m};if(e.target.value==='')delete n[key as ReferenceField];else n[key as ReferenceField]=Number(e.target.value);return n;});setResult(null);}}><option value="">انتخاب نشده</option>{headers.map((h,i)=><option key={i} value={i}>{faNum(i+1)} — {h||'بدون عنوان'}</option>)}</select></label>)}</div></fieldset>
+    <fieldset className="stack"><legend>۲. انتخاب ستون‌ها</legend>{suggested&&<p className="callout callout-amber small">ستون‌ها از روی عنوان‌ها پیشنهاد شده‌اند؛ پیش از پیش‌نمایش یکایک بررسی کنید. پس از نخستین ثبت، همین ستون‌ها برای فایل‌های بعدی همین گزارش به خاطر سپرده می‌شوند.</p>}<div className="grid-2">{Object.entries(REFERENCE_FIELDS[kind]).map(([key,label])=><label className="field" key={key}><span>{label}</span><select className="input" name={`mapping-${key}`} disabled={busy} value={mapping[key as ReferenceField]??''} onChange={e=>{setMapping(m=>{const n={...m};if(e.target.value==='')delete n[key as ReferenceField];else n[key as ReferenceField]=Number(e.target.value);return n;});setResult(null);}}><option value="">انتخاب نشده</option>{headers.map((h,i)=><option key={i} value={i}>{faNum(i+1)} — {h||'بدون عنوان'}</option>)}</select></label>)}</div></fieldset>
     <label className="field"><span>بخش فایل</span><select className="input" disabled={busy} value={offset} onChange={e=>{setOffset(Number(e.target.value));setResult(null);}}>{Array.from({length:Math.max(1,Math.ceil(((sheet?.rowCount||0)-headerRow)/5000))},(_,i)=><option key={i} value={i*5000}>بخش {faNum(i+1)} — ردیف‌های {faNum(headerRow+i*5000+1)} تا {faNum(Math.min(sheet?.rowCount||0,headerRow+(i+1)*5000))}</option>)}</select></label>
     <div><button className="btn btn-primary" disabled={busy} onClick={()=>void preview()}>{busy?'در حال بررسی…':'پیش‌نمایش اطلاعات پایه'}</button></div>
    </>}

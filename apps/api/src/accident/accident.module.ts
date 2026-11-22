@@ -19,6 +19,7 @@ import { WorkshopController } from '../workshop/workshop.controller';
 import { WorkshopService } from '../workshop/workshop.service';
 import { ReferenceDataController } from '../reference-data/reference-data.controller';
 import { ReferenceDataService } from '../reference-data/reference-data.service';
+import { SpecialAidModule } from '../special-aid/special-aid.module';
 import { AssessmentsController } from '../assessments/assessments.controller';
 import { AssessmentsService } from '../assessments/assessments.service';
 import { BlockersService } from '../blockers/blockers.service';
@@ -49,7 +50,7 @@ import {
 
 /** Phase-1 module: accident repair cases, assessments, parts, finance gate, repair activities, blockers, QC and delivery, dashboard. */
 @Module({
-  imports: [DailyReportsModule],
+  imports: [DailyReportsModule, SpecialAidModule],
   controllers: [
     CaseDocumentsController,
     CaseDeletionController,

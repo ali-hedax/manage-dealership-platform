@@ -106,7 +106,7 @@ export class PrintService {
       .leftJoin(stockSnapshotItems, and(eq(stockSnapshotItems.snapshotId, stockReservations.snapshotId), eq(stockSnapshotItems.fullStockCode, stockReservations.fullStockCode), eq(stockSnapshotItems.locationAddress, stockReservations.locationAddress)))
       .where(and(eq(stockReservations.tenantId, tenantId), eq(stockReservations.caseId, caseId), inArray(stockReservations.status, ['reserved'])));
     const byPart = new Map<string, typeof held>();
-    for (const h of held) byPart.set(h.r.partRequestId, [...(byPart.get(h.r.partRequestId) ?? []), h]);
+    for (const h of held) byPart.set(h.r.partRequestId!, [...(byPart.get(h.r.partRequestId!) ?? []), h]); // filtered by case above
 
     const pick: { loc: string; row: ChecklistRow }[] = [];
     const other: ChecklistRow[] = [];

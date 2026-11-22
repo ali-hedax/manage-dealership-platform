@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, lt, notInArray } from 'drizzle-orm';
-import { alertSettingsOf, DAILY_REPORT_KINDS, DAILY_REPORT_KIND_LABELS, isWorkingDay, normalizeRoles, partFlowState, permissionsFor, type AlertSettings, type DailyReportKind, type DailyTaskState, type Role } from '@manage/shared';
+import { and, desc, eq, inArray, isNull, lt, notInArray, sql } from 'drizzle-orm';
+import { alertSettingsOf, DAILY_REPORT_KINDS, DAILY_REPORT_KIND_LABELS, isWorkingDay, normalizeRoles, notificationBadge, notificationCategory, notificationState, URGENT_NOTIFICATION_KINDS, partFlowState, permissionsFor, type AlertSettings, type DailyReportKind, type DailyTaskState, type Role } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
@@ -219,11 +219,24 @@ export class DailyTasksService implements OnApplicationBootstrap, OnApplicationS
       .from(notifications)
       .where(and(eq(notifications.tenantId, actor.user.tenantId), eq(notifications.userId, actor.user.id)))
       .orderBy(desc(notifications.createdAt))
-      .limit(50);
-    return {
-      unread: rows.filter((r) => !r.readAt).length,
-      items: rows.map((r) => ({ id: r.id, kind: r.kind, title: r.title, body: r.body, link: r.link, createdAt: r.createdAt.toISOString(), readAt: r.readAt?.toISOString() ?? null })),
-    };
+      .limit(100);
+    // Notification center (spec section 25): unread, read but open, completed and urgent.
+    // Urgent open items stay in the counter after reading; history is kept (latest 100).
+    const items = rows.map((r) => {
+      const item = { id: r.id, kind: r.kind, title: r.title, body: r.body, link: r.link, createdAt: r.createdAt.toISOString(), readAt: r.readAt?.toISOString() ?? null, resolvedAt: r.resolvedAt?.toISOString() ?? null, urgent: r.urgent || URGENT_NOTIFICATION_KINDS.includes(r.kind), category: notificationCategory(r.kind, r.category) };
+      return { ...item, state: notificationState(item) };
+    });
+    return { unread: items.filter((r) => !r.readAt).length, badge: notificationBadge(items), items };
+  }
+
+  /** «انجام شد»: completing the work is recorded separately from reading. */
+  async resolve(actor: Actor, ids: string[]) {
+    const now = new Date();
+    await this.db
+      .update(notifications)
+      .set({ resolvedAt: now, resolvedBy: actor.user.id, readAt: sql`coalesce(${notifications.readAt}, ${now.toISOString()}::timestamptz)` })
+      .where(and(eq(notifications.tenantId, actor.user.tenantId), eq(notifications.userId, actor.user.id), isNull(notifications.resolvedAt), inArray(notifications.id, ids)));
+    return this.inbox(actor);
   }
 
   async markRead(actor: Actor, ids: string[] | 'all') {

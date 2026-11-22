@@ -383,4 +383,34 @@ export interface AppNotification {
   link: string | null;
   createdAt: string;
   readAt: string | null;
+  /** Notification center (spec section 25): reading is separate from completing the work. */
+  category?: NotificationCategory;
+  urgent?: boolean;
+  resolvedAt?: string | null;
+  state?: NotificationState;
+}
+
+export const NOTIFICATION_CATEGORIES = ['urgent', 'reports', 'parts', 'special_aid', 'general'] as const;
+export type NotificationCategory = Exclude<(typeof NOTIFICATION_CATEGORIES)[number], 'urgent'>;
+export const NOTIFICATION_CATEGORY_LABELS: Record<(typeof NOTIFICATION_CATEGORIES)[number], string> = {
+  urgent: 'فوری', reports: 'گزارش‌های روزانه', parts: 'قطعات و انبار', special_aid: 'امداد ویژه', general: 'سایر',
+};
+export type NotificationState = 'unread' | 'open' | 'done';
+export const NOTIFICATION_STATE_LABELS: Record<NotificationState, string> = { unread: 'خوانده‌نشده', open: 'خوانده‌شده، انجام‌نشده', done: 'انجام‌شده' };
+/** Kinds that stay in the counter until completed, even after reading. */
+export const URGENT_NOTIFICATION_KINDS: readonly string[] = ['special_aid.escalation', 'daily_report_due', 'emdad_dealer_supply'];
+/** Category of a notification from its kind (stored rows of older releases have none). */
+export function notificationCategory(kind: string, stored?: string | null): NotificationCategory {
+  if (stored && (NOTIFICATION_CATEGORIES as readonly string[]).includes(stored) && stored !== 'urgent') return stored as NotificationCategory;
+  if (kind.startsWith('special_aid')) return 'special_aid';
+  if (kind.startsWith('daily') || kind === 'report_missing') return 'reports';
+  if (/^(part|emdad|price_notice|stock|picking|handover|supply|invoice)/.test(kind)) return 'parts';
+  return 'general';
+}
+export function notificationState(n: { readAt: string | null; resolvedAt?: string | null }): NotificationState {
+  return n.resolvedAt ? 'done' : n.readAt ? 'open' : 'unread';
+}
+/** Bell counter: everything unread plus urgent items that are read but not completed. */
+export function notificationBadge(items: readonly Pick<AppNotification, 'readAt' | 'resolvedAt' | 'urgent'>[]): number {
+  return items.filter((n) => !n.resolvedAt && (!n.readAt || n.urgent)).length;
 }

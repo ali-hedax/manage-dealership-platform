@@ -66,9 +66,9 @@ export class PartsPickingService {
       .orderBy(asc(stockReservations.id));
     const byPart = new Map<string, Reservation[]>();
     for (const row of stock) {
-      const group = byPart.get(row.r.partRequestId) ?? [];
+      const group = byPart.get(row.r.partRequestId!) ?? [];
       group.push(row);
-      byPart.set(row.r.partRequestId, group);
+      byPart.set(row.r.partRequestId!, group); // filtered by part ids above
     }
 
     const activeTasks = await db.select({ id: tasks.id, caseId: tasks.caseId, departmentId: tasks.departmentId }).from(tasks)

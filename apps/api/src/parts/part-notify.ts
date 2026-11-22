@@ -11,6 +11,9 @@ export interface PartNotice {
   link?: string | null;
   /** One notice per recipient and key: repeating the same event never spams. */
   dedupeKey: string;
+  /** Notification center: stays in the counter until completed. */
+  urgent?: boolean;
+  category?: string;
 }
 
 /** Writes one in-app notice per recipient (deduplicated per user and key). */
@@ -19,7 +22,7 @@ export async function notifyUsers(tx: DbOrTx, tenantId: string, userIds: Iterabl
   if (!ids.length) return;
   await tx
     .insert(notifications)
-    .values(ids.map((userId) => ({ id: newId(), tenantId, userId, kind: n.kind, title: n.title, body: n.body ?? null, link: n.link ?? null, dedupeKey: n.dedupeKey })))
+    .values(ids.map((userId) => ({ id: newId(), tenantId, userId, kind: n.kind, title: n.title, body: n.body ?? null, link: n.link ?? null, dedupeKey: n.dedupeKey, urgent: n.urgent ?? false, category: n.category ?? null })))
     .onConflictDoNothing();
 }
 

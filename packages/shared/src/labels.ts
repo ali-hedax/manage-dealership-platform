@@ -38,6 +38,9 @@ export const ROLE_LABELS: Record<Role, string> = {
   technician: 'تکنسین جایگاه',
   service_manager: 'مدیر خدمات',
   system_admin: 'مدیر سیستم',
+  special_aid_operator: 'اپراتور امداد ویژه',
+  special_aid_supply: 'کارشناس پیگیری تأمین امداد ویژه',
+  guest: 'مهمان (فقط مشاهده)',
 };
 /** The owner is a flag on the account, not a role code. */
 export const OWNER_LABEL = 'مالک';

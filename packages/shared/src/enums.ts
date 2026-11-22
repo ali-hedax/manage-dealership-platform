@@ -9,6 +9,10 @@ export const ROLES = [
   'technician', // تکنسین جایگاه
   'service_manager', // مدیر خدمات — view, analyse, remind only
   'system_admin', // مدیر سیستم
+  // Special Aid module (owner, 2026-11-22): independent workspaces, combinable with any role.
+  'special_aid_operator', // اپراتور امداد ویژه
+  'special_aid_supply', // کارشناس پیگیری تأمین امداد ویژه
+  'guest', // مهمان: فقط مشاهده، با تاریخ پایان دسترسی
 ] as const;
 export type Role = (typeof ROLES)[number];
 
