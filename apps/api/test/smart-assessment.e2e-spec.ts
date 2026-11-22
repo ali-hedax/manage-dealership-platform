@@ -148,3 +148,24 @@ it('persists independent parts-clerk decisions and audit, requires reason, block
     action:'accept',expectedVersion:3,
   })).status).toBe(201);
 });
+
+it('allows smart manual assessments only for insurance and personal cases, never Golden Card', async () => {
+  for (const coverageType of ['insurance', 'personal', 'golden_card'] as const) {
+    const created = await admin.post('/cases', {
+      admittedAt: new Date(Date.now() - 86_400_000).toISOString(),
+      vehicle: { model: 'سورن' },
+      coverageType,
+    });
+    expect(created.status).toBe(201);
+    const result = await expert.post(`/cases/${created.body.id}/assessments`, {
+      kind: 'initial', smartManual: true, assessorName: 'کارشناس آزمون',
+    });
+    if (coverageType === 'golden_card') {
+      expect(result.status).toBe(422);
+      expect(result.body.code).toBe('SMART_ASSESSMENT_COVERAGE');
+    } else {
+      expect(result.status).toBe(201);
+      expect(result.body.smartManual).toBe(true);
+    }
+  }
+});
