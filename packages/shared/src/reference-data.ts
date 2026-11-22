@@ -19,6 +19,24 @@ export const referencePreviewSchema = referenceFileSchema.extend({
   mapping: z.partialRecord(z.enum(['partNumber','description','vehicleUse','quantity','unit','location','chassis','vin','fullName','phone','plate','model','trim','admissionNo','customerNo','visitedOn','isacoCode']),z.number().int().min(0).max(511)),
 });
 export const referenceSearchSchema = z.object({ query: z.string().trim().min(2).max(100) });
+/**
+ * Smart assessment catalog search scope (owner, 2026-11-22): the case's vehicle family
+ * (default), one chosen catalog family, or the whole catalog. Compatibility is always
+ * judged against the CASE vehicle; another scope never changes the case and marks every
+ * part outside the case's family as needing a technical check.
+ */
+export const ASSESSMENT_SEARCH_SCOPES = ['case', 'vehicle', 'all'] as const;
+export type AssessmentSearchScope = (typeof ASSESSMENT_SEARCH_SCOPES)[number];
+/** Ranked results per page; later pages are read with `offset`. */
+export const ASSESSMENT_SEARCH_PAGE = 100;
+export const assessmentCatalogSearchSchema = z.object({
+  query: z.string().trim().min(2).max(100),
+  scope: z.enum(ASSESSMENT_SEARCH_SCOPES).default('case'),
+  /** Catalog family key (from the case's vehicle list); required for `vehicle`. */
+  family: z.string().trim().min(1).max(120).optional(),
+  offset: z.number().int().min(0).max(5000).default(0),
+}).refine((v) => v.scope !== 'vehicle' || !!v.family, { message: 'خودروی موردنظر را انتخاب کنید', path: ['family'] });
+export type AssessmentCatalogSearchInput = z.infer<typeof assessmentCatalogSearchSchema>;
 export type ReferenceFileInput = z.infer<typeof referenceFileSchema>;
 export type ReferencePreviewInput = z.infer<typeof referencePreviewSchema>;
 export interface ReferenceInspection { sheets: { name: string; index: number; rows: { rowNo: number; cells: string[] }[]; rowCount: number }[] }

@@ -1,6 +1,6 @@
 import {Body,Controller,Get,Param,Post,StreamableFile} from '@nestjs/common';
 import {z} from 'zod';
-import {REFERENCE_KINDS,referenceFileSchema,referencePreviewSchema,referenceSearchSchema,type ReferenceKind,type ReferenceFileInput,type ReferencePreviewInput} from '@manage/shared';
+import {REFERENCE_KINDS,assessmentCatalogSearchSchema,referenceFileSchema,referencePreviewSchema,referenceSearchSchema,type ReferenceKind,type ReferenceFileInput,type ReferencePreviewInput,type AssessmentCatalogSearchInput} from '@manage/shared';
 import {CurrentActor,RequirePermissions} from '../auth/decorators';
 import type {Actor} from '../auth/auth.types';
 import {IdParam} from '../common/params';
@@ -28,8 +28,14 @@ export class ReferenceDataController{
  /** Case-scoped, read-only dropdown; no assessment line is created here. */
  @Post('cases/:id/assessment-catalog/search')
  @RequirePermissions('assessment.manage')
- suggestAssessmentParts(@CurrentActor()a:Actor,@IdParam()id:string,@Body(new ZodPipe(referenceSearchSchema))b:{query:string}){
-  return this.service.suggestAssessmentParts(a,id,b.query);
+ suggestAssessmentParts(@CurrentActor()a:Actor,@IdParam()id:string,@Body(new ZodPipe(assessmentCatalogSearchSchema))b:AssessmentCatalogSearchInput){
+  return this.service.suggestAssessmentParts(a,id,b);
+ }
+ /** Catalog vehicle families for the «انتخاب خودرو» picker; read-only, case-scoped. */
+ @Get('cases/:id/assessment-catalog/vehicles')
+ @RequirePermissions('assessment.manage')
+ assessmentVehicles(@CurrentActor()a:Actor,@IdParam()id:string){
+  return this.service.assessmentVehicles(a,id);
  }
  @Get('reference-data/:kind/sample')
  sample(@CurrentActor()a:Actor,@Kind()kind:ReferenceKind){return new StreamableFile(Buffer.from(this.service.sample(a,kind)),{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',disposition:'attachment; filename="reference-sample.xlsx"'});}

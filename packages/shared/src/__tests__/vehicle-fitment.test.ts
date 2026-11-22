@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assessmentReference, fitmentCatalog, normalizedPartCode, partFitment, resolveVehicleFamily, type FitmentResolution } from '../vehicle-fitment';
+import { assessmentReference, catalogFamilies, COMPATIBILITY_NOTES, fitmentCatalog, partCompatibility, normalizedPartCode, partFitment, resolveVehicleFamily, type FitmentResolution } from '../vehicle-fitment';
 
 const LABELS = ['دنا', 'دنا پلاس', 'پژو پارس', 'پژو 206', 'پژو207', 'پژو 2008', 'تارا', 'تارا با گیربکس اتوماتیک', 'ریرا', 'هایما S7', 'هایما S7 PRO', 'RD', 'سورن پلاس', 'سمند', 'خودروهای رایج-صرفنظراز پلتفرم', 'نامشخص', ''];
 const fam = (model: string, trim = '', vin: string[] = []) => resolveVehicleFamily([model, trim], vin, LABELS);
@@ -93,4 +93,30 @@ test('8-digit reference keeps the full code beside it and never invents one', ()
   assert.equal(assessmentReference('1234567'), null);
   assert.equal(assessmentReference('AB-1234'), null);
   assert.equal(normalizedPartCode('ab-1234'), 'AB1234');
+});
+
+test('search scopes: compatibility is always judged against the case vehicle; the picker lists real catalog families', () => {
+  const catalog = fitmentCatalog(REAL);
+  const compat = (model: string, label: string) => partCompatibility(label, resolveVehicleFamily([model], [], REAL, catalog), catalog);
+  assert.equal(compat('سورن پلاس', 'سورن پلاس'), 'verified');
+  assert.equal(compat('سورن ELX', 'سورن پلاس'), 'trim-review');
+  // A Soren case searching the Samand catalog: never certified, even on a shared platform.
+  assert.equal(compat('سورن ELX', 'سمند'), 'other-family');
+  assert.equal(compat('سورن ELX', 'خودروهای رایج-صرفنظراز پلتفرم'), 'verified');
+  assert.equal(compat('سورن ELX', 'نامشخص'), 'unknown');
+  assert.equal(compat('سورن ELX', ''), 'unknown');
+  // Unknown case vehicle: nothing is verified except explicitly common parts.
+  assert.equal(compat('خودروی ناشناخته', 'سمند'), 'other-family');
+  assert.equal(COMPATIBILITY_NOTES['other-family'], 'خودروی دیگر؛ سازگاری با خودروی پرونده تأیید نشده و نیازمند بررسی فنی است');
+  assert.equal(COMPATIBILITY_NOTES.verified, null);
+  const families = catalogFamilies(REAL, catalog);
+  const byName = new Map(families.map((f) => [f.name, f]));
+  assert.deepEqual(byName.get('دنا')?.labels.sort(), ['دنا', 'دنا پلاس', 'دنا پلاس اتوماتیک توربو']);
+  assert.deepEqual(byName.get('سورن')?.labels, ['سورن پلاس']);
+  assert.deepEqual(byName.get('سمند')?.labels, ['سمند']);
+  assert.ok(byName.has('پژو 2008') && byName.has('دانگ فنگ برقی'));
+  // Common and unlabelled parts are no vehicle; every label belongs to exactly one family.
+  assert.ok(!families.some((f) => f.labels.some((l) => l === 'نامشخص' || l === '' || l === 'خودروهای رایج-صرفنظراز پلتفرم')));
+  assert.equal(families.reduce((n, f) => n + f.labels.length, 0), REAL.length - 2);
+  assert.equal(new Set(families.map((f) => f.key)).size, families.length);
 });

@@ -68,6 +68,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/auth/me` | [source](../apps/api/src/auth/auth.controller.ts) |
 | GET | `/api/v1/auth/options` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/cases/:id/alerts/history` | [source](../apps/api/src/alerts/alerts.controller.ts) |
+| GET | `/api/v1/cases/:id/assessment-catalog/vehicles` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/cases/:id/assessments` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | GET | `/api/v1/cases/:id/completion` | [source](../apps/api/src/completion/completion.controller.ts) |
 | GET | `/api/v1/cases/:id/documents/:documentId` | [source](../apps/api/src/cases/case-documents.controller.ts) |

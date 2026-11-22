@@ -130,6 +130,63 @@ test('smart assessment: a vehicle that cannot be matched to a catalog family get
   await expect(picker.getByRole('option')).toHaveCount(0);
 });
 
+test('smart assessment: three vehicle scopes — Samand catalog for a «سورن ELX» case, all vehicles, and back', async ({ page }) => {
+  await login(page, 'admin');
+  const headers = { 'x-manage-client': 'e2e' };
+  const sheet = Buffer.from(writeSheet('قطعات', [
+    ['کد فنی', 'نام قطعه', 'مصرف خودرو'],
+    ['0077441101', 'آینه بغل دامنه آزمون', 'سورن پلاس'],
+    ['0077441201', 'آینه بغل دامنه آزمون سمند', 'سمند'],
+    ['0077441301', 'آینه بغل دامنه آزمون پارس', 'پژو پارس'],
+  ])).toString('base64');
+  const imp = await (await page.request.post('/api/v1/reference-imports', { headers, data: { kind: 'parts', fileName: 'synthetic-scope.xlsx', fileBase64: sheet, sheetIndex: 0, headerRow: 1, mapping: { partNumber: 0, description: 1, vehicleUse: 2 } } })).json() as { id: string };
+  expect((await page.request.post(`/api/v1/reference-imports/${imp.id}/apply`, { headers, data: {} })).status()).toBe(201);
+  const created = await page.request.post('/api/v1/cases', { headers, data: { admittedAt: new Date(Date.now() - 86_400_000).toISOString(), vehicle: { model: 'سورن ELX' }, coverageType: 'insurance' } });
+  const { id } = (await created.json()) as { id: string };
+  await page.goto(`/cases/${id}`);
+  await openCaseTab(page, 'کارشناسی');
+  const panel = page.getByTestId('assessment-panel');
+  await panel.getByRole('button', { name: 'ایجاد کارشناسی دستی هوشمند' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('نام کارشناس *').fill('کارشناس نمونه');
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  const picker = panel.getByTestId('smart-assessment-entry');
+  const scopes = picker.getByRole('group', { name: 'دامنهٔ جست‌وجوی خودرو' });
+  await expect(scopes.getByRole('button', { name: 'خودروی پرونده' })).toHaveAttribute('aria-pressed', 'true');
+  const search = picker.getByRole('combobox', { name: 'جست‌وجوی قطعه' });
+  await search.fill('آینه بغل دامنه');
+  // Default: only the Soren family.
+  await expect(picker.getByRole('listbox', { name: 'قطعات پیشنهادی' }).getByRole('option')).toHaveCount(1);
+  await expect(picker.getByRole('listbox', { name: 'قطعات پیشنهادی' }).getByRole('option')).toContainText('سورن');
+
+  // Another vehicle: the Samand catalog, with the unverified-compatibility warning.
+  await scopes.getByRole('button', { name: 'انتخاب خودرو' }).click();
+  await picker.getByLabel('جست‌وجوی خودرو', { exact: true }).fill('سمند');
+  const select = picker.getByTestId('smart-vehicle-select');
+  await expect(select.locator('option')).toHaveCount(2);
+  await select.selectOption({ index: 1 });
+  await expect(picker.getByTestId('smart-scope-text')).toContainText('کاتالوگ سمند');
+  await expect(picker.getByTestId('smart-cross-warning')).toBeVisible();
+  await expect(picker.getByRole('listbox', { name: 'قطعات پیشنهادی' }).getByRole('option')).toHaveCount(1);
+  await expect(picker.getByTestId('smart-source')).toContainText('سمند');
+  await expect(picker.getByTestId('smart-fit-note')).toContainText('سازگاری با خودروی پرونده تأیید نشده');
+  await picker.screenshot({ path: test.info().outputPath('smart-scope.png') });
+  await search.press('Enter');
+  await expect(panel.getByTestId('assessment-item')).toHaveCount(1);
+  await expect(page.getByTestId('smart-picked-note')).toContainText('منبع کاتالوگ: سمند');
+
+  // All vehicles, then back to the case vehicle; the case model is unchanged.
+  await scopes.getByRole('button', { name: 'همه خودروها' }).click();
+  await search.fill('آینه بغل دامنه');
+  await expect(picker.getByRole('listbox', { name: 'قطعات پیشنهادی' }).getByRole('option')).toHaveCount(3);
+  await scopes.getByRole('button', { name: 'خودروی پرونده' }).click();
+  await search.fill('آینه بغل دامنه آزمون');
+  await expect(picker.getByRole('listbox', { name: 'قطعات پیشنهادی' }).getByRole('option')).toHaveCount(1);
+  await expect(picker.getByTestId('smart-family')).toContainText('خودروی پرونده:سورن ELX');
+  const kase = await (await page.request.get(`/api/v1/cases/${id}`, { headers })).json() as { vehicle: { model: string } };
+  expect(kase.vehicle.model).toBe('سورن ELX');
+});
+
 test('parts clerk reviews individual draft lines and returns only a disputed technical code', async ({ page }) => {
   await login(page, 'admin');
   const headers = {'x-manage-client':'e2e'};

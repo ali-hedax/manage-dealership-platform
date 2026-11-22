@@ -50,8 +50,17 @@ export function rankAssessmentCandidates(
   candidates: readonly AssessmentCatalogCandidate[],
   limit = 20,
 ): RankedAssessmentCandidate[] {
+  if (!Number.isFinite(limit) || limit <= 0) return [];
+  return scoreAssessmentCandidates(query, candidates).slice(0, Math.min(Math.floor(limit), 100));
+}
+
+/** Every matching candidate in rank order (pages of a large catalog are sliced from this). */
+export function scoreAssessmentCandidates(
+  query: string,
+  candidates: readonly AssessmentCatalogCandidate[],
+): RankedAssessmentCandidate[] {
   const q = normalizeAssessmentSearch(query);
-  if (!q || q.length > 80 || !Number.isFinite(limit) || limit <= 0) return [];
+  if (!q || q.length > 80) return [];
   const output: RankedAssessmentCandidate[] = [];
   for (const candidate of candidates) {
     if (candidate.vehicleMatch === 'incompatible') continue;
@@ -77,5 +86,5 @@ export function rankAssessmentCandidates(
     if (candidate.vehicleMatch === 'verified') score += 20;
     output.push({ ...candidate, score, requiresFitmentReview: candidate.vehicleMatch !== 'verified' });
   }
-  return output.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'fa') || a.partNumber.localeCompare(b.partNumber)).slice(0, Math.min(Math.floor(limit), 100));
+  return output.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'fa') || a.partNumber.localeCompare(b.partNumber));
 }

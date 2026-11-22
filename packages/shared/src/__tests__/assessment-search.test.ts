@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeAssessmentSearch, rankAssessmentCandidates } from '../assessment-search';
+import { normalizeAssessmentSearch, rankAssessmentCandidates, scoreAssessmentCandidates } from '../assessment-search';
 
 test('Persian and Arabic letters, spaces, ZWNJ, digits normalize consistently', () => {
   assert.equal(normalizeAssessmentSearch('سپر جلو'), normalizeAssessmentSearch('سپر‌جلو'));
@@ -27,4 +27,15 @@ test('empty queries, impossible candidates and invalid limits are safe', () => {
   assert.deepEqual(rankAssessmentCandidates('  ', rows), []);
   assert.deepEqual(rankAssessmentCandidates('سپر', rows), []);
   assert.deepEqual(rankAssessmentCandidates('چراغ', rows, 0), []);
+});
+
+test('full ranking keeps every match for paging; the ranked list stays capped at 100', () => {
+  const rows = Array.from({ length: 150 }, (_, i) => ({ id: `p${i}`, name: `سپر آزمون ${i}`, partNumber: `0099${String(i).padStart(4, '0')}01`, vehicleMatch: (i % 2 ? 'verified' : 'unknown') as 'verified' | 'unknown' }));
+  const all = scoreAssessmentCandidates('سپر', rows);
+  assert.equal(all.length, 150);
+  assert.equal(rankAssessmentCandidates('سپر', rows, 500).length, 100);
+  assert.deepEqual(rankAssessmentCandidates('سپر', rows, 100).map((x) => x.id), all.slice(0, 100).map((x) => x.id));
+  // Verified applicability first; pages never overlap.
+  assert.ok(all.slice(0, 75).every((x) => x.vehicleMatch === 'verified'));
+  assert.equal(new Set([...all.slice(0, 100), ...all.slice(100)].map((x) => x.id)).size, 150);
 });
