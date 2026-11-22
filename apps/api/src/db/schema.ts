@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   bigint,
   bigserial,
+  check,
   serial,
   boolean,
   customType,
@@ -1073,12 +1074,11 @@ export const stockReservations = pgTable(
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id),
-    caseId: uuid('case_id')
-      .notNull()
-      .references(() => cases.id),
-    partRequestId: uuid('part_request_id')
-      .notNull()
-      .references(() => partRequests.id),
+    // Accident part lines carry case and part; a special-aid hold of another vehicle carries
+    // special_aid_item_id instead (migration 0034). Exactly one of the two is set (check constraint).
+    caseId: uuid('case_id').references(() => cases.id),
+    partRequestId: uuid('part_request_id').references(() => partRequests.id),
+    specialAidItemId: uuid('special_aid_item_id').references((): AnyPgColumn => specialAidItems.id),
     fullStockCode: text('full_stock_code').notNull(),
     locationAddress: text('location_address').notNull().default(''),
     quantity: qty('quantity').notNull(),
@@ -1110,6 +1110,8 @@ export const stockReservations = pgTable(
   (t) => [
     index('stock_reservations_tenant_code_idx').on(t.tenantId, t.fullStockCode, t.status),
     index('stock_reservations_part_idx').on(t.partRequestId),
+    index('stock_reservations_special_aid_idx').on(t.specialAidItemId),
+    check('stock_reservations_owner_ck', sql`(${t.partRequestId} is not null and ${t.caseId} is not null and ${t.specialAidItemId} is null) or (${t.partRequestId} is null and ${t.caseId} is null and ${t.specialAidItemId} is not null)`),
   ],
 );
 
@@ -1219,6 +1221,11 @@ export const notifications = pgTable(
     dedupeKey: text('dedupe_key').notNull(),
     createdAt: ts('created_at').notNull().defaultNow(),
     readAt: ts('read_at'),
+    // Notification center (migration 0034): reading is separate from completing the work.
+    category: text('category'),
+    urgent: boolean('urgent').notNull().default(false),
+    resolvedAt: ts('resolved_at'),
+    resolvedBy: uuid('resolved_by').references(() => users.id),
   },
   (t) => [
     uniqueIndex('notifications_user_key_uq').on(t.tenantId, t.userId, t.dedupeKey),
@@ -1514,3 +1521,92 @@ export const pickingBatches = pgTable('picking_batches', {
 }, (t) => [
   index('picking_batches_tenant_status_created_idx').on(t.tenantId, t.status, t.createdAt),
 ]);
+
+// ---------------------------------------------------------------- Special Aid (migration 0034)
+// Internal follow-up of the official special-aid report for every dealership vehicle
+// (spec section 25). The official row stays in emdad_requests; nothing here changes it.
+
+/** One dossier per valid VIN and dealership. */
+export const specialAidDossiers = pgTable('special_aid_dossiers', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  vin: text('vin').notNull(),
+  postponedUntil: ts('postponed_until'),
+  postponeReason: text('postpone_reason'),
+  /** Latest confirmed customer attendance (closes a promised visit). */
+  attendedAt: ts('attended_at'),
+  /** Last management escalation (three failed attempts), for de-duplication. */
+  escalatedAt: ts('escalated_at'),
+  isTest: boolean('is_test').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (t) => [uniqueIndex('special_aid_dossiers_tenant_vin_uq').on(t.tenantId, t.vin)]);
+
+/** Independent admissions of one VIN; never merged. */
+export const specialAidAdmissions = pgTable('special_aid_admissions', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  dossierId: uuid('dossier_id').notNull().references(() => specialAidDossiers.id),
+  admissionKey: text('admission_key').notNull(),
+  admissionNo: text('admission_no').notNull(),
+  admissionDate: text('admission_date'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('special_aid_admissions_key_uq').on(t.tenantId, t.dossierId, t.admissionKey)]);
+
+/** Related parts the operator follows together (partial arrival is the operator's decision). */
+export const specialAidGroups = pgTable('special_aid_groups', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  dossierId: uuid('dossier_id').notNull().references(() => specialAidDossiers.id),
+  label: text('label'),
+  decision: text('decision'), // wait | partial | null (undecided)
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (t) => [index('special_aid_groups_dossier_idx').on(t.tenantId, t.dossierId)]);
+
+/** Internal state of one official special-aid line (1:1 with emdad_requests). */
+export const specialAidItems = pgTable('special_aid_items', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  dossierId: uuid('dossier_id').notNull().references(() => specialAidDossiers.id),
+  admissionId: uuid('admission_id').references(() => specialAidAdmissions.id),
+  requestId: uuid('request_id').notNull().references(() => emdadRequests.id),
+  state: text('state').notNull().default('pending'),
+  /** Official category seen at the last sync and the first time Manage saw it (observation, not an official date). */
+  observedCategory: text('observed_category'),
+  statusObservedAt: ts('status_observed_at'),
+  arrivalObservedAt: ts('arrival_observed_at'),
+  informedAt: ts('informed_at'),
+  groupId: uuid('group_id').references(() => specialAidGroups.id),
+  nonConsumptionReason: text('non_consumption_reason'),
+  nonConsumptionNote: text('non_consumption_note'),
+  nonConsumptionBy: uuid('non_consumption_by').references(() => users.id),
+  nonConsumptionAt: ts('non_consumption_at'),
+  /** Why the automatic hold was not (fully) placed, shown to the operator. */
+  holdNote: text('hold_note'),
+  isTest: boolean('is_test').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (t) => [
+  uniqueIndex('special_aid_items_request_uq').on(t.requestId),
+  index('special_aid_items_dossier_idx').on(t.tenantId, t.dossierId),
+  index('special_aid_items_state_idx').on(t.tenantId, t.state),
+]);
+
+/** Customer contact attempts (one per call, covering one or more parts of the vehicle). */
+export const specialAidContacts = pgTable('special_aid_contacts', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  dossierId: uuid('dossier_id').notNull().references(() => specialAidDossiers.id),
+  outcome: text('outcome').notNull(),
+  note: text('note'),
+  promisedAt: ts('promised_at'),
+  itemIds: jsonb('item_ids').$type<string[]>().notNull(),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [index('special_aid_contacts_dossier_idx').on(t.tenantId, t.dossierId, t.createdAt)]);
