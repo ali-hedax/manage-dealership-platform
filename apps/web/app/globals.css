@@ -1941,3 +1941,20 @@ tr.is-late td { background:var(--red-soft); }
 .picking-controls { flex-wrap: wrap; align-items: end; gap: .75rem; }
 .picking-vehicle summary { padding-block: .3rem; }
 .picking-quantity { inline-size: 6rem; }
+
+
+/* Verified vehicle identity stays visible at the top of the case folder. */
+.cf-vehicle-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  line-height: 1.6;
+}
+.cf-vehicle-details > span { display: inline-block; }
+.cf-vehicle-details > span:nth-child(3) {
+  color: var(--ink);
+  font-weight: 700;
+}
