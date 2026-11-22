@@ -13,7 +13,7 @@ Base main at creation: `b3bfc8f6bab6889c031f828cc72a05fad30638a8`
 4. E2E regression test: insurance/personal cases accept Smart Manual Assessment while Golden Card rejects it. Existing backend and UI already implement this eligibility rule.
 5. Shared `calculateEmployeeScore`: deterministic 30/25/25/20 weights, stable identity, insufficient-evidence response, formula version, input validation; unit tests. This is a **standalone calculation core**, not yet connected to real events, manager UI, or role-specific calibrated metric generation.
 
-## Not implemented — DO NOT CLAIM COMPLETE
+6. Shared `advanceAssessmentPackage`: guarded draft → submitted → review → finalized transition rules and unsafe deletion guard; tests. This is a **pure state machine**, NOT YET connected to API or UI.\n7. Shared `aggregateStaffActivity`: allowlisted event attribution by authenticated employee ID, deduplication, unknown-actor and test-event exclusions; tests. This is **not yet connected to SQL aggregation or a manager report**.\n\n## Not implemented — DO NOT CLAIM COMPLETE
 - Pause/resume lifecycle: task status and event/schema/API/technician UI, lifecycle tests.
 - Full-assessment submission to Parts Specialist; direct technical corrections, safe deletes, audit and whole-assessment finalization.
 - Optional sectioned labour-entry UX and printout integration.
