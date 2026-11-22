@@ -38,3 +38,4 @@ export * from './vehicle-fitment';
 export * from './parts-picking';
 export * from './employee-performance';
 export * from './assessment-package';
+export * from './employee-activity';
