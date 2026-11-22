@@ -47,3 +47,10 @@ The current `CasesService.isacoCodeOf` already performs a **read-time, exact VIN
 
 ## Verification rules
 No local test execution was available in this GitHub-only step; CI must be checked for the exact final commit. All historical and synthetic test data must remain isolated from real production records. No production changes performed.
+
+
+## Additional scope: coverage eligibility and case sorting
+13. Smart Manual Assessment now checks `coverageType !== 'golden_card'` in both initial-create API and UI. The canonical values `insurance`, `personal`, `mixed`, and `unknown` are therefore eligible; official Golden Card remains excluded. A regression test exercises all five values.
+14. Case-list sorting is validated in shared Zod query schema and applied by the API before pagination. Options: latest admission (default), oldest admission, highest case number, lowest case number. UI selector updates the URL, resets pagination, and preserves filters.
+15. Added synthetic E2E sorting regression test. Do not claim success until the exact head commit passes CI.
+16. Financial/payer-specific authorization remains a separate mandatory downstream control. Being eligible for Smart Manual Assessment does not imply automatic insurance approval or free procurement.
