@@ -134,7 +134,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   useEffect(()=>{setSelected([]);},[current?.id,current?.version,reviewStateKey]);
   async function dispatchParts(){
     if(!current||!selected.length||sending)return;setSending(true);
-    try{const items=await api<Part[]>(`/cases/${kase.id}/parts/from-assessment`,{body:{assessmentId:current.id,expectedVersion:current.version,itemIds:selected}});await refreshCache(`/cases/${kase.id}/parts`,items,{revalidate:false});await mutate();setSelected([]);onChange();toast('اقلام انتخابی به قطعات و تأمین ارسال شدند');window.location.hash='case-parts';}
+    try{const items=await api<Part[]>(`/cases/${kase.id}/parts/from-assessment`,{body:{assessmentId:current.id,expectedVersion:current.version,itemIds:selected}});await refreshCache(`/cases/${kase.id}/parts`,items,{revalidate:false});const fresh=await mutate();setSelected([]);onChange();toast('اقلام انتخابی ارسال شدند؛ مرحله بعد: نهایی‌سازی کارشناسی');const latest=fresh?.at(-1);if(manage&&editable&&latest?.status==='draft')start({kind:'finalize',a:latest});}
     catch(e){toast(errorMessage(e),'error');void refreshCache(`/cases/${kase.id}/parts`);void mutate();}finally{setSending(false);}
   }
 
@@ -174,12 +174,13 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
     }
   }
 
-  async function run(fn: () => Promise<unknown>, done: string) {
+  async function run(fn: () => Promise<unknown>, done: string, afterSuccess?: () => void) {
     setBusy(true);
     try {
       await fn();
       toast(done);
       setMode(null);
+      afterSuccess?.();
     } catch (err) {
       toast(errorMessage(err), 'error');
     } finally {
@@ -236,7 +237,8 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
               note: note || null,
             },
           }),
-        'کارشناسی نهایی شد',
+        'کارشناسی نهایی شد؛ مرحله بعد: برنامه تعمیر',
+        () => requestAnimationFrame(() => { window.location.hash = 'case-plan'; }),
       );
     } else {
       await run(
