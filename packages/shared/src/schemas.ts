@@ -228,6 +228,7 @@ export const caseListQuerySchema = z.object({
   flag: z.enum(CASE_FLAGS).optional(),
   blockerReason: z.enum(BLOCKER_REASONS).optional(),
   responsibleUserId: uuid.optional(),
+  sort: z.enum(['admitted_desc', 'case_number_desc', 'admitted_asc', 'case_number_asc']).default('admitted_desc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
