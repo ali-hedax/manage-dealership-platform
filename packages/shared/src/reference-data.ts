@@ -77,3 +77,40 @@ export function headerSignature(cells: readonly string[]): string {
 }
 /** Column mapping remembered after the first confirmed import of a report layout. */
 export interface SavedReferenceMapping { signature: string; headerRow: number; sheetIndex: number; mapping: Partial<Record<ReferenceField, number>>; savedAt: string }
+
+/**
+ * Column suggestions for the FIRST import of a report layout, from common header names.
+ * Only a starting point: the administrator confirms or changes every column before preview,
+ * and the confirmed layout (header signature) is what recognizes later files.
+ */
+const HEADER_HINTS: Partial<Record<ReferenceKind, Partial<Record<ReferenceField, string[]>>>> = {
+  customers: {
+    vin: ['vin', 'شماره vin', 'وین'], chassis: ['شماره شاسی', 'شاسی'], fullName: ['نام مشتری', 'نام و نام خانوادگی', 'نام مالک', 'مشتری'],
+    phone: ['تلفن همراه', 'موبایل', 'شماره همراه', 'تلفن'], plate: ['شماره پلاک', 'پلاک'], model: ['مدل خودرو', 'نوع خودرو', 'خودرو', 'مدل'],
+    trim: ['شرح تیپ', 'تیپ'], admissionNo: ['شماره کارت پذیرش', 'شماره پذیرش', 'کارت پذیرش'], customerNo: ['شماره مشتری', 'کد مشتری'],
+    visitedOn: ['تاریخ پذیرش', 'تاریخ مراجعه'], isacoCode: ISACO_HEADER_ALIASES,
+  },
+  appointments: {
+    appointmentNo: ['شماره نوبت', 'کد نوبت'], vin: ['vin', 'شماره vin'], chassis: ['شماره شاسی', 'شاسی'], admissionNo: ['شماره پذیرش', 'شماره کارت پذیرش'],
+    appointmentDate: ['تاریخ نوبت', 'تاریخ مراجعه', 'تاریخ'], appointmentTime: ['ساعت نوبت', 'زمان نوبت', 'ساعت'], status: ['وضعیت نوبت', 'وضعیت'],
+    serviceType: ['نوع خدمت', 'نوع سرویس', 'نوع پذیرش'], fullName: ['نام مشتری', 'نام و نام خانوادگی', 'مشتری'], phone: ['تلفن همراه', 'موبایل', 'تلفن'], plate: ['شماره پلاک', 'پلاک'],
+  },
+};
+export function suggestReferenceMapping(kind: ReferenceKind, headers: readonly string[]): Partial<Record<ReferenceField, number>> {
+  const n = (x: string) => x.replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\s‌_-]+/g, '').toLowerCase();
+  const cols = headers.map((h) => n(h ?? ''));
+  const hints = HEADER_HINTS[kind] ?? {};
+  const out: Partial<Record<ReferenceField, number>> = {};
+  const used = new Set<number>();
+  // Exact header names first, then a header that contains the hint (longest hints win).
+  for (const exact of [true, false]) {
+    for (const [field, words] of Object.entries(hints) as [ReferenceField, string[]][]) {
+      if (out[field] !== undefined) continue;
+      for (const w of [...words].sort((a, b) => b.length - a.length).map(n)) {
+        const i = cols.findIndex((c, idx) => !used.has(idx) && !!c && (exact ? c === w : c.includes(w)));
+        if (i >= 0) { out[field] = i; used.add(i); break; }
+      }
+    }
+  }
+  return out;
+}

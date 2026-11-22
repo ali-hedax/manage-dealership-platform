@@ -166,3 +166,12 @@ test('cards, feedback, header signatures, guest and job titles', () => {
   assert.equal(accessUpdateSchema.safeParse({ ...base, jobTitles: ['کارشناس', 'کارشناس'] }).success, false);
   assert.equal(accessUpdateSchema.safeParse({ ...base, jobTitles: ['کارشناس امداد', 'مسئول تماس'], accessExpiresAt: '2026-12-01T00:00:00+03:30' }).success, true);
 });
+
+import { suggestReferenceMapping } from '../index';
+test('first-import column suggestions: exact names first, each column once, nothing for unknown headers', () => {
+  const m = suggestReferenceMapping('appointments', ['ردیف', 'شماره نوبت', 'تاریخ نوبت', 'ساعت', 'وضعیت', 'شماره شاسی', 'نام مشتری', 'موبایل']);
+  assert.deepEqual(m, { appointmentNo: 1, appointmentDate: 2, appointmentTime: 3, status: 4, chassis: 5, fullName: 6, phone: 7 });
+  const c = suggestReferenceMapping('customers', ['شماره شاسی', 'نام مشتری', 'تلفن همراه', 'شماره پلاک', 'مدل خودرو', 'شماره کارت پذيرش']);
+  assert.deepEqual(c, { chassis: 0, fullName: 1, phone: 2, plate: 3, model: 4, admissionNo: 5 });
+  assert.deepEqual(suggestReferenceMapping('appointments', ['ستون یک', 'ستون دو']), {});
+});

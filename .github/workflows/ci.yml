@@ -112,6 +112,29 @@ jobs:
           PGPASSWORD=ci-only psql -h localhost -U manage -d manage -c "create database manage_staff_usernames"
           cd apps/api && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testRegex 'test/staff-usernames-postgres\.e2e-spec\.ts$'
 
+      # Migrations 0034 + 0035 rehearsed from v1.0.8 (b3bfc8f, the Production release): row counts
+      # and fingerprints of existing rows before and after; evidence uploaded as an artifact.
+      - name: Rehearse 0034 + 0035 on a synthetic v1.0.8 copy
+        run: |
+          PGPASSWORD=ci-only psql -h localhost -U manage -d manage -c "create database manage_rehearsal"
+          cd apps/api && node dist/scripts/rehearse-special-aid.js --url postgres://manage:ci-only@localhost:5432/manage_rehearsal --prepare-synthetic --out ../../rehearsal-synthetic.json
+      - name: Rehearse 0034 + 0035 on a v1.0.8 demo database built by v1.0.8 itself
+        run: |
+          PGPASSWORD=ci-only psql -h localhost -U manage -d manage -c "create database manage_v108"
+          git fetch --depth=1 origin b3bfc8f6bab6889c031f828cc72a05fad30638a8
+          git worktree add /tmp/v108 b3bfc8f6bab6889c031f828cc72a05fad30638a8
+          cd /tmp/v108 && pnpm install --frozen-lockfile && pnpm build:shared && pnpm --filter @manage/api build
+          DATABASE_URL=postgres://manage:ci-only@localhost:5432/manage_v108 pnpm db:migrate
+          DATABASE_URL=postgres://manage:ci-only@localhost:5432/manage_v108 pnpm db:seed-demo
+          cd "$GITHUB_WORKSPACE/apps/api" && node dist/scripts/rehearse-special-aid.js --url postgres://manage:ci-only@localhost:5432/manage_v108 --out ../../rehearsal-v108-demo.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-rehearsal-evidence
+          path: rehearsal-*.json
+          if-no-files-found: ignore
+          retention-days: 30
+
   e2e:
     name: End-to-end (Playwright, Chromium)
     runs-on: ubuntu-latest
