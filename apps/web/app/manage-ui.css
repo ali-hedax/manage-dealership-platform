@@ -937,3 +937,14 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .aid-item-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: #3A4049; }
 .aid-item-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 @media (max-width: 600px) { .aid-item { grid-template-columns: minmax(0, 1fr); } .aid-item-actions { justify-content: flex-start; } }
+/* Notification center (spec section 25): same paper popover as the account menu. */
+.notice-center { position: relative; }
+.notice-panel { position: absolute; inset-block-start: calc(100% + 8px); inset-inline-end: 0; z-index: 30; inline-size: min(420px, calc(100vw - 32px)); max-block-size: min(70vh, 560px); overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: #FFFEFB; border: 1px solid #E6E2D9; box-shadow: 0 24px 48px -24px rgba(21, 24, 29, .35); color: #15181D; }
+.notice-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.notice-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.notice-item { display: grid; gap: 6px; padding-block: 10px; border-block-end: 1px solid #EEEAE2; }
+.notice-item.unread strong { font-weight: 800; }
+.notice-item.urgent { border-inline-start: 3px solid #8E2E1F; padding-inline-start: 8px; }
+.notice-item p { margin: 2px 0 0; }
+.notice-panel-foot { font-size: 13.5px; font-weight: 700; color: #12645D; text-decoration: none; }
+@media (max-width: 600px) { .notice-panel { position: fixed; inset-inline: 16px; inset-block-start: 64px; inline-size: auto; } }

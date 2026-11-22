@@ -326,7 +326,7 @@ export class SpecialAidService {
         patch.escalatedAt = now;
         const managers = await usersWithRole(tx, actor.user.tenantId, ['service_manager']);
         const owners = await tx.select({ id: users.id }).from(users).where(and(eq(users.tenantId, actor.user.tenantId), eq(users.isOwner, true), eq(users.isActive, true)));
-        await notifyUsers(tx, actor.user.tenantId, [...managers, ...owners.map((o) => o.id)], { kind: 'special_aid.escalation', title: `سه تماس بی‌پاسخ در سه روز جدا · شاسی ${d.vin}`, body: 'مشتری از رسیدن قطعهٔ امداد ویژه خبر ندارد؛ پیگیری مدیریتی لازم است.', link: `/special-aid/vehicles/${id}`, dedupeKey: `special-aid:escalation:${id}:${tehranDay(now)}` });
+        await notifyUsers(tx, actor.user.tenantId, [...managers, ...owners.map((o) => o.id)], { kind: 'special_aid.escalation', urgent: true, category: 'special_aid', title: `سه تماس بی‌پاسخ در سه روز جدا · شاسی ${d.vin}`, body: 'مشتری از رسیدن قطعهٔ امداد ویژه خبر ندارد؛ پیگیری مدیریتی لازم است.', link: `/special-aid/vehicles/${id}`, dedupeKey: `special-aid:escalation:${id}:${tehranDay(now)}` });
       }
       if (input.outcome !== 'no_answer') patch.escalatedAt = null;
       const saved = await this.bump(tx, d, patch);

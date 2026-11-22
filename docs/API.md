@@ -217,6 +217,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/financial-approvals/:id/decision` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/financial-approvals/:id/payment` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/notifications/read` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
+| POST | `/api/v1/notifications/resolve` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/part-discrepancies/:id/assign` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/part-discrepancies/:id/resolve` | [source](../apps/api/src/discrepancies/discrepancies.controller.ts) |
 | POST | `/api/v1/parts/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |

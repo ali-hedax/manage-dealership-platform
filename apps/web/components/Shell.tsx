@@ -2,14 +2,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MODULE_LABELS, ROLE_LABELS, type AppNotification, type ModuleKey, type ReceivedReminder } from '@manage/shared';
-import useSWR from 'swr';
-import { api, fetcher } from '@/lib/api';
+import { MODULE_LABELS, ROLE_LABELS, type ModuleKey } from '@manage/shared';
+import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { visibleWorkspaces, workspaceHome } from '@/lib/workspaces';
 import { AppIcon, type IconName } from './AppIcon';
 import { BackLink } from './BackLink';
-import { NotificationBar } from './NotificationBar';
+import { NotificationCenter } from './NotificationCenter';
 import { PageActions } from './PageActions';
 import { InstallButton } from './InstallApp';
 import { ReleaseNotice, VersionChip } from './ReleaseNotice';
@@ -31,9 +30,6 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const technicianOnly = me.roles.length === 1 && me.roles[0] === 'technician';
   const home = workspaceHome(me);
-  const { data: inbox } = useSWR<ReceivedReminder[]>('/reminders/inbox', fetcher, { refreshInterval: 60_000 });
-  const { data: notes } = useSWR<{ unread: number; items: AppNotification[] }>('/notifications', fetcher, { refreshInterval: 60_000 });
-  const unseen = (inbox?.filter((r) => r.status === 'sent').length ?? 0) + (notes?.unread ?? 0);
   const dark = ['/control-room', '/accidents/manager', '/accidents/owner'].includes(pathname);
   const desks = visibleWorkspaces(me);
 
@@ -160,9 +156,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="top-end">
             <VersionChip />
             <span className="top-tenant" title="نمایندگی">{me.tenant.name}</span>
-            <Link href="/reminders" className="icon-btn bell" aria-label={unseen ? `فیدبک‌ها و اعلان‌ها، ${unseen.toLocaleString('fa-IR')} مورد تازه` : 'فیدبک‌ها و اعلان‌ها'} aria-current={pathname === '/reminders' ? 'page' : undefined}>
-              <AppIcon name="bell" />{unseen > 0 && <span className="dot" aria-hidden="true" />}
-            </Link>
+            <NotificationCenter />
             <details className="account-menu">
               <summary aria-label={`حساب ${me.displayName}`}><span className="avatar" aria-hidden="true">{initials(me.displayName)}</span><span className="who">{me.displayName}</span><AppIcon name="chevron-down" className="chev" /></summary>
               <div className="account-pop" role="group" aria-label="حساب کاربری">
@@ -178,7 +172,6 @@ export function Shell({ children }: { children: ReactNode }) {
         {/* Outside <main>: a page's own actions stay the only buttons in its content. */}
         <div className="release-slot"><ReleaseNotice /></div>
         <main className="page" id="page-content" tabIndex={-1}>
-          <NotificationBar />
           {back && <BackLink href={back.href} label={back.label} />}
           <PageActions />
           {children}

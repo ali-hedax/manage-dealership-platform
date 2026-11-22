@@ -254,9 +254,13 @@ test('permissions, a full-size file through the web proxy and internal reminders
     return r.fulfill({ json: { unread: 0, items } });
   });
   await page.goto('/cases');
+  // Notification center (spec section 25): a bell in the top bar, never a banner above the page.
+  await expect(page.getByTestId('notifications')).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: /^اعلان‌ها/ }).click();
   const bar = page.getByTestId('notifications');
   await expect(bar).toContainText('یادآوری: موجودی روزانه انبار');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await bar.getByRole('button', { name: 'خواندم' }).click();
-  await expect(bar).toHaveCount(0);
+  await expect(bar.getByRole('button', { name: 'خواندم' })).toHaveCount(0);
+  await expect(bar.getByRole('button', { name: 'انجام شد' })).toBeVisible();
 });

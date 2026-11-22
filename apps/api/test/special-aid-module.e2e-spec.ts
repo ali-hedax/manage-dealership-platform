@@ -232,3 +232,19 @@ it('items of other vehicles cannot be used in a contact of this dossier', async 
   const all = await h.db.db.select().from(specialAidItems).where(inArray(specialAidItems.dossierId, [d.id, other.id]));
   expect(all.length).toBe(4);
 });
+
+it('notification center: reading is not completing; urgent stays counted until resolved; no duplicates', async () => {
+  const inbox = (await manager.get('/notifications')).body as { unread: number; badge: number; items: { id: string; kind: string; urgent: boolean; category: string; state: string }[] };
+  const esc = inbox.items.filter((n) => n.kind === 'special_aid.escalation');
+  expect(esc).toHaveLength(1);
+  expect(esc[0]).toMatchObject({ urgent: true, category: 'special_aid', state: 'unread' });
+  const read = (await manager.post('/notifications/read', { ids: [esc[0]!.id] })).body;
+  expect(read.items.find((n: { id: string }) => n.id === esc[0]!.id).state).toBe('open');
+  expect(read.badge).toBeGreaterThanOrEqual(1);
+  const done = await manager.post('/notifications/resolve', { ids: [esc[0]!.id] });
+  expect(done.status).toBe(201);
+  expect(done.body.items.find((n: { id: string }) => n.id === esc[0]!.id).state).toBe('done');
+  expect(done.body.badge).toBe(read.badge - 1);
+  // History is kept; another user cannot resolve it.
+  expect((await operator.post('/notifications/resolve', { ids: [esc[0]!.id] })).body.items.some((n: { id: string }) => n.id === esc[0]!.id)).toBe(false);
+});
