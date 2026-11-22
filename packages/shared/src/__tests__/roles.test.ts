@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { isPinEligible, normalizeRoles, PERMISSIONS, permissionsFor, ROLE_LABELS, ROLES } from '../index';
 
 test('six roles: five role codes plus the owner flag', () => {
-  assert.deepEqual([...ROLES], ['accident_expert', 'parts_clerk', 'technician', 'service_manager', 'system_admin']);
+  assert.deepEqual([...ROLES], ['accident_expert', 'parts_clerk', 'technician', 'service_manager', 'system_admin', 'special_aid_operator', 'special_aid_supply']);
   assert.equal(ROLE_LABELS.accident_expert, 'کارشناس تصادفات');
   assert.equal(ROLE_LABELS.parts_clerk, 'مسئول قطعات');
 });

@@ -1,0 +1,116 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  allowedItemActions, arrivalAge, dossierTasks, failedAttemptDays, nextItemState, permissionsFor, tehranDay,
+  type AidContactFacts, type AidItemFacts, contactSchema, itemActionSchema, nonConsumptionSchema,
+} from '../index';
+
+// Synthetic facts only. Times are fixed in UTC; Tehran is +03:30.
+const now = new Date('2026-11-22T08:00:00Z'); // 11:30 Tehran
+const days = (n: number, base = now) => new Date(base.getTime() - n * 86_400_000).toISOString();
+const item = (over: Partial<AidItemFacts> = {}): AidItemFacts => ({ id: over.id ?? 'a', state: 'reserved', receivedAt: days(1), arrivalObservedAt: days(1), informedAt: null, groupId: null, ...over });
+const call = (at: string, outcome: AidContactFacts['outcome'], itemIds = ['a'], promisedAt: string | null = null): AidContactFacts => ({ at, outcome, itemIds, promisedAt });
+
+test('the state machine never marks a part installed because it left the warehouse', () => {
+  assert.equal(nextItemState('reserved', 'deliver'), 'delivered');
+  assert.equal(nextItemState('reserved', 'installed'), null);
+  assert.equal(nextItemState('delivered', 'installed'), 'installed');
+  assert.equal(nextItemState('pending', 'reserve'), null);
+  assert.equal(nextItemState('installed', 'release'), null);
+  assert.deepEqual(allowedItemActions('not_installed').sort(), ['release', 'return_to_stock_hold']);
+});
+
+test('an arrived part not announced is the most urgent contact task, grouped per vehicle', () => {
+  const t = dossierTasks({ items: [item(), item({ id: 'b' }), item({ id: 'c', state: 'pending', receivedAt: null, arrivalObservedAt: null })], contacts: [] }, now);
+  const inform = t.find((x) => x.kind === 'inform_arrival');
+  assert.ok(inform);
+  assert.deepEqual(inform.itemIds.sort(), ['a', 'b']);
+  assert.equal(inform.urgent, true);
+});
+
+test('a no-answer is retried on another day; three separate days escalate to management', () => {
+  const sameDay = dossierTasks({ items: [item()], contacts: [call(days(0), 'no_answer')] }, now);
+  assert.ok(!sameDay.some((x) => x.kind === 'no_answer_retry' || x.kind === 'inform_arrival'), 'no second attempt is asked for on the same day');
+  const nextDay = dossierTasks({ items: [item({ receivedAt: days(3) })], contacts: [call(days(1), 'no_answer')] }, now);
+  assert.ok(nextDay.some((x) => x.kind === 'no_answer_retry'));
+  // Two attempts the same day count once.
+  assert.equal(failedAttemptDays([call(days(2), 'no_answer'), call(new Date(Date.parse(days(2)) + 3600_000).toISOString(), 'no_answer'), call(days(1), 'no_answer')]), 2);
+  const three = [call(days(3), 'no_answer'), call(days(2), 'no_answer'), call(days(1), 'no_answer')];
+  assert.equal(failedAttemptDays(three), 3);
+  assert.ok(dossierTasks({ items: [item({ receivedAt: days(4) })], contacts: three }, now).some((x) => x.kind === 'escalation' && x.urgent));
+  // A reached contact resets the streak.
+  assert.equal(failedAttemptDays([...three, call(days(0), 'answered')]), 0);
+});
+
+test('informed parts get a recurring call every ten days', () => {
+  const informed = item({ informedAt: days(11), receivedAt: days(12) });
+  assert.ok(dossierTasks({ items: [informed], contacts: [call(days(10), 'answered')] }, now).some((x) => x.kind === 'recurring_contact'));
+  assert.ok(!dossierTasks({ items: [informed], contacts: [call(days(9), 'answered')] }, now).some((x) => x.kind === 'recurring_contact'));
+});
+
+test('20/30-day flags come from the official receipt date and never move with a postponement', () => {
+  const old = item({ informedAt: days(25), receivedAt: days(31), arrivalObservedAt: days(2) });
+  const t = dossierTasks({ items: [old], contacts: [call(days(5), 'answered')], postponedUntil: days(-5) }, now);
+  const review = t.find((x) => x.kind === 'age_review');
+  assert.ok(review && review.urgent && !review.postponed, 'age review is never postponed');
+  assert.equal(arrivalAge(old, now), 31);
+  // Without the official date the first observation is used.
+  assert.equal(arrivalAge(item({ receivedAt: null, arrivalObservedAt: days(21) }), now), 21);
+  const warn = dossierTasks({ items: [item({ receivedAt: days(21), informedAt: days(20) })], contacts: [call(days(2), 'answered')] }, now);
+  assert.ok(warn.some((x) => x.kind === 'age_warning'));
+  assert.ok(dossierTasks({ items: [item({ receivedAt: days(18), informedAt: days(17) })], contacts: [call(days(2), 'answered')] }, now).some((x) => x.kind === 'age_approaching'));
+});
+
+test('a postponement hides contact tasks but keeps their original deadline', () => {
+  const t = dossierTasks({ items: [item({ receivedAt: days(3) })], contacts: [], postponedUntil: days(-2) }, now);
+  const inform = t.find((x) => x.kind === 'inform_arrival')!;
+  assert.equal(inform.postponed, true);
+  assert.equal(inform.overdue, true, 'the deadline is still the original one');
+});
+
+test('a partially arrived group waits for the operator decision; no invitation is implied', () => {
+  const items = [item({ id: 'a', groupId: 'g' }), item({ id: 'b', groupId: 'g', state: 'pending', receivedAt: null, arrivalObservedAt: null })];
+  const undecided = dossierTasks({ items, contacts: [], groups: [{ id: 'g', decision: null }] }, now);
+  assert.ok(undecided.some((x) => x.kind === 'group_decision'));
+  assert.ok(!undecided.some((x) => x.kind === 'inform_arrival'));
+  const wait = dossierTasks({ items, contacts: [], groups: [{ id: 'g', decision: 'wait' }] }, now);
+  assert.ok(!wait.some((x) => x.kind === 'inform_arrival' || x.kind === 'group_decision'));
+  const partial = dossierTasks({ items, contacts: [], groups: [{ id: 'g', decision: 'partial' }] }, now);
+  assert.ok(partial.some((x) => x.kind === 'inform_arrival'));
+});
+
+test('a promised visit day that arrived without attendance is a task', () => {
+  const t = dossierTasks({ items: [item({ informedAt: days(3) })], contacts: [call(days(3), 'promised_visit', ['a'], days(0))] }, now);
+  assert.ok(t.some((x) => x.kind === 'promised_visit'));
+  assert.ok(!dossierTasks({ items: [item({ informedAt: days(3) })], contacts: [call(days(3), 'promised_visit', ['a'], days(0))], attendedAt: days(0) }, now).some((x) => x.kind === 'promised_visit'));
+});
+
+test('installed, released and officially cancelled parts need no follow-up', () => {
+  for (const state of ['installed', 'released'] as const) assert.deepEqual(dossierTasks({ items: [item({ state, receivedAt: days(40) })], contacts: [] }, now), []);
+  assert.deepEqual(dossierTasks({ items: [item({ officialCancelled: true, receivedAt: days(40) })], contacts: [] }, now), []);
+});
+
+test('input rules: promise date, release reason and «other» explanation', () => {
+  const id = '0190f0f0-0000-7000-8000-000000000001';
+  assert.equal(contactSchema.safeParse({ outcome: 'promised_visit', itemIds: [id], expectedVersion: 1 }).success, false);
+  assert.equal(itemActionSchema.safeParse({ action: 'release', expectedVersion: 1 }).success, false);
+  assert.equal(itemActionSchema.safeParse({ action: 'release', expectedVersion: 1, reason: 'مشتری انصراف داد' }).success, true);
+  assert.equal(nonConsumptionSchema.safeParse({ reason: 'other', expectedVersion: 1 }).success, false);
+});
+
+test('Tehran day boundary', () => {
+  assert.equal(tehranDay('2026-11-21T20:29:00Z'), '2026-11-21');
+  assert.equal(tehranDay('2026-11-21T20:31:00Z'), '2026-11-22');
+});
+
+test('special-aid roles: operator calls customers, supply expert exports, release stays with authorized staff', () => {
+  const op = permissionsFor(['special_aid_operator']);
+  assert.ok(op.has('special_aid.operate') && op.has('customer.pii.read'));
+  assert.ok(!op.has('special_aid.release') && !op.has('stock.release'));
+  const supply = permissionsFor(['special_aid_supply']);
+  assert.ok(supply.has('special_aid.supply') && !supply.has('special_aid.operate') && !supply.has('customer.pii.read'));
+  const both = permissionsFor(['special_aid_operator', 'parts_clerk']);
+  assert.ok(both.has('special_aid.operate') && both.has('part.manage'), 'one person may hold several roles');
+  assert.ok(permissionsFor(['system_admin']).has('special_aid.release'));
+  assert.ok(permissionsFor(['service_manager']).has('special_aid.report') && !permissionsFor(['service_manager']).has('special_aid.operate'));
+});
