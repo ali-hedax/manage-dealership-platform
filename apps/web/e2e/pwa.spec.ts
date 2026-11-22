@@ -18,20 +18,20 @@ test('public installation metadata and icons are valid without exposing account-
  expect(await page.evaluate(async()=>('serviceWorker' in navigator)?(await navigator.serviceWorker.getRegistrations()).length:0)).toBe(0);
 });
 
-test('phone installation guide uses an optional native prompt, is keyboard accessible and never submits login',async({page},info)=>{
+test('cross-device installation guide uses an optional native prompt, is keyboard accessible and never submits login',async({page},info)=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/login');
- await page.getByRole('button',{name:'نصب روی گوشی',exact:true}).click();
+ await page.getByRole('button',{name:'نصب برنامه',exact:true}).click();
  const guide=page.getByRole('dialog',{name:'نصب Manage روی دستگاه',exact:true});
  await expect(guide).toBeVisible();await expect(guide.getByText('نصب روی اندروید',{exact:true})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('install-android-guide.png'),fullPage:true});
- await page.keyboard.press('Escape');await expect(guide).not.toBeVisible();await expect(page.getByRole('button',{name:'نصب روی گوشی',exact:true})).toBeFocused();
+ await page.keyboard.press('Escape');await expect(guide).not.toBeVisible();await expect(page.getByRole('button',{name:'نصب برنامه',exact:true})).toBeFocused();
  // The browser owns real installation. This synthetic event tests our progressive enhancement contract.
  await page.evaluate(()=>{
   const event=new Event('beforeinstallprompt',{cancelable:true});
   Object.assign(event,{prompt:async()=>{document.documentElement.dataset.prompted='yes';},userChoice:Promise.resolve({outcome:'dismissed'})});window.dispatchEvent(event);
  });
- await page.getByRole('button',{name:'نصب روی گوشی',exact:true}).click();
+ await page.getByRole('button',{name:'نصب برنامه',exact:true}).click();
  await guide.getByRole('button',{name:'نصب برنامه',exact:true}).click();
  await expect(guide.getByRole('status')).toContainText('نصب انجام نشد');
  await expect(page.locator('html')).toHaveAttribute('data-prompted','yes');
@@ -46,14 +46,14 @@ test('phone installation guide uses an optional native prompt, is keyboard acces
  await page.evaluate(()=>window.dispatchEvent(new Event('appinstalled')));
  await expect(guide.getByRole('status')).toContainText('Manage نصب شد');
  await guide.getByRole('button',{name:'بستن راهنما',exact:true}).click();
- await expect(page.getByRole('button',{name:'نصب روی گوشی',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'نصب برنامه',exact:true})).toHaveCount(0);
 });
 
 test('iPhone installation has manual Safari instructions and the installed window hides the install action',async({browser,baseURL},info)=>{
  const context=await browser.newContext({baseURL,locale:'fa-IR',timezoneId:'Asia/Tehran',viewport:{width:390,height:844},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'});
  const page=await context.newPage();
  try{
-  await page.goto('/login');await page.getByRole('button',{name:'نصب روی گوشی',exact:true}).click();
+  await page.goto('/login');await page.getByRole('button',{name:'نصب برنامه',exact:true}).click();
   const guide=page.getByRole('dialog',{name:'نصب Manage روی دستگاه',exact:true});
   await expect(guide.getByText('نصب روی آیفون و آیپد',{exact:true})).toBeVisible();
   await expect(guide).toContainText('Add to Home Screen');
@@ -61,7 +61,7 @@ test('iPhone installation has manual Safari instructions and the installed windo
   await page.screenshot({path:info.outputPath('install-iphone-guide.png'),fullPage:true});
   await context.addInitScript(()=>{Object.defineProperty(navigator,'standalone',{value:true,configurable:true});});
   await page.reload();await expect(page.getByRole('heading',{name:'ورود کارکنان',exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'نصب روی گوشی',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'نصب برنامه',exact:true})).toHaveCount(0);
  }finally{await context.close();}
 });
 
