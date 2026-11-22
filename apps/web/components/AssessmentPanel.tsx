@@ -305,7 +305,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
                 شروع کارشناسی
               </button>
             )}
-            {!current && (kase.coverageType==='insurance'||kase.coverageType==='personal') && (
+            {!current && kase.coverageType!=='golden_card' && (
               <button className="btn btn-sm btn-primary" onClick={() => start({
                 kind: 'new', assessmentKind: 'initial',smartManual:true,
               })}>
