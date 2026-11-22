@@ -149,8 +149,8 @@ it('persists independent parts-clerk decisions and audit, requires reason, block
   })).status).toBe(201);
 });
 
-it('allows smart manual assessments only for insurance and personal cases, never Golden Card', async () => {
-  for (const coverageType of ['insurance', 'personal', 'golden_card'] as const) {
+it('allows every non-Golden Card coverage, including mixed and unknown, but rejects Golden Card', async () => {
+  for (const coverageType of ['insurance', 'personal', 'mixed', 'unknown', 'golden_card'] as const) {
     const created = await admin.post('/cases', {
       admittedAt: new Date(Date.now() - 86_400_000).toISOString(),
       vehicle: { model: 'سورن' },
