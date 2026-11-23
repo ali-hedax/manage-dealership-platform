@@ -20,7 +20,7 @@ export const PULSE_STATE_LABELS: Record<PulseState, string> = {
 /** States in which the worker makes no login attempt until the system administrator acts. */
 export const PULSE_ATTENTION_STATES: readonly PulseState[] = ['captcha', 'login_failed', 'password_change'];
 
-export const PULSE_RUN_KINDS = ['today', 'open', 'lines', 'backfill', 'test', 'login', 'codes'] as const;
+export const PULSE_RUN_KINDS = ['today', 'open', 'lines', 'backfill', 'test', 'login', 'codes', 'stock'] as const;
 export type PulseRunKind = (typeof PULSE_RUN_KINDS)[number];
 export const PULSE_RUN_KIND_LABELS: Record<PulseRunKind, string> = {
   today: 'پذیرش‌های امروز',
@@ -30,16 +30,18 @@ export const PULSE_RUN_KIND_LABELS: Record<PulseRunKind, string> = {
   test: 'آزمایش اتصال',
   login: 'ورود به کسب‌وکار',
   codes: 'متن وضعیت‌ها',
+  stock: 'گزارش موجودی انبار',
 };
 export type PulseRunOutcome = 'running' | 'ok' | 'error';
 
-export const PULSE_COMMAND_KINDS = ['test', 'sync_now', 'backfill', 'captcha_answer'] as const;
+export const PULSE_COMMAND_KINDS = ['test', 'sync_now', 'backfill', 'captcha_answer', 'stock_now'] as const;
 export type PulseCommandKind = (typeof PULSE_COMMAND_KINDS)[number];
 export const PULSE_COMMAND_LABELS: Record<PulseCommandKind, string> = {
   test: 'آزمایش اتصال',
   sync_now: 'همین الان بخوان',
   backfill: 'بارگذاری اولیه',
   captcha_answer: 'ورود با کد امنیتی',
+  stock_now: 'خواندن موجودی انبار',
 };
 export type PulseCommandStatus = 'pending' | 'running' | 'done' | 'failed';
 
@@ -75,6 +77,12 @@ export interface PulseSettings {
   hoursTo: string;
   /** Days back that count as «open admissions» (re-read every 15 minutes). */
   openWindowDays: number;
+  /** Read the stock report (موجودی انبار) once a working day and stage it for confirmation (default on). */
+  stockAuto?: boolean;
+  /** Earliest Tehran time of the daily stock read (default 10:00). */
+  stockAfter?: string;
+  /** ISACO warehouse code (DssdSsd); empty = the parts warehouse («انبار قطعات…»). */
+  stockWarehouse?: string | null;
 }
 export const DEFAULT_PULSE_SETTINGS: PulseSettings = { intervalMinutes: 3, hoursMode: 'calendar', hoursFrom: '07:00', hoursTo: '19:00', openWindowDays: 60 };
 
@@ -85,6 +93,10 @@ export interface PulseCursor {
   codesAt?: string;
   /** Official text of each admission status code (domain CAR_STATE_REC of Sec/Code). */
   statusTexts?: Record<string, string>;
+  /** Tehran day of the last staged stock report, and which warehouse it was. */
+  stockDay?: string;
+  stockTriedAt?: string;
+  stockWarehouse?: { value: string; text: string };
   /** Column names (never values) of the first non-empty answer of each list. */
   structures?: Partial<Record<'cards' | 'parts' | 'repairs' | 'defects', string[]>>;
 }
@@ -97,6 +109,9 @@ export const pulseSettingsSchema = z.object({
   hoursFrom: hhmm,
   hoursTo: hhmm,
   openWindowDays: z.number().int().min(1).max(180),
+  stockAuto: z.boolean().optional(),
+  stockAfter: hhmm.optional(),
+  stockWarehouse: z.string().trim().max(20).nullable().optional(),
 }).strict().refine((v) => v.hoursFrom < v.hoursTo, { message: 'ساعت پایان باید بعد از ساعت شروع باشد', path: ['hoursTo'] });
 export type PulseSettingsInput = z.infer<typeof pulseSettingsSchema>;
 
@@ -114,6 +129,7 @@ export const pulseToggleSchema = z.object({ expectedVersion: z.number().int().mi
 export const pulseCommandSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('test') }).strict(),
   z.object({ kind: z.literal('sync_now') }).strict(),
+  z.object({ kind: z.literal('stock_now') }).strict(),
   z.object({ kind: z.literal('backfill'), from: z.string().trim().min(8).max(10) }).strict(),
 ]);
 export type PulseCommandInput = z.infer<typeof pulseCommandSchema>;

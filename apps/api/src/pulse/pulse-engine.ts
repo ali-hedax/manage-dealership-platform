@@ -15,6 +15,7 @@ import { CARD } from './kasb-protocol';
 import type { KasbTable } from './kasb-table';
 import { dayChunks, diffLines, isClosed, jalaliDay, mapCard, mapDefect, mapPart, mapRepair, statusTexts, tehranDateKey, tehranMidnight, withinWorkingHours, type DefectValues, type LineBase, type PartValues, type ReceptionValues, type RepairValues } from './pulse-map';
 import { findCaseLink } from './pulse-link';
+import { stageAutomaticReport } from '../daily-reports/auto-stage';
 import { decryptSecret } from './pulse-secret';
 
 // The Manage Pulse worker logic (spec section 26). Runs only in the separate `pulse` process,
@@ -146,7 +147,51 @@ export class PulseEngine {
     if (due(cursor.todayAt, s.intervalMinutes)) ok = (await this.cardsCycle(conn, 'today', [{ from: now, to: now }], fresh)) && ok;
     if (ok && due(cursor.openAt, 15)) ok = (await this.cardsCycle(conn, 'open', dayChunks(new Date(now.getTime() - s.openWindowDays * 86_400_000), now, 7), fresh)) && ok;
     if (ok) ok = (await this.linesCycle(conn, [...fresh])) && ok;
+    if (ok && s.stockAuto !== false && (force || this.stockDue(conn, s))) ok = (await this.stockCycle(conn)) && ok;
     return ok;
+  }
+
+  // ------------------------------------------------------------ stock report
+
+  /** Once a Tehran day, after `stockAfter` (default 10:00). */
+  private stockDue(conn: Connection, s: PulseSettings): boolean {
+    const now = this.now();
+    const cursor = conn.cursor ?? {};
+    if (cursor.stockDay === tehranDateKey(now)) return false;
+    // A failed read is tried again after an hour, not on every tick.
+    if (cursor.stockTriedAt && now.getTime() - Date.parse(cursor.stockTriedAt) < 3_600_000) return false;
+    const hhmm = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+    return hhmm >= (s.stockAfter ?? '10:00');
+  }
+
+  /**
+   * Reads «گزارش موجودی انبار» (the same file staff download by hand) and stages it in the daily
+   * report pipeline; a person still confirms the preview. Owner, 2026-11-23.
+   */
+  private async stockCycle(conn: Connection): Promise<boolean> {
+    this.relogins = 0;
+    const run = await this.startRun(conn, 'stock');
+    await this.patch(conn, { cursor: { ...(conn.cursor ?? {}), stockTriedAt: this.now().toISOString() } });
+    const stats: Stats = { read: 0, created: 0, changed: 0 };
+    try {
+      if (!conn.updatedBy) throw new PulseStop('PULSE_NOT_CONFIGURED');
+      const s = settingsOf(conn);
+      const list = await this.withSession(conn, (c) => c.warehouses());
+      const wh = (s.stockWarehouse && list.find((w) => w.value === s.stockWarehouse)) || list.find((w) => w.text.includes('قطعات')) || list[0];
+      if (!wh) throw new KasbError('KASB_REJECTED');
+      const year = Number(jalaliDay(this.now()).slice(0, 4));
+      const file = await this.withSession(conn, (c) => c.stockFile(wh.value, year));
+      stats.read = 1;
+      const staged = await stageAutomaticReport(this.db, { tenantId: conn.tenantId, isTest: conn.isTest, kind: 'stock', fileName: `pulse-stock-${jalaliDay(this.now()).replace(/\//g, '-')}.xls`, body: file, uploadedBy: conn.updatedBy });
+      if (staged.outcome === 'bad_format') throw new KasbError('KASB_PROTOCOL');
+      if (staged.outcome === 'staged') stats.created = 1;
+      await this.patch(conn, { cursor: { ...(conn.cursor ?? {}), stockDay: tehranDateKey(this.now()), stockWarehouse: wh } });
+      await this.finishRun(run, 'ok', stats, null, { warehouse: wh.text.slice(0, 60), outcome: staged.outcome, bytes: file.length });
+      return true;
+    } catch (e) {
+      await this.fail(conn, run, e, stats, { step: 'stock' });
+      return false;
+    }
   }
 
   private async startRun(conn: Connection, kind: PulseRunKind): Promise<string> {
@@ -489,6 +534,10 @@ export class PulseEngine {
         return finish(ok, ok ? 'OK' : (await this.reload(conn.id)).lastErrorCode ?? 'PULSE_INTERNAL');
       }
       if (cmd.kind === 'backfill') return this.backfillStep(conn, cmd);
+      if (cmd.kind === 'stock_now') {
+        const ok = await this.stockCycle(conn);
+        return finish(ok, ok ? 'OK' : (await this.reload(conn.id)).lastErrorCode ?? 'PULSE_INTERNAL');
+      }
       return finish(false, 'PULSE_UNKNOWN_COMMAND');
     } catch (e) {
       this.logger.warn(`dealership ${conn.tenantId}: command ${cmd.kind} ${safe(e)}`);

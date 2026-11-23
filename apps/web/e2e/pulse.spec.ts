@@ -26,9 +26,19 @@ test('reception lists, folder, outside work and Manage Pulse settings use the ex
 
   // Existing pages first, for the side-by-side comparison.
   await page.goto('/settings');
-  await expect(page.getByRole('link', { name: /منیج پالس · اتصال کسب‌وکار/ })).toBeVisible();
+  // Owner, 2026-11-23: four areas; every کسب‌وکار data source lives in «Manage Nexus».
+  await expect(page.locator('.settings-card')).toHaveCount(4);
+  await expect(page.getByRole('link', { name: /Manage Nexus/ })).toBeVisible();
   const reference = await tokens(page);
   await shot(page, 'existing-settings-desktop');
+  await page.getByRole('link', { name: /Manage Nexus/ }).click();
+  await expect(page).toHaveURL(/\/settings\/nexus$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Manage Nexus' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Manage Pulse/ })).toBeVisible();
+  for (const name of ['پذیرش‌ها و قطعه‌های هر کارت', 'موجودی انبار']) await expect(page.locator('.nexus-row strong', { hasText: name })).toBeVisible();
+  await page.locator('.nexus-row').filter({ hasText: 'موجودی انبار' }).getByText('راهنمای گرفتن این گزارش از کسب‌وکار').click();
+  await expect(page.getByText(/جست‌وجوی بالای صفحه/)).toBeVisible();
+  await shot(page, 'nexus-desktop');
   await page.goto('/daily-reports');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await shot(page, 'existing-daily-reports-desktop');
@@ -95,7 +105,7 @@ test('reception lists, folder, outside work and Manage Pulse settings use the ex
 
   // Phone width: no sideways scrolling anywhere.
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const [name, path] of [['reception-today', '/reception'], ['reception-open', '/reception/open'], ['reception-released', '/reception/released'], ['reception-folder', folder], ['pulse-settings', '/settings/pulse'], ['existing-settings', '/settings']] as const) {
+  for (const [name, path] of [['reception-today', '/reception'], ['reception-open', '/reception/open'], ['reception-released', '/reception/released'], ['reception-folder', folder], ['pulse-settings', '/settings/pulse'], ['existing-settings', '/settings'], ['nexus', '/settings/nexus'], ['special-aid-vehicles', '/special-aid/vehicles'], ['special-aid-reports', '/special-aid/reports']] as const) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(await noSideScroll(page), `${path} at 390 px`).toBe(true);

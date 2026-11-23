@@ -1,4 +1,5 @@
 import type { CaseStage, CoverageType, TaskStatus } from './enums';
+import { toLatinDigits } from './text';
 
 // Desks as folders on a table (spec §2, §12; mockups ExpertDesk / CaseFolder):
 // every car is one folder card — big plate, «پرونده … · پذیرش …», short name,
@@ -225,7 +226,32 @@ export function greeting(name: string, now = Date.now()): string {
  * gearbox or trim words, or the brand when there is no model. Never the trim.
  */
 export function shortVehicleName(brand: string | null | undefined, model: string | null | undefined): string {
-  const m = (model ?? '').trim();
-  const head = m.split(/\s+(?:با\s+)?(?:موتور|گیربکس|دنده|اتوماتیک|توربو|تیپ|مدل)(?=\s|$|[a-z0-9])/iu)[0]?.trim() ?? '';
-  return head || (brand ?? '').trim() || 'خودرو';
+  return vehicleHeadName(model) || (brand ?? '').trim() || 'خودرو';
+}
+
+// Words after which an ISACO model description is engine, gearbox, trim or equipment.
+const VEHICLE_STOP_WORDS = new Set(['با', 'و', 'موتور', 'گیربکس', 'دنده', 'اتوماتیک', 'دستی', 'توربو', 'تیپ', 'مدل', 'بنزینی', 'دوگانه', 'دوگانه‌سوز', 'گازسوز', 'سقف', 'فرمان', 'سطح', 'شامل', 'دارای', 'مجهز', 'رینگ', 'ترمز', 'ایربگ', 'یورو', 'سیستم', 'خودروی']);
+
+/**
+ * Head of an ISACO model description, at most three words: «دنا پلاس موتورEF7TCگیربکس…» → «دنا پلاس»,
+ * «6102201 ، رانا ، سقف فلزی…» → «رانا», «پژو 207i HB موتور TU5…» → «پژو 207i». Empty when nothing is left.
+ */
+export function vehicleHeadName(model: string | null | undefined): string {
+  const text = (model ?? '')
+    .replace(/([A-Za-z0-9]+)/g, ' $1 ')
+    .replace(/[،,؛;:()\[\]/\\|+&«»"'.\-–]+/g, ' ')
+    .trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  while (words.length && (/^\d{4,}$/.test(toLatinDigits(words[0]!)) || /^خودرو(ی)?$/.test(words[0]!))) words.shift();
+  const out: string[] = [];
+  for (const w of words) {
+    const latin = toLatinDigits(w);
+    if (VEHICLE_STOP_WORDS.has(w)) break;
+    if (/^\d{5,}$/.test(latin)) break; // product codes such as 3220901
+    if (/^[A-Za-z]+$/.test(latin) && out.length) break; // trim or engine codes: HB, BE, EMS
+    if (/[A-Za-z]/.test(latin) && /\d/.test(latin) && !/^\d{3,4}[A-Za-z]?$/.test(latin) && !/^[A-Za-z]\d{1,2}$/.test(latin)) break; // TU5P, EF7TC, XU7P (207i and S7 stay)
+    out.push(w);
+    if (out.length === 3) break;
+  }
+  return out.join(' ');
 }

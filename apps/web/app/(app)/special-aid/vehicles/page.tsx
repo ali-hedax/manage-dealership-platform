@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { toPersianDigits, type DossierSearchInput, type Paged, type SpecialAidCard, type SpecialAidDossierRow, type SpecialAidReviewRow } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
@@ -14,9 +15,14 @@ const VIEWS: { key: DossierSearchInput['view']; label: string }[] = [
 ];
 
 /** «پرونده خودروها»: one folder per VIN; search by VIN, plate, customer, special-aid or admission number, or code. */
-export default function SpecialAidVehicles() {
+export default function SpecialAidVehiclesPage() {
+  return <Suspense fallback={null}><SpecialAidVehicles /></Suspense>;
+}
+
+function SpecialAidVehicles() {
   const { can } = useAuth();
-  const [view, setView] = useState<DossierSearchInput['view']>('all');
+  const initial = useSearchParams().get('view');
+  const [view, setView] = useState<DossierSearchInput['view']>(VIEWS.some((x) => x.key === initial) ? (initial as DossierSearchInput['view']) : 'all');
   const [extra, setExtra] = useState<'cards' | 'vin' | null>(null);
   const [term, setTerm] = useState(''), [q, setQ] = useState(''), [page, setPage] = useState(1);
   const body = { view, page, pageSize: 24, ...(q ? { q } : {}) };

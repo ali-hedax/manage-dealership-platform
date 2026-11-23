@@ -260,6 +260,42 @@ export class KasbClient {
     return parseTable(await this.read(path, { Rcd: rcd }));
   }
 
+  /** Warehouses of the dealership («انبار قطعات ولوازم یدکی», «انبار روغن», …). */
+  async warehouses(): Promise<{ value: string; text: string }[]> {
+    if (!this.hasSession()) throw new KasbError('KASB_AUTH');
+    if (!this.keys) await this.loadKeys();
+    const headers: Record<string, string> = { sec: 'site', Origin: this.origin, 'Content-Type': 'application/json;charset=UTF-8', Authorization: this.authValue() };
+    // The site sends this one with an empty body (not sealed).
+    const res = await this.request('POST', `/api/${KASB_PATHS.warehouses}`, { headers, body: '' });
+    if (res.status === 401 || res.status === 403) throw new KasbError('KASB_AUTH', res.status);
+    if (!res.ok) throw new KasbError(res.status >= 500 ? 'KASB_UNREACHABLE' : 'KASB_PROTOCOL', res.status);
+    const answer = openAnswer<unknown>(await res.json(), this.keys!.clientPrivate);
+    if (!answer.Success || !Array.isArray(answer.Data)) throw new KasbError('KASB_REJECTED');
+    return (answer.Data as { value?: unknown; text?: unknown }[])
+      .filter((w) => w.value != null)
+      .map((w) => ({ value: String(w.value), text: String(w.text ?? '') }));
+  }
+
+  /** The stock report file of one warehouse and Jalali year, as downloaded by hand (HTML table). */
+  async stockFile(warehouse: string, jalaliYear: number): Promise<Buffer> {
+    if (!this.hasSession()) throw new KasbError('KASB_AUTH');
+    if (!this.keys) await this.loadKeys();
+    const headers: Record<string, string> = { sec: 'site', Origin: this.origin, 'Content-Type': 'application/json;charset=UTF-8', Authorization: this.authValue() };
+    const body = JSON.stringify(sealRequest({ CurYear: String(jalaliYear), DssdSsd: warehouse, WgdmGdm: '', TypeGhete: '' }, this.keys!.serverPublic));
+    const res = await this.request('POST', `/api/${KASB_PATHS.stock}`, { headers, body });
+    if (res.status === 401 || res.status === 403) throw new KasbError('KASB_AUTH', res.status);
+    if (!res.ok) throw new KasbError(res.status >= 500 ? 'KASB_UNREACHABLE' : 'KASB_PROTOCOL', res.status);
+    const file = Buffer.from(await res.arrayBuffer());
+    // An error comes back as encrypted JSON instead of the file.
+    if (/application\/json/i.test(res.headers.get('content-type') ?? '') || file.subarray(0, 64).toString('utf8').trimStart().startsWith('{')) throw new KasbError('KASB_REJECTED');
+    if (!file.length) throw new KasbError('KASB_PROTOCOL');
+    return file;
+  }
+
+  private authValue(): string {
+    return this.scheme === 'bearer' ? `Bearer ${this.token!.value}` : this.token!.value;
+  }
+
   /** Reference codes (status texts). */
   async codes(): Promise<KasbTable> {
     return parseTable(await this.read(KASB_PATHS.codes, undefined, 'GET'));

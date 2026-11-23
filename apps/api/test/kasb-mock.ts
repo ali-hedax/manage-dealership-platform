@@ -78,6 +78,9 @@ export class KasbMock {
   /** Delay of every answer (timeouts and concurrency tests). */
   delayMs = 0;
   cards: MockCard[] = [];
+  /** Synthetic stock report: the same HTML-table-as-.xls file staff download (leading whitespace included). */
+  stockHtml = `\n    <html><head><meta charset="UTF-8"></head><body><table><tr><th>کد کالا</th><th>شرح کالا</th><th>واحد شمارش</th><th>مدل خودرو</th><th>موجودي</th><th>قيمت ميانگين</th><th>قيمت فروش</th><th>آدرس</th><th>شرح لوکيشن</th><th>وضعيت مبنا</th></tr><tr><td>1720104599</td><td>قطعهٔ ساختگی</td><td>عدد</td><td>ساختگی</td><td>3</td><td>1000</td><td>1200</td><td>A1</td><td>قفسه</td><td>فعال</td></tr></table></body></html>`;
+  stockRequests: Record<string, unknown>[] = [];
   statusRows: unknown[][] = [['CAR_STATE_REC', 3, 'در حال تعمير'], ['CAR_STATE_REC', 9, 'ترخيص شده']];
   /** method and path of every request, in order (bodies are never kept). */
   readonly log: { method: string; path: string; at: number }[] = [];
@@ -126,7 +129,7 @@ export class KasbMock {
   }
   private bundle() {
     return `!function(){var e={NODE_ENV:"production",PUBLIC_URL:"",REACT_APP_PUBLIC_KEY:${JSON.stringify(this.serverKeys.publicKey)},REACT_APP_PRIVATE_KEY:${JSON.stringify(this.clientKeys.privateKey)}};` +
-      `var p=["Sec/GetCapcha","Sec/Login/v2","Sec/Code","Srv/rcpt/RepairCard/Drcds/q","Srv/rcpt/RepairCard/Drefs/q","Srv/rcpt/RepairCard/Drers/q","Srv/rcpt/RepairCard/Dreps/q","Srv/RepairCase/RepairCase"]}();`;
+      `var p=["Sec/GetCapcha","Sec/Login/v2","Sec/Code","Srv/rcpt/RepairCard/Drcds/q","Srv/rcpt/RepairCard/Drefs/q","Srv/rcpt/RepairCard/Drers/q","Srv/rcpt/RepairCard/Dreps/q","Srv/RepairCase/RepairCase","War/General/ScusStks","War/Reports/StkStock"]}();`;
   }
   private table(rows: Row[]) {
     // Columns in an order unlike the rows' own, to prove mapping by name.
@@ -159,6 +162,12 @@ export class KasbMock {
         return this.answer(res, { Success: true, Data: { Structure: ['RvDomain', 'RvLowValue', 'RvMeaning'], Rows: this.statusRows } });
       }
       if (method !== 'POST' || req.headers.sec !== 'site') return this.send(res, 400, 'bad request');
+      // The warehouse list is sent with an empty, unencrypted body (as on the real site).
+      if (api === 'War/General/ScusStks') {
+        if (!this.authorized(req)) return this.send(res, 401, '');
+        if (raw) return this.send(res, 400, 'expected empty body');
+        return this.answer(res, { Success: true, Data: [{ value: 14562, text: 'انبار ضایعات' }, { value: 14553, text: 'انبار قطعات ولوازم یدکی' }] });
+      }
       let payload: Record<string, unknown>;
       try {
         payload = openRequest<Record<string, unknown>>(JSON.parse(raw), this.serverPrivate);
@@ -177,6 +186,11 @@ export class KasbMock {
         return this.answer(res, { Success: true, Data: { Token: token, TokenAge: this.tokenAge, status: 2, Scus: this.dealerCode, FullName: 'کاربر ساختگی' } });
       }
       if (!this.authorized(req)) return this.send(res, 401, '');
+      if (api === 'War/Reports/StkStock') {
+        this.stockRequests.push(payload);
+        res.writeHead(200, { 'content-type': 'application/vnd.ms-excel', 'content-disposition': 'attachment;filename=IsacoDownload.xls' });
+        return res.end(this.stockHtml);
+      }
       if (api === 'Srv/rcpt/RepairCard/Drcds/q') {
         const from = String(payload.VarRcptDateFr), to = String(payload.VarRcptDateTo);
         const rows = payload.VarCus === this.dealerCode ? this.cards.map((c) => c.row).filter((r) => String(r.DrcdRcptDate) >= from && String(r.DrcdRcptDate) <= to) : [];

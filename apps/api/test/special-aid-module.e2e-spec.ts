@@ -218,6 +218,15 @@ it('management summary keeps non-consumption reasons apart and is read only', as
   expect(s.body.reasons.wrong_part_number).toBe(1);
   expect(s.body.released).toBe(1);
   expect(s.body.total).toBeGreaterThanOrEqual(4);
+  // Funnel (owner, 2026-11-23): parts add up, vehicles never exceed the registered count.
+  const f = s.body.funnel;
+  expect(f.parts.requested).toBe(s.body.total);
+  expect(f.parts.pending + f.parts.arrived).toBe(f.parts.requested);
+  expect(f.parts.releasedToOthers).toBe(1);
+  for (const k of ['arrived', 'informed', 'invited', 'attended', 'installed']) expect(f.customers[k]).toBeLessThanOrEqual(f.customers.registered);
+  const future = (await manager.get('/special-aid/summary?from=2099-01-01')).body.funnel;
+  expect(future.parts.requested).toBe(0);
+  expect((await manager.get('/special-aid/summary?from=bad')).status).toBe(400);
   expect((await operator.get('/special-aid/summary')).status).toBe(403);
   const d = await dossierOf(manager);
   expect((await manager.post(`/special-aid/dossiers/${d.id}/attended`, { expectedVersion: 1 })).status).toBe(403);

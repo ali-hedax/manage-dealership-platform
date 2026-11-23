@@ -15,6 +15,14 @@ export const KASB_PATHS = {
   repairs: 'Srv/rcpt/RepairCard/Drers/q',
   parts: 'Srv/rcpt/RepairCard/Dreps/q',
   repairCase: 'Srv/RepairCase/RepairCase',
+  /** Warehouses of the dealership: POST with an EMPTY, unencrypted body; encrypted answer [{value, text}]. */
+  warehouses: 'War/General/ScusStks',
+  /**
+   * Stock report «گزارش موجودی انبار» (owner's second recording, 1405/09/02): encrypted request
+   * {CurYear, DssdSsd, WgdmGdm: '', TypeGhete: ''}; the answer is the FILE itself
+   * (application/vnd.ms-excel, an HTML table — byte for byte what staff download by hand).
+   */
+  stock: 'War/Reports/StkStock',
 } as const;
 export type KasbPath = (typeof KASB_PATHS)[keyof typeof KASB_PATHS];
 
@@ -31,6 +39,8 @@ export const KASB_ALLOWED_API: ReadonlyMap<string, 'GET' | 'POST'> = new Map<str
   [KASB_PATHS.repairs, 'POST'],
   [KASB_PATHS.parts, 'POST'],
   [KASB_PATHS.repairCase, 'POST'],
+  [KASB_PATHS.warehouses, 'POST'],
+  [KASB_PATHS.stock, 'POST'],
 ]);
 /** Static files of the site, read with GET only (keys and client version). */
 export const KASB_ALLOWED_STATIC: readonly RegExp[] = [/^\/home$/, /^\/version\.txt$/, /^\/static\/js\/main\.[A-Za-z0-9]+\.chunk\.js$/];

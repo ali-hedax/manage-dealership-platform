@@ -9,15 +9,12 @@ interface Item { href: string; title: string; detail: string; icon: IconName; sh
 /** Settings hub: every settings area the account may open, in one place (no dead links). */
 export default function SettingsPage() {
   const { me, can } = useAuth();
+  // Owner, 2026-11-23: four clear areas instead of eight overlapping cards.
   const items: Item[] = [
-    { href: '/users', title: 'کارکنان و دعوت', detail: 'ساخت حساب، پین، غیرفعال‌سازی و بایگانی کارکنان', icon: 'team', show: can('user.manage') || !!me.isOwner },
-    { href: '/users#access-control', title: 'دسترسی‌ها', detail: 'مجوز پایهٔ هر نقش و استثنای هر نفر', icon: 'shield', show: !!me.isOwner },
-    { href: '/users#owner-admin', title: 'اجازه‌های مدیر سیستم', detail: 'دادن یا گرفتن اجازهٔ دعوت و گزارش کارهای پشتیبانی', icon: 'lock', show: !!me.isOwner },
-    { href: '/workshop/settings', title: 'تقویم، جایگاه‌ها و سقف هشدارها', detail: 'ساعت کاری، کد جایگاه‌ها، سقف هزینه، قطعهٔ گران و روزهای امداد دیرشده', icon: 'calendar', show: can('workshop.read') || can('calendar.manage') || can('settings.manage') },
-    { href: '/settings/reports', title: 'مرکز گزارش‌های کسب‌وکار', detail: 'سه گزارش ایساکو: راهنما، بازه، آخرین ورود و روزهای بدون گزارش', icon: 'layers', show: can('report_center.manage') || can('daily_reports.upload') || can('reference.customers.manage') },
-    { href: '/settings/pulse', title: 'منیج پالس · اتصال کسب‌وکار', detail: 'ورود خودکار به کسب‌وکار، خواندن پذیرش‌ها و قطعات، وضعیت و اجراهای اخیر', icon: 'layers', show: can('integration.manage') },
-    { href: '/daily-reports', title: 'گزارش‌های روزانه', detail: 'بارگذاری موجودی کسب‌وکار و امداد ویژه، ساعت یادآوری', icon: 'upload', show: can('daily_reports.upload') || can('daily_reports.apply') || can('daily_reports.settings') },
-    { href: '/reference-data', title: 'اطلاعات پایه', detail: 'کاتالوگ قطعات و سوابق پذیرش', icon: 'database', show: can('reference.parts.read') || can('reference.customers.read') },
+    { href: '/users', title: 'کارکنان و دسترسی‌ها', detail: 'حساب‌ها و دعوت، پین، دسترسی هر نقش و استثنای هر نفر، اجازه‌های مدیر سیستم', icon: 'team', show: can('user.manage') || !!me.isOwner },
+    { href: '/workshop/settings', title: 'کارگاه', detail: 'تقویم و ساعت کاری، کد جایگاه‌ها، سقف هزینه و هشدارها', icon: 'calendar', show: can('workshop.read') || can('calendar.manage') || can('settings.manage') },
+    { href: '/settings/nexus', title: 'Manage Nexus', detail: 'مرکز دادهٔ کسب‌وکار: اتصال خودکار Manage Pulse، همهٔ گزارش‌ها، آخرین ورود و راهنمای گرفتن هر گزارش', icon: 'layers', show: can('integration.manage') || can('report_center.manage') || can('daily_reports.upload') || can('daily_reports.apply') || can('reference.customers.manage') },
+    { href: '/reference-data', title: 'اطلاعات پایه', detail: 'کاتالوگ قطعات', icon: 'database', show: can('reference.parts.read') || can('reference.customers.read') },
   ];
   const visible = items.filter((i) => i.show);
   return (

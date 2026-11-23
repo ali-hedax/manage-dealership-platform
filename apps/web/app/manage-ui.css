@@ -601,7 +601,13 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .folder-clip { position: absolute; inset-block-start: -14px; inset-inline-end: 22px; filter: drop-shadow(0 2px 2px rgba(21, 24, 29, .25)); }
 .folder-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block-end: 12px; border-block-end: 1px solid #EEEAE2; }
 .folder-who { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
-.folder-car { font-size: 22px; font-weight: 800; color: #15181D; }
+.folder-car { font-size: 22px; font-weight: 800; color: #15181D; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+/* The plate keeps its own size beside long names (it was squeezed to a sliver in folder cards). */
+.folder-top > .plate, .folder-top > .plate-free { flex: none; }
+.plate { flex-shrink: 0; white-space: nowrap; }
+.vehicle-spec { margin-block: 4px 8px; font-size: 13px; color: #5B6068; }
+.vehicle-spec > summary { cursor: pointer; color: #12645D; font-weight: 600; inline-size: fit-content; }
+.vehicle-spec > p { margin: 6px 0 0; line-height: 1.9; }
 .folder-cust { font-size: 14px; color: #3A4049; overflow-wrap: anywhere; }
 .folder-own { align-self: flex-start; margin-block-start: 4px; font-size: 11.5px; font-weight: 700; color: #12645D; background: #E2F0EE; border-radius: 999px; padding: 2px 9px; }
 .folder-mine::after { border-color: #B9D8D3; }
@@ -1012,3 +1018,37 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .pulse-captcha { border-color: #EEDDBF; }
 .pulse-captcha-img { block-size: 52px; inline-size: auto; border-radius: 8px; border: 1px solid var(--m-line); background: #fff; }
 .pulse-details { max-inline-size: 420px; max-block-size: 220px; overflow: auto; margin: 4px 0 0; padding: 8px; border-radius: 8px; background: var(--m-paper-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Special-aid funnel (owner, 2026-11-23). */
+.funnel-range { gap: 6px; align-items: center; flex-wrap: wrap; }
+.funnel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 18px; }
+.funnel .panel-body { display: flex; flex-direction: column; gap: 6px; }
+.funnel-stage { display: grid; grid-template-columns: minmax(150px, 1.1fr) 2fr auto; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; color: inherit; text-decoration: none; }
+a.funnel-stage:hover { background: #F4F2EC; }
+.funnel-label { font-size: 13.5px; color: #2A2E35; }
+.funnel-bar { block-size: 10px; border-radius: 99px; background: #EEEAE2; overflow: hidden; }
+.funnel-bar > i { display: block; block-size: 100%; border-radius: inherit; background: #12645D; }
+.funnel-stage.tone-warn .funnel-bar > i { background: #C98A1B; }
+.funnel-stage.tone-ok .funnel-bar > i { background: #1F8A5B; }
+.funnel-num { display: flex; align-items: baseline; gap: 6px; min-inline-size: 84px; justify-content: flex-end; }
+.funnel-num b { font-size: 16px; }
+.funnel-num small { font-size: 12px; color: #6B7079; }
+.funnel-gaps { margin-block-start: 8px; padding: 10px 12px; border-radius: 10px; background: #FBF3E4; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.funnel-gaps a { color: #7A4B00; text-decoration: none; }
+.funnel-gaps b { font-size: 14px; }
+@media (max-width: 560px) { .funnel-stage { grid-template-columns: 1fr auto; } .funnel-bar { grid-column: 1 / -1; grid-row: 2; } }
+
+/* Manage Nexus (owner, 2026-11-23). */
+.nexus-head { display: flex; align-items: center; gap: 14px; }
+.nexus-head h1 { margin: 0; font-size: 24px; letter-spacing: .2px; }
+.nexus-head p { margin: 2px 0 0; color: #5B6068; font-size: 13.5px; }
+.nexus-mark { inline-size: 46px; block-size: 46px; border-radius: 14px; display: grid; place-items: center; background: #182326; color: #9FE1CB; font-size: 22px; flex: none; }
+.nexus-pulse { border-inline-start: 3px solid #12645D; border-radius: 0 12px 12px 0; }
+.nexus-list { display: flex; flex-direction: column; gap: 10px; }
+.nexus-row { padding: 12px 14px; border: 1px solid #EEEAE2; border-radius: 12px; background: #FDFCF9; display: flex; flex-direction: column; gap: 4px; }
+.nexus-row-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nexus-row-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nexus-row-name strong { font-size: 15px; }
+.nexus-row p { margin: 0; }
+.nexus-guide > summary { cursor: pointer; color: #12645D; font-size: 13px; font-weight: 600; inline-size: fit-content; }
+.nexus-guide > p { margin: 6px 0 0; line-height: 1.9; }

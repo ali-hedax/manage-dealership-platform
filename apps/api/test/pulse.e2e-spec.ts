@@ -3,7 +3,8 @@ import type { PulseStatus, ReceptionDetail, ReceptionList } from '@manage/shared
 import { AuditService } from '../src/audit/audit.service';
 import { newId } from '../src/common/ids';
 import { APP_CONFIG, type AppConfig } from '../src/config';
-import { auditEvents, cases, notifications, pulseConnections, receptionEvents, receptionParts, receptions, tenants, users, vehicles, workCalendars } from '../src/db/schema';
+import { auditEvents, cases, dailyReportImports, notifications, pulseConnections, receptionEvents, receptionParts, receptions, tenants, users, vehicles, workCalendars } from '../src/db/schema';
+import { DailyReportsService } from '../src/daily-reports/daily-reports.service';
 import { DEMO_TENANT_CODE } from '../src/demo/demo-seed.service';
 import { KasbClient } from '../src/pulse/kasb-client';
 import { PulseEngine } from '../src/pulse/pulse-engine';
@@ -158,6 +159,27 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     expect(s).toMatchObject({ enabled: true, state: 'active', todayReceptions: 2, reviewCount: 1 });
     expect(s.lastReadAt).not.toBeNull();
     expect(s.runs.map((r) => r.kind)).toEqual(expect.arrayContaining(['today', 'open', 'lines']));
+  });
+
+  it('reads the stock report once a day and stages it for confirmation, never applying it (owner, 2026-11-23)', async () => {
+    const staged = async () => db().select({ id: dailyReportImports.id, status: dailyReportImports.status, diagnostics: dailyReportImports.diagnostics }).from(dailyReportImports).where(and(eq(dailyReportImports.tenantId, tenantId), eq(dailyReportImports.kind, 'stock')));
+    // The first scheduled pass after 10:00 already read it from the parts warehouse.
+    expect(mock.stockRequests.at(-1)).toMatchObject({ DssdSsd: '14553' });
+    const first = await staged();
+    expect(first).toHaveLength(1);
+    expect(first[0]!.diagnostics).toMatchObject({ source: 'pulse' });
+    // Not again the same day; «خواندن موجودی انبار» asks for it now, and the same file is not staged twice.
+    const reads = mock.stockRequests.length;
+    advance(4); await engine.tick();
+    expect(mock.stockRequests.length).toBe(reads);
+    await admin.post('/pulse/commands', { kind: 'stock_now' }).expect(201);
+    await engine.tick();
+    expect(mock.stockRequests.length).toBe(reads + 1);
+    expect(await staged()).toHaveLength(1);
+    // The API turns it into the usual preview; nothing is applied without a person.
+    await h.app.get(DailyReportsService).processStaged();
+    expect((await staged())[0]!.status).toBe('preview');
+    expect((await status()).runs.some((r) => r.kind === 'stock' && r.outcome === 'ok')).toBe(true);
   });
 
   it('a repeated read of the same data creates no row, history, audit entry or notification', async () => {

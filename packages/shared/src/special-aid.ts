@@ -374,7 +374,14 @@ export interface SpecialAidItem {
 }
 export interface SpecialAidContact { id: string; outcome: ContactOutcome; note: string | null; promisedAt: string | null; itemIds: string[]; byName: string; at: string }
 export interface SpecialAidAdmission { id: string; admissionNo: string; admissionDate: string | null; itemCount: number }
-export interface SpecialAidVehicle { customerName: string | null; phone: string | null; model: string | null; plate: string | null }
+export interface SpecialAidVehicle {
+  customerName: string | null; phone: string | null;
+  /** Short name for lists and cards («دنا پلاس»). */
+  model: string | null;
+  /** Full ISACO model and trim, shown only on request inside the dossier. */
+  fullModel?: string | null;
+  plate: string | null;
+}
 export interface SpecialAidDossierRow {
   id: string;
   vin: string;
@@ -423,7 +430,22 @@ export interface SpecialAidSummary {
   stalledSupply: number;
   feedbackOpen: number;
   warningsIssued: number;
+  /** Customer and part funnels of the chosen period (by official registration day). */
+  funnel: SpecialAidFunnel;
 }
+
+/** Owner, 2026-11-23: «۱۰۰ مشتری قطعه‌شان رسیده، ۵ نفر دعوت شده و آمده‌اند؛ ۱۰۰۰ قطعه درخواست، ۵۰۰ نصب». */
+export interface SpecialAidFunnel {
+  period: { from: string | null; to: string | null };
+  customers: {
+    registered: number; arrived: number; informed: number; invited: number; attended: number; installed: number; releasedNoShow: number;
+    /** Gaps the manager acts on. */
+    arrivedNotInformed: number; arrivedOver30NoVisit: number;
+  };
+  parts: { requested: number; pending: number; arrived: number; installed: number; releasedToOthers: number; arrivedOpen: number };
+}
+export const funnelPeriodSchema = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
+export type FunnelPeriod = z.infer<typeof funnelPeriodSchema>;
 
 // ------------------------------------------------------------------ replacement request
 

@@ -34,6 +34,17 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     expect(c.bundleWarnings).toEqual([]);
   });
 
+  it('lists warehouses and downloads the stock report file unchanged (owner, 2026-11-23)', async () => {
+    const c = client();
+    await expect(c.warehouses()).rejects.toMatchObject({ code: 'KASB_AUTH' });
+    await c.login(creds());
+    const list = await c.warehouses();
+    expect(list.map((w) => w.text)).toContain('انبار قطعات ولوازم یدکی');
+    const file = await c.stockFile('14553', 1405);
+    expect(file.toString('utf8')).toBe(mock.stockHtml);
+    expect(mock.stockRequests[0]).toEqual({ CurYear: '1405', DssdSsd: '14553', WgdmGdm: '', TypeGhete: '' });
+  });
+
   it('sends only allowlisted, read-only requests', async () => {
     const seen: string[] = [];
     const c = client({ onRequest: (m, p) => seen.push(`${m} ${p}`) });
