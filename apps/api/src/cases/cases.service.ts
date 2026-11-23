@@ -1,3 +1,4 @@
+import { caseListOrder } from './case-order';
 import { EmdadService } from '../daily-reports/emdad.service';
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
@@ -15,7 +16,6 @@ import {
   normalizePersian,
   normalizePhone,
   normalizeVin,
-  toLatinDigits,
   searchKey,
   type Blocker,
   type CaseDetail,
@@ -601,13 +601,7 @@ export class CasesService {
       .where(where)) as [{ total: number }];
 
     // Stable ordering happens before LIMIT/OFFSET, so pagination never reorders only one page.
-    const order = q.sort === 'case_number_desc'
-      ? [desc(cases.caseNumber), desc(cases.admittedAt), desc(cases.id)]
-      : q.sort === 'case_number_asc'
-        ? [asc(cases.caseNumber), asc(cases.admittedAt), asc(cases.id)]
-        : q.sort === 'admitted_asc'
-          ? [asc(cases.admittedAt), asc(cases.caseNumber), asc(cases.id)]
-          : [desc(cases.admittedAt), desc(cases.caseNumber), desc(cases.id)];
+    const order = caseListOrder(q.sort);
 
     const rows = await this.db
       .select({

@@ -41,3 +41,4 @@ export * from './assessment-package';
 export * from './employee-activity';
 export * from './special-aid';
 export * from './report-center';
+export * from './case-order';

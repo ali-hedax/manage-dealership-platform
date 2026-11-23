@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, sql, inArray } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { assessmentReference, catalogFamilies, COMPATIBILITY_NOTES, fitmentCatalog, isCommonFitment, partCompatibility, partFitment, resolveVehicleFamily, scoreAssessmentCandidates, ASSESSMENT_SEARCH_PAGE, type AssessmentSearchScope, type PartCompatibility, REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, appointmentInstant, headerSignature, type SavedReferenceMapping, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
+import { assessmentReference, catalogFamilies, COMPATIBILITY_NOTES, fitmentCatalog, isCommonFitment, partCompatibility, partFitment, resolveVehicleFamily, scoreAssessmentCandidates, assessmentSearchWords, ASSESSMENT_SEARCH_PAGE, type AssessmentSearchScope, type PartCompatibility, REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, appointmentInstant, headerSignature, type SavedReferenceMapping, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
@@ -286,12 +286,15 @@ export class ReferenceDataService {
   // Bounded SQL prefilter avoids reading the entire catalog per keystroke.
   const vehicleUse=sql<string>`coalesce(${referenceEntries.data}->>'vehicleUse','')`;
   // Same letter folding as normalizeAssessmentSearch («آینه» is found by «اینه» and «آینه»).
-  const folded=sql`replace(replace(replace(translate(lower(coalesce(${referenceEntries.data}->>'description','')),'يىكأإٱآۀة','ییکااااهه'),' ',''),chr(8204),''),'-','')`;
+  const folded=sql`replace(replace(replace(translate(lower(concat(coalesce(${referenceEntries.data}->>'description',''), ' ', ${vehicleUse})),'يىكأإٱآۀة۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩','ییکااااهه01234567890123456789'),' ',''),chr(8204),''),'-','')`;
   const fragment=normalized.slice(0,Math.min(3,normalized.length));
+  // Several words (part name and vehicle, any order): every word must appear, so the bounded read keeps the real matches.
+  const words=assessmentSearchWords(query);
+  const byName=words.length>1?sql.join(words.map(w=>sql`${folded} like ${'%'+w+'%'}`),sql` and `):sql`${folded} like ${'%'+fragment+'%'}`;
   const codeQuery=toLatinDigits(query).replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
   const prefilter=codeQuery
-   ? sql`(${folded} like ${'%'+fragment+'%'} or ${referenceEntries.lookupKey} like ${codeQuery+'%'})`
-   : sql`${folded} like ${'%'+fragment+'%'}`;
+   ? sql`((${byName}) or ${referenceEntries.lookupKey} like ${codeQuery+'%'})`
+   : sql`(${byName})`;
   const direct=codeQuery
    ? sql`(${folded} like ${'%'+normalized+'%'} or ${referenceEntries.lookupKey} like ${codeQuery+'%'})`
    : sql`${folded} like ${'%'+normalized+'%'}`;
@@ -310,7 +313,8 @@ export class ReferenceDataService {
    const use=typeof data.vehicleUse==='string'?data.vehicleUse:'';
    const fitment=partFitment(use,fit,catalog);
    const compatibility=partCompatibility(use,fit,catalog);
-   return {id:row.id,name:String(data.description??''),partNumber:String(data.partNumber??''),vehicleUse:use,fitment,compatibility,
+   const name=String(data.description??'');
+   return {id:row.id,name,aliases:[use,`${name} ${use}`,`${use} ${name}`],partNumber:String(data.partNumber??''),vehicleUse:use,fitment,compatibility,
     // Only the case family's own label (and common parts) is verified; everything else ranks after it.
     vehicleMatch:(compatibility==='verified'?'verified':'unknown') as 'verified'|'unknown'};
    // Defence in depth: scope `case` never offers another vehicle.

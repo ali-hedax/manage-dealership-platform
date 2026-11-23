@@ -21,6 +21,7 @@ import {
   type UpdateAssessmentItemInput,
   assessmentReference,
   normalizedPartCode,
+  canUseSmartAssessment,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -93,8 +94,10 @@ export class AssessmentsService {
         throw conflict('ASSESSMENT_DRAFT_EXISTS', 'یک پیش‌نویس کارشناسی باز برای این پرونده وجود دارد');
       }
       const latest = versions.at(-1);
-      if(input.kind==='initial'&&input.smartManual&&kase.coverageType==='golden_card')
-        throw badRequest('SMART_ASSESSMENT_COVERAGE','کارشناسی دستی هوشمند برای کارت طلایی غیرفعال است؛ از مسیر رسمی کارشناسی کارت طلایی استفاده کنید');
+      if((input.smartManual || (input.kind==='supplement' && latest?.smartManual)) && !canUseSmartAssessment(kase.coverageType))
+        throw badRequest('SMART_ASSESSMENT_COVERAGE',kase.coverageType==='golden_card'
+          ? 'کارشناسی دستی هوشمند برای کارت طلایی غیرفعال است؛ از مسیر رسمی کارشناسی کارت طلایی استفاده کنید'
+          : 'ابتدا نوع پوشش معتبر پرونده را مشخص کنید');
       if(input.kind==='supplement'&&input.smartManual&&!latest?.smartManual)
         throw badRequest('SMART_ASSESSMENT_KIND','نوع کارشناسی الحاقیه از پرونده قبلی تعیین می‌شود');
       if (input.kind === 'initial' && latest) {
@@ -916,7 +919,9 @@ export class AssessmentsService {
     if (a.status !== 'draft') {
       throw badRequest('ASSESSMENT_FINAL', 'نسخه نهایی کارشناسی قابل تغییر نیست؛ برای تغییر، الحاقیه ثبت کنید');
     }
-    await this.cases.loadForWrite(tx, tenantId, a.caseId);
+    const kase = await this.cases.loadForWrite(tx, tenantId, a.caseId);
+    if (a.smartManual && !canUseSmartAssessment(kase.coverageType))
+      throw badRequest('SMART_ASSESSMENT_COVERAGE','نوع پوشش پرونده برای کارشناسی هوشمند معتبر نیست؛ ابتدا پوشش را بررسی کنید');
     return a;
   }
 

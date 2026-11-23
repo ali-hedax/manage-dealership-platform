@@ -46,6 +46,8 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await panel.getByRole('button', { name: /ارسال به قطعات و تأمین/ }).click();
   await expect(panel).toBeVisible();
   await expect(dialog).toBeVisible();
+  // The result stays on the panel for the accident expert (not only a passing toast).
+  await expect(panel.getByTestId('dispatch-result')).toContainText('۱ قلم به «قطعات و تأمین» ارسال شد');
   await dialog.getByRole('button', { name: 'نهایی کردن' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('#case-plan > summary')).toBeFocused();

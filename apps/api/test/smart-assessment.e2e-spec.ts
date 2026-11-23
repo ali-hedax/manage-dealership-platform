@@ -149,18 +149,19 @@ it('persists independent parts-clerk decisions and audit, requires reason, block
   })).status).toBe(201);
 });
 
-it('allows every non-Golden Card coverage, including mixed and unknown, but rejects Golden Card', async () => {
+it('allows all recorded non-Golden coverages independently of body replacement, rejects unknown and Golden Card', async () => {
   for (const coverageType of ['insurance', 'personal', 'mixed', 'unknown', 'golden_card'] as const) {
     const created = await admin.post('/cases', {
       admittedAt: new Date(Date.now() - 86_400_000).toISOString(),
       vehicle: { model: 'سورن' },
       coverageType,
+      bodyReplacement: true,
     });
     expect(created.status).toBe(201);
     const result = await expert.post(`/cases/${created.body.id}/assessments`, {
       kind: 'initial', smartManual: true, assessorName: 'کارشناس آزمون',
     });
-    if (coverageType === 'golden_card') {
+    if (coverageType === 'golden_card' || coverageType === 'unknown') {
       expect(result.status).toBe(422);
       expect(result.body.code).toBe('SMART_ASSESSMENT_COVERAGE');
     } else {
@@ -168,6 +169,11 @@ it('allows every non-Golden Card coverage, including mixed and unknown, but reje
       expect(result.body.smartManual).toBe(true);
     }
   }
+  const legacy = await expert.post('/cases', {admittedAt:new Date().toISOString(),vehicle:{model:'تست'}});
+  expect(legacy.status).toBe(201);
+  expect((await expert.post(`/cases/${legacy.body.id}/assessments`,{
+    kind:'initial',smartManual:true,assessorName:'کارشناس آزمون',
+  })).body.code).toBe('SMART_ASSESSMENT_COVERAGE');
 });
 
 it('hands the complete smart draft to parts for correction, safe removal and finalization', async () => {
