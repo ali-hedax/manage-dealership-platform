@@ -64,3 +64,7 @@
 - فایل در «گزارش‌های روزانه ← موجودی» به‌صورت پیش‌نمایش آماده می‌شود و مثل همیشه با تأیید شما اعمال می‌شود. فایل تکراری دوباره گذاشته نمی‌شود.
 - در Manage Nexus دکمهٔ «همین الان بخوان» کنار موجودی انبار هست. اگر خواندن ناموفق بود، پالس یک ساعت بعد دوباره امتحان می‌کند و تا آن موقع می‌توانید فایل را دستی بارگذاری کنید.
 - اگر کسب‌وکار این گزارش را عوض کرد: `KASB_PATHS.warehouses` و `KASB_PATHS.stock` در `apps/api/src/pulse/kasb-protocol.ts` و `stockFile()` در `kasb-client.ts`.
+
+## پاکت HashData (۲ آذر ۱۴۰۵)
+
+کلاینت سایت هر درخواست، به‌جز `Sec/GetCapcha`، را پیش از رمزنگاری این‌طور می‌پیچد: `{"HashData": base64(JSON payload) + base64(browser)}`. مقدار `browser` چهار رقم آخر `ServerTime` در پاسخ GetCapcha است، یا اگر کپچا نشان داده شد، پاسخ کپچا. درخواست بدون این پاکت با `MessageCode: 99999` رد می‌شود. پیاده‌سازی در `hashData()` و `browserFromServerTime()` (`apps/api/src/pulse/kasb-protocol.ts`) است. اگر سایت این را عوض کرد، تابع `Services` در `main.*.chunk.js` را ببینید.

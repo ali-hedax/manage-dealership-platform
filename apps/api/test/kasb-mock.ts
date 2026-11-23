@@ -81,6 +81,9 @@ export class KasbMock {
   /** Synthetic stock report: the same HTML-table-as-.xls file staff download (leading whitespace included). */
   stockHtml = `\n    <html><head><meta charset="UTF-8"></head><body><table><tr><th>کد کالا</th><th>شرح کالا</th><th>واحد شمارش</th><th>مدل خودرو</th><th>موجودي</th><th>قيمت ميانگين</th><th>قيمت فروش</th><th>آدرس</th><th>شرح لوکيشن</th><th>وضعيت مبنا</th></tr><tr><td>1720104599</td><td>قطعهٔ ساختگی</td><td>عدد</td><td>ساختگی</td><td>3</td><td>1000</td><td>1200</td><td>A1</td><td>قفسه</td><td>فعال</td></tr></table></body></html>`;
   stockRequests: Record<string, unknown>[] = [];
+  serverTime = 0;
+  /** Requests that were not inside a valid HashData envelope (must stay 0). */
+  bareRequests = 0;
   statusRows: unknown[][] = [['CAR_STATE_REC', 3, 'در حال تعمير'], ['CAR_STATE_REC', 9, 'ترخيص شده']];
   /** method and path of every request, in order (bodies are never kept). */
   readonly log: { method: string; path: string; at: number }[] = [];
@@ -174,10 +177,25 @@ export class KasbMock {
       } catch {
         return this.send(res, 400, 'cannot decrypt');
       }
-      if (api === 'Sec/GetCapcha') return this.answer(res, { Success: true, Data: { ImgCapcha: this.captchaImage ?? '', ServerTime: Date.now() } });
+      if (api === 'Sec/GetCapcha') {
+        this.serverTime = Date.now();
+        return this.answer(res, { Success: true, Data: { ImgCapcha: this.captchaImage ?? '', ServerTime: this.serverTime } });
+      }
+      // Like the real server: everything else must come inside the HashData envelope whose suffix is
+      // base64 of the «browser» value; a bare payload or a wrong suffix is answered with 99999.
+      let viaCaptcha = false;
+      {
+        const env = payload.HashData;
+        const fromTime = Buffer.from(String(this.serverTime).slice(-4)).toString('base64');
+        const fromCaptcha = this.acceptCaptcha ? Buffer.from(this.acceptCaptcha).toString('base64') : null;
+        const suffix = typeof env !== 'string' ? null : fromCaptcha && env.endsWith(fromCaptcha) ? fromCaptcha : env.endsWith(fromTime) ? fromTime : null;
+        if (typeof env !== 'string' || !suffix || Object.keys(payload).length !== 1) { this.bareRequests++; return this.answer(res, { Success: false, MessageCode: '99999', Data: null }); }
+        viaCaptcha = suffix === fromCaptcha;
+        payload = JSON.parse(Buffer.from(env.slice(0, -suffix.length), 'base64').toString('utf8')) as Record<string, unknown>;
+      }
       if (api === 'Sec/Login/v2') {
         this.loginAttempts++;
-        const okCaptcha = !this.captchaImage || payload.Capcha === this.acceptCaptcha;
+        const okCaptcha = !this.captchaImage || viaCaptcha;
         const ok = payload.Scus === this.dealerCode && payload.UserName === this.username && payload.Password === this.password && payload.ClientVersion === this.version && okCaptcha;
         if (!ok) return this.answer(res, { Success: false, MessageCode: 'E_LOGIN', Data: this.captchaImage ? { ImgCapcha: this.captchaImage } : null });
         if (this.loginStatus === 1) return this.answer(res, { Success: true, Data: { status: 1, Token: '' } });
