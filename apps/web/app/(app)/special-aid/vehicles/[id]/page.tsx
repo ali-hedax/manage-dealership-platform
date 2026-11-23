@@ -51,6 +51,7 @@ export default function SpecialAidDossierPage() {
           <Plate value={d.vehicle.plate} size="xl" />
         </div>
         <div className="folder-row"><VinText vin={d.vin} /><span className="folder-id">پذیرش: {faNum(d.admissionCount)}</span></div>
+        {d.vehicle.fullModel && d.vehicle.fullModel !== d.vehicle.model && <details className="vehicle-spec"><summary>مشخصات کامل خودرو</summary><p>{toPersianDigits(d.vehicle.fullModel)}</p></details>}
         <div className="folder-counts"><AppointmentStateTag state={d.appointmentState} /><span className="cnt cnt-ok">رسیده {faNum(d.arrived)}</span><span className="cnt">در حال تأمین {faNum(d.pending)}</span>{d.failedAttemptDays > 0 && <span className="cnt cnt-warn">بی‌پاسخ در {faNum(d.failedAttemptDays)} روز</span>}{d.postponedUntil && <span className="cnt">پیگیری از {formatJalali(d.postponedUntil)} · {d.postponeReason}</span>}</div>
         {operate && <div className="row no-print">
           <button type="button" className="btn btn-primary" onClick={() => setContact([])}><AppIcon name="send" />ثبت تماس</button>

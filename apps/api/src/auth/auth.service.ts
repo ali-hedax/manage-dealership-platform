@@ -1,7 +1,7 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
-import { isPinEligible, MODULES, normalizeRoles, normalizeStaffUsername, permissionsFor, PIN_DENIED_PERMISSIONS, type LoginInput, type Me, type TechnicianLoginInput } from '@manage/shared';
+import { isPinEligible, moduleStatuses, normalizeRoles, normalizeStaffUsername, permissionsFor, PIN_DENIED_PERMISSIONS, type LoginInput, type Me, type TechnicianLoginInput } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { AppError } from '../common/errors';
@@ -263,7 +263,7 @@ export class AuthService {
       accessExpiresAt: user.accessExpiresAt ?? null,
       tenant: { id: user.tenantId, code: user.tenantCode, name: user.tenantName },
       environment: this.cfg.APP_ENV,
-      modules: MODULES.map((m) => ({ key: m.key, status: m.status })),
+      modules: moduleStatuses({ PULSE_ENABLED: this.cfg.PULSE_ENABLED }),
     };
   }
 

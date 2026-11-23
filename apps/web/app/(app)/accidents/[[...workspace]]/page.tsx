@@ -12,6 +12,7 @@ import {faNum,toPersianDigits} from '@/lib/format';
 import {AppIcon} from '@/components/AppIcon';
 import {WorkspaceLauncher} from '@/components/WorkspaceLauncher';
 import {DailyStatusPanel} from '@/components/DailyStatusPanel';
+import {PulseStatusPanel} from '@/components/PulseStatusPanel';
 import {WorkspaceActions} from '@/components/WorkspaceActions';
 import {PartsOperationNotices} from '@/components/PartsOperations';
 import {AlertsPanel} from '@/components/AlertsPanel';
@@ -48,7 +49,7 @@ export default function AccidentWorkspace(){
  const tools=(label='ابزارها و صف‌های دیگر')=><details className="panel compact-disclosure desk-more"><summary>{label}</summary><div className="panel-body">{legacy}</div></details>;
  if (w.key === 'expert') return <div className="stack"><ReminderCards/><AccidentDesk intro={<>{(can('case.update')||can('report.manager'))&&<a className="m-btn2-s no-print" href="/api/v1/print/inspection.pdf" target="_blank" rel="noopener" data-testid="print-inspection"><AppIcon name="print"/>چاپ چک‌لیست بازدید خودروها</a>}{can('case.create')&&<Link className="m-btn" href="/cases/new"><AppIcon name="add"/>پذیرش خودرو</Link>}</>}/><AlertsPanel/><PartsOperationNotices/>{tools()}</div>;
  if (w.key === 'parts') return <div className="stack"><ReminderCards/><Suspense fallback={null}><PartsDesk/></Suspense>{tools('همهٔ صف‌ها')}</div>;
- if (w.key === 'admin') return <div className="stack"><ReminderCards/><DailyStatusPanel/><DeskBoard title="میز پشتیبانی مدیر سیستم" actors={['accident_expert','parts_clerk']} initial="stuck" filters={['stuck','all','mine','behind','parts','delivery']} extra={partCounts}/>{tools('همهٔ ابزارهای پشتیبانی')}</div>;
+ if (w.key === 'admin') return <div className="stack"><ReminderCards/><DailyStatusPanel/><PulseStatusPanel/><DeskBoard title="میز پشتیبانی مدیر سیستم" actors={['accident_expert','parts_clerk']} initial="stuck" filters={['stuck','all','mine','behind','parts','delivery']} extra={partCounts}/>{tools('همهٔ ابزارهای پشتیبانی')}</div>;
  if (w.key === 'manager') return <div className="stack"><ControlRoom/>{tools('گزارش‌ها و ابزارهای دیگر')}</div>;
  if (w.key === 'owner') return <div className="stack"><ControlRoom title="اتاق کنترل" extra={<nav className="cr-glass cr-pad owner-tools" aria-label="تنظیمات و کارکنان"><strong>تنظیمات و کارکنان</strong><div className="row"><Link className="cr-link" href="/users">کارکنان و دعوت</Link><Link className="cr-link" href="/users#access-control">دسترسی‌ها</Link><Link className="cr-link" href="/users#owner-admin">اجازه‌های مدیر سیستم</Link><Link className="cr-link" href="/workshop/settings">سقف هشدارها، تقویم و جایگاه‌ها</Link><Link className="cr-link" href="/launch">انتخاب میزکار</Link></div></nav>}/>{tools('همهٔ ابزارها')}</div>;
  return <div className="stack"><div className="unit-breadcrumb"><Link href="/accidents">واحد تصادفات</Link><span aria-hidden="true"> / </span><span>{w.label}</span></div><header className="unit-header"><span className="workspace-symbol"><AppIcon name={w.icon}/></span><div><h1>میز کار {w.label}</h1><p className="muted">{w.description}</p></div></header>{legacy}</div>;

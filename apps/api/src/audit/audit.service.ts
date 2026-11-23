@@ -8,7 +8,7 @@ import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { auditEvents, changeLog, users } from '../db/schema';
 
 export interface AuditEntry {
-  entityType: 'case_document' | 'tenant' | 'work_calendar' | 'workshop_station' | 'part_quote' | 'case' | 'task' | 'blocker' | 'user' | 'customer' | 'vehicle' | 'assessment' | 'assessment_technical_review' | 'part' | 'finance' | 'qc' | 'discrepancy' | 'reference' | 'daily_report' | 'emdad' | 'external_work' | 'external_contractor' | 'parts_statement' | 'reminder' | 'task_wage' | 'picking_batch' | 'special_aid';
+  entityType: 'case_document' | 'tenant' | 'work_calendar' | 'workshop_station' | 'part_quote' | 'case' | 'task' | 'blocker' | 'user' | 'customer' | 'vehicle' | 'assessment' | 'assessment_technical_review' | 'part' | 'finance' | 'qc' | 'discrepancy' | 'reference' | 'daily_report' | 'emdad' | 'external_work' | 'external_contractor' | 'parts_statement' | 'reminder' | 'task_wage' | 'picking_batch' | 'special_aid' | 'pulse' | 'reception';
   entityId: string;
   caseId?: string | null;
   action: string;
@@ -44,6 +44,29 @@ export class AuditService {
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
     @Inject(APP_CONFIG) private readonly cfg: AppConfig,
   ) {}
+
+  /**
+   * A change made by a background process (Manage Pulse) with no signed-in user: same audit row
+   * without an actor; `requestId` names the run.
+   */
+  async recordSystem(tx: DbOrTx, scope: { tenantId: string; isTest: boolean; requestId: string }, entry: Omit<AuditEntry, 'snapshot'>): Promise<void> {
+    await tx.insert(auditEvents).values({
+      id: newId(),
+      tenantId: scope.tenantId,
+      caseId: entry.caseId ?? null,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      action: entry.action,
+      actorUserId: null,
+      occurredAt: entry.occurredAt ?? new Date(),
+      reason: entry.reason ?? null,
+      before: entry.before ?? null,
+      after: entry.after ?? null,
+      requestId: scope.requestId,
+      ip: null,
+      isTest: scope.isTest,
+    });
+  }
 
   /** Must be called inside the same transaction as the change it records. */
   async record(tx: DbOrTx, actor: Actor, entry: AuditEntry): Promise<void> {

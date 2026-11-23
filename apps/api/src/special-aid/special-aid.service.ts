@@ -3,10 +3,10 @@ import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   EMDAD_ARRIVED_CATEGORIES, NON_CONSUMPTION_REASONS, SPECIAL_AID_FINAL_STATES, SPECIAL_AID_RULES,
   TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isWorkingDay, maskPhone, nextItemState,
-  parseProcurementCode, assessmentCodeOf, shortVehicleName, tehranDay,
+  parseProcurementCode, assessmentCodeOf, shortVehicleName, vehicleHeadName, tehranDay,
   type AidContactFacts, type AidItemFacts, type ContactInput, type DossierSearchInput, type ItemActionInput, type NonConsumptionInput,
   type NonConsumptionReason, type Paged, type Permission, type PostponeInput, type SpecialAidContact, type SpecialAidDossier, type SpecialAidDossierRow,
-  type SpecialAidItem, type SpecialAidItemState, type SpecialAidSummary, type SpecialAidSupplyRow, type SpecialAidTodayEntry,
+  type SpecialAidItem, type SpecialAidItemState, type SpecialAidSummary, type SpecialAidFunnel, type SpecialAidSupplyRow, type SpecialAidTodayEntry,
   type ReplacementInput, type SpecialAidVehicle, type SupplySearchInput,
 } from '@manage/shared';
 import { calendarAt } from '../workshop/work-calendar';
@@ -260,14 +260,14 @@ export class SpecialAidService {
     for (const r of refs) {
       if (out.has(r.key)) continue;
       const d = r.data as Record<string, string | undefined>;
-      out.set(r.key, { customerName: d.fullName ?? null, phone: canSeePhone ? d.phone ?? null : maskPhone(d.phone ?? null), model: d.model ? [d.model, d.trim].filter(Boolean).join(' ') : null, plate: d.plate ?? null });
+      out.set(r.key, { customerName: d.fullName ?? null, phone: canSeePhone ? d.phone ?? null : maskPhone(d.phone ?? null), model: d.model ? vehicleHeadName(d.model) || d.model : null, fullModel: d.model ? [d.model, d.trim].filter(Boolean).join(' ') : null, plate: d.plate ?? null });
     }
     const missing = vins.filter((v) => !out.has(v));
     if (missing.length) {
       const own = await this.db.select({ vin: vehicles.vin, brand: vehicles.brand, model: vehicles.model, plate: vehicles.plate, name: customers.fullName, phone: customers.phone }).from(vehicles)
         .leftJoin(cases, eq(cases.vehicleId, vehicles.id)).leftJoin(customers, eq(customers.id, cases.customerId))
         .where(and(eq(vehicles.tenantId, tenantId), inArray(vehicles.vin, missing))).orderBy(desc(cases.admittedAt));
-      for (const v of own) if (v.vin && !out.has(v.vin)) out.set(v.vin, { customerName: v.name, phone: canSeePhone ? v.phone : maskPhone(v.phone), model: shortVehicleName(v.brand, v.model) || null, plate: v.plate });
+      for (const v of own) if (v.vin && !out.has(v.vin)) out.set(v.vin, { customerName: v.name, phone: canSeePhone ? v.phone : maskPhone(v.phone), model: shortVehicleName(v.brand, v.model) || null, fullModel: [v.brand, v.model].filter(Boolean).join(' ') || null, plate: v.plate });
     }
     return out;
   }
@@ -552,7 +552,7 @@ export class SpecialAidService {
     ]);
   }
 
-  async summary(actor: Actor): Promise<SpecialAidSummary> {
+  async summary(actor: Actor, period: { from?: string; to?: string } = {}): Promise<SpecialAidSummary> {
     this.need(actor, 'special_aid.report');
     const now = new Date();
     const loaded = await this.load(actor.user.tenantId);
@@ -593,7 +593,52 @@ export class SpecialAidService {
       stalledSupply: stalled,
       feedbackOpen: fb.open,
       warningsIssued: fb.warnings,
+      funnel: this.funnel(loaded, period, now),
     };
+  }
+
+  /**
+   * Customer (vehicle) and part funnels. A part belongs to the period by its official registration
+   * day (Tehran); a vehicle when at least one of its parts does. Cancelled requests are left out.
+   */
+  private funnel(loaded: Loaded[], period: { from?: string; to?: string }, now: Date): SpecialAidFunnel {
+    const inPeriod = (i: SpecialAidItem) => {
+      if (i.officialCategory === 'cancelled') return false;
+      const day = i.officialRegisteredAt ? tehranDay(i.officialRegisteredAt) : null;
+      if (!period.from && !period.to) return true;
+      if (!day) return false;
+      return (!period.from || day >= period.from) && (!period.to || day <= period.to);
+    };
+    const arrivedState = (i: SpecialAidItem) => i.state !== 'pending';
+    const openArrived = (i: SpecialAidItem) => ['arrived', 'reserved', 'delivered', 'installation_pending', 'not_installed'].includes(i.state);
+    const c = { registered: 0, arrived: 0, informed: 0, invited: 0, attended: 0, installed: 0, releasedNoShow: 0, arrivedNotInformed: 0, arrivedOver30NoVisit: 0 };
+    const p = { requested: 0, pending: 0, arrived: 0, installed: 0, releasedToOthers: 0, arrivedOpen: 0 };
+    for (const l of loaded) {
+      const items = l.items.filter(inPeriod);
+      if (!items.length) continue;
+      const ids = new Set(items.map((i) => i.id));
+      const contacts = l.contacts.filter((x) => x.itemIds.some((id) => ids.has(id)));
+      const installed = items.some((i) => i.state === 'installed');
+      const attended = !!l.dossier.attendedAt || installed || items.some((i) => ['delivered', 'installation_pending'].includes(i.state));
+      c.registered += 1;
+      if (items.some(arrivedState)) c.arrived += 1;
+      if (items.some((i) => i.informedAt) || contacts.some((x) => x.outcome !== 'no_answer')) c.informed += 1;
+      if (contacts.some((x) => x.outcome === 'appointment_coordinated' || x.outcome === 'promised_visit')) c.invited += 1;
+      if (attended) c.attended += 1;
+      if (installed) c.installed += 1;
+      if (!attended && items.some((i) => i.state === 'released')) c.releasedNoShow += 1;
+      const open = items.filter(openArrived);
+      if (open.some((i) => !i.informedAt)) c.arrivedNotInformed += 1;
+      if (!attended && open.some((i) => (arrivalAge(i, now) ?? 0) >= 30)) c.arrivedOver30NoVisit += 1;
+      for (const i of items) {
+        p.requested += 1;
+        if (i.state === 'pending') p.pending += 1; else p.arrived += 1;
+        if (i.state === 'installed') p.installed += 1;
+        if (i.state === 'released') p.releasedToOthers += 1;
+        if (openArrived(i)) p.arrivedOpen += 1;
+      }
+    }
+    return { period: { from: period.from ?? null, to: period.to ?? null }, customers: c, parts: p };
   }
 
   /** Called after an Emdad report was published (its own transaction; the report stays published). */

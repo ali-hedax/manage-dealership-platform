@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { classifyStockMatch, codeMatchKey, isOemStockCode, nonOemPrefix } from '../stock-code';
 import { CHANGE_NOTES, RELEASE_LINE, compareVersions, nextVersion, releaseProblems, versionNotes } from '../releases';
 import { SERVICE_KPIS, buildFollowUps, serviceKpiMembers } from '../service-kpis';
-import { shortVehicleName } from '../desk';
+import { shortVehicleName, vehicleHeadName } from '../desk';
 
 // Non-OEM stock matching (owner, 2026-11-18). Synthetic codes only.
 const part = (base: string | null, ...exact: string[]) => ({ base, exact });
@@ -78,4 +78,15 @@ test('service numbers: one definition, vehicles counted once, exact lists', () =
   assert.equal(shortVehicleName('ایران خودرو', 'دنا پلاس توربو اتوماتیک'), 'دنا پلاس');
   assert.equal(shortVehicleName('ایران خودرو', null), 'ایران خودرو');
   assert.equal(buildFollowUps([]).length, 0);
+});
+
+test('vehicleHeadName: short name from ISACO model descriptions', () => {
+  assert.equal(vehicleHeadName('دنا پلاس موتورEF7TCگیربکس اتوماتیک DAE / LANDAI 7071202 دناپلاس'), 'دنا پلاس');
+  assert.equal(vehicleHeadName('تارا موتور TU5Pو گیربکس دستی 3220901 تارا V1P با موتور TU5P'), 'تارا');
+  assert.equal(vehicleHeadName('سورن پلاس بنزینی با موتور XU7P و گیربکس دستی BE'), 'سورن پلاس');
+  assert.equal(vehicleHeadName('6102201 ، رانا ، سقف فلزی ، موتور TU5'), 'رانا');
+  assert.equal(vehicleHeadName('3221501 خودروی تارا V1P با موتور TU5P'), 'تارا');
+  assert.equal(vehicleHeadName('پژو 207i HB موتور TU5 گیربکس دستی 5 دنده'), 'پژو 207i');
+  assert.equal(vehicleHeadName('هایما S7 توربو'), 'هایما S7');
+  assert.equal(vehicleHeadName(null), '');
 });

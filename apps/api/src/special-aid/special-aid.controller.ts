@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, StreamableFile } from '@nestjs/common';
 import { z } from 'zod';
 import {
-  appointmentRelationSchema, cardMatchSchema, cardUploadSchema, feedbackAckSchema, feedbackSchema, replacementSchema,
+  appointmentRelationSchema, cardMatchSchema, funnelPeriodSchema, type FunnelPeriod, cardUploadSchema, feedbackAckSchema, feedbackSchema, replacementSchema,
   type CardMatchInput, type CardUploadInput, type FeedbackAckInput, type FeedbackInput, type ReplacementInput,
   contactSchema, dossierSearchSchema, groupDecisionSchema, groupSchema, itemActionSchema, nonConsumptionSchema, postponeSchema, supplySearchSchema,
   type ContactInput, type DossierSearchInput, type ItemActionInput, type NonConsumptionInput, type PostponeInput, type SupplySearchInput,
@@ -66,7 +66,7 @@ export class SpecialAidController {
   }
 
   @RequirePermissions('special_aid.report') @Get('summary')
-  summary(@CurrentActor() actor: Actor) { return this.aid.summary(actor); }
+  summary(@CurrentActor() actor: Actor, @Query(new ZodPipe(funnelPeriodSchema)) q: FunnelPeriod) { return this.aid.summary(actor, q); }
   @RequirePermissions('special_aid.operate') @Post('items/:id/replacement')
   replacement(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(replacementSchema)) body: ReplacementInput) { return this.aid.replacement(actor, id, body); }
 

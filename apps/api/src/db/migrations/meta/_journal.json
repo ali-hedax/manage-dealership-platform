@@ -253,6 +253,13 @@
       "when": 1795351668937,
       "tag": "0035_special_aid_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795430000000,
+      "tag": "0036_manage_pulse",
+      "breakpoints": true
     }
   ]
 }

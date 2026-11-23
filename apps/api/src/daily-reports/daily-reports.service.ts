@@ -88,6 +88,15 @@ export class DailyReportsService implements OnApplicationBootstrap {
       void this.recover(new Date()).catch((e: unknown) => this.logger.warn(`daily report recovery skipped: ${e instanceof Error ? e.message : 'unknown'}`));
     setInterval(run, 3_600_000).unref();
     run();
+    // Files fetched by Manage Pulse (another process) are parsed here within a minute.
+    setInterval(() => void this.processStaged().catch((e: unknown) => this.logger.warn(`pulse-staged report skipped: ${e instanceof Error ? e.message : 'unknown'}`)), 60_000).unref();
+  }
+
+  /** Imports staged by Manage Pulse (diagnostics.source = 'pulse') still waiting to be parsed. */
+  async processStaged() {
+    const staged = await this.db.select({ id: dailyReportImports.id }).from(dailyReportImports)
+      .where(and(eq(dailyReportImports.status, 'uploaded'), sql`${dailyReportImports.diagnostics}->>'source' = 'pulse'`));
+    for (const p of staged) await this.process(p.id);
   }
 
   async recover(now: Date) {

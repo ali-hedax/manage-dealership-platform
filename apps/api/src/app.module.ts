@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { AccidentModule } from './accident/accident.module';
 import { DailyReportsModule } from './daily-reports/daily-reports.module';
 import { PeopleModule } from './people/people.module';
+import { PulseModule } from './pulse/pulse.module';
 import { AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -115,6 +116,7 @@ export class AppModule {
         AccidentModule,
         DailyReportsModule,
         PeopleModule,
+        PulseModule,
       ],
       controllers: [AuthController, EmailAuthController, TechniciansController, HealthController, ReferenceController, AccessController],
       providers: [

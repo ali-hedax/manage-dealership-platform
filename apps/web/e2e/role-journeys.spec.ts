@@ -103,7 +103,7 @@ test('system administrator: «گره‌ها» first, report status and alert thr
   // Settings hub: every settings area of the account in one place, each a real page.
   await page.goto('/settings');
   await expect(page.getByRole('heading', { level: 1, name: 'تنظیمات' })).toBeVisible();
-  await page.getByRole('link', { name: /تقویم، جایگاه‌ها و سقف هشدارها/ }).click();
+  await page.getByRole('link', { name: /^کارگاه/ }).click();
   await expect(page).toHaveURL(/\/workshop\/settings$/);
   await expect(page.getByRole('link', { name: 'بازگشت به تنظیمات' })).toBeVisible();
   await expect(page.getByText('امداد ویژهٔ دیرشده بعد از', { exact: false })).toBeVisible();

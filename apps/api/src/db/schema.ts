@@ -1676,3 +1676,233 @@ export const specialAidAppointmentLinks = pgTable('special_aid_appointment_links
   isTest: boolean('is_test').notNull().default(false),
   version: integer('version').notNull().default(1),
 }, (t) => [uniqueIndex('special_aid_appointment_links_uq').on(t.dossierId, t.entryId)]);
+
+// ------------------------------------------------------------------- Manage Pulse (migration 0036)
+// «منیج پالس» (spec section 26): read-only connection to ISACO «کسب‌وکار» and the reception
+// module. Official rows are kept whole in `official` (keyed by column name) so no column is lost;
+// `row_hash` makes repeated reads idempotent. Nothing is ever deleted: a line missing from a
+// later answer gets `removed_at`.
+
+/** One connection per dealership. The password is AES-256-GCM encrypted (PULSE_SECRET_KEY); the کسب‌وکار token never reaches the database. */
+export const pulseConnections = pgTable('pulse_connections', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  dealerCode: text('dealer_code').notNull(),
+  username: text('username').notNull(),
+  passwordEnc: text('password_enc'),
+  enabled: boolean('enabled').notNull().default(false),
+  state: text('state').notNull().default('off'),
+  /** Consecutive refused logins; two stop the worker until the system administrator acts. */
+  failedLogins: integer('failed_logins').notNull().default(0),
+  /** Captcha image (data URL) waiting for the administrator's answer. */
+  captchaImage: text('captcha_image'),
+  settings: jsonb('settings').$type<import('@manage/shared').PulseSettings>().notNull(),
+  cursor: jsonb('cursor').$type<import('@manage/shared').PulseCursor>().notNull().default({}),
+  lastReadAt: ts('last_read_at'),
+  lastErrorCode: text('last_error_code'),
+  workerSeenAt: ts('worker_seen_at'),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [uniqueIndex('pulse_connections_tenant_uq').on(t.tenantId)]);
+
+/** One row per worker cycle (no customer data, no secrets). */
+export const pulseRuns = pgTable('pulse_runs', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  kind: text('kind').notNull(),
+  startedAt: ts('started_at').notNull().defaultNow(),
+  finishedAt: ts('finished_at'),
+  outcome: text('outcome').notNull().default('running'),
+  readCount: integer('read_count').notNull().default(0),
+  createdCount: integer('created_count').notNull().default(0),
+  changedCount: integer('changed_count').notNull().default(0),
+  errorCode: text('error_code'),
+  /** Column names (never values) of first non-empty answers, bundle warnings, auth scheme. */
+  details: jsonb('details').$type<Record<string, unknown>>(),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [index('pulse_runs_tenant_started_idx').on(t.tenantId, t.startedAt)]);
+
+/** Requests from the settings page to the worker (the API itself never connects to کسب‌وکار). */
+export const pulseCommands = pgTable('pulse_commands', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  kind: text('kind').notNull(),
+  status: text('status').notNull().default('pending'),
+  /** Backfill start date or the captcha digits; cleared once handled. */
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  progress: jsonb('progress').$type<{ done: number; total: number; next?: string }>(),
+  resultCode: text('result_code'),
+  requestedBy: uuid('requested_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  startedAt: ts('started_at'),
+  finishedAt: ts('finished_at'),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [index('pulse_commands_tenant_status_idx').on(t.tenantId, t.status, t.createdAt)]);
+
+/** One reception folder per repair card of کسب‌وکار (DrcdRcd). */
+export const receptions = pgTable('receptions', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  kasbRcd: text('kasb_rcd').notNull(),
+  admissionNo: text('admission_no'),
+  admissionNoKey: text('admission_no_key'),
+  cardNo: text('card_no'),
+  chassis: text('chassis'),
+  vin: text('vin'),
+  engineNo: text('engine_no'),
+  productCode: text('product_code'),
+  productName: text('product_name'),
+  modelCode: text('model_code'),
+  modelName: text('model_name'),
+  color: text('color'),
+  plate: text('plate'),
+  plateRegion: text('plate_region'),
+  plateSection: text('plate_section'),
+  plateLetter: text('plate_letter'),
+  plateThree: text('plate_three'),
+  customerName: text('customer_name'),
+  customerPhone: text('customer_phone'),
+  customerMobile: text('customer_mobile'),
+  customerNationalId: text('customer_national_id'),
+  customerAddress: text('customer_address'),
+  delivererName: text('deliverer_name'),
+  delivererMobile: text('deliverer_mobile'),
+  entranceKm: integer('entrance_km'),
+  admittedAt: ts('admitted_at'),
+  statusCode: text('status_code'),
+  statusText: text('status_text'),
+  releasedAt: ts('released_at'),
+  isOpen: boolean('is_open').notNull().default(true),
+  station: text('station'),
+  receptionist: text('receptionist'),
+  searchText: text('search_text').notNull().default(''),
+  official: jsonb('official').$type<Record<string, unknown>>().notNull(),
+  rowHash: text('row_hash').notNull(),
+  firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+  lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+  /** Last read of parts, repairs and defects of the card. */
+  linesReadAt: ts('lines_read_at'),
+  /** Accident case with the same admission number or full VIN, only when unique. */
+  caseId: uuid('case_id').references(() => cases.id),
+  linkState: text('link_state').notNull().default('none'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [
+  uniqueIndex('receptions_tenant_rcd_uq').on(t.tenantId, t.kasbRcd),
+  index('receptions_tenant_open_idx').on(t.tenantId, t.isOpen, t.admittedAt),
+  index('receptions_tenant_admission_idx').on(t.tenantId, t.admissionNoKey),
+  index('receptions_tenant_vin_idx').on(t.tenantId, t.vin),
+]);
+
+/** Fresh column builders for each line table (builders are not shared between tables). */
+const receptionLine = () => ({
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  receptionId: uuid('reception_id').notNull().references(() => receptions.id),
+  kasbLineId: text('kasb_line_id').notNull(),
+  official: jsonb('official').$type<Record<string, unknown>>().notNull(),
+  rowHash: text('row_hash').notNull(),
+  firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  /** No longer in the answer of کسب‌وکار («حذف‌شده در کسب‌وکار»); the row is kept. */
+  removedAt: ts('removed_at'),
+  isTest: boolean('is_test').notNull().default(false),
+});
+
+export const receptionParts = pgTable('reception_parts', {
+  ...receptionLine(),
+  name: text('name'),
+  code: text('code'),
+  qtyRequested: text('qty_requested'),
+  qtyFinal: text('qty_final'),
+  unitPriceRial: bigint('unit_price_rial', { mode: 'number' }),
+  state: text('state'),
+  specialAid: boolean('special_aid').notNull().default(false),
+  warranty: text('warranty'),
+  rejectReason: text('reject_reason'),
+  repairLineId: text('repair_line_id'),
+}, (t) => [uniqueIndex('reception_parts_line_uq').on(t.receptionId, t.kasbLineId), index('reception_parts_tenant_idx').on(t.tenantId)]);
+
+export const receptionRepairs = pgTable('reception_repairs', {
+  ...receptionLine(),
+  code: text('code'),
+  description: text('description'),
+  state: text('state'),
+  finalPriceRial: bigint('final_price_rial', { mode: 'number' }),
+  warranty: text('warranty'),
+  defectLineId: text('defect_line_id'),
+}, (t) => [uniqueIndex('reception_repairs_line_uq').on(t.receptionId, t.kasbLineId), index('reception_repairs_tenant_idx').on(t.tenantId)]);
+
+export const receptionDefects = pgTable('reception_defects', {
+  ...receptionLine(),
+  customerText: text('customer_text'),
+  expertText: text('expert_text'),
+  state: text('state'),
+  type: text('type'),
+}, (t) => [uniqueIndex('reception_defects_line_uq').on(t.receptionId, t.kasbLineId), index('reception_defects_tenant_idx').on(t.tenantId)]);
+
+/** Work done outside the dealership for a reception (recorded in Manage; basis of a future ARPAST link). */
+export const receptionExternalWork = pgTable('reception_external_work', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  receptionId: uuid('reception_id').notNull().references(() => receptions.id),
+  contractorId: uuid('contractor_id').references(() => externalContractors.id),
+  contractorName: text('contractor_name'),
+  description: text('description').notNull(),
+  sentAt: ts('sent_at').notNull(),
+  doneAt: ts('done_at'),
+  amountRial: bigint('amount_rial', { mode: 'number' }),
+  status: text('status').notNull().default('sent'),
+  note: text('note'),
+  cancelReason: text('cancel_reason'),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [index('reception_external_work_reception_idx').on(t.tenantId, t.receptionId)]);
+
+/** Invoice images of external work (same storage as case_documents). */
+export const receptionDocuments = pgTable('reception_documents', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  receptionId: uuid('reception_id').notNull().references(() => receptions.id),
+  externalWorkId: uuid('external_work_id').notNull().references(() => receptionExternalWork.id),
+  fileName: text('file_name').notNull(),
+  mime: text('mime').notNull(),
+  sha256: text('sha256').notNull(),
+  dataBase64: text('data_base64').notNull(),
+  size: integer('size').notNull(),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [uniqueIndex('reception_documents_hash_uq').on(t.tenantId, t.externalWorkId, t.sha256)]);
+
+export const receptionNotes = pgTable('reception_notes', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  receptionId: uuid('reception_id').notNull().references(() => receptions.id),
+  text: text('text').notNull(),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [index('reception_notes_reception_idx').on(t.tenantId, t.receptionId)]);
+
+/** History of a reception folder: official status changes, parts and external work. Append-only. */
+export const receptionEvents = pgTable('reception_events', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  receptionId: uuid('reception_id').notNull().references(() => receptions.id),
+  kind: text('kind').notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>(),
+  actorUserId: uuid('actor_user_id').references(() => users.id),
+  runId: uuid('run_id').references(() => pulseRuns.id),
+  occurredAt: ts('occurred_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [index('reception_events_reception_idx').on(t.receptionId, t.occurredAt), index('reception_events_tenant_idx').on(t.tenantId, t.occurredAt)]);

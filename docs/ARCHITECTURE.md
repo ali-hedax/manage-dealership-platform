@@ -36,6 +36,7 @@ A modular monolith: one API process with domain modules, one web process, one da
 | Financial gate (shares, advance, exceptions) | `apps/api/src/finance` | Implemented |
 | QC, corrective work, independent closes and handover | `apps/api/src/completion` | Implemented (#20) |
 | Personal password + TOTP, invitation administration | `apps/api/src/auth` | Implemented in Preview (#21); recovery remains incomplete |
+| Manage Pulse (read-only کسب‌وکار connection) and «پذیرش و ترخیص» | `apps/api/src/pulse` (worker entry `src/pulse/main.ts`, compose service `pulse`) | Implemented behind `PULSE_ENABLED` (spec section 26) |
 | Advanced finance, documents, reports, notifications, integrations, AI, settings UI | `MODULES` in `packages/shared/src/enums.ts` | Planned; navigation shows "در دست توسعه" |
 
 ## Request path and cross-cutting concerns
