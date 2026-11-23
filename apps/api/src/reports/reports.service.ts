@@ -38,7 +38,7 @@ import { caseSql } from '../cases/cases.service';
 import { badRequest, forbidden } from '../common/errors';
 import { DATABASE, type DatabaseHandle } from '../db/database';
 import { DiscrepanciesService } from '../discrepancies/discrepancies.service';
-import { auditEvents, blockers, cases, departments, partRequests, tasks, tenants, users, vehicles } from '../db/schema';
+import { assessments, assessmentItems, assessmentTechnicalReviews, reminders, reminderRecipients, auditEvents, blockers, cases, departments, partRequests, tasks, tenants, users, vehicles } from '../db/schema';
 
 // Definitions: docs/REPORTS_FA.md. Every figure is computed here from the
 // operational tables, scoped to the actor's dealership; the web app only
@@ -332,6 +332,26 @@ export class ReportsService {
       const holds=await this.db.select({id:blockers.taskId}).from(blockers).where(and(eq(blockers.tenantId,tenant),eq(blockers.isTest,false),inArray(blockers.taskId,ids)));
       for(const hold of holds) if(hold.id) blocked.add(hold.id);
     }
+    // Technical decisions independently attributable to the author or reviewer.
+    const additions = await this.db.select({actor:auditEvents.actorUserId,after:auditEvents.after})
+      .from(auditEvents).where(and(eq(auditEvents.tenantId,tenant),eq(auditEvents.isTest,false),eq(auditEvents.entityType,'assessment'),
+        eq(auditEvents.action,'assessment.item_added'),gte(auditEvents.occurredAt,from),lt(auditEvents.occurredAt,to)));
+    const authors = new Map<string,string>();
+    for (const event of additions) {
+      const data = event.after;
+      if (event.actor && data && typeof data==='object' && 'itemId' in data && typeof data.itemId==='string') authors.set(data.itemId,event.actor);
+    }
+    const decisions = await this.db.select({id:assessmentItems.id,code:assessmentItems.partNumber,reviewer:assessmentTechnicalReviews.reviewedBy,
+      decision:assessmentTechnicalReviews.status,finalizer:assessments.finalizedBy,finalized:assessments.finalizedAt})
+      .from(assessmentTechnicalReviews)
+      .innerJoin(assessmentItems,and(eq(assessmentItems.id,assessmentTechnicalReviews.itemId),eq(assessmentItems.tenantId,tenant),eq(assessmentItems.isTest,false)))
+      .innerJoin(assessments,and(eq(assessments.id,assessmentItems.assessmentId),eq(assessments.tenantId,tenant),eq(assessments.isTest,false)))
+      .where(and(eq(assessmentTechnicalReviews.tenantId,tenant),gte(assessmentTechnicalReviews.reviewedAt,from),lt(assessmentTechnicalReviews.reviewedAt,to)));
+    const followups = await this.db.select({recipient:reminderRecipients.userId,role:reminders.targetRole,seen:reminderRecipients.seenAt,
+      due:reminderRecipients.remindAt,done:reminderRecipients.doneAt,reply:reminderRecipients.reply})
+      .from(reminderRecipients).innerJoin(reminders,and(eq(reminders.id,reminderRecipients.reminderId),eq(reminders.tenantId,tenant),eq(reminders.isTest,false)))
+      .where(and(eq(reminderRecipients.tenantId,tenant),eq(reminderRecipients.isTest,false),gte(reminderRecipients.remindAt,from),
+        lt(reminderRecipients.remindAt,to),ne(reminders.senderUserId,reminderRecipients.userId)));
     return {from:from.toISOString(),to:to.toISOString(),employees:staff.map(person=>{
       const assigned=due.filter(t=>t.assignee===person.id);
       const holds=assigned.filter(t=>blocked.has(t.id)||history.get(t.id)?.has('task.paused')).length;
@@ -345,7 +365,25 @@ export class ReportsService {
           accuracy:ratio(reviewed.filter(t=>!history.get(t.id)?.has('task.reopened')).length,reviewed.length),
           accountability:ratio(reviewed.filter(t=>t.completedBy===person.id).length,reviewed.length),
         }}) : null;
-      return {...person,activity:activity.get(person.id)?.counts??{},score,reviewed:reviewed.length,eligible:eligible.length,
+      const deskScores = (['accident_expert','parts_clerk'] as const).filter(role=>person.roles.includes(role)).map(role=>{
+        const notes=followups.filter(r=>r.recipient===person.id && r.role===role);
+        const closed=notes.filter(r=>r.done);
+        const isExpert=role==='accident_expert';
+        const independent=decisions.filter(d=>isExpert
+          ? authors.get(d.id)===person.id && d.reviewer && d.reviewer!==person.id && ['accepted','returned'].includes(d.decision)
+          : d.reviewer===person.id && d.decision==='accepted' && d.finalized && d.finalizer && d.finalizer!==person.id);
+        // Parts evidence is a recorded code on an independently finalized acceptance. Never treat a correction as fault.
+        const verified=independent.filter(d=>isExpert ? d.decision==='accepted' : !!d.code?.trim());
+        return {role,followups:notes.length,closed:closed.length,reviewed:independent.length,
+          delays:notes.filter(n=>!n.seen || n.seen>n.due).length,
+          result:calculateEmployeeScore({employeeId:person.id,displayName:person.name,roleGroup:isExpert?'accident':'parts',
+            metricVersion:'desk-followups-and-verified-lines-v1',eligibleCompletedEvents:independent.length,
+            ratios:{progress:notes.length>=5?ratio(closed.length,notes.length):null,
+              timeliness:notes.length>=5?ratio(notes.filter(n=>n.seen && n.seen<=n.due).length,notes.length):null,
+              accuracy:ratio(verified.length,independent.length),
+              accountability:closed.length>=5?ratio(closed.filter(n=>n.reply?.trim()).length,closed.length):null}})};
+      });
+      return {...person,activity:activity.get(person.id)?.counts??{},score,deskScores,reviewed:reviewed.length,eligible:eligible.length,
         delays:eligible.filter(t=>!t.end || t.end>t.deadline!).length,holds};
     })};
   }
