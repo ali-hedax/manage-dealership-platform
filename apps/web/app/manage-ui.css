@@ -601,10 +601,11 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .folder-clip { position: absolute; inset-block-start: -14px; inset-inline-end: 22px; filter: drop-shadow(0 2px 2px rgba(21, 24, 29, .25)); }
 .folder-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block-end: 12px; border-block-end: 1px solid #EEEAE2; }
 .folder-who { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
-.folder-car { font-size: 22px; font-weight: 800; color: #15181D; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
-/* The plate keeps its own size beside long names (it was squeezed to a sliver in folder cards). */
-.folder-top > .plate, .folder-top > .plate-free { flex: none; }
-.plate { flex-shrink: 0; white-space: nowrap; }
+.folder-car { font-size: 22px; font-weight: 800; color: #15181D; }
+/* Special-aid folders only (owner, 2026-11-23): the plate keeps its size beside the name. Not for
+   accident case folders, whose plate layout is unchanged. */
+.aid-folder .folder-car { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.aid-folder .folder-top > .plate, .aid-folder .folder-top > .plate-free { flex: none; white-space: nowrap; }
 .vehicle-spec { margin-block: 4px 8px; font-size: 13px; color: #5B6068; }
 .vehicle-spec > summary { cursor: pointer; color: #12645D; font-weight: 600; inline-size: fit-content; }
 .vehicle-spec > p { margin: 6px 0 0; line-height: 1.9; }

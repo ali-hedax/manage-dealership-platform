@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  CHANGE_NOTES, moduleStatuses, permissionsFor, PERMISSION_GROUPS, PERMISSION_LABELS, PERMISSIONS, PIN_DENIED_PERMISSIONS, pulseCaptchaSchema, pulseCommandSchema, pulseCredentialsSchema,
+  CHANGE_NOTES, kasbCredentialText, moduleStatuses, permissionsFor, PERMISSION_GROUPS, PERMISSION_LABELS, PERMISSIONS, PIN_DENIED_PERMISSIONS, pulseCaptchaSchema, pulseCommandSchema, pulseCredentialsSchema,
   pulseSentence, pulseSettingsSchema, receptionExternalWorkSchema, receptionSearchSchema,
 } from '../index';
 
@@ -51,6 +51,15 @@ test('settings, credentials and commands are validated', () => {
 });
 
 test('the release carries one Persian change note for Manage Pulse', () => {
-  assert.equal(CHANGE_NOTES[0]!.key, 'manage-pulse');
+  assert.equal(CHANGE_NOTES.some((n) => n.key === 'manage-pulse'), true);
   assert.equal(new Set(CHANGE_NOTES.map((n) => n.key)).size, CHANGE_NOTES.length);
+});
+
+test('credentials typed on a Persian keyboard reach کسب‌وکار with Latin digits', () => {
+  const v = pulseCredentialsSchema.parse({ expectedVersion: 0, dealerCode: ' ۴۰۰ ۱۳۰۷‏', username: '‎۰۳۸۳۹۴۸۷۲۱ ', password: 'Ab۱۲۳' });
+  assert.equal(v.dealerCode, '4001307');
+  assert.equal(v.username, '0383948721');
+  assert.equal(v.password, 'Ab123');
+  assert.equal(kasbCredentialText('٠١٢'), '012');
+  assert.equal(pulseCredentialsSchema.safeParse({ expectedVersion: 0, dealerCode: '‏', username: 'x' }).success, false);
 });

@@ -1,3 +1,4 @@
+import { browserFromServerTime, hashData } from '../src/pulse/kasb-protocol';
 import { KasbClient, assertAllowed, jwtExpiry } from '../src/pulse/kasb-client';
 import { KASB_PATHS } from '../src/pulse/kasb-protocol';
 import { KasbMock, mockCardRow, mockPartRow } from './kasb-mock';
@@ -43,6 +44,14 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     const file = await c.stockFile('14553', 1405);
     expect(file.toString('utf8')).toBe(mock.stockHtml);
     expect(mock.stockRequests[0]).toEqual({ CurYear: '1405', DssdSsd: '14553', WgdmGdm: '', TypeGhete: '' });
+    // Every sealed request after GetCapcha travelled inside HashData with the «browser» suffix.
+    expect(mock.bareRequests).toBe(0);
+  });
+
+  it('wraps every request in HashData like the site; a bare payload is what produced 99999 (owner, 2026-11-23)', () => {
+    const env = hashData({ Rcd: 12 }, '0123');
+    expect(env.HashData).toBe(Buffer.from('{"Rcd":12}').toString('base64') + Buffer.from('0123').toString('base64'));
+    expect(browserFromServerTime(1795414599123)).toBe('9123');
   });
 
   it('sends only allowlisted, read-only requests', async () => {

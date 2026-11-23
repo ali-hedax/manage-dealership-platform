@@ -1,8 +1,9 @@
 import type { KeyObject } from 'node:crypto';
+import { kasbCredentialText } from '@manage/shared';
 import { importPrivateKey, importPublicKey, openAnswer, sealRequest, type KasbAnswer } from './kasb-crypto';
 import { KasbError } from './kasb-errors';
 import { extractKeys, findMainChunk, missingServicePaths } from './kasb-keys';
-import { captchaFields, KASB_ALLOWED_API, KASB_ALLOWED_STATIC, KASB_ORIGIN, KASB_PATHS, KASB_USER_AGENT, LOGIN_STATUS_CHANGE_PASSWORD, LOGIN_STATUS_OK } from './kasb-protocol';
+import { browserFromServerTime, captchaFields, hashData, KASB_ALLOWED_API, KASB_ALLOWED_STATIC, KASB_ORIGIN, KASB_PATHS, KASB_USER_AGENT, LOGIN_STATUS_CHANGE_PASSWORD, LOGIN_STATUS_OK } from './kasb-protocol';
 import { parseTable, type KasbTable } from './kasb-table';
 
 // HTTP client of کسب‌وکار: the same JSON API the browser calls, over plain HTTPS (no browser
@@ -70,6 +71,8 @@ export class KasbClient {
   private readonly onRequest?: (method: string, path: string) => void;
   private keys: { serverPublic: KeyObject; clientPrivate: KeyObject; version: string } | null = null;
   private token: { value: string; expiresAt: number } | null = null;
+  /** The site's localStorage «browser» value: suffix of every HashData envelope (see hashData). */
+  private browser: string | null = null;
   private scheme: 'raw' | 'bearer' = 'raw';
   private active = 0;
   private nextStart = 0;
@@ -165,6 +168,9 @@ export class KasbClient {
   private async exchange<T>(path: string, payload: unknown, method: 'GET' | 'POST', auth: boolean, retried = false): Promise<KasbAnswer<T>> {
     if (!this.keys) await this.loadKeys();
     const keys = this.keys!;
+    const original = payload;
+    // Every service except Sec/GetCapcha travels inside the HashData envelope, like the site does.
+    if (method === 'POST' && path !== KASB_PATHS.captcha) payload = hashData(payload ?? {}, this.browser ?? '');
     const headers: Record<string, string> = { sec: 'site', Origin: this.origin };
     if (method === 'POST') headers['Content-Type'] = 'application/json;charset=UTF-8';
     if (auth && this.token) headers.Authorization = this.scheme === 'bearer' ? `Bearer ${this.token.value}` : this.token.value;
@@ -184,7 +190,7 @@ export class KasbClient {
       // A new client key in a new bundle: read the keys again and repeat this read once.
       if (!retried && e instanceof KasbError && e.code === 'KASB_DECRYPT') {
         await this.loadKeys(true);
-        return this.exchange<T>(path, payload, method, auth, true);
+        return this.exchange<T>(path, original, method, auth, true);
       }
       throw e;
     }
@@ -197,6 +203,7 @@ export class KasbClient {
     const answer = await this.exchange<{ ImgCapcha?: unknown }>(KASB_PATHS.captcha, { Lng: 'fa' }, 'POST', false);
     if (!answer.Success) throw new KasbError('KASB_REJECTED', undefined, answer.MessageCode != null ? String(answer.MessageCode) : undefined);
     const image = answer.Data?.ImgCapcha;
+    this.browser = browserFromServerTime((answer.Data as { ServerTime?: unknown } | undefined)?.ServerTime);
     return typeof image === 'string' && image.length > 0 ? image : null;
   }
 
@@ -208,8 +215,10 @@ export class KasbClient {
     if (!captchaAnswer) {
       const image = await this.checkCaptcha();
       if (image) return { kind: 'captcha', image };
+    } else {
+      this.browser = captchaAnswer.trim();
     }
-    const payload = { Scus: creds.dealerCode, UserName: creds.username.toLowerCase(), Password: creds.password, ClientVersion: this.clientVersion, Lng: 'fa', ...captchaFields(captchaAnswer) };
+    const payload = { Scus: kasbCredentialText(creds.dealerCode).replace(/\s+/g, ''), UserName: kasbCredentialText(creds.username).trim().toLowerCase(), Password: kasbCredentialText(creds.password), ClientVersion: this.clientVersion, Lng: 'fa', ...captchaFields(captchaAnswer) };
     const answer = await this.exchange<Record<string, unknown> | null>(KASB_PATHS.login, payload, 'POST', false);
     const data = answer.Data ?? {};
     const status = data.status == null ? null : Number(data.status);
@@ -281,7 +290,7 @@ export class KasbClient {
     if (!this.hasSession()) throw new KasbError('KASB_AUTH');
     if (!this.keys) await this.loadKeys();
     const headers: Record<string, string> = { sec: 'site', Origin: this.origin, 'Content-Type': 'application/json;charset=UTF-8', Authorization: this.authValue() };
-    const body = JSON.stringify(sealRequest({ CurYear: String(jalaliYear), DssdSsd: warehouse, WgdmGdm: '', TypeGhete: '' }, this.keys!.serverPublic));
+    const body = JSON.stringify(sealRequest(hashData({ CurYear: String(jalaliYear), DssdSsd: warehouse, WgdmGdm: '', TypeGhete: '' }, this.browser ?? ''), this.keys!.serverPublic));
     const res = await this.request('POST', `/api/${KASB_PATHS.stock}`, { headers, body });
     if (res.status === 401 || res.status === 403) throw new KasbError('KASB_AUTH', res.status);
     if (!res.ok) throw new KasbError(res.status >= 500 ? 'KASB_UNREACHABLE' : 'KASB_PROTOCOL', res.status);

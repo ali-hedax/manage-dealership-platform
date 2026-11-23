@@ -53,8 +53,27 @@ export const LOGIN_STATUS_CHANGE_PASSWORD = 1;
  * How the answer to a captcha image is sent. Not visible in the recording (no captcha was asked);
  * confirm it from `submitform` in main.*.chunk.js at the first captcha and adjust only here.
  */
-export function captchaFields(answer: string | null): Record<string, string> {
-  return answer ? { Capcha: answer } : {};
+export function captchaFields(_answer: string | null): Record<string, string> {
+  // The captcha answer is not a login field: it becomes the HashData suffix (see hashData).
+  return {};
+}
+
+/**
+ * The real client (Services in main.*.chunk.js, confirmed against the owner's recordings,
+ * 2026-11-23) does NOT seal the payload itself: for every service that is not marked FormData it
+ * seals `{ HashData: base64(JSON.stringify(payload)) + suffix }`, where `suffix` is the value it
+ * keeps in localStorage «browser»: base64 of the last four digits of Sec/GetCapcha's ServerTime,
+ * or base64 of the captcha answer when a captcha was shown. Sending the bare payload is answered
+ * with MessageCode 99999. Sec/GetCapcha itself is sent bare ({"Lng":"fa"}).
+ */
+export function hashData(payload: unknown, browser: string): { HashData: string } {
+  return { HashData: Buffer.from(JSON.stringify(payload), 'utf8').toString('base64') + Buffer.from(browser, 'utf8').toString('base64') };
+}
+
+/** Value the site keeps as «browser» when no captcha is shown. */
+export function browserFromServerTime(serverTime: unknown): string {
+  const t = String(serverTime ?? '');
+  return t.slice(-4);
 }
 
 /** Domain of the admission status texts in Sec/Code. */

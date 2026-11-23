@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { formatJalali } from './jalali';
-import { toPersianDigits } from './text';
+import { toLatinDigits, toPersianDigits } from './text';
 import type { Paged } from './types';
 
 // Manage Pulse («منیج پالس», spec section 26): a read-only worker that signs in to ISACO
@@ -115,13 +115,23 @@ export const pulseSettingsSchema = z.object({
 }).strict().refine((v) => v.hoursFrom < v.hoursTo, { message: 'ساعت پایان باید بعد از ساعت شروع باشد', path: ['hoursTo'] });
 export type PulseSettingsInput = z.infer<typeof pulseSettingsSchema>;
 
+/**
+ * کسب‌وکار accepts only Latin digits. A code, username or password typed on a Persian keyboard
+ * («۴۰۰۱۳۰۷») or pasted with invisible direction marks is rejected there, so every credential is
+ * normalised before it is stored and again before each login (owner's first test, 2026-11-23).
+ */
+export function kasbCredentialText(value: string): string {
+  return toLatinDigits(value.replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ''));
+}
+const credentialField = (max: number) => z.string().transform((v) => kasbCredentialText(v).trim()).pipe(z.string().min(1).max(max));
+
 export const pulseCredentialsSchema = z.object({
   /** 0 when the connection is created for the first time. */
   expectedVersion: z.number().int().min(0),
-  dealerCode: z.string().trim().min(1).max(16),
-  username: z.string().trim().min(1).max(64),
-  /** Write-only. Omitted to keep the stored password. */
-  password: z.string().min(1).max(128).optional(),
+  dealerCode: credentialField(16).transform((v) => v.replace(/\s+/g, '')),
+  username: credentialField(64),
+  /** Write-only. Omitted to keep the stored password. Digits are made Latin; nothing else changes. */
+  password: z.string().transform(kasbCredentialText).pipe(z.string().min(1).max(128)).optional(),
 }).strict();
 export type PulseCredentialsInput = z.infer<typeof pulseCredentialsSchema>;
 

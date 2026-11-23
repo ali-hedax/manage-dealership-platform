@@ -62,7 +62,7 @@ const taskTone = (t: SpecialAidTask | null) => (!t ? 'ok' : t.urgent || t.overdu
 export function DossierFolder({ d }: { d: SpecialAidDossierRow }) {
   const car = d.vehicle.model ?? 'خودرو';
   return (
-    <article className={`folder cov-own${d.urgent ? ' folder-behind' : ''}`} aria-label={`پروندهٔ امداد ویژهٔ ${car}${d.vehicle.plate ? `، پلاک ${toPersianDigits(d.vehicle.plate)}` : ''}`}>
+    <article className={`folder aid-folder cov-own${d.urgent ? ' folder-behind' : ''}`} aria-label={`پروندهٔ امداد ویژهٔ ${car}${d.vehicle.plate ? `، پلاک ${toPersianDigits(d.vehicle.plate)}` : ''}`}>
       <span className="folder-tab" aria-hidden="true" />
       <div className="folder-top">
         <div className="folder-who">

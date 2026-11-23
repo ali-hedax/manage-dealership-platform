@@ -105,6 +105,7 @@ function CredentialsForm({ s, busy, onSave }: { s: PulseStatus; busy: boolean; o
           <label className="field"><span>کد نمایندگی</span><input className="input ltr-input" inputMode="numeric" autoComplete="off" maxLength={16} value={dealerCode} onChange={(e) => setDealerCode(e.target.value)} /></label>
           <label className="field"><span>نام کاربری</span><input className="input ltr-input" autoComplete="off" maxLength={64} value={username} onChange={(e) => setUsername(e.target.value)} /></label>
         </div>
+        <p className="xs muted">دقیقاً همان سه مشخصهٔ صفحهٔ ورود کسب‌وکار. کد نمایندگی همان کد کامل بالای صفحهٔ کسب‌وکار است (مثلاً ۴۰۰۱۳۰۷، نه فقط ۱۳۰۷). اعداد فارسی خودکار به انگلیسی تبدیل می‌شوند. اگر ورود پذیرفته نشد، «جزئیات فنی» همان اجرا در جدول پایین کد پیام کسب‌وکار را نشان می‌دهد.</p>
         {changePassword
           ? <label className="field"><span>کلمه عبور</span><input className="input ltr-input" type="password" autoComplete="new-password" maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           : <p className="small">کلمه عبور: <span className="m-tag ok">ثبت شده</span> <button type="button" className="btn btn-sm btn-ghost" onClick={() => setChangePassword(true)}>تغییر</button></p>}
