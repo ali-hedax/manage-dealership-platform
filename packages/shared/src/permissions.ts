@@ -55,6 +55,10 @@ export const PERMISSIONS = [
   'special_aid.report', // management dashboard of the module
   'special_aid.warn', // technical feedback and formal warnings (service manager)
   'report_center.manage', // business report center: guides, periods and cross-report status
+  // Manage Pulse and the reception module (owner, 2026-11-23; spec section 26).
+  'integration.manage', // کسب‌وکار connection: credentials, start/stop, test, captcha (owner and system administrator)
+  'reception.read', // reception folders read from کسب‌وکار, including the customer's contact details
+  'reception.external_work', // work outside the dealership and notes on a reception folder
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -114,4 +118,4 @@ export const isPinEligible = (roles: readonly string[], isOwner = false) => {
  * who always sign in with email + Authenticator. Everything else follows the person's role, so a
  * service manager or coordinator keeps their approvals when they sign in with the 4-digit PIN.
  */
-export const PIN_DENIED_PERMISSIONS: readonly Permission[] = ['user.manage', 'settings.manage', 'daily_reports.settings', 'report_center.manage'];
+export const PIN_DENIED_PERMISSIONS: readonly Permission[] = ['user.manage', 'settings.manage', 'daily_reports.settings', 'report_center.manage', 'integration.manage'];

@@ -173,7 +173,9 @@ export const DEFAULT_DEPARTMENTS = [
 // visible in navigation as roadmap items and must not expose fake actions.
 export const MODULES = [
   { key: 'accident', status: 'active' },
-  { key: 'reception', status: 'planned' },
+  // Active behind the server flag PULSE_ENABLED (spec section 26): while it is off the
+  // roadmap keeps showing «در دست توسعه». See moduleStatuses().
+  { key: 'reception', status: 'active', flag: 'PULSE_ENABLED' },
   { key: 'periodic_service', status: 'planned' },
   { key: 'warranty', status: 'planned' },
   { key: 'parts_inventory', status: 'planned' },
@@ -185,6 +187,11 @@ export const MODULES = [
   { key: 'ai_assistant', status: 'planned' },
 ] as const;
 export type ModuleKey = (typeof MODULES)[number]['key'];
+export type ModuleFlag = 'PULSE_ENABLED';
+/** Module statuses for the signed-in user: a module behind a server flag stays planned while the flag is off. */
+export function moduleStatuses(flags: Partial<Record<ModuleFlag, boolean>>): { key: ModuleKey; status: 'active' | 'planned' }[] {
+  return MODULES.map((m) => ({ key: m.key, status: 'flag' in m && !flags[m.flag] ? 'planned' : m.status }));
+}
 
 // Quality control: one checklist per QC round. A failed item opens a
 // corrective activity; the case returns to repair until a new round passes.

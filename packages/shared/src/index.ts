@@ -38,3 +38,4 @@ export * from './vehicle-fitment';
 export * from './parts-picking';
 export * from './special-aid';
 export * from './report-center';
+export * from './pulse';
