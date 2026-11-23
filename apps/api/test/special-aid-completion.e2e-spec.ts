@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import { formatJalaliDateInput, formatTimeInput, toJalaliParts, type DailyImport, type Paged, type ReferenceImport, type ReferenceInspection, type SpecialAidDossier, type SpecialAidDossierRow } from '@manage/shared';
-import { auditEvents, specialAidCards, stockReservations, users } from '../src/db/schema';
+import { auditEvents, specialAidCards, specialAidItems, stockReservations, users } from '../src/db/schema';
 import { buildEmdadXml, buildStockXlsx, emdadRow, type EmdadRow, type StockRow } from '../src/daily-reports/fixtures';
 import { writeSheet } from '../src/parts/xlsx';
 import { Client, createHarness, type Harness } from './harness';
@@ -239,4 +239,33 @@ it('the ISACO 8-character chassis of the real reports opens a dossier; a broken 
   // «خواندن دوباره» is idempotent: nothing new on a second run.
   const again = (await operator.post('/special-aid/sync', {})).body;
   expect(again).toMatchObject({ dossiers: 0, admissions: 0, items: 0, statusChanges: 0, held: 0 });
+});
+
+it('a line that had already arrived before the module saw it is never held automatically; a manual hold still works', async () => {
+  expect((await apply(await preview('stock', buildStockXlsx([sku('0031313101', '2', 'S-01'), sku('0034343401', '3', 'S-04')])), -430)).status).toBe(201);
+  const HIST_VIN = 'TESTVIN0000SC0004';
+  const hist = { ...arrived, 'شماره شاسی': HIST_VIN, 'شماره کارت پذيرش': '991090', 'شماره امداد ویژه': '0091090', 'کد قطعه': '00343434', 'کد اختصاصی اولیه': '00343434', 'كد تداركاتي كالا': '0034343401' };
+  const rows = [emdadRow(1, arrived), emdadRow(2, wrong), emdadRow(3, correct), emdadRow(8, hist)];
+  await publish(rows, -425);
+  // New in the report being published: held automatically.
+  let d = await detail(operator, (await dossierOf(operator, HIST_VIN)).id);
+  let x = d.items.find((i) => i.emdadNo === '0091090')!;
+  expect(x.state).toBe('reserved');
+  // Simulate data from before the module existed: the report row stays, the module line is gone.
+  await h.db.db.delete(stockReservations).where(eq(stockReservations.specialAidItemId, x.id));
+  await h.db.db.delete(specialAidItems).where(eq(specialAidItems.id, x.id));
+  expect(await available('0034343401')).toBe(3);
+  await publish(rows, -420);
+  d = await detail(operator, (await dossierOf(operator, HIST_VIN)).id);
+  x = d.items.find((i) => i.emdadNo === '0091090')!;
+  expect(x.state).toBe('arrived');
+  expect(x.holdNote).toContain('رزرو خودکار نمی‌شود');
+  expect(await available('0034343401')).toBe(3);
+  // A later report does not hold it either.
+  await publish(rows, -415);
+  expect(await available('0034343401')).toBe(3);
+  // Staff can still hold it by hand for this vehicle.
+  const r = await operator.post(`/special-aid/items/${x.id}/action`, { action: 'reserve', expectedVersion: (await detail(operator, d.id)).items.find((i) => i.id === x.id)!.version });
+  expect(r.status).toBe(201);
+  expect(await available('0034343401')).toBe(2);
 });
