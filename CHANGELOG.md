@@ -528,3 +528,5 @@ All notable changes. Versions follow semantic versioning once releases start.
 - Persian A4 PDF reports with embedded Vazirmatn, dealership header, row-limit disclosure, repeated table header, multi-page long rows and page numbers.
 - Parts discrepancy queue in warehouse and manager reports: deduplicated findings, assignee, reasoned outcomes, optimistic locking and tenant isolation. Detection, condition changes and review actions retain transactional audit/change history.
 - CI exports the images it smoke-tests for an owner-approved Preview installation; CI does not deploy or connect to the server.
+
+- کارتابل تعمیرکار: ثبت توقف موقت و ادامه مستقل هر خودرو با علت و کسر زمان توقف از مدت کار.

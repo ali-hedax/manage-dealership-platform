@@ -1012,3 +1012,6 @@ Published to the owner-approved Preview after a verified restore drill. Health p
 - Every part lists possible repair destinations. The staff member chooses an exact active task/station; the server validates it belongs to the case (and if blockers exist, to the blocked task) before notifying assigned technician, station responsible, case responsible, accident supervisor and other parts staff. The receipt is still recorded only on physical pickup/handover.
 - Added API tests for station isolation and quoted-price self-registration (with official reference required).
 - Latest CI result must be checked before merge: prior run found and fixed one TypeScript narrowing error; no direct local build or Production deploy performed.
+
+### 2026-11-23 — independent technician pauses
+Technician pause/resume persists in the existing transactional per-task audit stream with a required reason, tenant and assignee checks, expected version and working-time exclusion. No schema migration. Local synthetic API verification: 4 suites / 14 passed (technician-timing, smart-assessment, case-sorting, isaco-parts). Shared package/employee tests: 9 passed. Web TypeScript passed. Browser and complete CI verification pending.

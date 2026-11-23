@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 import { addWorkingMinutes,workingDayMinutes,nextWorkingInstant } from '@manage/shared';
 import { calendarAt } from '../workshop/work-calendar';
 import { stepDependencies, TASK_CANCEL_REASON_LABELS, type CancelTaskInput, type ReactivateTaskInput, type CreateTaskInput, type RepairPlanStepsInput, type Task, type TaskActionInput, type TaskStatus, type UpdateTaskInput } from '@manage/shared';
@@ -10,7 +10,7 @@ import { badRequest, forbidden, notFound, versionConflict } from '../common/erro
 import { requireSupportReason } from '../auth/support-reason';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { departments, externalWork, partRequests, taskDependencies, tasks, technicianWages, workshopStations, users } from '../db/schema';
+import { auditEvents, departments, externalWork, partRequests, taskDependencies, tasks, technicianWages, workshopStations, users } from '../db/schema';
 
 type TaskRow = typeof tasks.$inferSelect;
 
@@ -224,7 +224,7 @@ export class TasksService {
    * with reopen for corrective work. Blocking goes through BlockersService.
    */
   async executeOwn(actor: Actor, taskId: string, input: TaskActionInput) {
-    if(!['start','complete'].includes(input.action) || input.at || input.note) throw forbidden('فقط شروع و پایان کار محول‌شده مجاز است');
+    if(!['start','complete','pause','resume'].includes(input.action) || input.at || (input.note && !['pause','resume'].includes(input.action))) throw forbidden('فقط شروع و پایان کار محول‌شده مجاز است');
     await this.act(actor,taskId,input,true);
     return {status:'ok'};
   }
@@ -241,7 +241,7 @@ export class TasksService {
     assertNotFuture(at, 'زمان ثبت‌شده نمی‌تواند در آینده باشد');
     const task = await this.loadForWrite(tx, tenantId, taskId, input.expectedVersion);
     if(own && task.assignedUserId !== actor.user.id) throw forbidden('این کار به شما محول نشده است');
-    if (!external && (input.action === 'start' || input.action === 'complete')) {
+    if (!external && ['start','complete','pause','resume'].includes(input.action)) {
       const [job] = await tx.select({ id: externalWork.taskId }).from(externalWork)
         .where(and(eq(externalWork.taskId, taskId), eq(externalWork.tenantId, tenantId)));
       if (job) throw badRequest('EXTERNAL_WORK_ACTION', 'این مرحله در بخش کار بیرون از نمایندگی پیگیری می‌شود');
@@ -263,7 +263,22 @@ export class TasksService {
     let patch: Partial<TaskRow>;
     let action: string;
 
+    if (['pause', 'resume', 'complete'].includes(input.action)) {
+      const [last] = await tx.select({ action: auditEvents.action }).from(auditEvents)
+        .where(and(eq(auditEvents.tenantId, tenantId), eq(auditEvents.entityType, 'task'),
+          eq(auditEvents.entityId, taskId), inArray(auditEvents.action, ['task.paused', 'task.resumed'])))
+        .orderBy(desc(auditEvents.occurredAt), desc(auditEvents.id)).limit(1);
+      const paused = last?.action === 'task.paused';
+      if ((input.action === 'resume') !== paused)
+        throw badRequest('TASK_PAUSE_STATE', paused ? 'پیش از پایان، ادامه کار را ثبت کنید' : 'این کار در توقف نیست');
+    }
     switch (input.action) {
+      case 'pause':
+      case 'resume':
+        if (status !== 'in_progress' || input.at) throw invalidTransition(status, input.action === 'pause' ? 'توقف' : 'ادامه');
+        patch = {};
+        action = input.action === 'pause' ? 'task.paused' : 'task.resumed';
+        break;
       case 'start': {
         if (status !== 'pending') throw invalidTransition(status, 'شروع');
         patch = { status: 'in_progress', actualStartAt: at };

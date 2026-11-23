@@ -269,6 +269,7 @@ export const taskActionSchema = z
     at: optionalIsoDate,
     note: optionalText(1000),
   })
+  .refine(v => !['pause','resume'].includes(v.action) || !!v.note?.trim(), { message: 'علت توقف یا ادامه کار را ثبت کنید', path: ['note'] })
   .refine((v) => v.action !== 'reopen' || !!v.note, {
     message: 'برای بازگشایی فعالیت ذکر دلیل الزامی است',
     path: ['note'],

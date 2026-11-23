@@ -67,7 +67,7 @@ export const TASK_CANCEL_REASONS = ['customer_withdrew', 'expert_changed', 'plan
 export type TaskCancelReason = (typeof TASK_CANCEL_REASONS)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export const TASK_ACTIONS = ['start', 'complete', 'approve', 'reopen'] as const;
+export const TASK_ACTIONS = ['start', 'complete', 'approve', 'reopen', 'pause', 'resume'] as const;
 export type TaskAction = (typeof TASK_ACTIONS)[number];
 
 export const BLOCKER_REASONS = [

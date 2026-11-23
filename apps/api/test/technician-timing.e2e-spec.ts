@@ -163,6 +163,14 @@ it('allows the same technician to start multiple assigned vehicles without compl
   expect(active).toHaveLength(3);
   expect(active.every(t => t.status === 'in_progress' && !!t.actualStartAt)).toBe(true);
 
+  const other = active.find(t => t.id === ids[1])!;
+  const route = `/workshop/my-tasks/${other.id}/actions`;
+  expect((await paintTech.post(route,{action:'pause',expectedVersion:other.version,note:'انتظار قطعه'})).status).toBe(201);
+  const paused = (await mine(paintTech)).find(t=>t.id===other.id)!;
+  expect(paused.pauseReason).toBe('انتظار قطعه');
+  expect((await paintTech.post(route,{action:'complete',expectedVersion:paused.version})).status).toBe(422);
+  expect((await paintTech.post(route,{action:'resume',expectedVersion:paused.version,note:'قطعه رسید'})).status).toBe(201);
+  expect((await mine(paintTech)).find(t=>t.id===other.id)!.pauseReason).toBeNull();
   const firstNow = active.find(t => t.id === ids[0])!;
   expect((await paintTech.post(`/workshop/my-tasks/${firstNow.id}/actions`, {
     action: 'complete', expectedVersion: firstNow.version,
