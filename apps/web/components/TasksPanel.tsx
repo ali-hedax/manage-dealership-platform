@@ -38,6 +38,8 @@ const ACTION_LABELS: Record<TaskAction, string> = {
   complete: 'اتمام',
   approve: 'تأیید تحویل',
   reopen: 'بازگشایی',
+  pause: 'توقف موقت',
+  resume: 'ادامه کار',
 };
 
 type Pending =

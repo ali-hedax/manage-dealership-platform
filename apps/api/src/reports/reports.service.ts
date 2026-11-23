@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, gte, inArray, isNull, like, lt, ne, sql, type SQL } from 'drizzle-orm';
 import {
+  aggregateStaffActivity, calculateEmployeeScore, MEANINGFUL_STAFF_EVENTS,
   SERVICE_KPIS,
   SERVICE_KPI_KEYS,
   serviceKpiMembers,
@@ -37,7 +38,7 @@ import { caseSql } from '../cases/cases.service';
 import { badRequest, forbidden } from '../common/errors';
 import { DATABASE, type DatabaseHandle } from '../db/database';
 import { DiscrepanciesService } from '../discrepancies/discrepancies.service';
-import { cases, departments, partRequests, tasks, tenants, users, vehicles } from '../db/schema';
+import { assessments, assessmentItems, assessmentTechnicalReviews, reminders, reminderRecipients, auditEvents, blockers, cases, departments, partRequests, tasks, technicianWages, tenants, users, vehicles } from '../db/schema';
 
 // Definitions: docs/REPORTS_FA.md. Every figure is computed here from the
 // operational tables, scoped to the actor's dealership; the web app only
@@ -301,6 +302,102 @@ export class ReportsService {
   }
 
   /** The four approved numbers with their exact rows, for the service manager dashboard. */
+  async employeePerformance(actor: Actor, now = new Date()) {
+    if (!actor.user.permissions.has('report.manager')) throw forbidden();
+    const tenant = actor.user.tenantId;
+    const {from,to} = periodRange({period:'month'},now);
+    const staff = await this.db.select({id:users.id,name:users.displayName,roles:users.roles,active:users.isActive}).from(users)
+      .where(eq(users.tenantId,tenant)).orderBy(users.displayName,users.id);
+    const events = await this.db.select({id:auditEvents.id,actorUserId:auditEvents.actorUserId,action:auditEvents.action,
+      occurredAt:auditEvents.occurredAt,isTest:auditEvents.isTest}).from(auditEvents).where(and(eq(auditEvents.tenantId,tenant),
+      eq(auditEvents.isTest,false),gte(auditEvents.occurredAt,from),lt(auditEvents.occurredAt,to),inArray(auditEvents.action,Object.keys(MEANINGFUL_STAFF_EVENTS))));
+    const activity = new Map(aggregateStaffActivity(events.map(e=>({...e,occurredAt:e.occurredAt.toISOString()}))).employees.map(a=>[a.employeeId,a]));
+    // Freeze the cohort by original deadline. Exclude assignments with documented blockers, pauses,
+    // reassignment, missing start evidence, or no independent handover decision from scored ratios.
+    const due = await this.db.select({id:tasks.id,assignee:tasks.assignedUserId,end:tasks.actualEndAt,start:tasks.actualStartAt,
+      deadline:tasks.baselineEndAt,completedBy:tasks.completedBy,approvedBy:tasks.approvedBy,status:tasks.status}).from(tasks)
+      .where(and(eq(tasks.tenantId,tenant),eq(tasks.isTest,false),gte(tasks.baselineEndAt,from),lt(tasks.baselineEndAt,to),ne(tasks.status,'cancelled')));
+    const history = new Map<string, Set<string>>();
+    const blocked = new Set<string>();
+    for(let i=0;i<due.length;i+=500) {
+      const ids=due.slice(i,i+500).map(t=>t.id);
+      const changes=await this.db.select({id:auditEvents.entityId,action:auditEvents.action,after:auditEvents.after})
+        .from(auditEvents).where(and(eq(auditEvents.tenantId,tenant),eq(auditEvents.isTest,false),eq(auditEvents.entityType,'task'),
+          inArray(auditEvents.entityId,ids),inArray(auditEvents.action,['task.paused','task.reopened','task.updated'])));
+      for(const change of changes) {
+        const set=history.get(change.id)??new Set<string>();
+        if(change.action!=='task.updated'||(change.after && typeof change.after==='object' && 'assignedUserId' in change.after)) set.add(change.action);
+        history.set(change.id,set);
+      }
+      const holds=await this.db.select({id:blockers.taskId}).from(blockers).where(and(eq(blockers.tenantId,tenant),eq(blockers.isTest,false),inArray(blockers.taskId,ids)));
+      for(const hold of holds) if(hold.id) blocked.add(hold.id);
+    }
+    // Technical decisions independently attributable to the author or reviewer.
+    const additions = await this.db.select({actor:auditEvents.actorUserId,after:auditEvents.after})
+      .from(auditEvents).where(and(eq(auditEvents.tenantId,tenant),eq(auditEvents.isTest,false),eq(auditEvents.entityType,'assessment'),
+        eq(auditEvents.action,'assessment.item_added'),gte(auditEvents.occurredAt,from),lt(auditEvents.occurredAt,to)));
+    const authors = new Map<string,string>();
+    for (const event of additions) {
+      const data = event.after;
+      if (event.actor && data && typeof data==='object' && 'itemId' in data && typeof data.itemId==='string') authors.set(data.itemId,event.actor);
+    }
+    const decisions = await this.db.select({id:assessmentItems.id,code:assessmentItems.partNumber,reviewer:assessmentTechnicalReviews.reviewedBy,
+      decision:assessmentTechnicalReviews.status,finalizer:assessments.finalizedBy,finalized:assessments.finalizedAt})
+      .from(assessmentTechnicalReviews)
+      .innerJoin(assessmentItems,and(eq(assessmentItems.id,assessmentTechnicalReviews.itemId),eq(assessmentItems.tenantId,tenant),eq(assessmentItems.isTest,false)))
+      .innerJoin(assessments,and(eq(assessments.id,assessmentItems.assessmentId),eq(assessments.tenantId,tenant),eq(assessments.isTest,false)))
+      .where(and(eq(assessmentTechnicalReviews.tenantId,tenant),gte(assessmentTechnicalReviews.reviewedAt,from),lt(assessmentTechnicalReviews.reviewedAt,to)));
+    const followups = await this.db.select({recipient:reminderRecipients.userId,role:reminders.targetRole,seen:reminderRecipients.seenAt,
+      due:reminderRecipients.remindAt,done:reminderRecipients.doneAt,reply:reminderRecipients.reply})
+      .from(reminderRecipients).innerJoin(reminders,and(eq(reminders.id,reminderRecipients.reminderId),eq(reminders.tenantId,tenant),eq(reminders.isTest,false)))
+      .where(and(eq(reminderRecipients.tenantId,tenant),eq(reminderRecipients.isTest,false),gte(reminderRecipients.remindAt,from),
+        lt(reminderRecipients.remindAt,to),ne(reminders.senderUserId,reminderRecipients.userId)));
+    // Revenue provenance: only the wage recorded on each job (who set it, when), for jobs approved in
+    // this month. Never estimated from the case or the assessment; amounts only with wage.report.
+    const showWages = actor.user.permissions.has('wage.report');
+    const approvedJobs = await this.db.select({assignee:tasks.assignedUserId,amount:technicianWages.amountRial,setBy:technicianWages.setBy})
+      .from(tasks).leftJoin(technicianWages,and(eq(technicianWages.taskId,tasks.id),eq(technicianWages.tenantId,tenant),eq(technicianWages.isTest,false)))
+      .where(and(eq(tasks.tenantId,tenant),eq(tasks.isTest,false),eq(tasks.status,'approved'),gte(tasks.approvedAt,from),lt(tasks.approvedAt,to)));
+    return {from:from.toISOString(),to:to.toISOString(),employees:staff.map(person=>{
+      const jobs=approvedJobs.filter(j=>j.assignee===person.id);
+      const paid=jobs.filter(j=>j.amount!=null);
+      const earnings=person.roles.includes('technician')&&jobs.length ? {source:'technician_wages' as const,approvedJobs:jobs.length,jobsWithWage:paid.length,
+        jobsWithoutWage:jobs.length-paid.length,amountRial:showWages?paid.reduce((n,j)=>n+Number(j.amount),0):null} : null;
+      const assigned=due.filter(t=>t.assignee===person.id);
+      const holds=assigned.filter(t=>blocked.has(t.id)||history.get(t.id)?.has('task.paused')).length;
+      const eligible=assigned.filter(t=>!blocked.has(t.id)&&!history.get(t.id)?.has('task.paused')&&!history.get(t.id)?.has('task.updated')&&t.start);
+      const reviewed=eligible.filter(t=>t.end && t.status==='approved' && t.approvedBy && t.approvedBy!==person.id);
+      const ratio=(count:number,total:number)=>total ? count/total : null;
+      const score=person.roles.includes('technician') ? calculateEmployeeScore({employeeId:person.id,displayName:person.name,
+        roleGroup:'technician',metricVersion:'technician-deadlines-v1',eligibleCompletedEvents:reviewed.length,ratios:{
+          progress:ratio(reviewed.length,eligible.length),
+          timeliness:ratio(reviewed.filter(t=>t.end!<=t.deadline!).length,reviewed.length),
+          accuracy:ratio(reviewed.filter(t=>!history.get(t.id)?.has('task.reopened')).length,reviewed.length),
+          accountability:ratio(reviewed.filter(t=>t.completedBy===person.id).length,reviewed.length),
+        }}) : null;
+      const deskScores = (['accident_expert','parts_clerk'] as const).filter(role=>person.roles.includes(role)).map(role=>{
+        const notes=followups.filter(r=>r.recipient===person.id && r.role===role);
+        const closed=notes.filter(r=>r.done);
+        const isExpert=role==='accident_expert';
+        const independent=decisions.filter(d=>isExpert
+          ? authors.get(d.id)===person.id && d.reviewer && d.reviewer!==person.id && ['accepted','returned'].includes(d.decision)
+          : d.reviewer===person.id && d.decision==='accepted' && d.finalized && d.finalizer && d.finalizer!==person.id);
+        // Parts evidence is a recorded code on an independently finalized acceptance. Never treat a correction as fault.
+        const verified=independent.filter(d=>isExpert ? d.decision==='accepted' : !!d.code?.trim());
+        return {role,followups:notes.length,closed:closed.length,reviewed:independent.length,
+          delays:notes.filter(n=>!n.seen || n.seen>n.due).length,
+          result:calculateEmployeeScore({employeeId:person.id,displayName:person.name,roleGroup:isExpert?'accident':'parts',
+            metricVersion:'desk-followups-and-verified-lines-v1',eligibleCompletedEvents:independent.length,
+            ratios:{progress:notes.length>=5?ratio(closed.length,notes.length):null,
+              timeliness:notes.length>=5?ratio(notes.filter(n=>n.seen && n.seen<=n.due).length,notes.length):null,
+              accuracy:ratio(verified.length,independent.length),
+              accountability:closed.length>=5?ratio(closed.filter(n=>n.reply?.trim()).length,closed.length):null}})};
+      });
+      return {...person,activity:activity.get(person.id)?.counts??{},score,deskScores,earnings,reviewed:reviewed.length,eligible:eligible.length,
+        delays:eligible.filter(t=>!t.end || t.end>t.deadline!).length,holds};
+    })};
+  }
+
   async serviceKpis(actor: Actor, now = new Date()): Promise<ServiceKpi[]> {
     const base = await this.baseCases(actor, {} as ReportQuery);
     const members = serviceKpiMembers(base.map(serviceRow), now);

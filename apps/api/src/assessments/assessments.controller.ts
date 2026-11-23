@@ -53,6 +53,40 @@ export class AssessmentsController {
     return this.assessments.reviewTechnicalItem(actor,id,body);
   }
 
+  @Get('assessments/:id/package')
+  @RequirePermissions('case.read')
+  packageStatus(@CurrentActor() actor: Actor, @IdParam() id: string) {
+    return this.assessments.packageStatus(actor,id);
+  }
+
+  @Post('assessments/:id/package')
+  @RequirePermissions('assessment.manage')
+  submitPackage(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(removeAssessmentItemSchema)) body: RemoveAssessmentItemInput) {
+    return this.assessments.submitPackage(actor,id,body.expectedVersion);
+  }
+
+  @Post('assessments/:id/package/finalize')
+  @RequirePermissions('part.manage')
+  finalizePackage(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(z.object({expectedVersion:z.number().int().positive()}).strict())) body: {expectedVersion:number}) {
+    return this.assessments.finalize(actor,id,body,true);
+  }
+
+  @Patch('assessment-items/:id/technical-code')
+  @RequirePermissions('part.manage')
+  correctCode(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(z.object({expectedVersion:z.number().int().positive(),partNumber:z.string().trim().min(1).max(64)}).strict())) body: {expectedVersion:number;partNumber:string}) {
+    return this.assessments.updateItem(actor,id,body,true);
+  }
+
+  @Post('assessment-items/:id/technical-remove')
+  @RequirePermissions('part.manage')
+  removeTechnicalLine(@CurrentActor() actor: Actor, @IdParam() id: string,
+    @Body(new ZodPipe(removeAssessmentItemSchema)) body: RemoveAssessmentItemInput) {
+    return this.assessments.removeItem(actor,id,body,true);
+  }
+
   @Post('cases/:id/assessments')
   @RequirePermissions('assessment.manage')
   create(

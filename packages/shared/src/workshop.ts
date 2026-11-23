@@ -54,6 +54,7 @@ export interface WorkshopTask {
   /** Technician delay against this assignment's planned duration, in complete working days; null without an actual start. */
   delayDays?:number|null;
   /** Where the actual start comes from: the task itself, a verifiable start event (legacy), or nothing recorded. */
+  pauseReason?: string | null;
   startSource?:'recorded'|'event'|null;
   /** Why «شروع کار» cannot be recorded now, with the next step and who can resolve it (stable codes). */
   startBlockers?:import('./workflow-blockers').WorkflowBlocker[];
@@ -72,10 +73,10 @@ export interface TechnicianTiming { workMinutes:number|null; plannedMinutes:numb
  * actual start nothing is calculated. Delay = work beyond this assignment's
  * planned duration.
  */
-export function technicianTiming(input:{actualStartAt:string|null;actualEndAt:string|null;plannedMinutes:number|null;now:string;calendar:WorkCalendar|null|undefined}):TechnicianTiming {
+export function technicianTiming(input:{actualStartAt:string|null;actualEndAt:string|null;plannedMinutes:number|null;pausedMinutes?:number;now:string;calendar:WorkCalendar|null|undefined}):TechnicianTiming {
   const none:TechnicianTiming={workMinutes:null,plannedMinutes:input.plannedMinutes,delayMinutes:null,workDays:null,delayDays:null};
   if(!input.actualStartAt||!input.calendar)return none;
-  const workMinutes=workingMinutesBetween(input.actualStartAt,input.actualEndAt??input.now,input.calendar);
+  const workMinutes=Math.max(0, workingMinutesBetween(input.actualStartAt,input.actualEndAt??input.now,input.calendar) - (input.pausedMinutes ?? 0));
   const dayMinutes=workingDayMinutes(input.calendar);
   const delayMinutes=input.plannedMinutes==null?null:Math.max(0,workMinutes-input.plannedMinutes);
   return {workMinutes,plannedMinutes:input.plannedMinutes,delayMinutes,workDays:wholeWorkingDays(workMinutes,dayMinutes),delayDays:wholeWorkingDays(delayMinutes,dayMinutes)};

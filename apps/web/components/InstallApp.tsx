@@ -34,7 +34,7 @@ export function InstallProvider({children}:{children:ReactNode}){
  }
  return <InstallContext.Provider value={{open:()=>{setMessage('');setOpen(true);},standalone:standalone||installed}}>{children}
   <Dialog open={open} title="نصب Manage روی دستگاه" onClose={()=>setOpen(false)} footer={<button className="btn install-touch" type="button" onClick={()=>setOpen(false)}>بستن راهنما</button>}>
-   <div className="install-brand"><img src="/brand/pwa-192.png" width={60} height={60} alt=""/><div><strong>Manage by HEDAX</strong><p>ورود سریع به میز کار، از آیکون روی گوشی</p></div></div>
+   <div className="install-brand"><img src="/brand/pwa-192.png" width={60} height={60} alt=""/><div><strong>Manage by HEDAX</strong><p>ورود سریع به میز کار از آیکون برنامه روی گوشی، تبلت یا کامپیوتر</p></div></div>
    <p className="callout callout-blue">این نسخه برای دریافت و ثبت اطلاعات به اینترنت یا شبکه متصل به سرور نیاز دارد. نصب برنامه، دسترسی حساب شما را تغییر نمی‌دهد.</p>
    {standalone?<p role="status">این پنجره در حالت برنامه باز شده است.</p>:installed?<p role="status">Manage نصب شد؛ از آیکون آن روی دستگاه وارد شوید.</p>:<>
     {!secure&&<p className="callout callout-amber">برای نصب، نشانی امن HTTPS سامانه را در مرورگر اصلی دستگاه باز کنید.</p>}
@@ -53,5 +53,5 @@ export function InstallProvider({children}:{children:ReactNode}){
 export function InstallButton(){
  const context=useContext(InstallContext);
  if(!context||context.standalone)return null;
- return <button type="button" className="btn btn-sm install-touch" onClick={context.open}>نصب روی گوشی</button>;
+ return <button type="button" className="btn btn-sm install-touch" onClick={context.open}>نصب برنامه</button>;
 }

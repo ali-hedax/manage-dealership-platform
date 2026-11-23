@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { parseStockCode, toLatinDigits, toPersianDigits, type CaseDetail, type PartsOperationsNotice, type DeskFolder, type Part, type StockOption, type StockSnapshotInfo } from '@manage/shared';
+import { latestAdmissionFirst, parseStockCode, toLatinDigits, toPersianDigits, type CaseDetail, type PartsOperationsNotice, type DeskFolder, type Part, type StockOption, type StockSnapshotInfo } from '@manage/shared';
 import { fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum } from '@/lib/format';
@@ -17,7 +17,6 @@ import { PlateText } from './Plate';
 // Parts desk (spec §3, §7; owner reference «میز قطعات»): the cars that have part lines
 // on the side, the single parts list of the chosen car in a folder, the usable stock of
 // the open line, and one «گام بعدی». The parts clerk acts; others read.
-const order = (f: DeskFolder) => (f.parts.undecided ? 0 : f.parts.emdadLate ? 1 : f.parts.ready ? 2 : f.parts.inProgress ? 3 : 4);
 
 export function PartsDesk() {
   const { can } = useAuth();
@@ -28,7 +27,7 @@ export function PartsDesk() {
   const [focus, setFocus] = useState<Part | null>(null);
   const [q, setQ] = useState('');
   const cars = useMemo(
-    () => (folders ?? []).filter((f) => f.parts.total > 0).sort((a, b) => order(a) - order(b) || a.admittedAt.localeCompare(b.admittedAt)),
+    () => (folders ?? []).filter((f) => f.parts.total > 0).sort(latestAdmissionFirst),
     [folders],
   );
   const term = toLatinDigits(q).trim().toLowerCase();

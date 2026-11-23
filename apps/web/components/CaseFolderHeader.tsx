@@ -65,7 +65,15 @@ export function CaseFolderHeader({ kase, tab, onTab, actions, chips, side, child
           <header className="case-hero cf-head cf2-face" aria-label="سربرگ پرونده">
             <div className="cf2-name">
               <span className="cf2-car-ico" aria-hidden="true"><AppIcon name="car" /></span>
-              <h1 className="cf-car">{name}</h1>
+              <div>
+                <h1 className="cf-car">{name}</h1>
+                <p className="cf-vehicle-details" aria-label="شناسه فنی خودرو">
+                  <span>{kase.vehicle.brand || 'برند نامشخص'}</span>
+                  <span>{kase.vehicle.model || 'مدل نامشخص'}</span>
+                  <span>کد محصول: {kase.vehicle.isacoCodeConflict ? 'نیازمند بررسی' : kase.vehicle.isacoCode ? toPersianDigits(kase.vehicle.isacoCode) : 'ثبت نشده'}</span>
+                  <span>تیپ: {kase.vehicle.trim || 'ثبت نشده'}</span>
+                </p>
+              </div>
             </div>
             <span className="cf2-rule" aria-hidden="true" />
             <div className="cf2-plate"><Plate value={kase.vehicle.plate} size="xxl" /></div>

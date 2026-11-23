@@ -36,6 +36,10 @@ export * from './service-kpis';
 export * from './vehicle-fitment';
 
 export * from './parts-picking';
+export * from './employee-performance';
+export * from './assessment-package';
+export * from './employee-activity';
 export * from './special-aid';
 export * from './report-center';
 export * from './pulse';
+export * from './case-order';

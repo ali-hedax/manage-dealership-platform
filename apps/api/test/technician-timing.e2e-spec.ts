@@ -133,3 +133,54 @@ it('runs two assignments of different technicians and workshops independently; f
   expect((await mechTech.post(`/workshop/my-tasks/${extra.id}/actions`, { action: 'start', expectedVersion: ready.version })).status).toBe(201);
   expect((await mine(paintTech)).find((t) => t.id === paint!.id)).toMatchObject({ status: 'in_progress', actualStartAt: paintStart });
 });
+
+it('allows the same technician to start multiple assigned vehicles without completing earlier jobs', async () => {
+  const first = await guidedCase('TESTVIN9000000201');
+  const second = await guidedCase('TESTVIN9000000202');
+  const third = await guidedCase('TESTVIN9000000203');
+
+  const ids: string[] = [];
+  for (const kase of [first, second, third]) {
+    const planned = await expert.post(`/cases/${kase.id}/repair-plan/steps`, {
+      steps: [{ title: 'نقاشی چند خودرو', departmentId: paintDept, stationId: paintStation, assignedUserId: paintId, days: 1 }],
+    });
+    expect(planned.status).toBe(201);
+    expect((await confirmPlan(kase.id)).status).toBe(201);
+    ids.push((planned.body as Task[])[0]!.id);
+  }
+
+  const starts = new Map<string, string | null>();
+  for (const id of ids) {
+    const job = (await mine(paintTech)).find(t => t.id === id)!;
+    expect(job).toMatchObject({ status: 'pending', canStart: true, startBlockers: [] });
+    expect((await paintTech.post(`/workshop/my-tasks/${id}/actions`, {
+      action: 'start', expectedVersion: job.version,
+    })).status).toBe(201);
+    starts.set(id, (await mine(paintTech)).find(t => t.id === id)!.actualStartAt);
+  }
+
+  const active = (await mine(paintTech)).filter(t => ids.includes(t.id));
+  expect(active).toHaveLength(3);
+  expect(active.every(t => t.status === 'in_progress' && !!t.actualStartAt)).toBe(true);
+
+  const other = active.find(t => t.id === ids[1])!;
+  const route = `/workshop/my-tasks/${other.id}/actions`;
+  expect((await paintTech.post(route,{action:'pause',expectedVersion:other.version,note:'انتظار قطعه'})).status).toBe(201);
+  const paused = (await mine(paintTech)).find(t=>t.id===other.id)!;
+  expect(paused.pauseReason).toBe('انتظار قطعه');
+  expect((await paintTech.post(route,{action:'complete',expectedVersion:paused.version})).status).toBe(422);
+  expect((await paintTech.post(route,{action:'resume',expectedVersion:paused.version,note:'قطعه رسید'})).status).toBe(201);
+  expect((await mine(paintTech)).find(t=>t.id===other.id)!.pauseReason).toBeNull();
+  const firstNow = active.find(t => t.id === ids[0])!;
+  expect((await paintTech.post(`/workshop/my-tasks/${firstNow.id}/actions`, {
+    action: 'complete', expectedVersion: firstNow.version,
+  })).status).toBe(201);
+
+  const afterwards = (await mine(paintTech)).filter(t => ids.includes(t.id));
+  expect(afterwards.find(t => t.id === ids[0])!.status).toBe('done');
+  for (const id of ids.slice(1)) {
+    expect(afterwards.find(t => t.id === id)).toMatchObject({
+      status: 'in_progress', actualStartAt: starts.get(id), actualEndAt: null,
+    });
+  }
+});

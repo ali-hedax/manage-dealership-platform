@@ -32,6 +32,11 @@ export function normalizeAssessmentSearch(input: string | null | undefined): str
     .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
+/** Normalized words of a query (at most four, so the SQL prefilter stays bounded). */
+export function assessmentSearchWords(input: string | null | undefined): string[] {
+  return String(input ?? '').split(/[\s‌،,]+/).map(normalizeAssessmentSearch).filter(Boolean).slice(0, 4);
+}
+
 /** Levenshtein on short normalized phrases only; avoids expensive fuzzy matching on long input. */
 function distance(a: string, b: string): number {
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -61,10 +66,14 @@ export function scoreAssessmentCandidates(
 ): RankedAssessmentCandidate[] {
   const q = normalizeAssessmentSearch(query);
   if (!q || q.length > 80) return [];
+  const words = assessmentSearchWords(query);
   const output: RankedAssessmentCandidate[] = [];
   for (const candidate of candidates) {
     if (candidate.vehicleMatch === 'incompatible') continue;
     const names = [candidate.name, ...(candidate.aliases ?? [])].map(normalizeAssessmentSearch).filter(Boolean);
+    // «سپر سورن» or «گلگیر 207»: every word in the part name or its vehicle, in any order.
+    const all = names.join('|');
+    const wordsMatch = words.length > 1 && words.every((w) => all.includes(w));
     const code = normalizeAssessmentSearch(candidate.partNumber);
     let score = 0;
     if (code === q) score = 140;
@@ -81,6 +90,7 @@ export function scoreAssessmentCandidates(
           score = Math.max(score, 55);
       }
     }
+    if (wordsMatch) score = Math.max(score, 70);
     if (!score) continue;
     // Verified applicability ranks above unknown only; it is never manufactured here.
     if (candidate.vehicleMatch === 'verified') score += 20;

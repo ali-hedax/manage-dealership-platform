@@ -11,9 +11,10 @@ test('expert and parts: guided admission to delivery and archive with RTL review
   const body = departments.find((d: { code: string }) => d.code === 'body').id;
   const staff = await (await admin.request.get('/api/v1/workshop/staff')).json();
   const tech = staff.find((u: { displayName: string }) => u.displayName === 'تکنسین نمونه');
-  const stationResponse = await admin.request.post('/api/v1/workshop/stations', { headers, data: { code: 'E2E-GUIDED-B', name: 'جایگاه مسیر ساختگی', trade: 'body', departmentId: body, responsibleUserId: tech.id } });
+  const stationCode = 'E2E-GUIDED-B-' + info.retry;
+  const stationResponse = await admin.request.post('/api/v1/workshop/stations', { headers, data: { code: stationCode, name: 'جایگاه مسیر ساختگی', trade: 'body', departmentId: body, responsibleUserId: tech.id } });
   expect(stationResponse.status()).toBe(201);
-  const station = (await stationResponse.json()).find((s: { code: string }) => s.code === 'E2E-GUIDED-B');
+  const station = (await stationResponse.json()).find((s: { code: string }) => s.code === stationCode);
   await login(page, 'supervisor'); await page.goto('/cases/new');
   await page.getByLabel('VIN (شماره شاسی)', { exact: true }).fill('TESTVIN99900E2E21');
   await page.getByLabel('مدل', { exact: true }).fill('ریرا');
@@ -40,7 +41,7 @@ test('expert and parts: guided admission to delivery and archive with RTL review
   await dialog.getByLabel('واحد اجرت').selectOption(body);
   await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
   await assessment.getByRole('button', { name: 'نهایی کردن', exact: true }).click(); await dialog.getByRole('button', { name: 'نهایی کردن', exact: true }).click();
-  await page.getByRole('button', { name: /رفتن به برنامهٔ تعمیر/ }).click();
+  await expect(page.locator('#case-plan > summary')).toBeFocused();
   await page.getByRole('button', { name: 'ساخت مسیر تعمیر', exact: true }).click();
   // The established plan editor is the only place for route order, days and assignees.
   const row = page.getByRole('region', { name: 'ساخت مسیر تعمیر' }).getByRole('listitem').first();

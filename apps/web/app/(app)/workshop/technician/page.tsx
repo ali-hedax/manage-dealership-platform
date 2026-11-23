@@ -34,6 +34,8 @@ export default function TechnicianPage() {
   const { data: month } = useSWR<MyWorkMonth>(can('task.execute') ? '/workshop/my-work' : null, fetcher, { refreshInterval: 120000 });
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [failure, setFailure] = useState('');
   const [problemFor, setProblemFor] = useState<WorkshopTask | null>(null);
+  // Selecting a vehicle never changes its job status or closes another active job.
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   // A refused «شروع کار» explains each missing prerequisite; «تلاش دوباره» repeats the same action.
   const [blocked, setBlocked] = useState<{ blockers: WorkflowBlocker[]; retry?: () => void; opener?: HTMLElement | null } | null>(null);
   const confirmed = useRef(new Set<string>());
@@ -78,7 +80,7 @@ export default function TechnicianPage() {
 
   if (!can('task.execute')) return <p className="callout">کارتابل تعمیرکار برای شما فعال نیست.</p>;
   const open = (data ?? []).filter((t) => t.status !== 'approved');
-  const current = open.find((t) => t.status === 'in_progress') ?? open.find((t) => t.status === 'pending' && t.canStart) ?? open.find((t) => t.status !== 'done') ?? open[0];
+  const current = open.find((t) => t.id === selectedTaskId) ?? open.find((t) => t.status === 'in_progress') ?? open.find((t) => t.status === 'pending' && t.canStart) ?? open.find((t) => t.status !== 'done') ?? open[0];
   const next = open.filter((t) => t.id !== current?.id);
   const place = current ? [current.departmentName, current.stationName ?? current.stationCode].filter(Boolean).join(' · ') : 'کارتابل تعمیرکار';
 
@@ -101,13 +103,13 @@ export default function TechnicianPage() {
       {error && <p role="alert" className="m-error">کارها دریافت نشد. <button className="m-btn-s" onClick={() => void mutate()}>تلاش دوباره</button></p>}
       {!data && !error && <p className="m-empty">در حال دریافت کارها…</p>}
 
-      {current && <CurrentJob t={current} busy={busy} onAct={act} onPickup={pickup} onWageSeen={wageSeen} onNoPart={(t) => report(t, 'no_part')} onProblem={setProblemFor} onWhy={why} />}
+      {current && <CurrentJob key={current.id} t={current} busy={busy} onPause={(reason) => run(() => api(`/workshop/my-tasks/${current.id}/actions`, { body: { action: current.pauseReason ? 'resume' : 'pause', expectedVersion: current.version, note: reason } }), current.pauseReason ? 'ادامه کار ثبت شد.' : 'توقف این خودرو ثبت شد.')}  onAct={act} onPickup={pickup} onWageSeen={wageSeen} onNoPart={(t) => report(t, 'no_part')} onProblem={setProblemFor} onWhy={why} />}
       <WorkflowBlockerDialog blockers={blocked?.blockers ?? null} title="شروع کار هنوز ممکن نیست" busy={busy} returnFocus={blocked?.opener ?? null} onClose={() => setBlocked(null)} onRetry={blocked?.retry ? () => { const r = blocked.retry!; setBlocked(null); r(); } : undefined} />
       {data && !open.length && <div className="tc-card tc-empty"><h2>کار بازی ندارید</h2><p>وقتی کاری به شما ارجاع شود، همین‌جا می‌آید.</p></div>}
 
       {next.length > 0 && (
-        <section aria-label="کارهای بعدی">
-          <h2 className="tc-sub">بعدی</h2>
+        <section aria-label="همه خودروهای من">
+          <h2 className="tc-sub">سایر خودروهای من</h2>
           <ul className="tc-next">
             {next.map((t) => (
               <li key={t.id} className="tc-mini">
@@ -115,6 +117,7 @@ export default function TechnicianPage() {
                   <strong>{t.vehicleLabel}</strong>
                   <span><PlateText value={t.plate} /> · {t.title || t.departmentName}{t.status === 'done' ? ' · منتظر تأیید کارشناس' : ''}</span>
                   {t.status === 'pending' && !t.canStart && !!t.startBlockers?.length && <span className="tc-note">{t.startBlockers[0]!.message} <button type="button" className="m-btn-s" onClick={() => why(t)}>چرا و چه باید کرد؟</button></span>}
+                  <button type="button" className="m-btn-s" disabled={busy} onClick={() => setSelectedTaskId(t.id)} aria-label={`باز کردن کار ${t.vehicleLabel}`}>باز کردن کار</button>
                 </div>
                 {t.wage && <b>{faNum(t.wage.amountRial)}</b>}
               </li>
@@ -137,11 +140,14 @@ export default function TechnicianPage() {
   );
 }
 
-function CurrentJob({ t, busy, onAct, onPickup, onWageSeen, onNoPart, onProblem, onWhy }: {
+function CurrentJob({ t, busy, onPause, onAct, onPickup, onWageSeen, onNoPart, onProblem, onWhy }: {
+  onPause: (reason: string) => Promise<void>;
   t: WorkshopTask; busy: boolean; onWhy: (t: WorkshopTask) => void;
   onAct: (t: WorkshopTask) => void; onPickup: (taskId: string, partId: string, v: number) => void; onWageSeen: (t: WorkshopTask) => void;
   onNoPart: (t: WorkshopTask) => void; onProblem: (t: WorkshopTask) => void;
 }) {
+  const [reason, setReason] = useState('');
+  useEffect(() => setReason(''), [t.version]);
   const left = t.status === 'done' ? null : timeLeft(t.plannedEndAt);
   const waiting = t.status === 'pending' && !t.canStart;
   const late = left?.tone === 'late';
@@ -180,14 +186,19 @@ function CurrentJob({ t, busy, onAct, onPickup, onWageSeen, onNoPart, onProblem,
       )}
       {waiting && (
         <p className="tc-note">
-          {t.startBlockers?.[0]?.message ?? 'منتظر تأیید کار قبلی توسط کارشناس.'}{' '}
+          {t.startBlockers?.[0]?.message ?? 'پیش‌نیاز شروع این کار هنوز تکمیل نشده است.'}{' '}
           {!!t.startBlockers?.length && <button type="button" className="m-btn-s" onClick={() => onWhy(t)}>چرا و چه باید کرد؟</button>}
         </p>
       )}
       {t.status === 'in_progress' && (
         <>
           {t.actualStartAt ? <p className="tc-note">در حال کار از ساعت {clock(t.actualStartAt)}{t.workDays != null ? ` · ${toPersianDigits(t.workDays)} روز کاری` : ''}{t.delayDays ? ` · تأخیر ${toPersianDigits(t.delayDays)} روز کاری` : ''}</p> : <p className="tc-note">زمان شروع ثبت نشده</p>}
-          <button type="button" className="tc-big tc-stop" disabled={busy} onClick={() => onAct(t)}>{busy ? 'در حال ثبت…' : 'پایان کار'}</button>
+          {t.pauseReason && <p role="status">توقف موقت · {t.pauseReason}</p>}
+          <label className="field">{t.pauseReason ? 'علت ادامه کار' : 'علت توقف موقت'}
+            <input value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} />
+          </label>
+          <button type="button" className="m-btn-s" disabled={busy || !reason.trim()} onClick={() => void onPause(reason.trim())}>{t.pauseReason ? 'ادامه کار' : 'توقف موقت'}</button>
+          <button type="button" className="tc-big tc-stop" disabled={busy || !!t.pauseReason} onClick={() => onAct(t)}>{busy ? 'در حال ثبت…' : 'پایان کار'}</button>
         </>
       )}
       {t.status === 'done' && <p className="tc-big tc-wait" role="status">تمام شد. منتظر تأیید کارشناس.</p>}

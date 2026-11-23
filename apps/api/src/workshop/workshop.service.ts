@@ -102,6 +102,22 @@ export class WorkshopService {
     const legacy=rows.filter(r=>!r.t.actualStartAt&&r.t.status!=='pending').map(r=>r.t.id);
     const startEvents=new Map<string,Date>();
     for(let i=0;i<legacy.length;i+=500){for(const e of await this.db.select({id:auditEvents.entityId,at:sql<Date>`max(${auditEvents.occurredAt})`}).from(auditEvents).where(and(eq(auditEvents.tenantId,tid),eq(auditEvents.entityType,'task'),eq(auditEvents.action,'task.started'),inArray(auditEvents.entityId,legacy.slice(i,i+500)))).groupBy(auditEvents.entityId))if(e.at)startEvents.set(e.id,new Date(e.at));}
+    const pauses = new Map<string, {start: string; end: string | null; reason: string}[]>();
+    const taskIds = rows.map(row => row.t.id);
+    for (let i = 0; i < taskIds.length; i += 500) {
+      const events = await this.db.select().from(auditEvents).where(and(eq(auditEvents.tenantId, tid),
+        eq(auditEvents.entityType, 'task'), inArray(auditEvents.entityId, taskIds.slice(i,i+500)),
+        inArray(auditEvents.action, ['task.paused','task.resumed']))).orderBy(asc(auditEvents.occurredAt),asc(auditEvents.id));
+      for (const event of events) {
+        const periods = pauses.get(event.entityId) ?? [];
+        if (event.action === 'task.paused') periods.push({start:event.occurredAt.toISOString(),end:null,reason:event.reason ?? ''});
+        else {
+          const last = periods.at(-1);
+          if (last && !last.end) last.end = event.occurredAt.toISOString();
+        }
+        pauses.set(event.entityId, periods);
+      }
+    }
     // Start blockers of pending assignments, with the same codes the start action refuses with.
     const pendingCases=[...new Set(rows.filter(r=>r.t.status==='pending'&&r.c.status==='open').map(r=>r.c.id))];
     const workflows=new Map<string,CaseWorkflow|null>();
@@ -113,10 +129,13 @@ export class WorkshopService {
       const end=iso(t.actualEndAt)??now,deadline=iso(t.baselineEndAt),snapshot=t.stationSnapshot;
       const startedAt=t.actualStartAt??startEvents.get(t.id)??null;
       const plannedMinutes=calendar&&t.baselineStartAt&&t.baselineEndAt?workingMinutesBetween(t.baselineStartAt.toISOString(),t.baselineEndAt.toISOString(),calendar):calendar&&t.plannedStartAt&&t.plannedEndAt?workingMinutesBetween(t.plannedStartAt.toISOString(),t.plannedEndAt.toISOString(),calendar):null;
-      const timing=technicianTiming({actualStartAt:iso(startedAt),actualEndAt:iso(t.actualEndAt),plannedMinutes,now,calendar});
+      const periods = pauses.get(t.id) ?? [];
+      const pausedMinutes = calendar ? unionWorkingMinutes(periods.map(p => ({start:p.start,end:p.end ?? end})),calendar) : 0;
+      const lastPause = periods.at(-1);
+      const timing=technicianTiming({pausedMinutes,actualStartAt:iso(startedAt),actualEndAt:iso(t.actualEndAt),plannedMinutes,now,calendar});
       const unfinished=deps.filter(e=>e.id===t.id&&e.status!=='approved'&&e.status!=='cancelled').length;
       const startBlockers=t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'?taskStartBlockers(c.id,workflows.get(c.id)??null,workOf(c.id),t.id,unfinished):[];
-      return {...(wages?{wage:wages.get(t.id)??null}:{}),partsReady:readyOf(c.id),partsWaiting:waitingOf(c.id),dayMinutes:calendar?workingDayMinutes(calendar):null,plannedWorkMinutes:calendar&&t.baselineStartAt&&t.baselineEndAt?workingMinutesBetween(t.baselineStartAt.toISOString(),t.baselineEndAt.toISOString(),calendar):null,id:t.id,caseId:c.id,caseNumber:c.caseNumber,vehicleLabel:shortVehicleName(v.brand,v.model),plate:v.plate,title:t.title,stationCode:snapshot?.code??null,stationName:snapshot?.name??null,departmentName:d.name,technicianName:t.technicianName,status:t.status,version:t.version,plannedStartAt:iso(t.plannedStartAt),plannedEndAt:iso(t.plannedEndAt),baselineEndAt:deadline,actualStartAt:iso(t.actualStartAt),actualEndAt:iso(t.actualEndAt),approvedAt:iso(t.approvedAt),canStart:t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'&&!startBlockers.length,startBlockers,startSource:t.actualStartAt?'recorded':startedAt?'event':null,workDays:timing.workDays,delayDays:timing.delayDays,
+      return {pauseReason:lastPause && !lastPause.end ? lastPause.reason : null,...(wages?{wage:wages.get(t.id)??null}:{}),partsReady:readyOf(c.id),partsWaiting:waitingOf(c.id),dayMinutes:calendar?workingDayMinutes(calendar):null,plannedWorkMinutes:calendar&&t.baselineStartAt&&t.baselineEndAt?workingMinutesBetween(t.baselineStartAt.toISOString(),t.baselineEndAt.toISOString(),calendar):null,id:t.id,caseId:c.id,caseNumber:c.caseNumber,vehicleLabel:shortVehicleName(v.brand,v.model),plate:v.plate,title:t.title,stationCode:snapshot?.code??null,stationName:snapshot?.name??null,departmentName:d.name,technicianName:t.technicianName,status:t.status,version:t.version,plannedStartAt:iso(t.plannedStartAt),plannedEndAt:iso(t.plannedEndAt),baselineEndAt:deadline,actualStartAt:iso(t.actualStartAt),actualEndAt:iso(t.actualEndAt),approvedAt:iso(t.approvedAt),canStart:t.status==='pending'&&c.status==='open'&&c.stage!=='delivered'&&!startBlockers.length,startBlockers,startSource:t.actualStartAt?'recorded':startedAt?'event':null,workDays:timing.workDays,delayDays:timing.delayDays,
         // Technician time: from the actual start of THIS assignment; delay = beyond its planned duration. No start → not calculated.
         workMinutes:timing.workMinutes,lateMinutes:timing.delayMinutes,transferMinutes:calendar&&t.actualEndAt?workingMinutesBetween(t.actualEndAt.toISOString(),iso(t.approvedAt)??now,calendar):null,calendarConfirmed:!!calendar?.holidaysVerifiedThrough&&calendar.holidaysVerifiedThrough>=new Date(Date.parse(end)+210*60000).toISOString().slice(0,10)};
     });

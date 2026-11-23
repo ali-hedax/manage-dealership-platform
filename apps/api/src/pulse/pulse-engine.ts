@@ -30,7 +30,7 @@ import { decryptSecret } from './pulse-secret';
 export const PULSE_LOCK_KEY = 731_621_002;
 const LINES_PER_TICK = 30;
 const BACKFILL_DAYS_PER_TICK = 5;
-const STRUCTURE_KINDS = ['cards', 'parts', 'repairs', 'defects'] as const;
+type StructureKind = 'cards' | 'parts' | 'repairs' | 'defects';
 
 type Connection = typeof pulseConnections.$inferSelect;
 type Command = typeof pulseCommands.$inferSelect;
@@ -300,7 +300,7 @@ export class PulseEngine {
   }
 
   /** Column names (never values) of the first non-empty answer of each list go to the run log once. */
-  private async noteStructure(conn: Connection, kind: (typeof STRUCTURE_KINDS)[number], table: KasbTable, details: Record<string, unknown>) {
+  private async noteStructure(conn: Connection, kind: StructureKind, table: KasbTable, details: Record<string, unknown>) {
     if (!table.columns.length || conn.cursor?.structures?.[kind]) return;
     const cursor: PulseCursor = { ...(conn.cursor ?? {}), structures: { ...(conn.cursor?.structures ?? {}), [kind]: table.columns } };
     details.structures = { ...((details.structures as object) ?? {}), [kind]: table.columns };

@@ -88,5 +88,9 @@ export function openDatabase(cfg: AppConfig): DatabaseHandle {
     driver: 'pglite',
     migrate: () => migratePglite(db, { migrationsFolder: MIGRATIONS_FOLDER }),
     close: () => client.close(),
+    // PGlite is one embedded process: the lock is always granted and never lost.
+    async leaderLock() {
+      return { lost: false, async release() { /* nothing to release */ } };
+    },
   };
 }

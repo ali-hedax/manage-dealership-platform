@@ -29,12 +29,23 @@ describe('ISACO product code', () => {
     expect(isacoHeaderIndex(['VIN', 'مدل'])).toBe(-1);
   });
 
+  it('finds an ISACO code on an old case created before the customer-history import', async () => {
+    const historical = await newCase({ model: 'سورن', vin: 'TESTVNA0000077111' });
+    expect((await expert.get(`/cases/${historical.id}`)).body.vehicle.isacoCode).toBeNull();
+    await importHistory([
+      ['TESTVNA0000077111', '', 'سورن', 'مشتری قدیمی ساختگی', '0007788'],
+    ]);
+    const updated = await expert.get(`/cases/${historical.id}`);
+    expect(updated.status).toBe(200);
+    expect(updated.body.vehicle).toMatchObject({isacoCode:'0007788',isacoCodeConflict:false});
+  });
+
   it('shows the code of this exact VIN/chassis only, keeps leading zeros, ignores blanks and refuses conflicts', async () => {
     await importHistory([
       ['TESTVNA0000077001', '', 'دنا پلاس', 'مشتری ساختگی یک', '0012345'],
       ['TESTVNA0000077001', '', 'دنا پلاس', 'مشتری ساختگی یک — مراجعهٔ دوم', ''],
       ['', 'CHS77002', 'تارا', 'مشتری ساختگی دو', '۰۰۹۸۷'],
-      ['TESTVNA0000077003', '', 'رانا', 'مشتری ساختگی سه', '111'],
+      ...Array.from({length:51},(_,n)=>['TESTVNA0000077003','','رانا',`مراجعه ساختگی ${n}`,'111']),
       ['TESTVNA0000077003', '', 'رانا', 'مشتری ساختگی سه', '222'],
     ]);
     const byVin = await newCase({ model: 'دنا پلاس', vin: 'TESTVNA0000077001' });

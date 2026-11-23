@@ -42,16 +42,20 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
   await expect(panel.getByTestId('assessment-total')).toHaveText('۴۵,۰۰۰,۰۰۰ ریال');
 
-  await panel.getByRole('button', { name: 'نهایی کردن' }).click();
+  await panel.getByRole('checkbox', { name: 'انتخاب همه قطعات قابل ارسال' }).check();
+  await panel.getByRole('button', { name: /ارسال به قطعات و تأمین/ }).click();
+  await expect(panel).toBeVisible();
+  await expect(dialog).toBeVisible();
+  // The result stays on the panel for the accident expert (not only a passing toast).
+  await expect(panel.getByTestId('dispatch-result')).toContainText('۱ قلم به «قطعات و تأمین» ارسال شد');
   await dialog.getByRole('button', { name: 'نهایی کردن' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('#case-plan > summary')).toBeFocused();
+  await openCaseTab(page, 'قطعات');
+  await expect(page.getByTestId('part')).toHaveCount(1);
+  await openCaseTab(page, 'کارشناسی');
   await expect(panel).toContainText('نیاز به مجوز جدید ندارد');
   await expect(panel.getByRole('button',{name:'ثبت مجوز',exact:true})).toHaveCount(0);
-  await panel.getByRole('checkbox',{name:'انتخاب همه قطعات قابل ارسال'}).check();
-  await panel.getByRole('button',{name:/ارسال به قطعات و تأمین/}).click();
-  await expect(page.locator('#case-parts')).toBeInViewport();
-  await expect(page.getByTestId('part')).toHaveCount(1);
-  await page.getByRole('list', { name: 'مسیر خودرو' }).getByRole('button').nth(1).click();
-
   // Hidden damage: a supplement copies the approved lines and adds a new one.
   await panel.getByRole('button', { name: 'ثبت الحاقیه (آسیب پنهان)' }).click();
   await dialog.getByLabel('شرح آسیب پنهان *').fill('پس از دمونتاژ ترک سینی جلو دیده شد');
@@ -68,6 +72,8 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await current.getByRole('button', { name: 'نهایی کردن' }).click();
   await dialog.getByRole('button', { name: 'نهایی کردن' }).click();
 
+  await expect(page.locator('#case-plan > summary')).toBeFocused();
+  await openCaseTab(page, 'کارشناسی');
   await expect(current).toContainText('نیاز به مجوز جدید ندارد');
   await expect(current).toContainText('نسبت به نسخه قبل: افزایش ۲۵,۰۰۰,۰۰۰ ریال');
   await expect(current).toContainText('تأیید مالی باید دوباره بررسی شود');
