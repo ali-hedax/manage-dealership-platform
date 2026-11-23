@@ -33,6 +33,7 @@ const withoutTasks = <T extends { tasks: unknown }>(r: T): Omit<T, 'tasks'> => {
 type RequestRow = typeof emdadRequests.$inferSelect;
 const ARRIVED = EMDAD_ARRIVED_CATEGORIES as readonly string[];
 const HOLD_ACTIVE = ['reserved', 'issued'];
+export const BACKFILL_HOLD_NOTE = 'این قطعه در گزارش‌های پیش از ثبت در این بخش «رسیده» بوده و شاید مدت‌ها پیش مصرف شده باشد؛ رزرو خودکار نمی‌شود. اگر هنوز برای همین خودرو در انبار است، رزرو را دستی انجام دهید.';
 /** A pending request without an observed status change for this many days counts as stalled in purchasing. */
 const SPECIAL_AID_STALLED_DAYS = 14;
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
@@ -120,9 +121,14 @@ export class SpecialAidService {
           // First sight of this line in the module: the status was observed at its last change in the reports.
           const [ev] = (await tx.execute(sql`select max(report_at) as at from ${emdadRequestEvents} where request_id = ${r.id} and changes ? 'emdadStatus'`) as unknown as { rows: { at: string | Date | null }[] }).rows;
           const observed = ev?.at ? new Date(ev.at) : r.lastReportAt;
+          // A line that had already arrived in earlier reports (before the module saw it) may have been
+          // installed long ago: it is never held automatically. Only a line that is new in the report
+          // being published, or that turns «arrived» in a later report, is held automatically.
+          const backfill = arrived && !(opts.autoHold && r.firstImportId === r.lastImportId);
           await tx.insert(specialAidItems).values({
             id: newId(), tenantId, dossierId, admissionId, requestId: r.id, state: arrived ? 'arrived' : 'pending', observedCategory: r.statusCategory,
             statusObservedAt: observed, arrivalObservedAt: arrived ? observed : null, isTest: actor.user.isTestTenant,
+            holdNote: backfill ? BACKFILL_HOLD_NOTE : null,
           }).onConflictDoNothing();
           result.items += 1;
           if (arrived) result.arrived += 1;
