@@ -44,7 +44,7 @@ export default function SpecialAidDossierPage() {
   return (
     <div className="stack">
       <SpecialAidTabs />
-      <article className={`folder cov-own${d.urgent ? ' folder-behind' : ''}`} aria-label="مشخصات خودرو">
+      <article className={`folder aid-folder cov-own${d.urgent ? ' folder-behind' : ''}`} aria-label="مشخصات خودرو">
         <span className="folder-tab" aria-hidden="true" />
         <div className="folder-top">
           <div className="folder-who"><h1 className="folder-car">{d.vehicle.model ?? 'خودرو'}</h1><span className="folder-cust">{d.vehicle.customerName ?? 'مشتری در سوابق پذیرش نیست'}{d.vehicle.phone && <> · <bdi dir="ltr">{toPersianDigits(d.vehicle.phone)}</bdi></>}</span></div>
