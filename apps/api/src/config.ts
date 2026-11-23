@@ -39,6 +39,13 @@ const envSchema = z.object({
   // Package 8: the demo seeds about twenty synthetic cars; 'false' keeps only the five base cases.
   DEMO_FLEET: z.string().default('true').transform((v) => v === 'true'),
   LOGIN_RATE_LIMIT: z.preprocess((v) => (v === '' ? undefined : v), z.coerce.number().int().positive().optional()),
+  // Manage Pulse (spec section 26). PULSE_ENABLED shows the reception module and lets the worker
+  // read; PULSE_SECRET_KEY (≥ 32 characters, same value for api and pulse) encrypts the stored
+  // کسب‌وکار password. PULSE_KASB_ORIGIN is the real site; only tests point it elsewhere.
+  PULSE_ENABLED: z.string().default('false').transform((v) => v === 'true'),
+  PULSE_SECRET_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
+  PULSE_KASB_ORIGIN: z.url().default('https://b2b.isaco.ir'),
+  PULSE_TICK_MS: z.coerce.number().int().min(1000).max(600_000).default(30_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
@@ -53,6 +60,9 @@ export function loadConfig(overrides: Partial<Record<keyof AppConfig, string>> =
   }
   if (cfg.DB_DRIVER === 'postgres' && !cfg.DATABASE_URL) {
     throw new Error('DATABASE_URL is required when DB_DRIVER=postgres');
+  }
+  if ((cfg.APP_ENV === 'production' || cfg.APP_ENV === 'preview') && cfg.PULSE_KASB_ORIGIN !== 'https://b2b.isaco.ir') {
+    throw new Error('PULSE_KASB_ORIGIN may only differ from https://b2b.isaco.ir in development and tests');
   }
   if (cfg.APP_ENV === 'production' && cfg.DB_DRIVER === 'pglite') {
     throw new Error('PGlite is for development and demo only; use DB_DRIVER=postgres in production');

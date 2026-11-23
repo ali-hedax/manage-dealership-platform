@@ -115,6 +115,11 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/price-notices` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/print/cases/:id/picking.pdf` | [source](../apps/api/src/print/print.controller.ts) |
 | GET | `/api/v1/print/inspection.pdf` | [source](../apps/api/src/print/print.controller.ts) |
+| GET | `/api/v1/pulse/review` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/pulse/status` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/reception/:id` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/reception/contractors` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/reception/invoices/:documentId` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reference-data/:kind/sample` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-data/:kind` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id/report` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
@@ -234,6 +239,16 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/parts/picking-batches` | [source](../apps/api/src/parts/parts-picking.controller.ts) |
 | POST | `/api/v1/parts/workbench/:id/actions` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/price-notices/:id/respond` | [source](../apps/api/src/parts/parts.controller.ts) |
+| POST | `/api/v1/pulse/captcha` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/pulse/commands` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/pulse/start` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/pulse/stop` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/:id/external-work` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/:id/notes` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/external-work/:id/cancel` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/external-work/:id/invoices` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/external-work/:id` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/search` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reference-data/:kind/search` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/:id/apply` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
@@ -283,6 +298,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PUT | `/api/v1/access/users/:id/staff-admin` | [source](../apps/api/src/people/people.controllers.ts) |
 | PUT | `/api/v1/access/users/:id` | [source](../apps/api/src/auth/access.controller.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
+| PUT | `/api/v1/pulse/credentials` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| PUT | `/api/v1/pulse/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | PUT | `/api/v1/report-center` | [source](../apps/api/src/special-aid/report-center.controller.ts) |
 | PUT | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/active` | [source](../apps/api/src/auth/technicians.controller.ts) |

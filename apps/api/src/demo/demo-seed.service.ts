@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { seedDemoReceptions } from '../pulse/pulse-demo';
 import { eq, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -102,6 +103,10 @@ export class DemoSeedService {
 
     if (opts.withCases !== false) await this.seedCases(tenantId);
     if (opts.withCases !== false && (opts.fleet ?? this.cfg.DEMO_FLEET) !== false) await this.seedFleetCars(tenantId, passwordHash);
+    // Manage Pulse (spec section 26): synthetic receptions only where the demo runs (never in tests or production).
+    if (opts.withCases !== false && this.cfg.PULSE_ENABLED && (this.cfg.APP_ENV === 'development' || this.cfg.APP_ENV === 'preview')) {
+      await db.transaction((tx) => seedDemoReceptions(tx, tenantId));
+    }
     return password;
   }
 
