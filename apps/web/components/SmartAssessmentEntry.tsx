@@ -73,6 +73,8 @@ export function SmartAssessmentEntry({
   const [vehicles, setVehicles] = useState<Vehicles | null>(null);
   const [more, setMore] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const saving = useRef(false);
+  const searchGeneration = useRef(0);
   useEffect(() => { setVersion(assessment.version); }, [assessment.id, assessment.version]);
   const results = data?.results ?? [];
   const picked = assessment.items.filter((i) => i.action === 'replace');
@@ -91,6 +93,7 @@ export function SmartAssessmentEntry({
   const body = (value: string, offset: number) => ({ query: value, scope, ...(scope === 'vehicle' ? { family } : {}), offset });
 
   useEffect(() => {
+    searchGeneration.current += 1;
     const value = query.trim();
     if (value.length < 2 || (scope === 'vehicle' && !family)) {
       setData(null); setLoading(false); setOpen(false); return;
@@ -105,15 +108,17 @@ export function SmartAssessmentEntry({
         if (!cancelled) { setData(null); setError(errorMessage(e)); setOpen(true); }
       } finally { if (!cancelled) setLoading(false); }
     }, 200);
-    return () => { cancelled = true; window.clearTimeout(handle); };
+    return () => { cancelled = true; searchGeneration.current += 1; window.clearTimeout(handle); };
   }, [kase.id, query, scope, family]);
 
   /** The next page of a large result set, appended below the current one. */
   async function loadMore() {
     if (!data || more) return;
+    const generation = searchGeneration.current;
     setMore(true); setError('');
     try {
       const next = await api<Response>(`/cases/${kase.id}/assessment-catalog/search`, { body: body(query.trim(), data.results.length) });
+      if (generation !== searchGeneration.current) return;
       setData({ ...next, results: [...data.results, ...next.results.filter((r) => !data.results.some((x) => x.id === r.id))] });
     } catch (e) { setError(errorMessage(e)); } finally { setMore(false); }
   }
@@ -138,11 +143,12 @@ export function SmartAssessmentEntry({
   }
 
   async function add(s: Suggestion) {
-    if (busy) return;
+    if (saving.current) return;
     if (pickedRefs.has(refOf(s.partNumber))) {
       toast('این قطعه (همین کد ۸ رقمی) قبلاً اضافه شده است؛ تعداد همان ردیف را تغییر دهید.', 'error');
       return;
     }
+    saving.current = true;
     setBusy(true);
     setError('');
     try {
@@ -169,7 +175,7 @@ export function SmartAssessmentEntry({
       setError(errorMessage(e));
       // A version conflict is refreshed and retried by the user, never silently overwritten.
       await onSaved();
-    } finally { setBusy(false); }
+    } finally { saving.current = false; setBusy(false); }
   }
 
   async function changeQuantity(item: AssessmentItem, value: number) {
@@ -241,9 +247,10 @@ export function SmartAssessmentEntry({
           autoComplete="off"
           placeholder="مثلاً سپر جلو، گلگیر، کاپوت، شماره فنی…"
           disabled={busy}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setData(null); setOpen(false); }}
           onFocus={() => { if (results.length) setOpen(true); }}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (!open || !results.length) return;
             if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => (i + 1) % results.length); }
             if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => (i - 1 + results.length) % results.length); }

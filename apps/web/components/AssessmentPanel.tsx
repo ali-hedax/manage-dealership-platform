@@ -1,6 +1,6 @@
 'use client';
 
-import { useState,useEffect } from 'react';
+import { useState,useEffect,useRef } from 'react';
 import useSWR,{useSWRConfig} from 'swr';
 import {
   ASSESSMENT_ITEM_ACTION_LABELS,
@@ -12,6 +12,7 @@ import {
   AUTHORIZATION_STATUS_LABELS,
   ITEM_APPROVAL_LABELS,
   assessmentDispatchLines,
+  canUseSmartAssessment,
   type AssessmentDispatchLine,
   type Part,
   type Assessment,
@@ -93,6 +94,8 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const {mutate:refreshCache}=useSWRConfig();
   const {data:requests}=useSWR<Part[]>(can('part.request')?`/cases/${kase.id}/parts`:null,fetcher);
   const [selected,setSelected]=useState<string[]>([]),[sending,setSending]=useState(false);
+  const dispatching = useRef(false);
+  const [dispatchMessage,setDispatchMessage]=useState<{ok:boolean;text:string}|null>(null);
 
   // Dialog state.
   const [assessorName, setAssessorName] = useState('');
@@ -133,9 +136,10 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const reviewStateKey=(technicalReviews??[]).map(r=>`${r.itemId}:${r.status}:${r.stale}`).join(',');
   useEffect(()=>{setSelected([]);},[current?.id,current?.version,reviewStateKey]);
   async function dispatchParts(){
-    if(!current||!selected.length||sending)return;setSending(true);
-    try{const items=await api<Part[]>(`/cases/${kase.id}/parts/from-assessment`,{body:{assessmentId:current.id,expectedVersion:current.version,itemIds:selected}});await refreshCache(`/cases/${kase.id}/parts`,items,{revalidate:false});await mutate();setSelected([]);onChange();toast('اقلام انتخابی به قطعات و تأمین ارسال شدند');window.location.hash='case-parts';}
-    catch(e){toast(errorMessage(e),'error');void refreshCache(`/cases/${kase.id}/parts`);void mutate();}finally{setSending(false);}
+    if(!current||!selected.length||dispatching.current)return;
+    dispatching.current=true;setSending(true);setDispatchMessage(null);const count=selected.length;
+    try{const items=await api<Part[]>(`/cases/${kase.id}/parts/from-assessment`,{body:{assessmentId:current.id,expectedVersion:current.version,itemIds:selected}});await refreshCache(`/cases/${kase.id}/parts`,items,{revalidate:false});const fresh=await mutate();setSelected([]);onChange();setDispatchMessage({ok:true,text:`${faNum(count)} قلم به «قطعات و تأمین» ارسال شد و در میز قطعات همین پرونده دیده می‌شود. اقلام ارسال‌شده دوباره ارسال نمی‌شوند.`});toast('اقلام انتخابی ارسال شدند؛ مرحله بعد: نهایی‌سازی کارشناسی');const latest=fresh?.at(-1);if(manage&&editable&&latest?.status==='draft')start({kind:'finalize',a:latest});}
+    catch(e){setDispatchMessage({ok:false,text:`ارسال انجام نشد: ${errorMessage(e)} — انتخاب شما حفظ شده است؛ دوباره «ارسال» را بزنید.`});toast(errorMessage(e),'error');void refreshCache(`/cases/${kase.id}/parts`);void mutate();}finally{dispatching.current=false;setSending(false);}
   }
 
   function start(m: NonNullable<Mode>) {
@@ -174,12 +178,13 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
     }
   }
 
-  async function run(fn: () => Promise<unknown>, done: string) {
+  async function run(fn: () => Promise<unknown>, done: string, afterSuccess?: () => void) {
     setBusy(true);
     try {
       await fn();
       toast(done);
       setMode(null);
+      afterSuccess?.();
     } catch (err) {
       toast(errorMessage(err), 'error');
     } finally {
@@ -236,7 +241,8 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
               note: note || null,
             },
           }),
-        'کارشناسی نهایی شد',
+        'کارشناسی نهایی شد؛ مرحله بعد: برنامه تعمیر',
+        () => requestAnimationFrame(() => { window.location.hash = 'case-plan'; }),
       );
     } else {
       await run(
@@ -303,12 +309,15 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
                 شروع کارشناسی
               </button>
             )}
-            {!current && (kase.coverageType==='insurance'||kase.coverageType==='personal') && (
+            {!current && canUseSmartAssessment(kase.coverageType) && (
               <button className="btn btn-sm btn-primary" onClick={() => start({
                 kind: 'new', assessmentKind: 'initial',smartManual:true,
               })}>
                 ایجاد کارشناسی دستی هوشمند
               </button>
+            )}
+            {!current && kase.coverageType !== 'golden_card' && !canUseSmartAssessment(kase.coverageType) && (
+              <span className="small muted" role="note">برای کارشناسی هوشمند ابتدا نوع پوشش پرونده را مشخص کنید.</span>
             )}
             {current && current.status !== 'draft' && (
               <button className="btn btn-sm" onClick={() => start({ kind: 'new', assessmentKind: 'supplement' })}>
@@ -327,6 +336,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
         </div>
       )}
 
+      {dispatchMessage && <p className={`panel-body callout ${dispatchMessage.ok?'':'callout-red'}`} role={dispatchMessage.ok?'status':'alert'} data-testid="dispatch-result">{dispatchMessage.text}</p>}
       {current && (
         <>
         {manage && editable && current.status === 'draft' && current.smartManual && (
@@ -339,6 +349,34 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
               return refreshed;
             }}
           />
+        )}
+        {manage && editable && current.status === 'draft' && current.smartManual && (
+          <details className="panel-body no-print" data-testid="optional-labour">
+            <summary>اجرت به تفکیک واحد (اختیاری)</summary>
+            {(departments ?? []).filter(d => d.isActive).map(dept => (
+              <details key={dept.id}>
+                <summary>{dept.name}</summary>
+                <form className="stack" onSubmit={async event => {
+                  event.preventDefault();
+                  if (busy) return;
+                  const form = event.currentTarget;
+                  const fields = new FormData(form);
+                  await run(async () => {
+                    await api(`/assessments/${current.id}/items`, { body: {
+                      expectedVersion: current.version, action: 'repair', quantity: 1,
+                      description: String(fields.get('description') ?? '').trim() || `اجرت ${dept.name}`,
+                      labourDepartmentId: dept.id, labourRial: parseAmount(String(fields.get('amount') ?? '')),
+                    } });
+                    form.reset();
+                  }, 'اجرت واحد ثبت شد');
+                }}>
+                  <label className="field">شرح اجرت (اختیاری)<input name="description" maxLength={300} /></label>
+                  <label className="field">مبلغ اجرت (ریال، اختیاری)<input name="amount" inputMode="numeric" pattern="[0-9۰-۹٠-٩]+" maxLength={15} /></label>
+                  <button type="submit" className="btn btn-sm" disabled={busy}>ثبت اجرت واحد</button>
+                </form>
+              </details>
+            ))}
+          </details>
         )}
         {editable && current.smartManual && (
           <TechnicalReviewPanel caseId={kase.id} assessment={current} />

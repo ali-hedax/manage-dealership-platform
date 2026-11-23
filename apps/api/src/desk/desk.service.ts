@@ -19,6 +19,7 @@ import {
   type TaskStatus,
 } from '@manage/shared';
 import { AlertsService } from '../alerts/alerts.service';
+import { caseListOrder } from '../cases/case-order';
 import type { Actor } from '../auth/auth.types';
 import { notFound } from '../common/errors';
 import { DATABASE, type DatabaseHandle } from '../db/database';
@@ -67,7 +68,7 @@ export class DeskService {
       .leftJoin(responsible, eq(responsible.id, cases.responsibleUserId))
       // One case (its folder header) may be closed; the desks list open cases only.
       .where(and(eq(cases.tenantId, tenantId), caseId ? eq(cases.id, caseId) : eq(cases.status, 'open')))
-      .orderBy(asc(cases.admittedAt));
+      .orderBy(...caseListOrder());
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
 

@@ -26,6 +26,7 @@ import { DiscrepancyQueue } from '@/components/DiscrepancyQueue';
 import { ReportChart } from '@/components/ReportChart';
 import { ReminderComposer, type ReminderDefaults } from '@/components/ReminderComposer';
 import { useAuth } from '@/lib/auth';
+import { EmployeePerformance } from '@/components/EmployeePerformance';
 import { PlateText } from '@/components/Plate';
 
 type Views = { views: ReportView[]; defaultView: ReportView | null; defaultResponsible: 'me' | null };
@@ -299,6 +300,7 @@ function ReportsPage() {
             </button>
           </nav>
 
+          {tab === 'stats' && view === 'manager' && can('report.manager') && <EmployeePerformance />}
           {tab === 'today' && (view === 'parts' || view === 'manager') && <DiscrepancyQueue />}
 
           {tab === 'today' ? (

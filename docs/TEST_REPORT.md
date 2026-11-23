@@ -1,3 +1,19 @@
+## 2026-11-23 — ممیزی پیش از ادغام PR #120 (توقف، تحویل کل کارشناسی، اجرت اختیاری، عملکرد کارکنان)
+
+- shared: ۱۰۷/۱۰۷ (تازه: زمان توقف از زمان کار و تأخیر کم می‌شود).
+- employee-report ۲/۲ (تازه: امتیاز واقعی تکنسین از کارهای تأیید مستقل = ۹۲ با جزئیات ۲۵٫۷۱/۲۰٫۸۳/۲۵/۲۰؛ کار متوقف و خودتأییدی کنار گذاشته می‌شوند؛ اجرت ثبت‌شدهٔ ۳ کار از ۸ = ۶٬۰۰۰٬۰۰۰ ریال؛ بدون مجوز اجرت، مبلغ پنهان).
+- سازگاری با PR #119 (main کامل در شاخه): special-aid-module ۱۲/۱۲، special-aid-completion ۹/۹، special-aid ۱۴/۱۴، daily-reports ۲۵/۲۵، technician-timing ۴/۴، workshop ۱۱/۱۱، people ۱۴/۱۴، guided-migrations ۳/۳، access ۵/۵، release-v1 ۱۶/۱۶.
+- lint کل مخزن پاس. Playwright تازهٔ صفحهٔ عملکرد کارکنان در CI.
+- محدودیت: امتیاز کارشناس تصادفات و مسئول قطعات فقط در هستهٔ محاسبه و حالت «بدون شواهد» آزموده شده؛ مسیر کامل یادآوری‌ها با عدد امتیاز آزمون جدا ندارد.
+
+## 2026-11-23 — کارشناسی ← ارسال به قطعات و تأمین، پوشش کارشناسی هوشمند، ترتیب پرونده‌ها (PR #120)
+
+- shared: ۱۰۶/۱۰۶ (تازه: جست‌وجوی چندکلمه‌ای نام قطعه و مدل خودرو با هر ترتیب، پوشش مجاز فقط insurance/personal/mixed، ترتیب آخرین پذیرش و ۱۰۰ بالاتر از ۹۹).
+- API، PGlite، هر مجموعه در پردازش جدا: assessment-dispatch-flow ۴/۴ (تازه: جست‌وجو با «سپر سورن»، «سورن گلگیر»، مدل تنها و شمارهٔ فنی فارسی؛ افزودن همان قطعه؛ دو درخواست هم‌زمان و تلاش دوباره فقط یک ردیف؛ میز قطعات همان پرونده را با یک قطعه نشان می‌دهد؛ قطعهٔ تازه پس از ارسال قبلی فقط همان را می‌فرستد؛ ارسال ناموفق [تأیید فنی نشده ۴۲۲، نسخهٔ کهنه ۴۰۹] هیچ ردیفی نمی‌سازد و تلاش دوباره موفق است؛ بیمه/شخصی/ترکیبی با و بدون تعویض اتاق مجاز، کارت طلایی/نامشخص/خالی ۴۲۲ و مسیر رسمی باز؛ تغییر پوشش به کارت طلایی پس از پیش‌نویس هوشمند افزودن قلم و ارسال را رد می‌کند؛ ترتیب با پذیرش تازه، زمان برابر، ۹۹ و ۱۰۰، بیش از یک صفحه، میز تصادفات و ویرایش توضیح).
+- رگرسیون: accident ۳۰/۳۰، assessment-dispatch ۳/۳، assessment-rejections ۱/۱، assessment ۱۰/۱۰، case-sorting ۱/۱، desk ۱/۱، guided-workflow ۳/۳، isaco-parts ۴/۴، part-flow ۸/۸، parts-workbench ۵/۵، reference-data ۹/۹، smart-assessment ۶/۶، smart-fitment ۶/۶، smart-scope ۵/۵، release-v1 ۱۶/۱۶.
+- lint کل مخزن (پس از حذف یک import بی‌استفاده در cases.service)، typecheck وب، ساخت API و بررسی مستندات (۷۷ فایل، ۲۳۷ مسیر) پاس.
+- **اجرا نشده در این رایانه:** ساخت وب Next.js (مثل قبل روی بررسی امنیتی نسخهٔ Next.js متوقف شد؛ در CI) و Playwright (محدودیت سوکت Chromium؛ در CI؛ سناریوی assessment.spec اکنون پیام ماندگار نتیجهٔ ارسال را هم بررسی می‌کند).
+
 ## 2026-11-23 — قطعه‌های رسیدهٔ قدیمی خودکار رزرو نمی‌شوند
 
 - علت: تمرین پیش از نصب روی نسخهٔ بازیابی‌شدهٔ پشتیبان (پس از #122): نخستین «خواندن دوباره» ۲٬۴۲۸ پرونده، ۵٬۸۷۵ قطعه و ۳٬۳۶۰ پذیرش ساخت (۴۶٫۶ ثانیه؛ دوباره ۰٫۷ ثانیه و بدون هیچ ردیف تازه، بدون رزرو)؛ اما ۵٬۳۷۵ سطر «رسیده» بودند و ۴٬۲۸۶ تای آن‌ها کد تدارکاتی‌ای داشتند که در گزارش موجودی فعال بود (۹۹۱ کد). با قاعدهٔ قبلی، انتشار گزارش امداد بعدی موجودی آزاد آن کدها را برای خودروهای قدیمی رزرو می‌کرد.
@@ -1017,3 +1033,11 @@ Published to the owner-approved Preview after a verified restore drill. Health p
 - Every part lists possible repair destinations. The staff member chooses an exact active task/station; the server validates it belongs to the case (and if blockers exist, to the blocked task) before notifying assigned technician, station responsible, case responsible, accident supervisor and other parts staff. The receipt is still recorded only on physical pickup/handover.
 - Added API tests for station isolation and quoted-price self-registration (with official reference required).
 - Latest CI result must be checked before merge: prior run found and fixed one TypeScript narrowing error; no direct local build or Production deploy performed.
+
+### 2026-11-23 — independent technician pauses
+Technician pause/resume persists in the existing transactional per-task audit stream with a required reason, tenant and assignee checks, expected version and working-time exclusion. No schema migration. Local synthetic API verification: 4 suites / 14 passed (technician-timing, smart-assessment, case-sorting, isaco-parts). Shared package/employee tests: 9 passed. Web TypeScript passed. Browser and complete CI verification pending.
+
+## 2026-11-23 — release candidate after c6d55d6b
+- PR 119 and PR 122 incorporated. No additional database migrations required for PR 120. ISACO reconciliation rejects contradictory VIN evidence and considers distinct codes across the entire matched history. A4 Chromium PDF regression added.
+- On f68278d Chromium passed the two formerly failing desktop assessment and guided-workflow cases, including repair-plan focus. Five CI jobs passed; remainder of Chromium cancelled when superseded. Technician milestone fae4c11: focused API 14/14, shared 9/9, web TypeScript passed. Other feature milestones: a624c74 optional labour, 61d7f29 package, 34ffe34 and c6d55d6 employee reports. Check final CI on the current HEAD separately.
+- Next: verify all six checks on this exact candidate, then merge, verify main artifacts, confirm production SHA, independent backup and isolated restoration, migration rehearsal, rollback, deploy and confirm live version. The host's SSH command is sandbox-blocked. No production access or deployment verified in this session.

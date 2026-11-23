@@ -1,3 +1,10 @@
+## 2026-11-23 — PR #120: کارشناسی ← ارسال به قطعات و تأمین، پوشش هوشمند، ترتیب پرونده‌ها
+
+- شاخهٔ `feature/manage-operational-improvements-20261122` (PR #120). کار نیمه‌تمام اجرای قبلی فقط روی این رایانه بود (commit نشده): قاعدهٔ `canUseSmartAssessment`، ترتیب طبیعی شمارهٔ پرونده، جست‌وجو با مصرف خودرو، قفل دوبار کلیک. تکمیل شد: جست‌وجوی چندکلمه‌ای (پیش‌فیلتر SQL و رتبه‌بندی)، ارقام فارسی در جست‌وجو، پیام ماندگار نتیجهٔ ارسال و حفظ انتخاب در خطا، راهنمای پوشش نامشخص، یادداشت نسخه، سند جامع بخش ۲۰ و آزمون‌های دو طرف.
+- Production همچنان v1.0.9 (`8f89187`)؛ این PR منتشر نشده.
+- ممیزی ۲۰۲۶-۱۱-۲۳: توقف/ادامه، تحویل کل کارشناسی، اجرت اختیاری و عملکرد کارکنان در کد و آزمون بررسی شد (جزئیات در checkpoint)؛ منبع اجرت و آزمون امتیاز واقعی اضافه شد.
+- قدم دقیق بعد: CI سبز روی head همین PR؛ ادغام؛ سپس پشتیبان رمزگذاری‌شده، بازیابی و تمرین روی نسخهٔ جدا، نصب artifact همان SHA main و `confirm-healthy-release.sh`.
+
 ## 2026-11-22 — ماژول مستقل «پیگیری امداد ویژه» — در جریان، منتشر نشده
 
 - شاخهٔ `feature/special-aid-module-20261122` از main در `b3bfc8f` (همان Production v1.0.8). سند جامع بخش ۲۵؛ ممیزی و مرحله‌ها در [SPECIAL_AID_MODULE_FA](docs/SPECIAL_AID_MODULE_FA.md). migration افزایشی 0034 با down.
@@ -317,3 +324,17 @@ curl -fsS https://managebyhedax.ir/api/v1/health              # status: ok، db:
 ## گام بعدی
 
 باز کردن PR یکپارچه روی مخزن مالک، سبز شدن هر شش بررسی CI روی آن، بازبینی و ادغام توسط مالک، سپس انتشار طبق [RELEASE_RUNBOOK_RC1_FA](docs/RELEASE_RUNBOOK_RC1_FA.md) با تأیید مالک.
+
+## 2026-11-23 — PR 120 integration checkpoint
+
+- Verified PR 119 was merged in f8a1ca1 and main c636eea includes the subsequent ISACO chassis correction from PR 122. Integrated those commits on the PR 120 branch. The sole Git conflict was the shared barrel; retained the exports from both branches. PR 120 previously introduced no migrations.
+- On 6b958c6, run 45032800839 passed five jobs. Chromium failed in assessment.spec.ts (stale expectation after finalization) and guided-workflow.spec.ts (redundant repair-plan click, then fixture collision on retry). Updated both scenarios to exercise the automatic transition and assert keyboard focus. The assessment scenario dispatches from a draft and checks that procurement received one item.
+- Next: run the integrated regression suite, then finish persistent technician pause/resume, assessment package handoff and corrections, optional labour and employee analytics. Release remains pending independent backup, isolated restore, migration rehearsal and live confirmation.
+
+### 2026-11-23 — independent technician pauses
+Technician pause/resume persists in the existing transactional per-task audit stream with a required reason, tenant and assignee checks, expected version and working-time exclusion. No schema migration. Local synthetic API verification: 4 suites / 14 passed (technician-timing, smart-assessment, case-sorting, isaco-parts). Shared package/employee tests: 9 passed. Web TypeScript passed. Browser and complete CI verification pending.
+
+## 2026-11-23 — release candidate after c6d55d6b
+- PR 119 and PR 122 incorporated. No additional database migrations required for PR 120. ISACO reconciliation rejects contradictory VIN evidence and considers distinct codes across the entire matched history. A4 Chromium PDF regression added.
+- On f68278d Chromium passed the two formerly failing desktop assessment and guided-workflow cases, including repair-plan focus. Five CI jobs passed; remainder of Chromium cancelled when superseded. Technician milestone fae4c11: focused API 14/14, shared 9/9, web TypeScript passed. Other feature milestones: a624c74 optional labour, 61d7f29 package, 34ffe34 and c6d55d6 employee reports. Check final CI on the current HEAD separately.
+- Next: verify all six checks on this exact candidate, then merge, verify main artifacts, confirm production SHA, independent backup and isolated restoration, migration rehearsal, rollback, deploy and confirm live version. The host's SSH command is sandbox-blocked. No production access or deployment verified in this session.

@@ -1941,3 +1941,48 @@ tr.is-late td { background:var(--red-soft); }
 .picking-controls { flex-wrap: wrap; align-items: end; gap: .75rem; }
 .picking-vehicle summary { padding-block: .3rem; }
 .picking-quantity { inline-size: 6rem; }
+
+
+/* Verified vehicle identity stays visible at the top of the case folder. */
+.cf-vehicle-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  line-height: 1.6;
+}
+.cf-vehicle-details > span { display: inline-block; }
+.cf-vehicle-details > span:nth-child(3) {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+
+/* Discreet long-page navigation; never covers the case's primary action row. */
+.page-scroll-shortcuts {
+  position: fixed;
+  inset-inline-end: max(12px, env(safe-area-inset-right));
+  bottom: max(84px, calc(env(safe-area-inset-bottom) + 72px));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.page-scroll-shortcuts button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 2px 9px rgb(0 0 0 / 8%);
+}
+.page-scroll-shortcuts button:disabled { opacity: .3; cursor: default; }
+.page-scroll-shortcuts button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+@media print { .page-scroll-shortcuts { display: none !important; } }

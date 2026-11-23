@@ -44,6 +44,12 @@ export function normalizeRoles(raw: readonly string[] | null | undefined): Role[
 export const COVERAGE_TYPES = ['golden_card', 'insurance', 'personal', 'mixed', 'unknown'] as const;
 export type CoverageType = (typeof COVERAGE_TYPES)[number];
 
+/** A recorded payer is required; legacy unknown/empty values grant no smart access. */
+export function canUseSmartAssessment(coverage: string | null | undefined): boolean {
+  return !!coverage && (COVERAGE_TYPES as readonly string[]).includes(coverage)
+    && coverage !== 'golden_card' && coverage !== 'unknown';
+}
+
 // Ordered pipeline of an accident case. Stage is set explicitly by staff in
 // phase 1; later phases derive parts of it from tasks, approvals and QC.
 export const CASE_STAGES = [
@@ -67,7 +73,7 @@ export const TASK_CANCEL_REASONS = ['customer_withdrew', 'expert_changed', 'plan
 export type TaskCancelReason = (typeof TASK_CANCEL_REASONS)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export const TASK_ACTIONS = ['start', 'complete', 'approve', 'reopen'] as const;
+export const TASK_ACTIONS = ['start', 'complete', 'approve', 'reopen', 'pause', 'resume'] as const;
 export type TaskAction = (typeof TASK_ACTIONS)[number];
 
 export const BLOCKER_REASONS = [

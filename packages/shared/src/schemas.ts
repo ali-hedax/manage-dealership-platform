@@ -228,6 +228,7 @@ export const caseListQuerySchema = z.object({
   flag: z.enum(CASE_FLAGS).optional(),
   blockerReason: z.enum(BLOCKER_REASONS).optional(),
   responsibleUserId: uuid.optional(),
+  sort: z.enum(['admitted_desc', 'case_number_desc', 'admitted_asc', 'case_number_asc']).default('admitted_desc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -268,6 +269,7 @@ export const taskActionSchema = z
     at: optionalIsoDate,
     note: optionalText(1000),
   })
+  .refine(v => !['pause','resume'].includes(v.action) || !!v.note?.trim(), { message: 'علت توقف یا ادامه کار را ثبت کنید', path: ['note'] })
   .refine((v) => v.action !== 'reopen' || !!v.note, {
     message: 'برای بازگشایی فعالیت ذکر دلیل الزامی است',
     path: ['note'],

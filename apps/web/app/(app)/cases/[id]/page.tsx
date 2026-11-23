@@ -79,6 +79,7 @@ export default function CaseDetailPage() {
       const element = document.getElementById(anchor);
       if (element instanceof HTMLDetailsElement) element.open = true;
       element?.scrollIntoView({ block: 'start' });
+      if (element instanceof HTMLDetailsElement) element.querySelector('summary')?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
   }, [kase?.id, tab]);
@@ -113,11 +114,12 @@ export default function CaseDetailPage() {
     setTab(t);
     const hash = anchor ?? Object.keys(SECTION_TAB).find(key => SECTION_TAB[key] === t);
     if (hash) window.history.replaceState(null, '', `#${hash}`);
-    if (anchor) {
+    if (hash) {
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        const el = document.getElementById(anchor);
+        const el = document.getElementById(hash);
         if (el instanceof HTMLDetailsElement) el.open = true;
-        el?.scrollIntoView({ block: 'start' });
+        el?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+        if (el instanceof HTMLDetailsElement) el.querySelector('summary')?.focus({ preventScroll: true });
       }));
     }
   }

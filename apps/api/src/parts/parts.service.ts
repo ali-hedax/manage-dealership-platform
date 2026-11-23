@@ -19,6 +19,8 @@ import {
   type PriceNotice,
   type PriceNoticeResponseInput,
   assessmentDispatchLines,
+  canUseSmartAssessment,
+  latestAdmissionFirst,
   assessmentPartKey,
   technicalReviewFingerprint,
   toLatinDigits,
@@ -166,6 +168,8 @@ export class PartsService {
       const versions=await tx.select().from(assessments).where(and(eq(assessments.tenantId,tenantId),eq(assessments.caseId,caseId))).orderBy(desc(assessments.versionNo));
       const current=versions.find(a=>a.status==='draft'||a.status==='final');
       if(!current)throw badRequest('NO_FINAL_ASSESSMENT','کارشناسی برای این پرونده ثبت نشده است');
+      if(current.smartManual&&!canUseSmartAssessment(kase.coverageType))
+        throw badRequest('SMART_ASSESSMENT_COVERAGE','ابتدا نوع پوشش معتبر پرونده را مشخص کنید؛ کارت طلایی مسیر رسمی دارد');
       if(input.assessmentId&&input.assessmentId!==current.id)throw badRequest('ASSESSMENT_CHANGED','نسخه کارشناسی تغییر کرده است؛ صفحه را تازه کنید');
       if(input.expectedVersion&&input.expectedVersion!==current.version)throw versionConflict(current.version);
       const all=await tx.select().from(assessmentItems).where(and(eq(assessmentItems.tenantId,tenantId),inArray(assessmentItems.assessmentId,versions.map(a=>a.id))));
@@ -736,8 +740,7 @@ export class PartsService {
       if (state === 'needed' && (!card.oldestUndecidedAt || p.createdAt.toISOString() < card.oldestUndecidedAt)) card.oldestUndecidedAt = p.createdAt.toISOString();
       cards.set(c.id, card);
     }
-    const rank = (k: PartsDeskCard) => (k.counts.undecided || k.dealerSupply ? 0 : k.counts.ready ? 1 : 2);
-    return [...cards.values()].sort((a, b) => rank(a) - rank(b) || (a.oldestUndecidedAt ?? a.admittedAt).localeCompare(b.oldestUndecidedAt ?? b.admittedAt));
+    return [...cards.values()].sort(latestAdmissionFirst);
   }
 
   /** Open announcements with their case, for the accident expert (spec section 7: «اعلام قیمت»). */
