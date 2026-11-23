@@ -1,3 +1,11 @@
+## 2026-11-23 — منیج پالس و «پذیرش و ترخیص» — شاخهٔ `feature/manage-pulse`، منتشر نشده
+
+- شاخه از main در `c636eea` (PR #122). سند جامع بخش ۲۶؛ راهنما [MANAGE_PULSE_FA](docs/MANAGE_PULSE_FA.md). migration افزایشی `0036_manage_pulse` با down (شمارهٔ 0034 درخواست قبلاً به امداد ویژه رسیده بود).
+- انجام‌شده: کلاینت فقط‌خواندنی کسب‌وکار با فهرست مجاز، رمزنگاری CryptoJS/RSA-OAEP، کلیدها از bundle، parser ستونی، محدودیت نرخ و حفاظت ورود (`apps/api/src/pulse`)؛ worker جدا (`dist/pulse/main.js`، سرویس compose `pulse` با profile، قفل advisory)؛ چرخه‌های ۳/۱۵/۱۰/۳۰ دقیقه، بارگذاری اولیه، کپچا و اعلان؛ API تنظیمات و پذیرش؛ صفحه‌های `/settings/pulse`، `/reception`، `/reception/open`، `/reception/released`، `/reception/[id]`؛ وضعیت پالس در میز پشتیبانی؛ سه مجوز تازه؛ پرچم `PULSE_ENABLED`؛ دادهٔ ساختگی پذیرش برای دمو؛ آزمون‌ها و اسناد.
+- آزمون: [TEST_REPORT](docs/TEST_REPORT.md). در این محیط بستهٔ npm نصب نمی‌شد؛ آزمون‌های خالص و shared اجرا شدند، آزمون‌های Nest/PGlite و Playwright در CI اجرا می‌شوند.
+- باقی‌مانده: سبز شدن CI و بازبینی اسکرین‌شات‌های artifact «pulse-screenshots»؛ بررسی‌های نخستین اتصال واقعی (فهرست انتهای راهنما: پیشوند Bearer، واحد TokenAge، ترتیب پلاک، ستون نام قطعه، اثر ثبت قطعه بر `DrcdUpdDte`، فیلد کپچا).
+- قدم دقیق بعد: باز کردن PR به `ali-hedax/main` (شاخه روی fork `nadiafallah/manage-dealership-platform` push شده)، سبز شدن CI، بازبینی مالک؛ سپس با تأیید مالک: پشتیبان، تمرین 0036 روی نسخهٔ بازیابی‌شده، `PULSE_SECRET_KEY` و `PULSE_ENABLED=true` و `COMPOSE_PROFILES=pulse` روی سرور، بالا آوردن `pulse`، سه مشخصه در تنظیمات، «آزمایش اتصال»، «شروع»، یک هفته مقایسه، سپس `reception.read` برای نقش‌های دیگر.
+
 ## 2026-11-22 — ماژول مستقل «پیگیری امداد ویژه» — در جریان، منتشر نشده
 
 - شاخهٔ `feature/special-aid-module-20261122` از main در `b3bfc8f` (همان Production v1.0.8). سند جامع بخش ۲۵؛ ممیزی و مرحله‌ها در [SPECIAL_AID_MODULE_FA](docs/SPECIAL_AID_MODULE_FA.md). migration افزایشی 0034 با down.

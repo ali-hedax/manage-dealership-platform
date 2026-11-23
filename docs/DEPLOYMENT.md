@@ -159,6 +159,10 @@ This audit only read the Manage VM Git/container state: deployed 58ad08c, clean 
 
 Before any future owner-approved update, inspect all tracked/untracked changes, preserve them privately and take DB/config backups. The existing deploy.sh uses reset --hard and image prune; do not run it on an unreviewed checkout or as an automatic update. Review and harden that behavior in a separate tested change before relying on it. All three Compose files remain necessary on this VM. Do not publish .env, invitation files or backup contents.
 
+## Manage Pulse (spec section 26)
+
+The worker is the compose service `pulse` (same image as the API, `node dist/pulse/main.js`, no published port, profile `pulse`). Set on the server, never in the repository: `PULSE_ENABLED=true`, `PULSE_SECRET_KEY` (at least 32 characters, e.g. `openssl rand -base64 48`; same value for `api` and `pulse`; keep it with the backups — without it the stored کسب‌وکار password cannot be read and must be entered again) and `COMPOSE_PROFILES=pulse`. Without `PULSE_SECRET_KEY` the API refuses to store a password with a Persian message. The worker connects only to `https://b2b.isaco.ir` (`PULSE_KASB_ORIGIN` may differ only in development and tests) and must run on the server inside Iran; if outbound access is blocked, report it — do not change the firewall without the owner. Guide: [MANAGE_PULSE_FA](MANAGE_PULSE_FA.md).
+
 ## Staff invitation email configuration
 
 New feature branch: feature/staff-email-invitations. Set SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD and SMTP_FROM privately on the Manage Preview only; Compose passes them to API only. Gmail requires a user-created App Password; neither the primary Google password nor a six-digit code can be used. Keep AUTH_TOKEN_SECRET unchanged. Verify SMTP authentication without sending mail, then exercise an owner-authorized invitation recipient. Back up DB/config before additive migration 0006. Current mail configuration being present is distinct from successful provider authentication and actual email delivery. Do not claim rollout complete until the feature is deployed, services healthy and the sender verified.

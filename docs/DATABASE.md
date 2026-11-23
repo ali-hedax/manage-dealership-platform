@@ -1,5 +1,22 @@
 # Database
 
+## 0036: Manage Pulse and the reception module (owner, 2026-11-23; spec section 26)
+
+Additive migration `0036_manage_pulse` (down: `apps/api/src/db/down/0036_manage_pulse.sql`, drops only these tables). No existing table or row changes.
+
+| Table | Purpose |
+| --- | --- |
+| `pulse_connections` | One per dealership: dealer code, user name, `password_enc` (AES-256-GCM with `PULSE_SECRET_KEY`, `v1.<iv>.<tag>.<data>`), `enabled` (start/stop), `state` (off, active, captcha, login_failed, unreachable, password_change), `failed_logins`, `captcha_image`, `settings` (interval, hours, open window), `cursor` (schedule times, status texts, column names), `last_read_at`, `worker_seen_at`, `version`. The کسب‌وکار token is never stored. |
+| `pulse_runs` | One row per worker cycle: kind, start/end, outcome, read/created/changed counts, error code, `details` (column names, client version, auth scheme; never values). Rows older than 30 days are pruned unless an event references them. |
+| `pulse_commands` | Settings page → worker: `test`, `sync_now`, `backfill` (with `progress`), `captcha_answer` (the digits are cleared once handled). |
+| `receptions` | One per repair card, unique `(tenant_id, kasb_rcd)`. Admission number and key (vehicle-import rules), card, chassis, VIN, engine, product/model, colour, plate parts, customer and deliverer, km, `admitted_at`, `status_code`/`status_text`, `released_at`, `is_open`, station, receptionist, `search_text`, `official` (whole row keyed by column name), `row_hash`, first/last seen, `lines_read_at`, `case_id` + `link_state` (none, linked, ambiguous), `version`, `is_test`. |
+| `reception_parts`, `reception_repairs`, `reception_defects` | Lines of a card, unique `(reception_id, kasb_line_id)`, with `official`, `row_hash` and `removed_at` («حذف‌شده در کسب‌وکار»; never deleted). |
+| `reception_external_work` | Work outside the dealership recorded in Manage: contractor (`external_contractors`) or free name, description, sent/done, amount (Rial), status (sent, done, cancelled), note, cancel reason, `version`. |
+| `reception_documents` | Invoice images of external work (same storage as `case_documents`, unique per work and SHA-256). |
+| `reception_notes`, `reception_events` | Staff notes and the append-only history (status, release, parts, external work, notes, case link). |
+
+Writes of the worker are audited with `AuditService.recordSystem()` (no actor, request id `pulse:<run>`); staff writes use `record()` with `expectedVersion`.
+
 ## 0026: special-aid number, procurement code and warehouse receipt (owner, 2026-11-17)
 
 `0026_broad_wildside.sql` adds five nullable columns to `part_requests` and one partial index; nothing is rewritten:

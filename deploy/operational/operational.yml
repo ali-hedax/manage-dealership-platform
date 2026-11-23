@@ -7,6 +7,12 @@ services:
       COOKIE_SECURE: "true"
       TOTP_AUTH_ENABLED: "true"
       SEED_DEMO_PASSWORD: ""
+  # Manage Pulse worker (profile "pulse"; started only after the owner approves and sets
+  # PULSE_SECRET_KEY in /opt/manage/.env). Same production settings as the API.
+  pulse:
+    environment:
+      APP_ENV: production
+      NODE_ID: manage-arvan-production
   gate:
     environment:
       TOTP_AUTH_ENABLED: "true"
