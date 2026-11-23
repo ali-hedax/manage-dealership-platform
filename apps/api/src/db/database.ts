@@ -14,11 +14,24 @@ export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 export type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 export type DbOrTx = Database | Tx;
 
+/** A session-level PostgreSQL advisory lock held on one dedicated connection. */
+export interface LeaderLock {
+  /** True once the connection holding the lock was lost (the lock went with it). */
+  readonly lost: boolean;
+  release(): Promise<void>;
+}
+
 export interface DatabaseHandle {
   db: Database;
   driver: AppConfig['DB_DRIVER'];
   migrate(): Promise<void>;
   close(): Promise<void>;
+  /**
+   * pg_try_advisory_lock on a dedicated connection, so that only one background worker of a
+   * kind runs at a time (Manage Pulse). Null when another process holds it. PGlite is a single
+   * embedded process and always grants it.
+   */
+  leaderLock(key: number): Promise<LeaderLock | null>;
 }
 
 export const DATABASE = Symbol('DATABASE');
@@ -34,6 +47,29 @@ export function openDatabase(cfg: AppConfig): DatabaseHandle {
       driver: 'postgres',
       migrate: () => migratePg(db, { migrationsFolder: MIGRATIONS_FOLDER }),
       close: () => pool.end(),
+      async leaderLock(key: number) {
+        const client = await pool.connect();
+        try {
+          const res = await client.query<{ ok: boolean }>('select pg_try_advisory_lock($1) as ok', [key]);
+          if (!res.rows[0]?.ok) {
+            client.release();
+            return null;
+          }
+        } catch (e) {
+          client.release();
+          throw e;
+        }
+        const state = { lost: false, released: false };
+        client.on('error', () => { state.lost = true; });
+        return {
+          get lost() { return state.lost; },
+          async release() {
+            if (state.released) return;
+            state.released = true;
+            try { if (!state.lost) await client.query('select pg_advisory_unlock($1)', [key]); } finally { client.release(state.lost); }
+          },
+        };
+      },
     };
   }
 
