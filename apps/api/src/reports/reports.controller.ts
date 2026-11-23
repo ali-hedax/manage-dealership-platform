@@ -27,6 +27,12 @@ export class ReportsController {
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
   ) {}
 
+  @Get('employees')
+  @RequirePermissions('report.manager')
+  employeePerformance(@CurrentActor() actor: Actor) {
+    return this.reports.employeePerformance(actor);
+  }
+
   @Get('views')
   @RequirePermissions('case.read')
   views(@CurrentActor() actor: Actor) {

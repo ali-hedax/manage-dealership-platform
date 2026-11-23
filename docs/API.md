@@ -126,6 +126,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reminders/people` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/reminders` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/report-center` | [source](../apps/api/src/special-aid/report-center.controller.ts) |
+| GET | `/api/v1/reports/employees` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/export` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/pdf` | [source](../apps/api/src/reports/reports.controller.ts) |
 | GET | `/api/v1/reports/responsibility` | [source](../apps/api/src/people/people.controllers.ts) |

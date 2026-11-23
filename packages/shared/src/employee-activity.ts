@@ -6,6 +6,9 @@
 export const MEANINGFUL_STAFF_EVENTS = {
   'assessment.created': 'assessment_created',
   'assessment.finalized': 'assessment_finalized',
+  'assessment.supplement_created': 'assessment_created',
+  'assessment.package_submitted': 'package_submitted',
+  'assessment.technical_review': 'part_reviewed',
   'task.started': 'work_started',
   'task.completed': 'work_completed',
   'task.approved': 'work_approved',

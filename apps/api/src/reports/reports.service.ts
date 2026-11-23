@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, gte, inArray, isNull, like, lt, ne, sql, type SQL } from 'drizzle-orm';
 import {
+  aggregateStaffActivity, calculateEmployeeScore, MEANINGFUL_STAFF_EVENTS,
   SERVICE_KPIS,
   SERVICE_KPI_KEYS,
   serviceKpiMembers,
@@ -37,7 +38,7 @@ import { caseSql } from '../cases/cases.service';
 import { badRequest, forbidden } from '../common/errors';
 import { DATABASE, type DatabaseHandle } from '../db/database';
 import { DiscrepanciesService } from '../discrepancies/discrepancies.service';
-import { cases, departments, partRequests, tasks, tenants, users, vehicles } from '../db/schema';
+import { auditEvents, blockers, cases, departments, partRequests, tasks, tenants, users, vehicles } from '../db/schema';
 
 // Definitions: docs/REPORTS_FA.md. Every figure is computed here from the
 // operational tables, scoped to the actor's dealership; the web app only
@@ -301,6 +302,54 @@ export class ReportsService {
   }
 
   /** The four approved numbers with their exact rows, for the service manager dashboard. */
+  async employeePerformance(actor: Actor, now = new Date()) {
+    if (!actor.user.permissions.has('report.manager')) throw forbidden();
+    const tenant = actor.user.tenantId;
+    const {from,to} = periodRange({period:'month'},now);
+    const staff = await this.db.select({id:users.id,name:users.displayName,roles:users.roles,active:users.isActive}).from(users)
+      .where(eq(users.tenantId,tenant)).orderBy(users.displayName,users.id);
+    const events = await this.db.select({id:auditEvents.id,actorUserId:auditEvents.actorUserId,action:auditEvents.action,
+      occurredAt:auditEvents.occurredAt,isTest:auditEvents.isTest}).from(auditEvents).where(and(eq(auditEvents.tenantId,tenant),
+      eq(auditEvents.isTest,false),gte(auditEvents.occurredAt,from),lt(auditEvents.occurredAt,to),inArray(auditEvents.action,Object.keys(MEANINGFUL_STAFF_EVENTS))));
+    const activity = new Map(aggregateStaffActivity(events.map(e=>({...e,occurredAt:e.occurredAt.toISOString()}))).employees.map(a=>[a.employeeId,a]));
+    // Freeze the cohort by original deadline. Exclude assignments with documented blockers, pauses,
+    // reassignment, missing start evidence, or no independent handover decision from scored ratios.
+    const due = await this.db.select({id:tasks.id,assignee:tasks.assignedUserId,end:tasks.actualEndAt,start:tasks.actualStartAt,
+      deadline:tasks.baselineEndAt,completedBy:tasks.completedBy,approvedBy:tasks.approvedBy,status:tasks.status}).from(tasks)
+      .where(and(eq(tasks.tenantId,tenant),eq(tasks.isTest,false),gte(tasks.baselineEndAt,from),lt(tasks.baselineEndAt,to),ne(tasks.status,'cancelled')));
+    const history = new Map<string, Set<string>>();
+    const blocked = new Set<string>();
+    for(let i=0;i<due.length;i+=500) {
+      const ids=due.slice(i,i+500).map(t=>t.id);
+      const changes=await this.db.select({id:auditEvents.entityId,action:auditEvents.action,after:auditEvents.after})
+        .from(auditEvents).where(and(eq(auditEvents.tenantId,tenant),eq(auditEvents.isTest,false),eq(auditEvents.entityType,'task'),
+          inArray(auditEvents.entityId,ids),inArray(auditEvents.action,['task.paused','task.reopened','task.updated'])));
+      for(const change of changes) {
+        const set=history.get(change.id)??new Set<string>();
+        if(change.action!=='task.updated'||(change.after && typeof change.after==='object' && 'assignedUserId' in change.after)) set.add(change.action);
+        history.set(change.id,set);
+      }
+      const holds=await this.db.select({id:blockers.taskId}).from(blockers).where(and(eq(blockers.tenantId,tenant),eq(blockers.isTest,false),inArray(blockers.taskId,ids)));
+      for(const hold of holds) if(hold.id) blocked.add(hold.id);
+    }
+    return {from:from.toISOString(),to:to.toISOString(),employees:staff.map(person=>{
+      const assigned=due.filter(t=>t.assignee===person.id);
+      const holds=assigned.filter(t=>blocked.has(t.id)||history.get(t.id)?.has('task.paused')).length;
+      const eligible=assigned.filter(t=>!blocked.has(t.id)&&!history.get(t.id)?.has('task.paused')&&!history.get(t.id)?.has('task.updated')&&t.start);
+      const reviewed=eligible.filter(t=>t.end && t.status==='approved' && t.approvedBy && t.approvedBy!==person.id);
+      const ratio=(count:number,total:number)=>total ? count/total : null;
+      const score=person.roles.includes('technician') ? calculateEmployeeScore({employeeId:person.id,displayName:person.name,
+        roleGroup:'technician',metricVersion:'technician-deadlines-v1',eligibleCompletedEvents:reviewed.length,ratios:{
+          progress:ratio(reviewed.length,eligible.length),
+          timeliness:ratio(reviewed.filter(t=>t.end!<=t.deadline!).length,reviewed.length),
+          accuracy:ratio(reviewed.filter(t=>!history.get(t.id)?.has('task.reopened')).length,reviewed.length),
+          accountability:ratio(reviewed.filter(t=>t.completedBy===person.id).length,reviewed.length),
+        }}) : null;
+      return {...person,activity:activity.get(person.id)?.counts??{},score,reviewed:reviewed.length,eligible:eligible.length,
+        delays:eligible.filter(t=>!t.end || t.end>t.deadline!).length,holds};
+    })};
+  }
+
   async serviceKpis(actor: Actor, now = new Date()): Promise<ServiceKpi[]> {
     const base = await this.baseCases(actor, {} as ReportQuery);
     const members = serviceKpiMembers(base.map(serviceRow), now);

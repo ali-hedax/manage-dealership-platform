@@ -67,3 +67,5 @@ Technician pause/resume persists in the existing transactional per-task audit st
 Optional labour entry added to the smart draft, grouped by active department. Each explicit save uses an existing audited repair item, its existing totals and printable rows. Descriptions and amounts are optional. Browser regression added; verify final CI and A4 output.
 
 Package milestone: full smart assessment submission and deduplicated parts-clerk notifications, tenant-scoped correction/removal with optimistic locks and immutable audit, existing downstream supply lineage guard, permission-gated whole-package finalization against current technical acceptances. Synthetic API regression added. CI and production outstanding.
+
+Manager stats: named tenant roster, authenticated event counts and monthly technician score when at least five independently accepted jobs have evidence. Deadline, reopen and completion actor explain each dimension. Blocked/paused jobs are excluded. Other roles currently have activity summaries and insufficient-evidence status; role-specific score inputs outside technician work are incomplete. No revenue estimation. CI/production validation pending.
