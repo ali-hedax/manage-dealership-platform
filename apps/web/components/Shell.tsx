@@ -44,7 +44,7 @@ export function Shell({ children }: { children: ReactNode }) {
         { href: '/cases', label: 'پرونده‌ها', icon: 'folder', show: can('case.read'), match: (p) => p.startsWith('/cases') },
         { href: '/parts', label: 'قطعات', icon: 'box', show: can('case.read') && (can('part.manage') || can('part.request') || can('stock.read')), match: (p) => p === '/parts' || p === '/stock' || p === '/emdad' },
         { href: '/reports', label: 'گزارش‌ها', icon: 'chart', show: can('report.manager') || can('part.manage') || can('case.update') || can('task.manage') || can('wage.report'), match: (p) => p.startsWith('/reports') },
-        { href: '/settings', label: 'تنظیمات', icon: 'gear', show: me.isOwner || can('user.manage') || can('calendar.manage') || can('workshop.manage') || can('settings.manage') || can('reference.parts.read') || can('daily_reports.upload') || can('workshop.read'), match: (p) => ['/settings', '/users', '/workshop/settings', '/reference-data', '/daily-reports'].includes(p) },
+        { href: '/settings', label: 'تنظیمات', icon: 'gear', show: me.isOwner || can('user.manage') || can('calendar.manage') || can('workshop.manage') || can('settings.manage') || can('reference.parts.read') || can('daily_reports.upload') || can('workshop.read') || can('integration.manage'), match: (p) => ['/settings', '/users', '/workshop/settings', '/reference-data', '/daily-reports'].includes(p) },
       ];
   const more: NavItem[] = technicianOnly ? [] : [
     { href: '/workshop', label: 'برنامه و گزارش تعمیر', icon: 'wrench', show: can('workshop.read'), match: (p) => p === '/workshop' },
@@ -61,7 +61,15 @@ export function Shell({ children }: { children: ReactNode }) {
   const byHref = (href: string) => [...primary, ...more].find((i) => i.href === href)!;
   const manager = can('report.manager');
   const reports = byHref('/reports');
+  // «پذیرش و ترخیص» (owner, 2026-11-23; spec section 26): only when the server flag made the
+  // module active and only with reception.read (owner and system administrator during the trial).
+  const receptionActive = me.modules.some((m) => m.key === 'reception' && m.status === 'active');
   const groups: NavGroupDef[] = technicianOnly ? [] : [
+    { key: 'reception', label: 'پذیرش و ترخیص', icon: 'file', items: [
+      { href: '/reception', label: 'پذیرش‌های امروز', icon: 'calendar', show: receptionActive && can('reception.read'), match: (p) => p === '/reception' },
+      { href: '/reception/open', label: 'پذیرش‌های باز', icon: 'folder', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/open' || (/^\/reception\/[^/]+$/.test(p) && p !== '/reception/released') },
+      { href: '/reception/released', label: 'ترخیص‌شده‌ها', icon: 'check', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/released' },
+    ] },
     { key: 'accident', label: 'مدیریت تصادفات', icon: 'nav-car', items: [
       { href: '/accidents/expert', label: 'خودروهای تصادفی', icon: 'car', show: desks.some((w) => w.key === 'expert') && home !== '/accidents/expert', match: (p) => p === '/accidents/expert' },
       { ...byHref('/cases'), label: 'پرونده و کارشناسی', match: (p) => p.startsWith('/cases') && p !== '/cases/new' },
@@ -90,7 +98,7 @@ export function Shell({ children }: { children: ReactNode }) {
       { ...byHref('/'), label: 'آمار پرونده‌ها' },
     ] },
     { key: 'settings', label: 'تنظیمات سیستم', icon: 'nav-settings', items: [
-      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/settings/reports', '/workshop/settings', '/reference-data'].includes(p) },
+      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/settings/reports', '/settings/pulse', '/workshop/settings', '/reference-data'].includes(p) },
       { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team', show: me.isOwner || can('user.manage'), match: (p) => p === '/users' },
     ] },
     { key: 'roadmap', label: 'نقشهٔ راه', icon: 'layers', items: [
@@ -204,14 +212,17 @@ export function backTarget(pathname: string, home: string, canChooseDesk = false
   // Special Aid pages carry their own workspace tabs; a dossier goes back to the vehicle list.
   if (/^\/special-aid\/vehicles\/[^/]+$/.test(pathname)) return { href: '/special-aid/vehicles', label: 'بازگشت به پرونده خودروها' };
   if (pathname.startsWith('/special-aid')) return null;
+  // Reception lists carry their own tabs; a reception folder goes back to the open admissions.
+  if (/^\/reception\/(?!open$|released$)[^/]+$/.test(pathname)) return { href: '/reception/open', label: 'بازگشت به پذیرش‌ها' };
+  if (pathname.startsWith('/reception')) return null;
   if (/^\/cases\/(?!new$|import$)[^/]+$/.test(pathname)) return null;
   const edit = /^\/cases\/([^/]+)\/edit$/.exec(pathname);
   if (edit) return { href: `/cases/${edit[1]}`, label: 'بازگشت به پرونده' };
-  if (['/users', '/settings/reports', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
+  if (['/users', '/settings/reports', '/settings/pulse', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
   return { href: home, label: 'بازگشت به میز کار' };
 }
 
-const PAGE_TITLES: [RegExp, string][] = [[/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid\/feedback/, 'بازخورد فنی و تذکر'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
+const PAGE_TITLES: [RegExp, string][] = [[/^\/reception\/open$/, 'پذیرش‌های باز'], [/^\/reception\/released$/, 'ترخیص‌شده‌ها'], [/^\/reception\/[^/]+$/, 'پروندهٔ پذیرش'], [/^\/reception$/, 'پذیرش‌های امروز'], [/^\/settings\/pulse/, 'منیج پالس'], [/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid\/feedback/, 'بازخورد فنی و تذکر'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
 /** Browser tab title for each area, so several open tabs can be told apart. */
 export function pageTitle(pathname: string): string {
   const module = /^\/modules\/([^/]+)/.exec(pathname)?.[1];

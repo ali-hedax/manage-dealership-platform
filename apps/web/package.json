@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "test": "echo \"web: covered by test:e2e (Playwright)\"",
-    "test:e2e": "playwright test && playwright test -c playwright.daily.config.ts"
+    "test:e2e": "playwright test && playwright test -c playwright.daily.config.ts && playwright test -c playwright.pulse.config.ts"
   },
   "dependencies": {
     "@fontsource/vazirmatn": "^5.2.0",

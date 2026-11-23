@@ -15,6 +15,7 @@ export default function SettingsPage() {
     { href: '/users#owner-admin', title: 'اجازه‌های مدیر سیستم', detail: 'دادن یا گرفتن اجازهٔ دعوت و گزارش کارهای پشتیبانی', icon: 'lock', show: !!me.isOwner },
     { href: '/workshop/settings', title: 'تقویم، جایگاه‌ها و سقف هشدارها', detail: 'ساعت کاری، کد جایگاه‌ها، سقف هزینه، قطعهٔ گران و روزهای امداد دیرشده', icon: 'calendar', show: can('workshop.read') || can('calendar.manage') || can('settings.manage') },
     { href: '/settings/reports', title: 'مرکز گزارش‌های کسب‌وکار', detail: 'سه گزارش ایساکو: راهنما، بازه، آخرین ورود و روزهای بدون گزارش', icon: 'layers', show: can('report_center.manage') || can('daily_reports.upload') || can('reference.customers.manage') },
+    { href: '/settings/pulse', title: 'منیج پالس · اتصال کسب‌وکار', detail: 'ورود خودکار به کسب‌وکار، خواندن پذیرش‌ها و قطعات، وضعیت و اجراهای اخیر', icon: 'layers', show: can('integration.manage') },
     { href: '/daily-reports', title: 'گزارش‌های روزانه', detail: 'بارگذاری موجودی کسب‌وکار و امداد ویژه، ساعت یادآوری', icon: 'upload', show: can('daily_reports.upload') || can('daily_reports.apply') || can('daily_reports.settings') },
     { href: '/reference-data', title: 'اطلاعات پایه', detail: 'کاتالوگ قطعات و سوابق پذیرش', icon: 'database', show: can('reference.parts.read') || can('reference.customers.read') },
   ];

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { MODULE_LABELS, type ModuleKey } from '@manage/shared';
+import { useAuth } from '@/lib/auth';
 
 // Planned modules are visible so the roadmap is clear, but expose no actions.
 const SCOPE: Record<string, string[]> = {
@@ -20,8 +21,13 @@ const SCOPE: Record<string, string[]> = {
 
 export default function ModulePage() {
   const { key } = useParams<{ key: string }>();
+  const { me } = useAuth();
   const label = MODULE_LABELS[key as ModuleKey];
   if (!label) return <div className="callout callout-red">این ماژول وجود ندارد.</div>;
+  // A module made active by its server flag (reception: Manage Pulse) has its own pages.
+  if (key === 'reception' && me.modules.some((m) => m.key === 'reception' && m.status === 'active')) {
+    return <div className="callout"><h1>{label}</h1><p>این بخش فعال است: <Link href="/reception">پذیرش‌های امروز</Link></p></div>;
+  }
   return (
     <div className="stack" style={{ maxWidth: 720 }}>
       <div className="page-head">

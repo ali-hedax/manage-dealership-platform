@@ -23,6 +23,8 @@ playwright-report/
 playwright-report-daily/
 test-results/
 test-results-daily/
+test-results-pulse/
+playwright-report-pulse/
 apps/web/e2e/.auth/
 
 # OS / editor

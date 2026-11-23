@@ -948,3 +948,67 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .notice-item p { margin: 2px 0 0; }
 .notice-panel-foot { font-size: 13.5px; font-weight: 700; color: #12645D; text-decoration: none; }
 @media (max-width: 600px) { .notice-panel { position: fixed; inset-inline: 16px; inset-block-start: 64px; inline-size: auto; } }
+
+/* ---------------------------------------------------------------- Manage Pulse · پذیرش و ترخیص
+   (owner, 2026-11-23; spec section 26). Paper desk of the approved design; existing tokens only. */
+.rcp-fresh { display: inline-flex; align-items: center; gap: 6px; }
+.rcp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rcp-row { display: grid; grid-template-columns: minmax(150px, auto) minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; padding: 10px 16px; border-radius: var(--m-radius-s); background: var(--m-paper); border: 1px solid var(--m-line); color: var(--m-ink); text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+.rcp-row:hover { transform: translateY(-1px); box-shadow: var(--m-shadow); }
+.rcp-row:focus-visible { outline: none; box-shadow: var(--m-focus); }
+.rcp-row.is-closed { background: var(--m-paper-2); }
+.rcp-row .plate.row { block-size: 40px; font-size: 22px; border-width: 2px; }
+.rcp-plate { display: grid; justify-items: start; gap: 2px; min-inline-size: 0; }
+.rcp-plate small { font-size: 11.5px; color: var(--m-muted); font-weight: 600; }
+.rcp-who { display: grid; gap: 2px; min-inline-size: 0; }
+.rcp-who strong { font-size: 15px; font-weight: 800; }
+.rcp-who span { font-size: 13px; color: var(--m-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rcp-status { min-inline-size: 0; }
+.rcp-status .m-tag { white-space: normal; }
+.rcp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12.5px; color: var(--m-muted); }
+.rcp-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+.rcp-meta .app-icon { inline-size: 15px; block-size: 15px; }
+@media (max-width: 760px) {
+  .rcp-row { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'plate who' 'status meta'; padding: 10px 12px; }
+  .rcp-plate { grid-area: plate; } .rcp-who { grid-area: who; } .rcp-status { grid-area: status; } .rcp-meta { grid-area: meta; justify-content: flex-end; }
+  .rcp-row .plate.row { block-size: 34px; font-size: 18px; }
+}
+
+.rcp-folder { max-inline-size: 1100px; }
+.rcp-head { padding: 18px 20px; display: grid; gap: 12px; }
+.rcp-head-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.rcp-head h1 { margin: 0; font-size: 26px; font-weight: 800; }
+.rcp-head-who { margin: 4px 0 0; color: var(--m-ink-2); font-size: 15px; }
+.rcp-head-ids { margin: 4px 0 0; color: var(--m-muted); font-size: 12.5px; font-weight: 600; }
+.rcp-sec > summary { cursor: pointer; list-style: none; }
+.rcp-sec > summary::-webkit-details-marker { display: none; }
+.rcp-sec > summary h2 { margin: 0; }
+.rcp-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 10px 18px; }
+.rcp-fact { display: grid; gap: 2px; min-inline-size: 0; }
+.rcp-fact dt { font-size: 12px; color: var(--m-muted); }
+.rcp-fact dd { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.rcp-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rcp-lines > li { display: grid; gap: 4px; padding: 9px 12px; border-radius: var(--m-radius-s); border: 1px solid var(--m-line-soft); background: var(--m-paper); }
+.rcp-lines > li.is-removed, .table tr.is-removed td { color: var(--m-faint); background: var(--m-paper-2); }
+.rcp-lines > li.is-removed strong { font-weight: 600; text-decoration: line-through; text-decoration-color: var(--m-line); }
+.rcp-line-name { min-inline-size: 0; overflow-wrap: anywhere; }
+.rcp-form { padding: 14px; border-radius: var(--m-radius-s); background: var(--m-paper-2); border: 1px solid var(--m-line); }
+.rcp-note-form { align-items: flex-end; }
+.rcp-note-form .field { flex: 1 1 260px; }
+
+.pulse-card .panel-head { align-items: center; }
+.pulse-line { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
+.pulse-line h2 { margin: 0; }
+.pulse-line p { margin: 2px 0 0; }
+.pulse-dot { inline-size: 10px; block-size: 10px; border-radius: 50%; flex: none; background: var(--m-own); }
+.pulse-dot.ok { background: var(--m-accent); box-shadow: 0 0 0 4px var(--m-accent-soft); }
+.pulse-dot.wait { background: var(--m-warn); box-shadow: 0 0 0 4px var(--m-warn-bg); }
+.pulse-dot.stop { background: var(--m-stop); box-shadow: 0 0 0 4px var(--m-stop-bg); }
+.pulse-page { max-inline-size: 1100px; }
+.pulse-commands { margin-block-start: 12px; }
+.pulse-progress { position: relative; display: inline-flex; align-items: center; min-inline-size: 160px; block-size: 18px; border-radius: 999px; background: var(--m-line-soft); overflow: hidden; }
+.pulse-progress i { position: absolute; inset-block: 0; inset-inline-start: 0; background: var(--m-accent-soft); border-inline-end: 2px solid var(--m-accent); }
+.pulse-progress span { position: relative; padding-inline: 8px; font-size: 11.5px; font-weight: 700; color: var(--m-accent-ink); }
+.pulse-captcha { border-color: #EEDDBF; }
+.pulse-captcha-img { block-size: 52px; inline-size: auto; border-radius: 8px; border: 1px solid var(--m-line); background: #fff; }
+.pulse-details { max-inline-size: 420px; max-block-size: 220px; overflow: auto; margin: 4px 0 0; padding: 8px; border-radius: 8px; background: var(--m-paper-2); white-space: pre-wrap; overflow-wrap: anywhere; }
