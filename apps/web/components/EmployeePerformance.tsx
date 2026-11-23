@@ -6,7 +6,8 @@ import { fetcher } from '@/lib/api';
 import { faNum, formatJalali } from '@/lib/format';
 
 type Employee = {id:string;name:string;active:boolean;activity:Record<string,number>;score:EmployeeScoreResult|null;
-  deskScores:{role:string;followups:number;closed:number;reviewed:number;delays:number;result:EmployeeScoreResult}[];reviewed:number;eligible:number;delays:number;holds:number};
+  deskScores:{role:string;followups:number;closed:number;reviewed:number;delays:number;result:EmployeeScoreResult}[];reviewed:number;eligible:number;delays:number;holds:number;
+  earnings:{source:'technician_wages';approvedJobs:number;jobsWithWage:number;jobsWithoutWage:number;amountRial:number|null}|null};
 const titles:Record<string,string>={assessment_created:'کارشناسی ثبت‌شده',assessment_finalized:'کارشناسی نهایی',
   package_submitted:'ارسال کل کارشناسی',part_reviewed:'تصمیم بررسی فنی',work_started:'شروع کار',work_completed:'پایان کار',work_approved:'تأیید تحویل'};
 export function EmployeePerformance() {
@@ -26,6 +27,7 @@ export function EmployeePerformance() {
       </section>)}
       {person.score && <><p>کارهای واجد بررسی با موعد این ماه {faNum(person.eligible)} · تحویل با تأیید مستقل {faNum(person.reviewed)} · عبور از موعد {faNum(person.delays)} · دارای توقف ثبت‌شده {faNum(person.holds)}</p>
       <dl>{([['progress','تحویل تأییدشده از کارهای واجد بررسی (۳۰)'],['timeliness','تحویل در موعد برنامه اولیه (۲۵)'],['accuracy','تحویل بدون بازگشایی ثبت‌شده (۲۵)'],['accountability','ثبت پایان به دست خود تکنسین (۲۰)']] as const).map(([k,title])=><div key={k}><dt>{title}</dt><dd>{person.score?.breakdown[k]!=null ? faNum(person.score.breakdown[k]!) : 'داده کافی نیست'}</dd></div>)}</dl>
+      {person.earnings && <p data-testid="employee-earnings">اجرت ثبت‌شدهٔ کارهای تأییدشدهٔ این ماه: {person.earnings.amountRial==null?'(نمایش مبلغ نیازمند مجوز گزارش اجرت است)':faNum(person.earnings.amountRial)+' ریال'} · از {faNum(person.earnings.jobsWithWage)} کار{person.earnings.jobsWithoutWage>0?` · ${faNum(person.earnings.jobsWithoutWage)} کار تأییدشده بدون اجرت ثبت‌شده`:''} · منبع: اجرت ثبت‌شده روی هر کار (نه برآورد)</p>}
       {person.holds>0 && <p>علت توقف کارهای این کارمند را در پرونده‌ها مرور کنید.</p>}
       {person.delays>0 && <p>برنامه کارهای گذشته از موعد را با زمان تحویل تطبیق دهید.</p>}</>}
     </details>)}</section>;

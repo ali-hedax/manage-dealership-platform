@@ -35,3 +35,13 @@ test('latest admission first; equal admissions by the larger case number, 100 ab
   ];
   assert.deepEqual([...rows].sort(latestAdmissionFirst).map((r) => r.caseId), ['3', '2', '1', '4']);
 });
+
+test('technician pause: paused working minutes never count as work or delay', async () => {
+  const { DEFAULT_WORK_CALENDAR, technicianTiming } = await import('../workshop');
+  const base = { actualStartAt: '2026-11-07T08:00:00+03:30', actualEndAt: '2026-11-07T14:00:00+03:30', plannedMinutes: 240, now: '2026-11-20T00:00:00Z', calendar: DEFAULT_WORK_CALENDAR };
+  const plain = technicianTiming(base);
+  const paused = technicianTiming({ ...base, pausedMinutes: 90 });
+  assert.equal(paused.workMinutes, plain.workMinutes! - 90);
+  assert.equal(paused.delayMinutes, Math.max(0, plain.workMinutes! - 90 - 240));
+  assert.equal(technicianTiming({ ...base, pausedMinutes: 10_000 }).workMinutes, 0);
+});

@@ -23,7 +23,14 @@ Base main at creation: `b3bfc8f6bab6889c031f828cc72a05fad30638a8`
 ## Legacy ISACO known limitation
 The current `CasesService.isacoCodeOf` already performs a **read-time, exact VIN/chassis** lookup on every old and new case. The new regression test demonstrates this intended scenario, but **cannot prove real production historical cases have valid VIN/chassis and a matching source row**. Backfilling missing identifiers or repairing ambiguous codes requires a read-only audit of real production data followed by a separately verified, non-destructive reconciliation strategy. Never guess a product code from the model or plate.
 
-## Not implemented — DO NOT CLAIM COMPLETE
+## Status audit 2026-11-23 (supersedes the list below, which described the state on 2026-11-22)
+Verified against the code and tests, not only CI:
+- **Pause/resume — complete.** Required reason, tenant/assignee checks, expectedVersion, audit stream (`task.paused`/`task.resumed`), «پایان کار» refused while paused, technician UI, paused working minutes subtracted (`workshop.service.ts`). Tests: technician-timing e2e, shared unit test of the subtraction.
+- **Full assessment handoff and finalization — complete.** Submit, status, parts-clerk code correction and audited removal, whole-package finalization only after current technical acceptances; UI in `TechnicalReviewPanel`. Test: smart-assessment e2e.
+- **Optional labour — complete.** Department sections in the smart draft; saved as audited repair rows, so totals and printable rows include them; hidden in print. Only replaced parts need technical review, so labour never blocks finalization. Test: Playwright smart-assessment.
+- **Employee performance — complete for operational roles.** Manager-only report (`report.manager`), tenant roster, activity counts, 0–100 scores for technicians and for accident experts / parts clerks with five-event evidence thresholds and per-dimension breakdown; paused, blocked, reassigned and self-approved jobs are excluded; revenue provenance from the wage recorded on each approved job (amount only with `wage.report`). Tests: employee-report e2e computes a real score (92) and the wage figure; Playwright checks the page. Other roles (managers, system admin, special-aid roles) show activity with «شواهد کافی نیست» — no role-specific metric exists for them yet.
+
+## Not implemented — DO NOT CLAIM COMPLETE (historical, 2026-11-22)
 - Pause/resume lifecycle: task status and event/schema/API/technician UI, lifecycle tests.
 - Full-assessment submission to Parts Specialist; direct technical corrections, safe deletes, audit and whole-assessment finalization.
 - Optional sectioned labour-entry UX and printout integration.

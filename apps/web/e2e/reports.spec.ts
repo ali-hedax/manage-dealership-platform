@@ -59,3 +59,14 @@ test('parts clerk sees only the parts work list, with quantities and next action
   await expect(page.getByTestId('work-row').first()).toContainText(/بررسی موجودی|ثبت سفارش|پیگیری|تحویل به واحد/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('service manager: monthly employee performance lists named staff with evidence, never a score without enough evidence', async ({ page }) => {
+  await as(page, 'manager');
+  await page.goto('/reports?view=manager&tab=stats');
+  const section = page.locator('section', { has: page.getByRole('heading', { name: 'عملکرد کارکنان در ماه جاری' }) });
+  await expect(section).toBeVisible();
+  await expect(section.locator('details').first()).toBeVisible();
+  // Demo data is synthetic, so nobody is scored; the reason is shown instead of a number.
+  await expect(section.locator('details > summary', { hasText: 'از ۱۰۰' })).toHaveCount(0);
+  await expect(section.getByText('شواهد کافی برای امتیاز وجود ندارد').first()).toBeVisible();
+});

@@ -38,7 +38,7 @@ import { caseSql } from '../cases/cases.service';
 import { badRequest, forbidden } from '../common/errors';
 import { DATABASE, type DatabaseHandle } from '../db/database';
 import { DiscrepanciesService } from '../discrepancies/discrepancies.service';
-import { assessments, assessmentItems, assessmentTechnicalReviews, reminders, reminderRecipients, auditEvents, blockers, cases, departments, partRequests, tasks, tenants, users, vehicles } from '../db/schema';
+import { assessments, assessmentItems, assessmentTechnicalReviews, reminders, reminderRecipients, auditEvents, blockers, cases, departments, partRequests, tasks, technicianWages, tenants, users, vehicles } from '../db/schema';
 
 // Definitions: docs/REPORTS_FA.md. Every figure is computed here from the
 // operational tables, scoped to the actor's dealership; the web app only
@@ -352,7 +352,17 @@ export class ReportsService {
       .from(reminderRecipients).innerJoin(reminders,and(eq(reminders.id,reminderRecipients.reminderId),eq(reminders.tenantId,tenant),eq(reminders.isTest,false)))
       .where(and(eq(reminderRecipients.tenantId,tenant),eq(reminderRecipients.isTest,false),gte(reminderRecipients.remindAt,from),
         lt(reminderRecipients.remindAt,to),ne(reminders.senderUserId,reminderRecipients.userId)));
+    // Revenue provenance: only the wage recorded on each job (who set it, when), for jobs approved in
+    // this month. Never estimated from the case or the assessment; amounts only with wage.report.
+    const showWages = actor.user.permissions.has('wage.report');
+    const approvedJobs = await this.db.select({assignee:tasks.assignedUserId,amount:technicianWages.amountRial,setBy:technicianWages.setBy})
+      .from(tasks).leftJoin(technicianWages,and(eq(technicianWages.taskId,tasks.id),eq(technicianWages.tenantId,tenant),eq(technicianWages.isTest,false)))
+      .where(and(eq(tasks.tenantId,tenant),eq(tasks.isTest,false),eq(tasks.status,'approved'),gte(tasks.approvedAt,from),lt(tasks.approvedAt,to)));
     return {from:from.toISOString(),to:to.toISOString(),employees:staff.map(person=>{
+      const jobs=approvedJobs.filter(j=>j.assignee===person.id);
+      const paid=jobs.filter(j=>j.amount!=null);
+      const earnings=person.roles.includes('technician')&&jobs.length ? {source:'technician_wages' as const,approvedJobs:jobs.length,jobsWithWage:paid.length,
+        jobsWithoutWage:jobs.length-paid.length,amountRial:showWages?paid.reduce((n,j)=>n+Number(j.amount),0):null} : null;
       const assigned=due.filter(t=>t.assignee===person.id);
       const holds=assigned.filter(t=>blocked.has(t.id)||history.get(t.id)?.has('task.paused')).length;
       const eligible=assigned.filter(t=>!blocked.has(t.id)&&!history.get(t.id)?.has('task.paused')&&!history.get(t.id)?.has('task.updated')&&t.start);
@@ -383,7 +393,7 @@ export class ReportsService {
               accuracy:ratio(verified.length,independent.length),
               accountability:closed.length>=5?ratio(closed.filter(n=>n.reply?.trim()).length,closed.length):null}})};
       });
-      return {...person,activity:activity.get(person.id)?.counts??{},score,deskScores,reviewed:reviewed.length,eligible:eligible.length,
+      return {...person,activity:activity.get(person.id)?.counts??{},score,deskScores,earnings,reviewed:reviewed.length,eligible:eligible.length,
         delays:eligible.filter(t=>!t.end || t.end>t.deadline!).length,holds};
     })};
   }
