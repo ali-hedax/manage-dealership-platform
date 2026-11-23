@@ -1,4 +1,5 @@
 import type { KeyObject } from 'node:crypto';
+import { kasbCredentialText } from '@manage/shared';
 import { importPrivateKey, importPublicKey, openAnswer, sealRequest, type KasbAnswer } from './kasb-crypto';
 import { KasbError } from './kasb-errors';
 import { extractKeys, findMainChunk, missingServicePaths } from './kasb-keys';
@@ -209,7 +210,7 @@ export class KasbClient {
       const image = await this.checkCaptcha();
       if (image) return { kind: 'captcha', image };
     }
-    const payload = { Scus: creds.dealerCode, UserName: creds.username.toLowerCase(), Password: creds.password, ClientVersion: this.clientVersion, Lng: 'fa', ...captchaFields(captchaAnswer) };
+    const payload = { Scus: kasbCredentialText(creds.dealerCode).replace(/\s+/g, ''), UserName: kasbCredentialText(creds.username).trim().toLowerCase(), Password: kasbCredentialText(creds.password), ClientVersion: this.clientVersion, Lng: 'fa', ...captchaFields(captchaAnswer) };
     const answer = await this.exchange<Record<string, unknown> | null>(KASB_PATHS.login, payload, 'POST', false);
     const data = answer.Data ?? {};
     const status = data.status == null ? null : Number(data.status);
