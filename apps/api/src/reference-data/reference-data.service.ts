@@ -10,7 +10,7 @@ import { DATABASE, type DatabaseHandle } from '../db/database';
 import { referenceEntries, referenceImports, cases, tenants, vehicles } from '../db/schema';
 import { detectFormat, readHtmlTable, readSpreadsheetML } from '../daily-reports/spreadsheet-formats';
 import { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
-import { isFullVin } from '../vehicle-import/vehicle-sheet';
+import { isAidVehicleKey } from '../vehicle-import/vehicle-sheet';
 import { readWorkbook, writeSheet } from '../parts/xlsx';
 
 type Entry = typeof referenceEntries.$inferSelect;
@@ -61,8 +61,8 @@ export class ReferenceDataService {
    if(data.partNumber.length>80)fail('کد فنی بیش از ۸۰ نویسه است');
    if(data.quantity&&!/^\d+(?:\.\d+)?$/.test(toLatinDigits(data.quantity).replace(/,/g,'')))fail('موجودی باید عدد نامنفی باشد؛ مقدار نامعلوم را خالی بگذارید');
   }else if(kind==='appointments'){
-   // Same full-VIN rule as the special-aid dossiers, so an appointment always finds its dossier.
-   if(data.vin){data.vin=normalizeVin(data.vin);if(!isFullVin(data.vin))fail('VIN کامل باید ۱۷ نویسه معتبر داشته باشد');}
+   // Same vehicle-identity rule as the special-aid dossiers (full VIN or ISACO 8-character chassis), so an appointment always finds its dossier.
+   if(data.vin){data.vin=normalizeVin(data.vin);if(!isAidVehicleKey(data.vin))fail('VIN کامل ۱۷ نویسه یا شمارهٔ شاسی ۸ نویسه‌ای ایساکو لازم است');}
    if(data.chassis)data.chassis=code(data.chassis);
    lookupKey=data.vin||data.chassis||'';
    if(!lookupKey||lookupKey.length<6)fail('VIN کامل یا شماره شاسی حداقل شش نویسه لازم است');

@@ -224,3 +224,19 @@ it('guest access needs an end date and stops at it; job titles are labels set on
   expect((await owner.put(`/access/users/${gid}`, { ...base, accessExpiresAt: new Date(Date.now() - 60_000).toISOString() })).status).toBe(200);
   expect((await guest.get('/special-aid/today')).status).toBe(401);
 });
+
+it('the ISACO 8-character chassis of the real reports opens a dossier; a broken one stays in review', async () => {
+  // Production Emdad and reception reports carry only the 8-character chassis (e.g. AAA12345), never a 17-character VIN.
+  const short = { ...correct, 'شماره شاسی': 'tst 12345', 'شماره کارت پذيرش': '991088', 'شماره امداد ویژه': '0091088', 'کد قطعه': '00383838', 'کد اختصاصی اولیه': '00383838' };
+  const broken = { ...badVin, 'شماره شاسی': 'TS1234', 'شماره کارت پذيرش': '991089', 'شماره امداد ویژه': '0091089' };
+  await publish([emdadRow(1, arrived), emdadRow(2, wrong), emdadRow(3, correct), emdadRow(6, short), emdadRow(7, broken)], -440);
+  const d = await dossierOf(operator, 'TST12345');
+  expect(d).toMatchObject({ vin: 'TST12345' });
+  expect((await detail(operator, d.id)).items.map((i) => i.emdadNo)).toEqual(['0091088']);
+  const queue = (await operator.get('/special-aid/review-queue')).body as { emdadNo: string }[];
+  expect(queue.some((q) => q.emdadNo === '0091089')).toBe(true);
+  expect(queue.some((q) => q.emdadNo === '0091088')).toBe(false);
+  // «خواندن دوباره» is idempotent: nothing new on a second run.
+  const again = (await operator.post('/special-aid/sync', {})).body;
+  expect(again).toMatchObject({ dossiers: 0, admissions: 0, items: 0, statusChanges: 0, held: 0 });
+});

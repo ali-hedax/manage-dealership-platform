@@ -26,7 +26,7 @@ import { safeCell } from '../daily-reports/safe-cell';
 import { snapshotInfo } from '../daily-reports/stock.service';
 import { notifyUsers, usersWithRole } from '../parts/part-notify';
 import { writeSheet } from '../parts/xlsx';
-import { idKey, isFullVin, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
+import { idKey, isAidVehicleKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 
 type ItemRow = typeof specialAidItems.$inferSelect;
 const withoutTasks = <T extends { tasks: unknown }>(r: T): Omit<T, 'tasks'> => { const copy: Partial<T> = { ...r }; delete copy.tasks; return copy as Omit<T, 'tasks'>; };
@@ -90,7 +90,7 @@ export class SpecialAidService {
         const admKey = r.admissionNo && !isNonUniqueAdmission(r.admissionNo) ? idKey(r.admissionNo) : '';
         if (i && i.observedCategory === r.statusCategory && dVin === vin && (aKey ?? '') === admKey) continue;
         // An invalid VIN never opens a dossier (review queue); an existing line is not moved onto it.
-        if (!isFullVin(vin)) { if (!i) result.invalidVin += 1; continue; }
+        if (!isAidVehicleKey(vin)) { if (!i) result.invalidVin += 1; continue; }
         let dossierId = i && dVin === vin ? i.dossierId : dossierIds.get(vin);
         if (!dossierId) {
           const inserted = await tx.insert(specialAidDossiers).values({ id: newId(), tenantId, vin, isTest: actor.user.isTestTenant }).onConflictDoNothing().returning({ id: specialAidDossiers.id });

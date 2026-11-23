@@ -2,7 +2,9 @@ import { writeWorkbook } from '../parts/xlsx';
 import { buildVehicleWorkbook } from './sample';
 import {
   idKey,
+  isAidVehicleKey,
   isFullVin,
+  isIsacoChassis,
   isNonUniqueAdmission,
   normalizeCaseNumber,
   parseCoverage,
@@ -51,6 +53,14 @@ describe('vehicle intake sheet', () => {
     expect(isFullVin('NAAN01CE8KK123456')).toBe(true);
     expect(isFullVin('TST00001')).toBe(false);
     expect(isFullVin('NAAN01CE8KK12345O')).toBe(false);
+    // ISACO reports identify the vehicle by its 8-character chassis: valid for special aid, not a VIN.
+    expect(isIsacoChassis('TST00001')).toBe(true);
+    expect(isIsacoChassis('TS123456')).toBe(true);
+    expect(isIsacoChassis('TS12345')).toBe(false);
+    expect(isIsacoChassis('T1234567')).toBe(false);
+    expect(isIsacoChassis('TSTA1234')).toBe(false);
+    expect(isAidVehicleKey('NAAN01CE8KK123456')).toBe(true);
+    expect(isAidVehicleKey('TESTVIN0000SC')).toBe(false);
     expect(normalizeCaseNumber(' ac-۱۴۰۵-۰۰۱۲ ')).toBe('AC-1405-0012');
   });
 
