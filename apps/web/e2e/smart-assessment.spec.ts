@@ -76,6 +76,19 @@ test('smart assessment: rapid catalog selection persists two lines and prevents 
   await expect(picked.getByRole('spinbutton', { name: /تعداد سپر جلو/ })).toHaveValue('3');
   await picked.getByRole('button', { name: /حذف دیاق/ }).click();
   await expect(picked.getByTestId('smart-picked-row')).toHaveCount(1);
+  const labour = panel.getByTestId('optional-labour');
+  await labour.locator(':scope > summary').click();
+  const department = labour.locator('details').first();
+  await department.locator('summary').click();
+  await department.getByRole('button', { name: 'ثبت اجرت واحد' }).click();
+  await expect(panel.getByTestId('assessment-item')).toHaveCount(2);
+  await department.getByLabel('مبلغ اجرت', { exact: false }).fill('۲۰۰۰۰');
+  await department.getByRole('button', { name: 'ثبت اجرت واحد' }).click();
+  await expect(panel.getByTestId('assessment-total')).toContainText('۲۰,۰۰۰');
+  await expect(picked.getByTestId('smart-picked-row')).toHaveCount(1);
+  await page.emulateMedia({ media: 'print' });
+  await expect(labour).toBeHidden();
+  await page.emulateMedia({ media: 'screen' });
   await page.screenshot({ path: test.info().outputPath('smart-picked.png'), fullPage: false });
 });
 

@@ -342,6 +342,34 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
             }}
           />
         )}
+        {manage && editable && current.status === 'draft' && current.smartManual && (
+          <details className="panel-body no-print" data-testid="optional-labour">
+            <summary>اجرت به تفکیک واحد (اختیاری)</summary>
+            {(departments ?? []).filter(d => d.isActive).map(dept => (
+              <details key={dept.id}>
+                <summary>{dept.name}</summary>
+                <form className="stack" onSubmit={async event => {
+                  event.preventDefault();
+                  if (busy) return;
+                  const form = event.currentTarget;
+                  const fields = new FormData(form);
+                  await run(async () => {
+                    await api(`/assessments/${current.id}/items`, { body: {
+                      expectedVersion: current.version, action: 'repair', quantity: 1,
+                      description: String(fields.get('description') ?? '').trim() || `اجرت ${dept.name}`,
+                      labourDepartmentId: dept.id, labourRial: parseAmount(String(fields.get('amount') ?? '')),
+                    } });
+                    form.reset();
+                  }, 'اجرت واحد ثبت شد');
+                }}>
+                  <label className="field">شرح اجرت (اختیاری)<input name="description" maxLength={300} /></label>
+                  <label className="field">مبلغ اجرت (ریال، اختیاری)<input name="amount" inputMode="numeric" pattern="[0-9۰-۹٠-٩]+" maxLength={15} /></label>
+                  <button type="submit" className="btn btn-sm" disabled={busy}>ثبت اجرت واحد</button>
+                </form>
+              </details>
+            ))}
+          </details>
+        )}
         {editable && current.smartManual && (
           <TechnicalReviewPanel caseId={kase.id} assessment={current} />
         )}

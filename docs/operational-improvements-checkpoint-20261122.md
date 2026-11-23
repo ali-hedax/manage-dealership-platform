@@ -63,3 +63,5 @@ No local test execution was available in this GitHub-only step; CI must be check
 
 ### 2026-11-23 — independent technician pauses
 Technician pause/resume persists in the existing transactional per-task audit stream with a required reason, tenant and assignee checks, expected version and working-time exclusion. No schema migration. Local synthetic API verification: 4 suites / 14 passed (technician-timing, smart-assessment, case-sorting, isaco-parts). Shared package/employee tests: 9 passed. Web TypeScript passed. Browser and complete CI verification pending.
+
+Optional labour entry added to the smart draft, grouped by active department. Each explicit save uses an existing audited repair item, its existing totals and printable rows. Descriptions and amounts are optional. Browser regression added; verify final CI and A4 output.
