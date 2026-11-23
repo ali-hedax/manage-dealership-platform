@@ -23,6 +23,9 @@ const invalidCredentials = () =>
 /** A PIN account may hold only ordinary staff roles (PIN_LOGIN_ROLES): never the owner or an administrator. */
 export const isTechnicianOnly = isPinEligible;
 
+/** Guest or temporary access ends at the account's expiry (owner-set); the account itself stays. */
+const accessEnded = (u: { accessExpiresAt: Date | null }, now: Date) => !!u.accessExpiresAt && u.accessExpiresAt <= now;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger('Auth');
@@ -78,7 +81,7 @@ export class AuthService {
     }
 
     const ok = await verifyPassword(input.password, user.passwordHash);
-    if (!ok || !user.isActive) {
+    if (!ok || !user.isActive || accessEnded(user, now)) {
       const failed = user.failedLoginCount + 1;
       await this.db
         .update(users)
@@ -161,7 +164,7 @@ export class AuthService {
       throw new AppError(HttpStatus.LOCKED, 'ACCOUNT_LOCKED', 'چند بار اشتباه وارد شد؛ ۱۵ دقیقه دیگر دوباره امتحان کنید.');
     }
     const ok = await verifyPassword(input.pin, user.pinHash!);
-    if (!ok || !user.isActive) {
+    if (!ok || !user.isActive || accessEnded(user, now)) {
       const failed = user.failedLoginCount + 1;
       const lock = failed >= MAX_FAILED_LOGINS;
       await this.db
@@ -222,7 +225,7 @@ export class AuthService {
       )
       .limit(1);
     const row = rows[0];
-    if (!row || !row.user.isActive) return null;
+    if (!row || !row.user.isActive || accessEnded(row.user, now)) return null;
     const pinSession = row.session.authMethod === 'pin';
     // A PIN session stays valid only while the account is technician-only with a PIN.
     if (pinSession && (!row.user.pinHash || !isTechnicianOnly(row.user.roles, row.user.isOwner))) return null;
@@ -256,6 +259,8 @@ export class AuthService {
       displayName: user.displayName,
       roles: user.roles,
       permissions: [...user.permissions],
+      jobTitles: user.jobTitles ?? [],
+      accessExpiresAt: user.accessExpiresAt ?? null,
       tenant: { id: user.tenantId, code: user.tenantCode, name: user.tenantName },
       environment: this.cfg.APP_ENV,
       modules: MODULES.map((m) => ({ key: m.key, status: m.status })),
@@ -301,6 +306,8 @@ export class AuthService {
       isTestTenant: tenant.isTest,
       username: user.username,
       displayName: user.displayName,
+      jobTitles: user.jobTitles ?? [],
+      accessExpiresAt: user.accessExpiresAt?.toISOString() ?? null,
       roles,
       permissions: permissionsFor(roles, tenant.permissionTemplates, user.permissionOverrides, user.isOwner),
       sessionId,

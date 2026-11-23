@@ -1,3 +1,24 @@
+## 2026-11-22 — ماژول مستقل «پیگیری امداد ویژه» — در جریان، منتشر نشده
+
+- شاخهٔ `feature/special-aid-module-20261122` از main در `b3bfc8f` (همان Production v1.0.8). سند جامع بخش ۲۵؛ ممیزی و مرحله‌ها در [SPECIAL_AID_MODULE_FA](docs/SPECIAL_AID_MODULE_FA.md). migration افزایشی 0034 با down.
+- انجام‌شده (مرحله ۱ تا ۵): قواعد و مجوزها و دو نقش تازه؛ پایگاه داده؛ API پرونده/تماس/تعویق/وضعیت قطعه/رزرو برای VIN/گروه/پیگیری تأمین/خلاصه، همگام‌سازی پس از هر گزارش امداد؛ صفحه‌های کارهای امروز، پرونده خودروها، پیگیری تأمین و گزارش‌ها با اجزای موجود؛ مرکز اعلان به‌جای نوار بالای صفحه. آزمون‌ها در [TEST_REPORT](docs/TEST_REPORT.md).
+- مرحلهٔ ۶الف (`fccbbb4`): مرکز گزارش‌های کسب‌وکار در تنظیمات (راهنمای قابل ویرایش، بازه، آخرین ورود، روزهای بدون گزارش امداد). PR پیش‌نویس [#119](https://github.com/ali-hedax/manage-dealership-platform/pull/119).
+- باقی‌مانده (انجام نشده): تصویر راهنما؛ ورود گزارش «تعمیرات خودرو» و «لیست نوبت پذیرش» (نمونهٔ بی‌نام واقعی لازم است تا سربرگ حدس زده نشود) و تطبیق نوبت؛ بایگانی کارت پذیرش (OCR آفلاین در دسترس نیست؛ تصمیم مالک لازم است)؛ عناوین شغلی قابل تنظیم و دسترسی مهمان؛ بازخورد فنی و تذکر رسمی با تأیید دریافت؛ پیوند درخواست جایگزین شمارهٔ فنی اشتباه؛ اسکرین‌شات مقایسه‌ای؛ نتیجهٔ Playwright در CI.
+- قدم دقیق بعد: بررسی CI روی PR پیش‌نویس؛ رفع هر شکست مرورگر؛ سپس ورود گزارش نوبت با `daily_report_profiles.headerSignature` برای دو نوع گزارش تازه. بدون تأیید مالک ادغام یا نصب نشود؛ پیش از نصب، پشتیبان و تمرین 0034 روی نسخهٔ بازیابی‌شده.
+
+## 2026-11-22 — ماژول امداد ویژه (PR #119) — ادغام در main به دستور مالک؛ نصب Production در انتظار
+
+- پیش‌انتشار: پیشنهاد ستون نخستین ورود، اسکریپت تمرین `rehearse-special-aid` و شواهد CI (نسخهٔ ساختگی و پایگاه دموی v1.0.8، هر دو `ok`)، [راهنمای گزارش‌های ایساکو](docs/ISACO_REPORTS_GUIDE_FA.md)، دستور نصب کامل با پشتیبان رمزگذاری‌شده و فهرست نقش‌ها.
+- قدم دقیق بعد (فقط با تأیید مالک): پشتیبان رمزگذاری‌شده → بازیابی در پایگاه جدا → `rehearse-special-aid` روی آن (باید ok بدهد) → نصب artifact همان SHA main → سلامت → `confirm-healthy-release.sh` → «خواندن دوباره از گزارش‌های ثبت‌شده» → نقش‌ها.
+
+## 2026-11-22 — تکمیل ماژول امداد ویژه (PR #119)
+
+- شاخهٔ `feature/special-aid-module-20261122`؛ migration افزایشی تازهٔ `0035_special_aid_completion` با down. دستور نصب: [SPECIAL_AID_DEPLOYMENT_FA](docs/SPECIAL_AID_DEPLOYMENT_FA.md).
+- انجام‌شده: تصمیم‌های نهایی مالک A تا F (سند جامع بخش ۲۵)؛ مصرف هنگام نصب؛ مهلت روز کاری بعد؛ صف شاسی نامعتبر و جابه‌جایی ردیف پس از اصلاح VIN/پذیرش؛ بایگانی کارت پذیرش (تکی/گروهی، تطبیق دقیق و دستی، تلاش دوباره، رابط OCR)؛ «لیست نوبت پذیرش» به‌عنوان نوع سوم اطلاعات پایه و وضعیت نوبت در پرونده با تأیید مرتبط/نامرتبط؛ بارگذاری چندفایلی با تشخیص از محتوا و تازگی گزارش‌ها؛ درخواست جایگزین؛ بازخورد فنی و تذکر رسمی با تأیید دریافت؛ شاخص‌های تازهٔ گزارش مدیریتی؛ عنوان‌های شغلی و نقش مهمان با تاریخ پایان؛ آزمون Playwright با اسکرین‌شات مقایسه‌ای (artifact در CI).
+- باقی‌مانده: تصویر داخل راهنمای گزارش‌ها؛ ارائه‌دهندهٔ OCR (تصمیم مالک)؛ بررسی ستون‌های نخستین فایل واقعی «تعمیرات خودرو» و «لیست نوبت پذیرش» هنگام نخستین ورود.
+- CI روی `11052e8` هر شش job سبز (run 45032495359)؛ اسکرین‌شات‌ها در artifact «special-aid-screenshots».
+- قدم دقیق بعد: بازبینی مالک (PR و اسکرین‌شات‌ها)؛ سپس تأیید مالک، پشتیبان، تمرین 0034+0035 روی نسخهٔ بازیابی‌شده، نصب artifact همان SHA و confirm-release. ادغام و نصب بدون تأیید مالک انجام نمی‌شود.
+
 ## 2026-11-20 — مسیرهای میزکار و پیگیری عملیاتی
 
 - شاخهٔ `fix/owner-workspace-ux` از `95259b5` (ادغام PR #114). تغییرات رابط کاربری و آزمون‌های مرورگر در همین commit قرار دارند.
@@ -296,3 +317,9 @@ curl -fsS https://managebyhedax.ir/api/v1/health              # status: ok، db:
 ## گام بعدی
 
 باز کردن PR یکپارچه روی مخزن مالک، سبز شدن هر شش بررسی CI روی آن، بازبینی و ادغام توسط مالک، سپس انتشار طبق [RELEASE_RUNBOOK_RC1_FA](docs/RELEASE_RUNBOOK_RC1_FA.md) با تأیید مالک.
+
+## 2026-11-23 — PR 120 integration checkpoint
+
+- Verified PR 119 was merged in f8a1ca1 and main c636eea includes the subsequent ISACO chassis correction from PR 122. Integrated those commits on the PR 120 branch. The sole Git conflict was the shared barrel; retained the exports from both branches. PR 120 previously introduced no migrations.
+- On 6b958c6, run 45032800839 passed five jobs. Chromium failed in assessment.spec.ts (stale expectation after finalization) and guided-workflow.spec.ts (redundant repair-plan click, then fixture collision on retry). Updated both scenarios to exercise the automatic transition and assert keyboard focus. The assessment scenario dispatches from a draft and checks that procurement received one item.
+- Next: run the integrated regression suite, then finish persistent technician pause/resume, assessment package handoff and corrections, optional labour and employee analytics. Release remains pending independent backup, isolated restore, migration rehearsal and live confirmation.

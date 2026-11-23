@@ -54,3 +54,9 @@ No local test execution was available in this GitHub-only step; CI must be check
 14. Case-list sorting is validated in shared Zod query schema and applied by the API before pagination. Options: latest admission (default), oldest admission, highest case number, lowest case number. UI selector updates the URL, resets pagination, and preserves filters.
 15. Added synthetic E2E sorting regression test. Do not claim success until the exact head commit passes CI.
 16. Financial/payer-specific authorization remains a separate mandatory downstream control. Being eligible for Smart Manual Assessment does not imply automatic insurance approval or free procurement.
+
+## 2026-11-23 — PR 120 integration checkpoint
+
+- Verified PR 119 was merged in f8a1ca1 and main c636eea includes the subsequent ISACO chassis correction from PR 122. Integrated those commits on the PR 120 branch. The sole Git conflict was the shared barrel; retained the exports from both branches. PR 120 previously introduced no migrations.
+- On 6b958c6, run 45032800839 passed five jobs. Chromium failed in assessment.spec.ts (stale expectation after finalization) and guided-workflow.spec.ts (redundant repair-plan click, then fixture collision on retry). Updated both scenarios to exercise the automatic transition and assert keyboard focus. The assessment scenario dispatches from a draft and checks that procurement received one item.
+- Next: run the integrated regression suite, then finish persistent technician pause/resume, assessment package handoff and corrections, optional labour and employee analytics. Release remains pending independent backup, isolated restore, migration rehearsal and live confirmation.

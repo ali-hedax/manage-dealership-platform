@@ -1,13 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, sql, inArray } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { assessmentReference, catalogFamilies, COMPATIBILITY_NOTES, fitmentCatalog, isCommonFitment, partCompatibility, partFitment, resolveVehicleFamily, scoreAssessmentCandidates, ASSESSMENT_SEARCH_PAGE, type AssessmentSearchScope, type PartCompatibility, REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
+import { assessmentReference, catalogFamilies, COMPATIBILITY_NOTES, fitmentCatalog, isCommonFitment, partCompatibility, partFitment, resolveVehicleFamily, scoreAssessmentCandidates, ASSESSMENT_SEARCH_PAGE, type AssessmentSearchScope, type PartCompatibility, REFERENCE_FIELDS, REFERENCE_OUTCOME_LABELS, normalizeAssessmentSearch, normalizePersian, normalizeVin, toLatinDigits, appointmentInstant, headerSignature, type SavedReferenceMapping, type ReferenceFileInput, type ReferencePreviewInput, type ReferenceKind, type ReferencePlanRow, type ReferenceImport, type ReferenceRecord, type ReferenceOutcome, type ReferenceField } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle } from '../db/database';
-import { referenceEntries, referenceImports, cases, vehicles } from '../db/schema';
+import { referenceEntries, referenceImports, cases, tenants, vehicles } from '../db/schema';
+import { detectFormat, readHtmlTable, readSpreadsheetML } from '../daily-reports/spreadsheet-formats';
+import { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
+import { isAidVehicleKey } from '../vehicle-import/vehicle-sheet';
 import { readWorkbook, writeSheet } from '../parts/xlsx';
 
 type Entry = typeof referenceEntries.$inferSelect;
@@ -19,17 +22,26 @@ const code=(value:string)=>toLatinDigits(value).replace(/\s+/g,'').toUpperCase()
 const counts=(rows:ReferencePlanRow[])=>Object.fromEntries((['new','update','unchanged','duplicate','error','conflict'] as ReferenceOutcome[]).map(o=>[o,rows.filter(r=>r.outcome===o).length])) as ReferenceImport['counts'];
 const changed=(a:Record<string,string>,b:Record<string,string>)=>Object.entries(b).some(([k,v])=>v!==a[k]);
 
+/** Reads the workbook by its content: XLSX, XML Spreadsheet 2003 or an HTML table (ISACO «xls» exports). */
+export function readSheets(bytes:Uint8Array):{name:string;rows:string[][]}[]{
+ const format=detectFormat(bytes);
+ if(format==='xlsx')return readWorkbook(bytes);
+ if(format==='spreadsheetml'){const s=readSpreadsheetML(bytes,{limits:{maxRows:200_000}});return [{name:s.sheetName,rows:[...s.rows()]}];}
+ if(format==='html_table'){const s=readHtmlTable(bytes);return [{name:s.sheetName,rows:s.rows}];}
+ throw Error(format==='xls_binary'?'فایل xls قدیمی (باینری) خوانده نمی‌شود؛ آن را در Excel با قالب xlsx ذخیره کنید':'قالب فایل شناخته نشد؛ خروجی Excel ایساکو یا فایل xlsx را انتخاب کنید');
+}
+
 @Injectable()
 export class ReferenceDataService {
- constructor(@Inject(DATABASE)private readonly handle:DatabaseHandle,private readonly audit:AuditService){}
+ constructor(@Inject(DATABASE)private readonly handle:DatabaseHandle,private readonly audit:AuditService,private readonly aidRecords:SpecialAidRecordsService){}
  private get db(){return this.handle.db;}
  private allow(actor:Actor,kind:ReferenceKind,manage=false){
   const permission=`reference.${kind}.${manage?'manage':'read'}` as const;
-  if(!actor.user.permissions.has(permission)||(kind==='customers'&&!actor.user.permissions.has('customer.pii.read')))throw forbidden();
+  if(!actor.user.permissions.has(permission)||(kind!=='parts'&&!actor.user.permissions.has('customer.pii.read')))throw forbidden();
  }
  private workbook(input:ReferenceFileInput){
   const bytes=Buffer.from(input.fileBase64,'base64');if(bytes.length>5_000_000)throw badRequest('REFERENCE_FILE_LARGE','فایل باید کمتر از پنج مگابایت باشد');
-  try{const sheets=readWorkbook(bytes);if(sheets.some(s=>s.rows.some(r=>r.length>128)))throw Error('حداکثر ۱۲۸ ستون پذیرفته می‌شود؛ فقط ستون‌های موردنیاز را نگه دارید');return sheets;}catch(e){throw badRequest('REFERENCE_FILE_INVALID',e instanceof Error?e.message:'فایل خوانده نشد');}
+  try{const sheets=readSheets(bytes);if(sheets.some(s=>s.rows.some(r=>r.length>128)))throw Error('حداکثر ۱۲۸ ستون پذیرفته می‌شود؛ فقط ستون‌های موردنیاز را نگه دارید');return sheets;}catch(e){throw badRequest('REFERENCE_FILE_INVALID',e instanceof Error?e.message:'فایل خوانده نشد');}
  }
  inspect(actor:Actor,input:ReferenceFileInput){
   this.allow(actor,input.kind,true);
@@ -48,6 +60,17 @@ export class ReferenceDataService {
    data.partNumber=code(data.partNumber||'');key=data.partNumber;lookupKey=key;
    if(data.partNumber.length>80)fail('کد فنی بیش از ۸۰ نویسه است');
    if(data.quantity&&!/^\d+(?:\.\d+)?$/.test(toLatinDigits(data.quantity).replace(/,/g,'')))fail('موجودی باید عدد نامنفی باشد؛ مقدار نامعلوم را خالی بگذارید');
+  }else if(kind==='appointments'){
+   // Same vehicle-identity rule as the special-aid dossiers (full VIN or ISACO 8-character chassis), so an appointment always finds its dossier.
+   if(data.vin){data.vin=normalizeVin(data.vin);if(!isAidVehicleKey(data.vin))fail('VIN کامل ۱۷ نویسه یا شمارهٔ شاسی ۸ نویسه‌ای ایساکو لازم است');}
+   if(data.chassis)data.chassis=code(data.chassis);
+   lookupKey=data.vin||data.chassis||'';
+   if(!lookupKey||lookupKey.length<6)fail('VIN کامل یا شماره شاسی حداقل شش نویسه لازم است');
+   if(!data.appointmentDate)fail('تاریخ نوبت الزامی است');
+   else if(!appointmentInstant(data.appointmentDate,data.appointmentTime))fail('تاریخ یا ساعت نوبت خوانده نشد (نمونه: ۱۴۰۵/۰۹/۰۳ و ۱۰:۳۰)');
+   if(data.phone){const p=toLatinDigits(data.phone).replace(/[\s()-]/g,'');data.phone=p.startsWith('+98')?'0'+p.slice(3):p.startsWith('0098')?'0'+p.slice(4):p;if(!/^09\d{9}$/.test(data.phone))delete data.phone;}
+   // The ISACO appointment number is the identity; otherwise vehicle + date + time (a re-import updates the status).
+   key=data.appointmentNo?'no:'+code(data.appointmentNo):'at:'+hash([lookupKey,data.appointmentDate||'',data.appointmentTime||''].join('|'));
   }else{
    if(data.vin){data.vin=normalizeVin(data.vin);if(!/^[A-HJ-NPR-Z0-9]{17}$/.test(data.vin))fail('VIN کامل باید ۱۷ نویسه معتبر داشته باشد');}
    if(data.chassis)data.chassis=code(data.chassis);
@@ -68,7 +91,8 @@ export class ReferenceDataService {
   const allowed=Object.keys(REFERENCE_FIELDS[input.kind]);const mapped=Object.keys(input.mapping);
   if(mapped.some(k=>!allowed.includes(k))||new Set(Object.values(input.mapping)).size!==mapped.length)throw badRequest('REFERENCE_MAPPING','هر ستون فقط به یک فیلد مرتبط وصل شود');
   if(input.kind==='parts'&&(!mapped.includes('partNumber')||!mapped.includes('description')))throw badRequest('REFERENCE_MAPPING','ستون کد فنی و نام قطعه را انتخاب کنید');
-  if(input.kind==='customers'&&!mapped.includes('vin')&&!mapped.includes('chassis'))throw badRequest('REFERENCE_MAPPING','ستون شماره شاسی یا VIN را انتخاب کنید');
+  if(input.kind!=='parts'&&!mapped.includes('vin')&&!mapped.includes('chassis'))throw badRequest('REFERENCE_MAPPING','ستون شماره شاسی یا VIN را انتخاب کنید');
+  if(input.kind==='appointments'&&!mapped.includes('appointmentDate'))throw badRequest('REFERENCE_MAPPING','ستون تاریخ نوبت را انتخاب کنید');
   const sheet=this.workbook(input)[input.sheetIndex];if(!sheet||!sheet.rows[input.headerRow-1]?.some(Boolean))throw badRequest('REFERENCE_SHEET','برگه یا ردیف سربرگ معتبر نیست');
   const maxCol=sheet.rows[input.headerRow-1]!.length;if(Object.values(input.mapping).some(c=>c!==undefined&&c>=maxCol))throw badRequest('REFERENCE_MAPPING','ستون انتخاب‌شده خارج از سربرگ است');
   const totalRows=sheet.rows.length-input.headerRow;
@@ -91,7 +115,7 @@ export class ReferenceDataService {
   for(const p of plans){if(p.outcome!=='new')continue;const old=byKey.get(p.key);if(old){p.expectedVersion=old.version;p.outcome=changed(old.data as Record<string,string>,p.data)?'update':'unchanged';}}
   const id=newId();
   await this.db.transaction(async tx=>{
-   await tx.insert(referenceImports).values({id,tenantId:actor.user.tenantId,kind:input.kind,fileName:input.fileName,fileSha256:hash(input.fileBase64),sheetName:sheet.name,headerRow:input.headerRow,mapping:{columns:input.mapping,offset:input.offset,totalRows,batchSize:5000},rows:plans,createdBy:actor.user.id,isTest:actor.user.isTestTenant});
+   await tx.insert(referenceImports).values({id,tenantId:actor.user.tenantId,kind:input.kind,fileName:input.fileName,fileSha256:hash(input.fileBase64),sheetName:sheet.name,headerRow:input.headerRow,mapping:{columns:input.mapping,offset:input.offset,totalRows,batchSize:5000,signature:headerSignature(sheet.rows[input.headerRow-1]??[]),sheetIndex:input.sheetIndex},rows:plans,createdBy:actor.user.id,isTest:actor.user.isTestTenant});
    await this.audit.record(tx,actor,{entityType:'reference',entityId:id,action:'reference.previewed',after:{kind:input.kind,counts:counts(plans)},snapshot:{version:1,row:{id,kind:input.kind,status:'preview'}}});
   });
   return this.get(actor,id);
@@ -130,9 +154,27 @@ export class ReferenceDataService {
     await this.audit.record(tx,actor,{entityType:'reference',entityId:entryId,action:old?'reference.updated':'reference.created',after:{kind,importId:id,rowNo:p.rowNo},snapshot:{version,row:{id:entryId,kind,sourceImportId:id,version}}});
    }
    await tx.update(referenceImports).set({rows:plans,status:'applied',appliedAt:new Date()}).where(eq(referenceImports.id,id));
+   // The confirmed column layout is remembered by its header signature: the next file of this report is recognized.
+   const m=imp.mapping as {columns:SavedReferenceMapping['mapping'];signature?:string;sheetIndex?:number};
+   if(m.signature){
+    const [t]=await tx.select({settings:tenants.settings}).from(tenants).where(eq(tenants.id,actor.user.tenantId)).for('update');
+    const saved=(t?.settings.referenceMappings??{}) as Record<string,SavedReferenceMapping>;
+    const next:SavedReferenceMapping={signature:m.signature,headerRow:imp.headerRow,sheetIndex:m.sheetIndex??0,mapping:m.columns,savedAt:new Date().toISOString()};
+    await tx.update(tenants).set({settings:{...t!.settings,referenceMappings:{...saved,[kind]:next}}}).where(eq(tenants.id,actor.user.tenantId));
+   }
    await this.audit.record(tx,actor,{entityType:'reference',entityId:id,action:'reference.applied',after:{kind,counts:counts(plans)},snapshot:{version:2,row:{id,kind,status:'applied'}}});
-  });return this.get(actor,id);
+  });
+  // A reception record may name the admission of an archived card (exact match only; never fatal).
+  try{await this.aidRecords.retryCards(this.db,actor.user.tenantId);}catch{/* the import itself is complete */}
+  return this.get(actor,id);
  }
+ /** Saved column layouts (by header signature) of the reports already confirmed once. */
+ async savedMappings(tenantId:string):Promise<Record<string,SavedReferenceMapping>>{
+  const [t]=await this.db.select({settings:tenants.settings}).from(tenants).where(eq(tenants.id,tenantId));
+  return (t?.settings.referenceMappings??{}) as Record<string,SavedReferenceMapping>;
+ }
+ /** Header signature of a sheet row, for recognizing a report by its structure. */
+ signatureOf(input:ReferenceFileInput,sheetIndex:number,headerRow:number){const sheet=this.workbook(input)[sheetIndex];return sheet?headerSignature(sheet.rows[headerRow-1]??[]):'';}
  async list(actor:Actor,kind:ReferenceKind){
   this.allow(actor,kind,true);
   const imports=await this.db.select({id:referenceImports.id,fileName:referenceImports.fileName,status:referenceImports.status,createdAt:referenceImports.createdAt}).from(referenceImports).where(and(eq(referenceImports.tenantId,actor.user.tenantId),eq(referenceImports.kind,kind))).orderBy(desc(referenceImports.createdAt)).limit(20);

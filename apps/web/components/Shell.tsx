@@ -2,14 +2,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MODULE_LABELS, ROLE_LABELS, type AppNotification, type ModuleKey, type ReceivedReminder } from '@manage/shared';
-import useSWR from 'swr';
-import { api, fetcher } from '@/lib/api';
+import { MODULE_LABELS, ROLE_LABELS, type ModuleKey } from '@manage/shared';
+import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { visibleWorkspaces, workspaceHome } from '@/lib/workspaces';
 import { AppIcon, type IconName } from './AppIcon';
 import { BackLink } from './BackLink';
-import { NotificationBar } from './NotificationBar';
+import { NotificationCenter } from './NotificationCenter';
 import { PageActions } from './PageActions';
 import { InstallButton } from './InstallApp';
 import { ReleaseNotice, VersionChip } from './ReleaseNotice';
@@ -31,9 +30,6 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const technicianOnly = me.roles.length === 1 && me.roles[0] === 'technician';
   const home = workspaceHome(me);
-  const { data: inbox } = useSWR<ReceivedReminder[]>('/reminders/inbox', fetcher, { refreshInterval: 60_000 });
-  const { data: notes } = useSWR<{ unread: number; items: AppNotification[] }>('/notifications', fetcher, { refreshInterval: 60_000 });
-  const unseen = (inbox?.filter((r) => r.status === 'sent').length ?? 0) + (notes?.unread ?? 0);
   const dark = ['/control-room', '/accidents/manager', '/accidents/owner'].includes(pathname);
   const desks = visibleWorkspaces(me);
 
@@ -78,6 +74,13 @@ export function Shell({ children }: { children: ReactNode }) {
       { ...byHref('/emdad'), label: 'امداد ویژه تصادفات' },
       { ...byHref('/daily-reports'), label: 'گزارش‌های روزانهٔ انبار' },
     ] },
+    // Standalone Special Aid follow-up (owner, 2026-11-22; spec section 25): its own group, nothing else moved.
+    { key: 'special_aid', label: 'پیگیری امداد ویژه', icon: 'truck', items: [
+      { href: '/special-aid', label: 'کارهای امروز', icon: 'calendar', show: can('special_aid.read') && home !== '/special-aid', match: (p) => p === '/special-aid' },
+      { href: '/special-aid/vehicles', label: 'پرونده خودروها', icon: 'folder', show: can('special_aid.read'), match: (p) => p.startsWith('/special-aid/vehicles') },
+      { href: '/special-aid/supply', label: 'پیگیری تأمین قطعات', icon: 'truck', show: can('special_aid.supply'), match: (p) => p === '/special-aid/supply' },
+      { href: '/special-aid/reports', label: 'گزارش‌ها', icon: 'chart', show: can('special_aid.report'), match: (p) => p === '/special-aid/reports' || p === '/special-aid/feedback' },
+    ] },
     { key: 'workshop', label: 'مدیریت تعمیرگاه', icon: 'nav-calendar', items: [
       { ...byHref('/workshop'), label: 'برنامه و پیگیری مراحل تعمیر' },
     ] },
@@ -87,7 +90,7 @@ export function Shell({ children }: { children: ReactNode }) {
       { ...byHref('/'), label: 'آمار پرونده‌ها' },
     ] },
     { key: 'settings', label: 'تنظیمات سیستم', icon: 'nav-settings', items: [
-      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/workshop/settings', '/reference-data'].includes(p) },
+      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/settings/reports', '/workshop/settings', '/reference-data'].includes(p) },
       { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team', show: me.isOwner || can('user.manage'), match: (p) => p === '/users' },
     ] },
     { key: 'roadmap', label: 'نقشهٔ راه', icon: 'layers', items: [
@@ -153,9 +156,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="top-end">
             <VersionChip />
             <span className="top-tenant" title="نمایندگی">{me.tenant.name}</span>
-            <Link href="/reminders" className="icon-btn bell" aria-label={unseen ? `فیدبک‌ها و اعلان‌ها، ${unseen.toLocaleString('fa-IR')} مورد تازه` : 'فیدبک‌ها و اعلان‌ها'} aria-current={pathname === '/reminders' ? 'page' : undefined}>
-              <AppIcon name="bell" />{unseen > 0 && <span className="dot" aria-hidden="true" />}
-            </Link>
+            <NotificationCenter />
             <details className="account-menu">
               <summary aria-label={`حساب ${me.displayName}`}><span className="avatar" aria-hidden="true">{initials(me.displayName)}</span><span className="who">{me.displayName}</span><AppIcon name="chevron-down" className="chev" /></summary>
               <div className="account-pop" role="group" aria-label="حساب کاربری">
@@ -171,7 +172,6 @@ export function Shell({ children }: { children: ReactNode }) {
         {/* Outside <main>: a page's own actions stay the only buttons in its content. */}
         <div className="release-slot"><ReleaseNotice /></div>
         <main className="page" id="page-content" tabIndex={-1}>
-          <NotificationBar />
           {back && <BackLink href={back.href} label={back.label} />}
           <PageActions />
           {children}
@@ -201,14 +201,17 @@ export function backTarget(pathname: string, home: string, canChooseDesk = false
   if (canChooseDesk && /^\/accidents\/[^/]+$/.test(pathname)) return { href: '/launch', label: 'بازگشت به انتخاب میزکار' };
   // Sidebar destinations are top-level places: no «back» link above them.
   if (['/reminders', '/reports/people', '/workshop/technician/work', '/parts', '/settings', '/reports', '/cases'].includes(pathname)) return null;
+  // Special Aid pages carry their own workspace tabs; a dossier goes back to the vehicle list.
+  if (/^\/special-aid\/vehicles\/[^/]+$/.test(pathname)) return { href: '/special-aid/vehicles', label: 'بازگشت به پرونده خودروها' };
+  if (pathname.startsWith('/special-aid')) return null;
   if (/^\/cases\/(?!new$|import$)[^/]+$/.test(pathname)) return null;
   const edit = /^\/cases\/([^/]+)\/edit$/.exec(pathname);
   if (edit) return { href: `/cases/${edit[1]}`, label: 'بازگشت به پرونده' };
-  if (['/users', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
+  if (['/users', '/settings/reports', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
   return { href: home, label: 'بازگشت به میز کار' };
 }
 
-const PAGE_TITLES: [RegExp, string][] = [[/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
+const PAGE_TITLES: [RegExp, string][] = [[/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid\/feedback/, 'بازخورد فنی و تذکر'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
 /** Browser tab title for each area, so several open tabs can be told apart. */
 export function pageTitle(pathname: string): string {
   const module = /^\/modules\/([^/]+)/.exec(pathname)?.[1];

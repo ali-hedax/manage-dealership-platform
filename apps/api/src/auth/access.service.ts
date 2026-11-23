@@ -1,10 +1,10 @@
 import {Inject,Injectable} from '@nestjs/common';
-import {and,asc,eq,sql} from 'drizzle-orm';
+import {and,asc,eq,isNull,sql} from 'drizzle-orm';
 import {permissionsFor,ROLES,type Role,type AccessUpdate,type TemplateUpdate,type AccessCatalog} from '@manage/shared';
 import {DATABASE,type DatabaseHandle,type Tx} from '../db/database';
-import {tenants,users} from '../db/schema';
+import {sessions,tenants,users} from '../db/schema';
 import {AuditService} from '../audit/audit.service';
-import {forbidden,notFound,versionConflict} from '../common/errors';
+import {badRequest,forbidden,notFound,versionConflict} from '../common/errors';
 import type {Actor} from './auth.types';
 
 @Injectable()
@@ -19,7 +19,7 @@ export class AccessService {
   await this.owner(actor);
   const [tenant]=await this.db.select().from(tenants).where(eq(tenants.id,actor.user.tenantId));
   const people=await this.db.select().from(users).where(eq(users.tenantId,actor.user.tenantId)).orderBy(asc(users.displayName));
-  return {version:tenant.permissionVersion,templates:tenant.permissionTemplates,staff:people.map(u=>({id:u.id,displayName:u.displayName,email:u.email,roles:u.roles as Role[],isOwner:u.isOwner,isActive:u.isActive,version:u.version,overrides:u.permissionOverrides,permissions:[...permissionsFor(u.roles as Role[],tenant.permissionTemplates,u.permissionOverrides,u.isOwner)]}))};
+  return {version:tenant.permissionVersion,templates:tenant.permissionTemplates,staff:people.map(u=>({id:u.id,displayName:u.displayName,email:u.email,roles:u.roles as Role[],isOwner:u.isOwner,isActive:u.isActive,version:u.version,overrides:u.permissionOverrides,jobTitles:u.jobTitles,accessExpiresAt:u.accessExpiresAt?.toISOString()??null,permissions:[...permissionsFor(u.roles as Role[],tenant.permissionTemplates,u.permissionOverrides,u.isOwner)]}))};
  }
  async presets(actor:Actor){
   if(!actor.user.permissions.has('user.manage'))throw forbidden();
@@ -38,8 +38,13 @@ export class AccessService {
    if(u.isOwner)throw forbidden('دسترسی کامل مالک ثابت است؛ مالک از این فرم تغییر نمی‌کند');
    if(u.version!==input.expectedVersion)throw versionConflict(u.version);
    const roles=[...new Set(input.roles)],permissionOverrides={allow:input.allow,deny:input.deny};
-   await tx.update(users).set({roles,permissionOverrides,version:u.version+1,updatedAt:new Date()}).where(eq(users.id,id));
-   await this.audit.record(tx,actor,{entityType:'user',entityId:id,action:'user.access_updated',before:{roles:u.roles,permissionOverrides:u.permissionOverrides},after:{roles,permissionOverrides},snapshot:{version:u.version+1,row:{id,roles,permissionOverrides}}});
+   // Job titles are labels only; the access end date applies to any account (guest or temporary staff).
+   const jobTitles=input.jobTitles??u.jobTitles,accessExpiresAt=input.accessExpiresAt===undefined?u.accessExpiresAt:input.accessExpiresAt?new Date(input.accessExpiresAt):null;
+   if(roles.includes('guest')&&!accessExpiresAt)throw badRequest('GUEST_EXPIRY','برای دسترسی مهمان تاریخ پایان دسترسی لازم است');
+   await tx.update(users).set({roles,permissionOverrides,jobTitles,accessExpiresAt,version:u.version+1,updatedAt:new Date()}).where(eq(users.id,id));
+   // An ended access closes the open sessions at once.
+   if(accessExpiresAt&&accessExpiresAt<=new Date())await tx.update(sessions).set({revokedAt:new Date()}).where(and(eq(sessions.userId,id),isNull(sessions.revokedAt)));
+   await this.audit.record(tx,actor,{entityType:'user',entityId:id,action:'user.access_updated',before:{roles:u.roles,permissionOverrides:u.permissionOverrides,jobTitles:u.jobTitles,accessExpiresAt:u.accessExpiresAt?.toISOString()??null},after:{roles,permissionOverrides,jobTitles,accessExpiresAt:accessExpiresAt?.toISOString()??null},snapshot:{version:u.version+1,row:{id,roles,permissionOverrides,jobTitles}}});
   });return {status:'ok'};
  }
  async updateTemplate(actor:Actor,role:Role,input:TemplateUpdate){

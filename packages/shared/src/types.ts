@@ -46,6 +46,9 @@ export interface Me {
   displayName: string;
   roles: Role[];
   permissions: Permission[];
+  jobTitles?: string[];
+  /** Guest or temporary access: sign-in stops after this instant. */
+  accessExpiresAt?: string | null;
   tenant: { id: string; code: string; name: string };
   environment: string;
   modules: { key: ModuleKey; status: 'active' | 'planned' }[];

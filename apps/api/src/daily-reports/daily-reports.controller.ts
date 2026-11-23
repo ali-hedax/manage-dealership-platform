@@ -187,6 +187,11 @@ export class DailyReportsController {
     return this.tasks.inbox(a);
   }
 
+  @Post('notifications/resolve')
+  resolve(@CurrentActor() a: Actor, @Body(new ZodPipe(z.object({ ids: z.array(z.uuid()).min(1).max(100) }).strict())) b: { ids: string[] }) {
+    return this.tasks.resolve(a, b.ids);
+  }
+
   @Post('notifications/read')
   read(@CurrentActor() a: Actor, @Body(new ZodPipe(z.object({ ids: z.union([z.array(z.uuid()).max(100), z.literal('all')]) }).strict())) b: { ids: string[] | 'all' }) {
     return this.tasks.markRead(a, b.ids);

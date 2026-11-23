@@ -239,6 +239,20 @@
       "when": 1795200000001,
       "tag": "0033_staged_parts_picking",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795339075498,
+      "tag": "0034_special_aid_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795351668937,
+      "tag": "0035_special_aid_completion",
+      "breakpoints": true
     }
   ]
 }

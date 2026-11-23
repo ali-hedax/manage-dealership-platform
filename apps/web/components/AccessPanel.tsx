@@ -1,5 +1,6 @@
 'use client';
 import {useState} from 'react';
+import {JalaliInput} from '@/components/JalaliInput';
 import useSWR,{useSWRConfig} from 'swr';
 import {PERMISSIONS,ROLE_LABELS,ROLES,ROLE_PERMISSIONS,permissionsFor,type AccessCatalog,type Permission,type Role,type StaffAccess} from '@manage/shared';
 import {api,fetcher,errorMessage} from '@/lib/api';
@@ -9,11 +10,15 @@ import {PermissionPicker} from './PermissionPicker';
 function StaffEditor({person,catalog,onSaved}:{person:StaffAccess;catalog:AccessCatalog;onSaved:()=>Promise<unknown>}){
  const [roles,setRoles]=useState<Role[]>(person.roles),[selected,setSelected]=useState<Permission[]>(person.permissions),[review,setReview]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const changes=PERMISSIONS.filter(p=>selected.includes(p)!==person.permissions.includes(p)).length;
+ // Job titles are labels only (several allowed); the access end date applies to guests and temporary staff.
+ const [titles,setTitles]=useState((person.jobTitles??[]).join('، ')),[expires,setExpires]=useState<string|null>(person.accessExpiresAt??null);
  function changeRoles(next:Role[]){setRoles(next);setSelected([...permissionsFor(next,catalog.templates)]);setReview(false);}
- async function save(){setBusy(true);setError('');try{const base=permissionsFor(roles,catalog.templates);await api(`/access/users/${person.id}`,{method:'PUT',body:{expectedVersion:person.version,expectedTemplateVersion:catalog.version,roles,allow:selected.filter(p=>!base.has(p)),deny:[...base].filter(p=>!selected.includes(p))}});await onSaved();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
+ async function save(){setBusy(true);setError('');try{const base=permissionsFor(roles,catalog.templates);await api(`/access/users/${person.id}`,{method:'PUT',body:{expectedVersion:person.version,expectedTemplateVersion:catalog.version,roles,allow:selected.filter(p=>!base.has(p)),deny:[...base].filter(p=>!selected.includes(p)),jobTitles:[...new Set(titles.split(/[،,]/).map(t=>t.trim()).filter(t=>t.length>=2))].slice(0,6),accessExpiresAt:expires}});await onSaved();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
  return <div className="access-editor">
   <p className="small">با تغییر سمت‌ها، الگوی پیشنهادی آن‌ها انتخاب می‌شود. سپس تیک هر دسترسی را برای همین فرد تغییر دهید. تغییر روی درخواست‌های بعدی او اعمال می‌شود.</p>
   <fieldset disabled={busy}><legend>سمت‌های {person.displayName}</legend><div className="role-options">{ROLES.map(role=><label className="permission-option" key={role}><input type="checkbox" checked={roles.includes(role)} onChange={e=>changeRoles(e.target.checked?[...roles,role]:roles.filter(r=>r!==role))}/>{ROLE_LABELS[role]}</label>)}</div></fieldset>
+  <div className="grid-2"><label className="field"><span>عنوان‌های شغلی (با ویرگول جدا کنید)</span><input className="input" maxLength={400} value={titles} onChange={e=>setTitles(e.target.value)} placeholder="مثلاً: اپراتور امداد ویژه، مسئول تماس"/></label>
+  <JalaliInput label={roles.includes('guest')?'پایان دسترسی (برای مهمان لازم است)':'پایان دسترسی (اختیاری)'} value={expires} onChange={setExpires}/></div>
   <div className="row"><button className="btn" type="button" disabled={busy} onClick={()=>{setSelected([...permissionsFor(roles,catalog.templates)]);setReview(false);}}>بازگشت به الگوی سمت</button><span>{selected.length.toLocaleString('fa-IR')} دسترسی انتخاب شده</span></div>
   <PermissionPicker value={selected} disabled={busy} onChange={v=>{setSelected(v);setReview(false);}}/>
   <p className="small muted">مجوزهای مالی همچنان تابع تأیید رسمی و ممنوعیت تأیید پیشنهاد خود شخص‌اند. «دعوت و مدیریت کارکنان» اجازه دعوت با سمت‌های مصوب تا سقف مجوزهای خود فرد را می‌دهد؛ ویرایش جزئی دسترسی و الگوها فقط برای مالک است.</p>

@@ -10,6 +10,8 @@ export interface AuthUser {
   isTestTenant: boolean;
   username: string;
   displayName: string;
+  jobTitles?: string[];
+  accessExpiresAt?: string | null;
   roles: Role[];
   permissions: Set<Permission>;
   sessionId: string;
