@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, {useSWRConfig} from 'swr';
 import type { Assessment } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -25,6 +25,22 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
   const {can} = useAuth();
   const toast=useToast();
   const {data,mutate}=useSWR<Review[]>(`/cases/${caseId}/technical-reviews`,fetcher);
+  const {data:handoff,mutate:refreshHandoff}=useSWR<{submitted:boolean}>(`/assessments/${assessment.id}/package`,fetcher);
+  const {mutate:refreshCache}=useSWRConfig();
+  const [codes,setCodes]=useState<Record<string,string>>({});
+  async function packageAction(path:string, method:'POST'|'PATCH'='POST', extra:Record<string,string>={}) {
+    if (busy) return;
+    setBusy(path);
+    try {
+      await api(path,{method,body:{expectedVersion:assessment.version,...extra}});
+      await Promise.all([mutate(),refreshHandoff(),refreshCache(`/cases/${caseId}/assessments`),refreshCache(`/cases/${caseId}`)]);
+      toast('عملیات کارشناسی ثبت شد');
+      if (path.endsWith('/finalize')) window.location.hash='case-plan';
+    } catch (err) {
+      toast(errorMessage(err),'error');
+      await Promise.all([mutate(),refreshHandoff(),refreshCache(`/cases/${caseId}/assessments`)]);
+    } finally { setBusy(null); }
+  }
   const [reason,setReason]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState<string|null>(null);
   const rows=(data??[]).filter(r=>r.assessmentId===assessment.id);
@@ -54,6 +70,13 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
         <p className="small muted">از {rows.length} قلم: {accepted} تأیید، {returned} نیازمند اصلاح. هر قلم مستقل بررسی می‌شود.</p>
       </div>
     </div>
+    {assessment.status==='draft' && handoff && <div className="row no-print">
+      {handoff.submitted ? <strong>تحویل مسئول قطعات شد</strong> : can('assessment.manage') &&
+        <button type="button" className="btn" disabled={!!busy} onClick={()=>void packageAction(`/assessments/${assessment.id}/package`)}>ارسال کل کارشناسی به مسئول قطعات</button>}
+      {handoff.submitted && can('part.manage') && <button className="btn btn-primary" type="button"
+        disabled={!!busy || rows.some(r=>r.status!=='accepted'||r.stale)}
+        onClick={()=>void packageAction(`/assessments/${assessment.id}/package/finalize`)}>نهایی کردن کل کارشناسی</button>}
+    </div>}
     {rows.map(r=><div key={r.itemId} className="panel" style={{padding:12}}>
       <div className="row" style={{justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
         <div><strong>{r.description}</strong><div className="small muted"><bdi>{r.partNumber??'شماره فنی ثبت نشده'}</bdi></div></div>
@@ -62,6 +85,15 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
       {r.status==='returned'&&r.reason&&<p className="callout callout-amber small">دلیل برگشت: {r.reason}</p>}
       {r.stale&&<p className="callout callout-amber small">اطلاعات قطعه تغییر کرده است؛ برای بررسی دوباره ابتدا «بازنشانی بررسی» را بزنید.</p>}
       {can('part.manage')&&assessment.status==='draft'&&<div className="stack">
+        {handoff?.submitted && <details className="no-print">
+          <summary>اصلاح شماره فنی یا حذف قلم</summary>
+          <label className="field">شماره فنی اصلاح‌شده<input className="input" value={codes[r.itemId]??r.partNumber??''}
+            maxLength={64} onChange={e=>setCodes(v=>({...v,[r.itemId]:e.target.value}))}/></label>
+          <button type="button" className="btn btn-sm" disabled={!!busy||!codes[r.itemId]?.trim()||codes[r.itemId]?.trim()===r.partNumber}
+            onClick={()=>void packageAction(`/assessment-items/${r.itemId}/technical-code`,'PATCH',{partNumber:codes[r.itemId]!.trim()})}>ثبت اصلاح شماره فنی</button>
+          <button type="button" className="btn btn-sm" disabled={!!busy}
+            onClick={()=>{if(window.confirm('این قلم از کارشناسی حذف شود؟')) void packageAction(`/assessment-items/${r.itemId}/technical-remove`);}}>حذف قلم</button>
+        </details>}
         <label className="field"><span>دلیل اصلاح (هنگام برگشت الزامی)</span>
           <input className="input" value={reason[r.itemId]??''} maxLength={500}
             placeholder="مثلاً شماره فنی مناسب این تیپ نیست"

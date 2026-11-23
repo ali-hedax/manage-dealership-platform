@@ -169,3 +169,37 @@ it('allows every non-Golden Card coverage, including mixed and unknown, but reje
     }
   }
 });
+
+it('hands the complete smart draft to parts for correction, safe removal and finalization', async () => {
+  const c = await expert.post('/cases',{coverageType:'personal',admittedAt:new Date().toISOString(),vehicle:{model:'تست',brand:'تست'}});
+  expect(c.status).toBe(201);
+  const prefix = `/cases/${c.body.id}`;
+  const draft = await expert.post(prefix+'/assessments',{kind:'initial',smartManual:true,assessorName:'کارشناس تست'});
+  const path = `/assessments/${draft.body.id}`;
+  let version = draft.body.version;
+  for (const code of ['88112001','88112002']) {
+    const item = await expert.post(path+'/items',{expectedVersion:version,action:'replace',description:code,partNumber:code});
+    expect(item.status).toBe(201);
+    version = item.body.version;
+  }
+  const reviews = async () => (await clerk.get(prefix+'/technical-reviews')).body as {itemId:string;version:number;partNumber:string}[];
+  const [one,two] = await reviews();
+  const correction = `/assessment-items/${one!.itemId}/technical-code`;
+  expect((await clerk.patch(correction,{expectedVersion:version,partNumber:'88112003'})).status).toBe(422);
+  const handed = await expert.post(path+'/package',{expectedVersion:version});
+  expect(handed.status).toBe(201);
+  version = handed.body.version;
+  expect((await clerk.get(path+'/package')).body.submitted).toBe(true);
+  expect((await clerk.post(path+'/package/finalize',{expectedVersion:version})).status).toBe(422);
+  const corrected = await clerk.patch(correction,{expectedVersion:version,partNumber:'88112003'});
+  expect(corrected.status).toBe(200);
+  const removed = await clerk.post(`/assessment-items/${two!.itemId}/technical-remove`,{expectedVersion:corrected.body.version});
+  expect(removed.status).toBe(201);
+  const [remaining] = await reviews();
+  expect(remaining!.partNumber).toBe('88112003');
+  expect((await clerk.post(`/assessment-items/${remaining!.itemId}/technical-review`,{action:'accept',expectedVersion:remaining!.version})).status).toBe(201);
+  const current = (await expert.get(prefix+'/assessments')).body.at(-1);
+  const done = await clerk.post(path+'/package/finalize',{expectedVersion:current.version});
+  expect(done.status).toBe(201);
+  expect(done.body.status).toBe('final');
+});

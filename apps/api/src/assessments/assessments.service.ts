@@ -29,7 +29,7 @@ import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cas
 import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
-import { assessmentItems, assessmentTechnicalReviews, assessments, blockers, cases, departments, partRequests, users } from '../db/schema';
+import { auditEvents, assessmentItems, assessmentTechnicalReviews, assessments, blockers, cases, departments, partRequests, users } from '../db/schema';
 import { notifyUsers, partLink, usersWithRole } from '../parts/part-notify';
 import { parseAssessmentSheet } from './assessment-sheet';
 
@@ -335,11 +335,13 @@ export class AssessmentsService {
     return this.get(actor, assessmentId);
   }
 
-  async updateItem(actor: Actor, itemId: string, input: UpdateAssessmentItemInput): Promise<Assessment> {
+  async updateItem(actor: Actor, itemId: string, input: UpdateAssessmentItemInput, technical = false): Promise<Assessment> {
     const tenantId = actor.user.tenantId;
     const { a } = await this.db.transaction(async (tx) => {
       const item = await this.loadItem(tx, tenantId, itemId);
       const a = await this.loadDraft(tx, tenantId, item.assessmentId, input.expectedVersion);
+      if (technical) await this.requirePackageReviewer(tx,actor,a,item);
+      if (input.partNumber !== undefined && input.partNumber !== item.partNumber) await this.assertNoLinkedSupply(tx,tenantId,a,item);
       if (input.labourDepartmentId) await this.assertDepartment(tx, tenantId, input.labourDepartmentId);
 
       const patch: Partial<ItemRow> = {};
@@ -406,11 +408,62 @@ export class AssessmentsService {
     return this.get(actor, a.id);
   }
 
-  async removeItem(actor: Actor, itemId: string, input: RemoveAssessmentItemInput): Promise<Assessment> {
+  async submitPackage(actor: Actor, assessmentId: string, expectedVersion: number) {
+    const tenantId = actor.user.tenantId;
+    await this.db.transaction(async tx => {
+      const a = await this.loadDraft(tx, tenantId, assessmentId, expectedVersion);
+      if (!a.smartManual) throw badRequest('SMART_ONLY','این مسیر ویژه کارشناسی دستی هوشمند است');
+      const parts = await tx.select({id:assessmentItems.id}).from(assessmentItems).where(and(
+        eq(assessmentItems.tenantId,tenantId),eq(assessmentItems.assessmentId,a.id),eq(assessmentItems.action,'replace')));
+      if (!parts.length) throw badRequest('PARTS_REQUIRED','حداقل یک قطعه لازم است');
+      if (await this.packageSubmitted(tx,tenantId,a.id)) throw conflict('ALREADY_SUBMITTED','کارشناسی قبلاً تحویل مسئول قطعات شده است');
+      const saved = await this.touch(tx,a);
+      await this.audit.record(tx,actor,{entityType:'assessment',entityId:a.id,caseId:a.caseId,
+        action:'assessment.package_submitted',after:{itemIds:parts.map(p=>p.id)},snapshot:{version:saved.version,row:saved}});
+      await notifyUsers(tx,tenantId,await usersWithRole(tx,tenantId,['parts_clerk']),{
+        kind:'assessment_package',title:'کارشناسی آماده بررسی قطعات',body:`بررسی فنی ${parts.length} قطعه`,
+        link:`/cases/${a.caseId}#case-assessment`,dedupeKey:`assessment_package:${a.id}`});
+    });
+    return this.get(actor,assessmentId);
+  }
+
+  private async packageSubmitted(tx: DbOrTx, tenantId: string, id: string) {
+    const [event] = await tx.select({id:auditEvents.id}).from(auditEvents).where(and(
+      eq(auditEvents.tenantId,tenantId),eq(auditEvents.entityType,'assessment'),
+      eq(auditEvents.entityId,id),eq(auditEvents.action,'assessment.package_submitted'))).limit(1);
+    return !!event;
+  }
+
+  async packageStatus(actor: Actor, id: string) {
+    const a = await this.loadRow(this.db,actor.user.tenantId,id);
+    return {submitted:a.smartManual && await this.packageSubmitted(this.db,actor.user.tenantId,id)};
+  }
+
+  private async assertNoLinkedSupply(tx: DbOrTx, tenantId: string, a: AssessmentRow, item: ItemRow) {
+    const ids = new Set([item.id]);
+    let origin = item.originItemId;
+    while (origin && !ids.has(origin)) {
+      ids.add(origin);
+      origin = (await this.loadItem(tx,tenantId,origin)).originItemId;
+    }
+    const [supply] = await tx.select({id:partRequests.id}).from(partRequests).where(and(
+      eq(partRequests.tenantId,tenantId),eq(partRequests.caseId,a.caseId),inArray(partRequests.assessmentItemId,[...ids]))).limit(1);
+    if (supply) throw conflict('ASSESSMENT_HAS_SUPPLY','برای این قلم سابقه تأمین ثبت شده است؛ اصلاح را از مسیر الحاقیه پیگیری کنید');
+  }
+
+  private async requirePackageReviewer(tx: DbOrTx, actor: Actor, a: AssessmentRow, item?: ItemRow) {
+    if (!actor.user.permissions.has('part.manage')) throw forbidden();
+    if (!a.smartManual || (item && item.action !== 'replace') || !await this.packageSubmitted(tx,actor.user.tenantId,a.id))
+      throw badRequest('PACKAGE_REVIEW_REQUIRED','ابتدا کل کارشناسی برای مسئول قطعات ارسال شود');
+  }
+
+  async removeItem(actor: Actor, itemId: string, input: RemoveAssessmentItemInput, technical = false): Promise<Assessment> {
     const tenantId = actor.user.tenantId;
     const assessmentId = await this.db.transaction(async (tx) => {
       const item = await this.loadItem(tx, tenantId, itemId);
       const a = await this.loadDraft(tx, tenantId, item.assessmentId, input.expectedVersion);
+      if (technical) await this.requirePackageReviewer(tx,actor,a,item);
+      await this.assertNoLinkedSupply(tx,tenantId,a,item);
       // Only draft lines are deleted; the copy in the previous version remains.
       await tx.delete(assessmentItems).where(eq(assessmentItems.id, item.id));
       const saved = await this.touch(tx, a);
@@ -420,6 +473,7 @@ export class AssessmentsService {
         caseId: a.caseId,
         action: 'assessment.item_removed',
         before: {
+          ...item,
           itemId: item.id,
           lineNo: item.lineNo,
           description: item.description,
@@ -434,11 +488,15 @@ export class AssessmentsService {
     return this.get(actor, assessmentId);
   }
 
-  async finalize(actor: Actor, assessmentId: string, input: FinalizeAssessmentInput): Promise<Assessment> {
+  async finalize(actor: Actor, assessmentId: string, input: FinalizeAssessmentInput, technical = false): Promise<Assessment> {
     const tenantId = actor.user.tenantId;
     const forecast = input.forecastDeliveryAt ? new Date(input.forecastDeliveryAt) : null;
     await this.db.transaction(async (tx) => {
       const recorded=await this.loadRow(tx,tenantId,assessmentId);
+      if (technical) {
+        if (recorded.status !== 'draft') throw conflict('PACKAGE_ALREADY_FINAL','کارشناسی قبلاً نهایی شده است');
+        await this.requirePackageReviewer(tx,actor,recorded);
+      }
       if(recorded.status==='final'&&recorded.authorizationStatus==='pending'){
         if(recorded.version!==input.expectedVersion)throw versionConflict(recorded.version);
         const kase=await this.cases.loadForWrite(tx,tenantId,recorded.caseId);
@@ -459,6 +517,8 @@ export class AssessmentsService {
       const reviewRows=await tx.select().from(assessmentTechnicalReviews)
         .where(and(eq(assessmentTechnicalReviews.tenantId,tenantId),
           eq(assessmentTechnicalReviews.assessmentId,a.id)));
+      if (technical && !items.some(i=>i.action==='replace' && i.approvalStatus!=='rejected'))
+        throw badRequest('PARTS_REQUIRED','برای نهایی‌سازی حداقل یک قطعه لازم است');
       if(a.smartManual){
         const byItem=new Map(reviewRows.map(r=>[r.itemId,r]));
         const awaiting=items.filter(i=>i.action==='replace'&&i.approvalStatus!=='rejected')

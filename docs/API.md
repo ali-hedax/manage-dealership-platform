@@ -63,6 +63,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/access/system-admins` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/access` | [source](../apps/api/src/auth/access.controller.ts) |
 | GET | `/api/v1/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
+| GET | `/api/v1/assessments/:id/package` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | GET | `/api/v1/auth/invitations/email/status` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/invitations` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | GET | `/api/v1/auth/me` | [source](../apps/api/src/auth/auth.controller.ts) |
@@ -159,6 +160,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/workshop/quotes` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/staff` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | GET | `/api/v1/workshop/stations` | [source](../apps/api/src/workshop/workshop.controller.ts) |
+| PATCH | `/api/v1/assessment-items/:id/technical-code` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | PATCH | `/api/v1/assessment-items/:id` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | PATCH | `/api/v1/cases/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PATCH | `/api/v1/daily-reports/profiles/:kind` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
@@ -167,11 +169,14 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PATCH | `/api/v1/tasks/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PATCH | `/api/v1/workshop/stations/:id` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/assessment-items/:id/remove` | [source](../apps/api/src/assessments/assessments.controller.ts) |
+| POST | `/api/v1/assessment-items/:id/technical-remove` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessment-items/:id/technical-review` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/authorization` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/finalize` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/import` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/assessments/:id/items` | [source](../apps/api/src/assessments/assessments.controller.ts) |
+| POST | `/api/v1/assessments/:id/package/finalize` | [source](../apps/api/src/assessments/assessments.controller.ts) |
+| POST | `/api/v1/assessments/:id/package` | [source](../apps/api/src/assessments/assessments.controller.ts) |
 | POST | `/api/v1/auth/email/login` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/email/verify` | [source](../apps/api/src/auth/email-auth.controller.ts) |
 | POST | `/api/v1/auth/invitations/accept` | [source](../apps/api/src/auth/email-auth.controller.ts) |
