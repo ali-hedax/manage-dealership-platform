@@ -530,3 +530,5 @@ All notable changes. Versions follow semantic versioning once releases start.
 - CI exports the images it smoke-tests for an owner-approved Preview installation; CI does not deploy or connect to the server.
 
 - کارتابل تعمیرکار: ثبت توقف موقت و ادامه مستقل هر خودرو با علت و کسر زمان توقف از مدت کار.
+
+- کارشناسی هوشمند: ارسال کل کارشناسی برای بازبینی مسئول قطعات، اصلاح فنی با سابقه، ثبت اجرت اختیاری هر واحد و نهایی‌سازی. گزارش ماهانه مدیر، فعالیت و شواهد امتیاز کارکنان را جدا نمایش می‌دهد. کد ایساکو با شناسه معتبر و بدون ابهام نمایش داده می‌شود.

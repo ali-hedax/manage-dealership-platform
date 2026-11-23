@@ -1015,3 +1015,8 @@ Published to the owner-approved Preview after a verified restore drill. Health p
 
 ### 2026-11-23 — independent technician pauses
 Technician pause/resume persists in the existing transactional per-task audit stream with a required reason, tenant and assignee checks, expected version and working-time exclusion. No schema migration. Local synthetic API verification: 4 suites / 14 passed (technician-timing, smart-assessment, case-sorting, isaco-parts). Shared package/employee tests: 9 passed. Web TypeScript passed. Browser and complete CI verification pending.
+
+## 2026-11-23 — release candidate after c6d55d6b
+- PR 119 and PR 122 incorporated. No additional database migrations required for PR 120. ISACO reconciliation rejects contradictory VIN evidence and considers distinct codes across the entire matched history. A4 Chromium PDF regression added.
+- On f68278d Chromium passed the two formerly failing desktop assessment and guided-workflow cases, including repair-plan focus. Five CI jobs passed; remainder of Chromium cancelled when superseded. Technician milestone fae4c11: focused API 14/14, shared 9/9, web TypeScript passed. Other feature milestones: a624c74 optional labour, 61d7f29 package, 34ffe34 and c6d55d6 employee reports. Check final CI on the current HEAD separately.
+- Next: verify all six checks on this exact candidate, then merge, verify main artifacts, confirm production SHA, independent backup and isolated restoration, migration rehearsal, rollback, deploy and confirm live version. The host's SSH command is sandbox-blocked. No production access or deployment verified in this session.

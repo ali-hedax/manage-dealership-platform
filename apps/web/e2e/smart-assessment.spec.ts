@@ -88,6 +88,8 @@ test('smart assessment: rapid catalog selection persists two lines and prevents 
   await expect(picked.getByTestId('smart-picked-row')).toHaveCount(1);
   await page.emulateMedia({ media: 'print' });
   await expect(labour).toBeHidden();
+  const printout = await page.pdf({format:'A4',printBackground:true});
+  expect(printout.subarray(0,5).toString()).toBe('%PDF-');
   await page.emulateMedia({ media: 'screen' });
   await page.screenshot({ path: test.info().outputPath('smart-picked.png'), fullPage: false });
 });

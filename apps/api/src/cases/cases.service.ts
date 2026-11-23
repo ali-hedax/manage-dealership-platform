@@ -57,7 +57,7 @@ import {
 import { buildSearchText, computeMissingFields, formatCaseNumber } from './case-rules';
 import { recordInitialResponsibility, recordResponsibilityChange } from './responsibility';
 import { requireSupportReason } from '../auth/support-reason';
-import {idKey,isNonUniqueAdmission} from '../vehicle-import/vehicle-sheet';
+import {idKey,isAidVehicleKey,isFullVin,isNonUniqueAdmission} from '../vehicle-import/vehicle-sheet';
 
 export const planSignature = (work: (typeof tasks.$inferSelect)[]) => createHash('sha256').update(JSON.stringify(work.map(t => [t.id, t.stationId, t.assignedUserId, t.plannedStartAt, t.plannedEndAt, t.sortOrder]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))))).digest('hex');
 type CaseRow = typeof cases.$inferSelect;
@@ -712,16 +712,22 @@ export class CasesService {
    * blank cells never count, and nothing is guessed from model or plate.
    */
   async isacoCodeOf(tenantId: string, vin: string | null, chassis: string | null): Promise<{ code: string | null; conflict: boolean }> {
-    const keys = [vin ? normalizeVin(vin) : '', chassis ? toLatinDigits(chassis).replace(/\s+/g, '').toUpperCase() : ''].filter((k) => k.length >= 6);
+    const vinKey = vin ? normalizeVin(vin) : '';
+    const keys = [vinKey, chassis ? idKey(chassis) : ''].filter(isAidVehicleKey);
     if (!keys.length) return { code: null, conflict: false };
     const list = sql.join(keys.map((k) => sql`${k}`), sql`, `);
     const rows = await this.db
-      .select({ code: sql<string | null>`${referenceEntries.data}->>'isacoCode'` })
+      .selectDistinct({
+        code: sql<string>`trim(${referenceEntries.data}->>'isacoCode')`,
+        contradictoryVin: sql<boolean>`(${isFullVin(vinKey)} AND coalesce(${referenceEntries.data}->>'vin','') <> ''
+          AND upper(${referenceEntries.data}->>'vin') <> ${vinKey})`,
+      })
       .from(referenceEntries)
       .where(and(eq(referenceEntries.tenantId, tenantId), eq(referenceEntries.kind, 'customers'),
         sql`(upper(coalesce(${referenceEntries.data}->>'vin','')) in (${list}) or upper(coalesce(${referenceEntries.data}->>'chassis','')) in (${list}))`,
-        sql`coalesce(${referenceEntries.data}->>'isacoCode','') <> ''`))
-      .limit(50);
+        sql`trim(coalesce(${referenceEntries.data}->>'isacoCode','')) <> ''`))
+      .limit(2);
+    if (rows.some(r=>r.contradictoryVin)) return {code:null,conflict:true};
     const codes = [...new Set(rows.map((r) => r.code!.trim()).filter(Boolean))];
     return codes.length === 1 ? { code: codes[0]!, conflict: false } : { code: null, conflict: codes.length > 1 };
   }
