@@ -17,12 +17,12 @@ import {
 } from '../db/schema';
 import type { EmdadOfficial } from '../daily-reports/report-rows';
 import { notifyUsers } from '../parts/part-notify';
-import { idKey, isFullVin } from '../vehicle-import/vehicle-sheet';
+import { idKey, isAidVehicleKey } from '../vehicle-import/vehicle-sheet';
 import { CARD_EXTRACTOR, type CardTextExtractor, sniffCardMime } from './card-extractor';
 
 type CardRow = typeof specialAidCards.$inferSelect;
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
-const vinOf = (v: string | null | undefined) => { const n = v ? normalizeVin(v) : ''; return isFullVin(n) ? n : null; };
+const vinOf = (v: string | null | undefined) => { const n = v ? normalizeVin(v) : ''; return isAidVehicleKey(n) ? n : null; };
 
 /**
  * Evidence and records around a special-aid dossier: admission-card archive, appointment
@@ -146,7 +146,7 @@ export class SpecialAidRecordsService {
       if (!c) throw notFound('کارت پذیرش');
       if (c.version !== input.expectedVersion) throw versionConflict(c.version);
       const vin = input.vin ? normalizeVin(input.vin) : null;
-      if (vin && !isFullVin(vin)) throw badRequest('SPECIAL_AID_CARD_VIN', 'VIN کامل باید ۱۷ نویسهٔ معتبر باشد');
+      if (vin && !isAidVehicleKey(vin)) throw badRequest('SPECIAL_AID_CARD_VIN', 'VIN کامل ۱۷ نویسه یا شمارهٔ شاسی ۸ نویسه‌ای ایساکو لازم است');
       const [saved] = await tx.update(specialAidCards).set({ admissionNo: input.admissionNo?.trim() || null, vin, state: 'unmatched', dossierId: null, admissionId: null, matchedAt: null, matchedBy: null, version: c.version + 1 })
         .where(and(eq(specialAidCards.id, c.id), eq(specialAidCards.version, c.version))).returning();
       if (!saved) throw versionConflict();
@@ -280,7 +280,7 @@ export class SpecialAidRecordsService {
     // A later row with the same special-aid number and a corrected VIN supersedes the invalid one (history stays).
     const placed = new Set((await this.db.select({ no: emdadRequests.emdadNo }).from(emdadRequests).innerJoin(specialAidItems, eq(specialAidItems.requestId, emdadRequests.id))
       .where(eq(emdadRequests.tenantId, actor.user.tenantId))).map((x) => x.no).filter(Boolean));
-    return rows.filter(({ emdad_requests: r }) => !isFullVin(idKey(r.chassis ?? '')) && !(r.emdadNo && placed.has(r.emdadNo))).slice(0, 500).map(({ emdad_requests: r }) => {
+    return rows.filter(({ emdad_requests: r }) => !isAidVehicleKey(idKey(r.chassis ?? '')) && !(r.emdadNo && placed.has(r.emdadNo))).slice(0, 500).map(({ emdad_requests: r }) => {
       const o = (r.official ?? {}) as Partial<EmdadOfficial>;
       return { requestId: r.id, vinText: r.chassis, emdadNo: r.emdadNo, admissionNo: r.admissionNo, description: o.specialDescription || o.supplyDescription || null, officialStatus: o.emdadStatus ?? '', lastReportAt: iso(r.lastReportAt) };
     });

@@ -89,7 +89,7 @@ export function CardList({ cards, onChanged }: { cards: SpecialAidCard[]; onChan
         <td><span className={`m-tag ${c.state === 'matched' ? 'ok' : 'wait'}`}>{c.state === 'matched' ? 'وصل به پرونده' : 'در انتظار تطبیق'}</span></td>
         <td>{can('special_aid.operate') && (edit === c.id ? <div className="row">
           <input className="input" aria-label="شمارهٔ پذیرش" placeholder="شمارهٔ پذیرش" maxLength={40} value={adm} onChange={(e) => setAdm(e.target.value)} />
-          <input className="input" aria-label="VIN" placeholder="VIN" dir="ltr" maxLength={17} value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} />
+          <input className="input" aria-label="VIN" placeholder="VIN یا شاسی" dir="ltr" maxLength={17} value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} />
           <button type="button" className="btn btn-sm btn-primary" disabled={busy || (!adm.trim() && !vin.trim())} onClick={() => void match(c)}>تطبیق</button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>انصراف</button>
         </div> : <button type="button" className="btn btn-sm" onClick={() => { setEdit(c.id); setAdm(c.admissionNo ?? ''); setVin(c.vin ?? ''); }}>ثبت شماره</button>)}</td>
