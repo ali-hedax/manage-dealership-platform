@@ -119,6 +119,8 @@ export class KasbMock {
     this.version = version;
     this.chunk = `main.${randomBytes(4).toString('hex')}.chunk.js`;
   }
+  /** When set, GetCapcha hands out a session cookie that the login must send back. */
+  requireCookie = false;
   count(path: string) {
     return this.log.filter((l) => l.path === path).length;
   }
@@ -179,6 +181,7 @@ export class KasbMock {
       }
       if (api === 'Sec/GetCapcha') {
         this.serverTime = Date.now();
+        if (this.requireCookie) res.setHeader('set-cookie', [`lb=${this.serverTime}; Path=/; HttpOnly`, 'old=; Max-Age=0']);
         return this.answer(res, { Success: true, Data: { ImgCapcha: this.captchaImage ?? '', ServerTime: this.serverTime } });
       }
       // Like the real server: everything else must come inside the HashData envelope whose suffix is
@@ -195,6 +198,8 @@ export class KasbMock {
       }
       if (api === 'Sec/Login/v2') {
         this.loginAttempts++;
+        // Like a sticky load balancer: the captcha time is only known to the node that issued it.
+        if (this.requireCookie && req.headers.cookie !== `lb=${this.serverTime}`) return this.answer(res, { Success: false, MessageCode: '99999', MessageDes: 'نشست نامعتبر', Data: null });
         const okCaptcha = !this.captchaImage || viaCaptcha;
         const ok = payload.Scus === this.dealerCode && payload.UserName === this.username && payload.Password === this.password && payload.ClientVersion === this.version && okCaptcha;
         if (!ok) return this.answer(res, { Success: false, MessageCode: 'E_LOGIN', Data: this.captchaImage ? { ImgCapcha: this.captchaImage } : null });

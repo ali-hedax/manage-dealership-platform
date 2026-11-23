@@ -17,6 +17,7 @@ export interface KasbAnswer<T = unknown> {
   Success: boolean;
   Data: T;
   MessageCode?: string | number | null;
+  MessageDes?: string | null;
 }
 
 /** OpenSSL EVP_BytesToKey(MD5, count 1): 32-byte key and 16-byte IV for AES-256-CBC. */

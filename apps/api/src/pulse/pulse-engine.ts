@@ -11,7 +11,7 @@ import { notifyUsers } from '../parts/part-notify';
 import { calendarAt } from '../workshop/work-calendar';
 import { KasbClient, type LineKind } from './kasb-client';
 import { describeKasbError, KasbError } from './kasb-errors';
-import { CARD } from './kasb-protocol';
+import { CARD, PULSE_PROTOCOL_REVISION } from './kasb-protocol';
 import type { KasbTable } from './kasb-table';
 import { dayChunks, diffLines, isClosed, jalaliDay, mapCard, mapDefect, mapPart, mapRepair, statusTexts, tehranDateKey, tehranMidnight, withinWorkingHours, type DefectValues, type LineBase, type PartValues, type ReceptionValues, type RepairValues } from './pulse-map';
 import { findCaseLink } from './pulse-link';
@@ -262,7 +262,7 @@ export class PulseEngine {
     }
     const failed = conn.failedLogins + 1;
     await this.patch(conn, { failedLogins: failed, lastErrorCode: 'KASB_LOGIN_FAILED', captchaImage: null, ...(failed >= 2 ? { state: 'login_failed' } : {}) });
-    await this.finishRun(run, 'error', none, 'KASB_LOGIN_FAILED', result.messageCode ? { messageCode: result.messageCode.slice(0, 40) } : null);
+    await this.finishRun(run, 'error', none, 'KASB_LOGIN_FAILED', { messageCode: result.messageCode?.slice(0, 40) ?? null, messageText: result.messageText, protocol: PULSE_PROTOCOL_REVISION, cookies: client.cookieNames.slice(0, 10) });
     if (failed >= 2) await this.notifyAdmins(conn, 'login_failed', 'KASB_LOGIN_FAILED');
     throw new PulseStop('KASB_LOGIN_FAILED');
   }

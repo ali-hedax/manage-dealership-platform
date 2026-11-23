@@ -22,6 +22,15 @@
 bash deploy/operational/operational-compose.sh up -d --no-build --pull never --no-deps --force-recreate --wait --wait-timeout 120 api web
 ```
 
+اگر منیج پالس روشن است (`COMPOSE_PROFILES=pulse` در `/opt/manage/.env`)، کارگزار `pulse` همان ایمیج API را اجرا می‌کند اما دستور بالا آن را عوض نمی‌کند و با کد قبلی می‌ماند. بلافاصله پس از آن:
+
+```bash
+bash deploy/operational/operational-compose.sh up -d --no-build --pull never --no-deps --force-recreate pulse
+docker inspect -f '{{.Image}}' $(bash deploy/operational/operational-compose.sh ps -q api) $(bash deploy/operational/operational-compose.sh ps -q pulse)
+```
+
+دو شناسهٔ ایمیج باید یکی باشند. در «جزئیات فنی» اجرای ناموفق پالس، `protocol` نسخهٔ کد کارگزار را نشان می‌دهد.
+
 ## سلامت و بازگشت
 
 - **شمارهٔ نسخه (از migration 0030):** بلافاصله پس از تکمیل تمام کنترل‌های سلامت و بررسی‌های انتشار، روی سرور و از مسیر `/opt/manage` این دستور را به‌عنوان **مرحلهٔ اجباری پایان هر انتشار** اجرا کنید: `bash deploy/operational/confirm-healthy-release.sh <FULL_MAIN_SHA>`. اسکریپت شناسهٔ کامل commit در حال اجرای API را با SHA مورد انتظار مقایسه می‌کند، سالم‌بودن API/DB را می‌سنجد، نسخهٔ تازه را ثبت می‌کند و دوباره نسخه و SHA را از health بررسی می‌کند. در شکست هر بررسی، با وضعیت خطا متوقف می‌شود. اجرای دوباره روی همان commit شمارهٔ اضافی ایجاد نمی‌کند. این اسکریپت **خودش منتشر نمی‌کند** و جای بکاپ، آزمون یا کنترل سلامت وب را نمی‌گیرد. پس از بازگشت به نسخهٔ قبل نباید نسخهٔ جدید ثبت شود. health فیلد `version` را تا تأیید `null` و پس از آن شمارهٔ تأییدشده می‌دهد.
