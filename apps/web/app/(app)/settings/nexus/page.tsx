@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { pulseSentence, type DailyReportsStatus, type PulseStatus, type ReportCenterEntry } from '@manage/shared';
+import { pulseErrorText, pulseSentence, type DailyReportsStatus, type PulseStatus, type ReportCenterEntry } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali } from '@/lib/format';
@@ -42,10 +42,21 @@ export default function NexusPage() {
   const pulseLive = !!pulse?.configured && !!pulse.enabled;
   const auto = (m: Mode): Mode => (pulseLive ? m : 'manual');
   const entry = (k: ReportCenterEntry['kind']) => center?.find((e) => e.kind === k);
-  async function stockNow() {
-    try { await api('/pulse/commands', { method: 'POST', body: { kind: 'stock_now' } }); toast('درخواست خواندن موجودی به پالس داده شد؛ تا یک دقیقه دیگر پیش‌نمایش آماده می‌شود'); void refreshPulse(); }
+  async function readNow(kind: 'stock_now' | 'emdad_now' | 'appointments_now') {
+    const done = { stock_now: 'درخواست خواندن موجودی به پالس داده شد؛ تا یک دقیقه دیگر پیش‌نمایش آماده می‌شود',
+      emdad_now: 'گزارش امداد ویژه از کسب‌وکار درخواست شد؛ ساختنش چند دقیقه طول می‌کشد و پالس خودش آن را می‌گیرد',
+      appointments_now: 'درخواست خواندن لیست نوبت به پالس داده شد؛ تا یک دقیقه دیگر پیش‌نمایش در «اطلاعات پایه» آماده می‌شود' }[kind];
+    try { await api('/pulse/commands', { method: 'POST', body: { kind } }); toast(done); void refreshPulse(); }
     catch (e) { toast(errorMessage(e), 'error'); }
   }
+  /** Last run of a report kind, as one short phrase (why the last automatic read did not work). */
+  const lastRun = (kind: 'emdad' | 'appointments') => {
+    const r = pulse?.runs.find((x) => x.kind === kind);
+    if (!r || r.outcome !== 'error') return null;
+    return `آخرین تلاش پالس: ${pulseErrorText(r.errorCode) ?? 'ناموفق'}`;
+  };
+  const AUTO_DETAIL = { emdad: 'پالس روزی یک بار (از ساعت ۱۰:۰۵، نه ۱۶ تا ۱۸) گزارش را درخواست می‌کند و وقتی کسب‌وکار ساخت، می‌گیرد؛ شما فقط پیش‌نمایش را تأیید می‌کنید.',
+    appointments: 'پالس روزی یک بار (از ساعت ۱۰:۱۰) لیست را می‌گیرد و پیش‌نمایشش را در «اطلاعات پایه ← نوبت‌های پذیرش» آماده می‌کند؛ بار اول ستون‌ها باید یک بار دستی تأیید شده باشند.' } as const;
 
   return (
     <div className="stack nexus">
@@ -70,11 +81,12 @@ export default function NexusPage() {
           <ReportRow title="موجودی انبار" mode={auto('auto_manual')} last={daily?.stock?.appliedAt ?? null} stale={daily?.stock ? !daily.stock.fresh : undefined}
             detail={pulseLive ? 'پالس روزی یک بار (از ساعت ۱۰) فایل را می‌گیرد؛ شما فقط پیش‌نمایش را تأیید می‌کنید.' : null}
             guide={STOCK_GUIDE} isacoPath="کسب‌وکار ← گزارش موجودی انبار (جست‌وجو: «موجودی انبار»)" manualHref="/daily-reports?kind=stock"
-            extra={pulseLive && <button type="button" className="btn btn-sm" onClick={() => void stockNow()}><AppIcon name="download" />همین الان بخوان</button>} />
+            extra={pulseLive && <button type="button" className="btn btn-sm" onClick={() => void readNow('stock_now')}><AppIcon name="download" />همین الان بخوان</button>} />
           {(['emdad', 'appointments'] as const).map((k) => { const e = entry(k); return e ? (
-            <ReportRow key={k} title={e.title} mode="manual" last={e.lastImport?.appliedAt ?? null} stale={e.lastImport ? e.stale : undefined}
-              detail={e.missingDays.length ? `${faNum(e.missingDays.length)} روز کاری بدون گزارش در دو هفتهٔ اخیر` : null}
-              guide={e.guide} isacoPath={e.isacoPath} manualHref={e.uploadHref} note="خودکار شدن این گزارش در نسخهٔ بعد" />
+            <ReportRow key={k} title={e.title} mode={auto('auto_manual')} last={e.lastImport?.appliedAt ?? null} stale={e.lastImport ? e.stale : undefined}
+              detail={[pulseLive ? AUTO_DETAIL[k] : null, e.missingDays.length ? `${faNum(e.missingDays.length)} روز کاری بدون گزارش در دو هفتهٔ اخیر` : null].filter(Boolean).join(' · ') || null}
+              guide={e.guide} isacoPath={e.isacoPath} manualHref={e.uploadHref} note={pulseLive ? lastRun(k) ?? undefined : undefined}
+              extra={pulseLive && <button type="button" className="btn btn-sm" onClick={() => void readNow(k === 'emdad' ? 'emdad_now' : 'appointments_now')}><AppIcon name="download" />همین الان بخوان</button>} />
           ) : null; })}
           {centerOk && <p className="xs muted">راهنماها و بازهٔ پیش‌فرض گزارش‌ها در <Link href="/settings/reports">جزئیات مرکز گزارش‌ها</Link> قابل ویرایش است.</p>}
         </div>
