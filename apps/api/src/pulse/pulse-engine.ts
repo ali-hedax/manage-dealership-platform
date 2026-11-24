@@ -1,12 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { DEFAULT_PULSE_SETTINGS, normalizeRoles, PULSE_ATTENTION_STATES, PULSE_ERROR_LABELS, PULSE_STATE_LABELS, parseJalali, type PulseCursor, type PulseRunKind, type PulseSettings, type PulseState } from '@manage/shared';
+import { DEFAULT_PULSE_SETTINGS, normalizeRoles, permissionsFor, REPORT_CENTER_DEFAULTS, type ReportCenterKind, type Role, PULSE_ATTENTION_STATES, PULSE_ERROR_LABELS, PULSE_STATE_LABELS, parseJalali, type PulseCursor, type PulseRunKind, type PulseSettings, type PulseState } from '@manage/shared';
 import type { AuditService } from '../audit/audit.service';
 import type { AppConfig } from '../config';
 import { newId } from '../common/ids';
 import type { DatabaseHandle, DbOrTx } from '../db/database';
-import { pulseCommands, pulseConnections, pulseRuns, receptionDefects, receptionEvents, receptionParts, receptionRepairs, receptions, users } from '../db/schema';
+import { pulseCommands, pulseConnections, pulseRuns, receptionDefects, receptionEvents, receptionParts, receptionRepairs, receptions, referenceImports, tenants, users } from '../db/schema';
 import { notifyUsers } from '../parts/part-notify';
 import { calendarAt } from '../workshop/work-calendar';
 import { KasbClient, type LineKind } from './kasb-client';
@@ -17,6 +17,10 @@ import { dayChunks, diffLines, isClosed, jalaliDay, mapCard, mapDefect, mapPart,
 import { findCaseLink } from './pulse-link';
 import { stageAutomaticReport } from '../daily-reports/auto-stage';
 import { decryptSecret } from './pulse-secret';
+import type { Actor } from '../auth/auth.types';
+import { ReferenceDataService } from '../reference-data/reference-data.service';
+import type { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
+import { ReportCenterService } from '../special-aid/report-center.service';
 
 // The Manage Pulse worker logic (spec section 26). Runs only in the separate `pulse` process,
 // never in the API. One tick handles every dealership: queued commands first (test, read now,
@@ -43,6 +47,13 @@ export class PulseStop extends Error {
     super(code);
     this.name = 'PulseStop';
   }
+}
+
+/** The cursor without a pending special-aid request. */
+function withoutPending(cursor: PulseCursor | null | undefined): PulseCursor {
+  const next = { ...(cursor ?? {}) };
+  delete next.emdadPending;
+  return next;
 }
 
 export interface PulseEngineOptions {
@@ -148,6 +159,9 @@ export class PulseEngine {
     if (ok && due(cursor.openAt, 15)) ok = (await this.cardsCycle(conn, 'open', dayChunks(new Date(now.getTime() - s.openWindowDays * 86_400_000), now, 7), fresh)) && ok;
     if (ok) ok = (await this.linesCycle(conn, [...fresh])) && ok;
     if (ok && s.stockAuto !== false && (force || this.stockDue(conn, s))) ok = (await this.stockCycle(conn)) && ok;
+    // The two reports never stop the admission reads: a refused report is only logged.
+    if (ok && s.emdadAuto !== false && this.emdadDue(conn, s)) await this.emdadCycle(conn, false);
+    if (ok && s.appointmentsAuto !== false && this.dailyDue(conn.cursor?.appointmentsDay, conn.cursor?.appointmentsTriedAt, s.appointmentsAfter ?? '10:10')) await this.appointmentsCycle(conn);
     return ok;
   }
 
@@ -190,6 +204,164 @@ export class PulseEngine {
       return true;
     } catch (e) {
       await this.fail(conn, run, e, stats, { step: 'stock' });
+      return false;
+    }
+  }
+
+  // ------------------------------------------------------------ special-aid report and appointment list
+
+  private tehranHhmm(at: Date): string {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }).format(at);
+  }
+  /** کسب‌وکار refuses the special-aid report 07:00–10:00 and 16:00–18:00, except on Fridays (its isOffPeak). */
+  private reportPeak(at: Date): boolean {
+    if (new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tehran', weekday: 'short' }).format(at) === 'Fri') return false;
+    const t = this.tehranHhmm(at);
+    return (t >= '07:00' && t <= '10:00') || (t >= '16:00' && t <= '18:00');
+  }
+  /** Once a Tehran day after `after`; a failed attempt is retried after an hour. */
+  private dailyDue(day: string | undefined, triedAt: string | undefined, after: string): boolean {
+    const now = this.now();
+    if (day === tehranDateKey(now)) return false;
+    if (triedAt && now.getTime() - Date.parse(triedAt) < 3_600_000) return false;
+    return this.tehranHhmm(now) >= after;
+  }
+  private emdadDue(conn: Connection, s: PulseSettings): boolean {
+    const cursor = conn.cursor ?? {};
+    if (this.reportPeak(this.now())) return false;
+    // A report the server is still building is asked for again every two minutes.
+    if (cursor.emdadPending) return !cursor.emdadTriedAt || this.now().getTime() - Date.parse(cursor.emdadTriedAt) >= 2 * 60_000 - 5_000;
+    return this.dailyDue(cursor.emdadDay, cursor.emdadTriedAt, s.emdadAfter ?? '10:05');
+  }
+  /** Report-center period of a report (days back and ahead), as the dealership set it. */
+  private async reportPeriod(tenantId: string, kind: ReportCenterKind): Promise<{ past: number; future: number }> {
+    const [t] = await this.db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantId));
+    const stored = ((t?.settings ?? {}) as { reportCenter?: Partial<Record<ReportCenterKind, { pastDays?: number; futureDays?: number }>> }).reportCenter?.[kind];
+    return { past: stored?.pastDays ?? REPORT_CENTER_DEFAULTS[kind].pastDays, future: stored?.futureDays ?? REPORT_CENTER_DEFAULTS[kind].futureDays };
+  }
+  private shiftDay(days: number): string {
+    return jalaliDay(new Date(this.now().getTime() + days * 86_400_000));
+  }
+
+  /**
+   * «گزارش امداد ویژه»: requested once a day; the server builds it in the background, so the same
+   * request is repeated every two minutes (for up to an hour) until the file is ready. The file is
+   * staged in the daily-report pipeline (kind emdad) and a person confirms it. Owner, 2026-11-24.
+   */
+  private async emdadCycle(conn: Connection, force: boolean): Promise<boolean> {
+    this.relogins = 0;
+    const now = this.now();
+    const cursor: PulseCursor = conn.cursor ?? {};
+    if (this.reportPeak(now)) {
+      if (force) { const run = await this.startRun(conn, 'emdad'); await this.finishRun(run, 'error', { read: 0, created: 0, changed: 0 }, 'KASB_REPORT_PEAK'); }
+      return false;
+    }
+    let pending = cursor.emdadPending;
+    if (pending && now.getTime() - Date.parse(pending.since) > 3_600_000) {
+      // Not ready after an hour: give up and ask again an hour later.
+      const rest = withoutPending(cursor);
+      await this.patch(conn, { cursor: { ...rest, emdadTriedAt: now.toISOString() } });
+      const run = await this.startRun(conn, 'emdad');
+      await this.finishRun(run, 'error', { read: 0, created: 0, changed: 0 }, 'KASB_REPORT_FAILED', { status: 'timeout', from: pending.from, to: pending.to });
+      return false;
+    }
+    const first = !pending;
+    if (!pending) {
+      const period = await this.reportPeriod(conn.tenantId, 'emdad');
+      pending = { from: this.shiftDay(-period.past), to: this.shiftDay(0), since: now.toISOString() };
+    }
+    const stats: Stats = { read: 0, created: 0, changed: 0 };
+    let run: string | null = null;
+    try {
+      if (!conn.updatedBy) throw new PulseStop('PULSE_NOT_CONFIGURED');
+      const answer = await this.withSession(conn, (c) => c.emdadReport(conn.dealerCode, pending.from, pending.to));
+      if (answer.status === 'pending') {
+        await this.patch(conn, { cursor: { ...(conn.cursor ?? {}), emdadPending: pending, emdadTriedAt: now.toISOString() } });
+        // Only the request itself is logged; the polls that follow are not.
+        if (first) { run = await this.startRun(conn, 'emdad'); await this.finishRun(run, 'ok', stats, null, { status: 'requested', from: pending.from, to: pending.to }); }
+        return true;
+      }
+      run = await this.startRun(conn, 'emdad');
+      const rest = withoutPending(conn.cursor);
+      if (answer.status === 'failed') {
+        await this.patch(conn, { cursor: { ...rest, emdadTriedAt: now.toISOString() } });
+        await this.finishRun(run, 'error', stats, 'KASB_REPORT_FAILED', { status: answer.reason });
+        return false;
+      }
+      stats.read = 1;
+      const staged = await stageAutomaticReport(this.db, { tenantId: conn.tenantId, isTest: conn.isTest, kind: 'emdad', fileName: `pulse-emdad-${pending.to.replace(/\//g, '-')}.xls`, body: answer.file, uploadedBy: conn.updatedBy });
+      if (staged.outcome === 'bad_format') throw new KasbError('KASB_PROTOCOL');
+      if (staged.outcome === 'staged') stats.created = 1;
+      await this.patch(conn, { cursor: { ...rest, emdadDay: tehranDateKey(now), emdadTriedAt: now.toISOString() } });
+      await this.finishRun(run, 'ok', stats, null, { from: pending.from, to: pending.to, outcome: staged.outcome, bytes: answer.file.length });
+      return true;
+    } catch (e) {
+      const rest = withoutPending(conn.cursor);
+      await this.patch(conn, { cursor: { ...rest, emdadTriedAt: now.toISOString() } });
+      await this.fail(conn, run ?? (await this.startRun(conn, 'emdad')), e, stats, { step: 'emdad' });
+      return false;
+    }
+  }
+
+  /** The person who configured Pulse acts for its automatic previews (their own permissions apply). */
+  private async actorFor(conn: Connection): Promise<Actor> {
+    const [row] = await this.db.select({ u: users, t: tenants }).from(users).innerJoin(tenants, eq(tenants.id, users.tenantId))
+      .where(and(eq(users.id, conn.updatedBy!), eq(users.tenantId, conn.tenantId)));
+    if (!row || !row.u.isActive) throw new PulseStop('PULSE_NOT_CONFIGURED');
+    const roles = normalizeRoles(row.u.roles as Role[]);
+    return {
+      user: {
+        id: row.u.id, tenantId: conn.tenantId, tenantCode: row.t.code, tenantName: row.t.name, isTestTenant: row.t.isTest,
+        username: row.u.username, displayName: row.u.displayName, roles, isOwner: row.u.isOwner,
+        permissions: permissionsFor(roles, row.t.permissionTemplates, row.u.permissionOverrides, row.u.isOwner), sessionId: 'pulse',
+      },
+      requestId: 'manage-pulse',
+    };
+  }
+
+  /**
+   * «لیست نوبت پذیرش»: read once a day for the report-center period and prepared as a preview of
+   * the appointments import with the column layout the dealership confirmed once. A person still
+   * confirms it in «اطلاعات پایه»; without a confirmed layout nothing is prepared. Owner, 2026-11-24.
+   */
+  private async appointmentsCycle(conn: Connection): Promise<boolean> {
+    this.relogins = 0;
+    const now = this.now();
+    const run = await this.startRun(conn, 'appointments');
+    await this.patch(conn, { cursor: { ...(conn.cursor ?? {}), appointmentsTriedAt: now.toISOString() } });
+    const stats: Stats = { read: 0, created: 0, changed: 0 };
+    try {
+      if (!conn.updatedBy) throw new PulseStop('PULSE_NOT_CONFIGURED');
+      const period = await this.reportPeriod(conn.tenantId, 'appointments');
+      const from = this.shiftDay(-period.past), to = this.shiftDay(period.future);
+      const file = await this.withSession(conn, (c) => c.appointmentsFile(conn.dealerCode, from, to));
+      stats.read = 1;
+      const actor = await this.actorFor(conn);
+      const fileName = `pulse-appointments-${this.shiftDay(0).replace(/\//g, '-')}.xlsx`;
+      const fileBase64 = file.toString('base64');
+      const found = await new ReportCenterService(this.handle, this.audit).detect(actor, { fileName, fileBase64 });
+      if (found.kind !== 'appointments' || found.sheetIndex == null || found.headerRow == null || !found.mapping) {
+        await this.finishRun(run, 'error', stats, 'PULSE_LAYOUT_UNCONFIRMED', { from, to, bytes: file.length });
+        return false;
+      }
+      // The same file waiting for confirmation, or already confirmed, is not prepared again.
+      const sha = createHash('sha256').update(fileBase64).digest('hex');
+      const [same] = await this.db.select({ id: referenceImports.id, status: referenceImports.status }).from(referenceImports)
+        .where(and(eq(referenceImports.tenantId, conn.tenantId), eq(referenceImports.kind, 'appointments'), eq(referenceImports.fileSha256, sha)))
+        .orderBy(desc(referenceImports.createdAt)).limit(1);
+      let outcome: string, previewId: string;
+      if (same) { outcome = same.status === 'applied' ? 'unchanged' : 'waiting'; previewId = same.id; }
+      else {
+        // preview() never uses the special-aid records service (only apply() does).
+        const refs = new ReferenceDataService(this.handle, this.audit, null as unknown as SpecialAidRecordsService);
+        const preview = await refs.preview(actor, { kind: 'appointments', fileName, fileBase64, sheetIndex: found.sheetIndex, headerRow: found.headerRow, offset: 0, mapping: found.mapping });
+        outcome = 'staged'; previewId = preview.id; stats.created = preview.counts.new; stats.changed = preview.counts.update;
+      }
+      await this.patch(conn, { cursor: { ...(conn.cursor ?? {}), appointmentsDay: tehranDateKey(now) } });
+      await this.finishRun(run, 'ok', stats, null, { from, to, outcome, previewId, bytes: file.length });
+      return true;
+    } catch (e) {
+      await this.fail(conn, run, e, stats, { step: 'appointments' });
       return false;
     }
   }
@@ -534,6 +706,15 @@ export class PulseEngine {
         return finish(ok, ok ? 'OK' : (await this.reload(conn.id)).lastErrorCode ?? 'PULSE_INTERNAL');
       }
       if (cmd.kind === 'backfill') return this.backfillStep(conn, cmd);
+      if (cmd.kind === 'emdad_now') {
+        // A forced request still respects the site's peak hours; a pending one is simply asked again.
+        const ok = await this.emdadCycle(conn, true);
+        return finish(ok, ok ? 'OK' : (await this.reload(conn.id)).lastErrorCode ?? 'KASB_REPORT_PEAK');
+      }
+      if (cmd.kind === 'appointments_now') {
+        const ok = await this.appointmentsCycle(conn);
+        return finish(ok, ok ? 'OK' : (await this.reload(conn.id)).lastErrorCode ?? 'PULSE_LAYOUT_UNCONFIRMED');
+      }
       if (cmd.kind === 'stock_now') {
         const ok = await this.stockCycle(conn);
         return finish(ok, ok ? 'OK' : (await this.reload(conn.id)).lastErrorCode ?? 'PULSE_INTERNAL');
