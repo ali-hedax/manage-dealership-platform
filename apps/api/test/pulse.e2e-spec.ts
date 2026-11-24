@@ -3,7 +3,9 @@ import type { PulseStatus, ReceptionDetail, ReceptionList } from '@manage/shared
 import { AuditService } from '../src/audit/audit.service';
 import { newId } from '../src/common/ids';
 import { APP_CONFIG, type AppConfig } from '../src/config';
-import { auditEvents, cases, dailyReportImports, notifications, pulseConnections, receptionEvents, receptionParts, receptions, tenants, users, vehicles, workCalendars } from '../src/db/schema';
+import { auditEvents, cases, dailyReportImports, notifications, pulseConnections, receptionEvents, receptionParts, receptions, referenceImports, tenants, users, vehicles, workCalendars } from '../src/db/schema';
+import { buildEmdadXml, emdadRow } from '../src/daily-reports/fixtures';
+import { writeWorkbook } from '../src/parts/xlsx';
 import { DailyReportsService } from '../src/daily-reports/daily-reports.service';
 import { DEMO_TENANT_CODE } from '../src/demo/demo-seed.service';
 import { KasbClient } from '../src/pulse/kasb-client';
@@ -18,6 +20,11 @@ import { KasbMock, mockCardRow, mockPartRow, type MockCard } from './kasb-mock';
 // not depend on when CI runs.
 // Synthetic, built at run time (not a credential): 44 characters for the ≥ 32 rule.
 const SECRET = `test-only-pulse-${'k'.repeat(28)}`;
+// «لیست نوبت پذیرش» as the report server sends it (headers of the real file; invented rows).
+const APPOINTMENT_HEADER = ['دفتر', 'کد نمایندگی', 'شماره شاسی', 'شماره محصول', 'شرح محول', 'شماره پلاک', 'نام مشتری', 'شماره موبایل', 'شماره نوبت', 'کانال', 'شیفت', 'وضعیت نوبت', 'تاریخ نوبت', 'گروه ایراد خودرو', 'ایراد خودرو', 'توضیحات مشتری برای ایراد'];
+const APPOINTMENT_ROWS = [APPOINTMENT_HEADER,
+  ['دفتر ساختگی', '9999', 'TESTCH01', '322', 'خودروی ساختگی', '11 ايران 111 ب 11', 'مشتری آزمونی', '09000000011', '7000001', 'مشتري', 'صبح', 'پذيرش شده', '1405/09/05 07:30', 'موتور', 'ایراد ساختگی', 'توضیح ساختگی'],
+  ['دفتر ساختگی', '9999', 'TESTCH02', '322', 'خودروی ساختگی', '22 ايران 222 ج 22', 'مشتری دیگر', '09000000012', '7000002', 'نمايندگي', 'عصر', 'عدم مراجعه', '1405/09/06 14:00', '', '', '']];
 const PNG = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.from('synthetic invoice image')]).toString('base64');
 
 describe('Manage Pulse with the synthetic کسب‌وکار', () => {
@@ -49,6 +56,9 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
   beforeAll(async () => {
     mock = new KasbMock();
     await mock.start();
+    // Synthetic report files (invented values, real layouts) for the daily reads after 10:00.
+    mock.emdadXml = Buffer.from(buildEmdadXml([emdadRow(1), emdadRow(2)])).toString('utf8');
+    mock.appointmentsXlsx = writeWorkbook([{ name: 'گزارش  نوبت پذیرش', rows: APPOINTMENT_ROWS }]);
     h = await createHarness({ withCases: true, config: { PULSE_ENABLED: 'true', PULSE_SECRET_KEY: SECRET, PULSE_KASB_ORIGIN: mock.url } });
     admin = await h.login('admin');
     expert = await h.login('expert');
@@ -180,6 +190,85 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     await h.app.get(DailyReportsService).processStaged();
     expect((await staged())[0]!.status).toBe('preview');
     expect((await status()).runs.some((r) => r.kind === 'stock' && r.outcome === 'ok')).toBe(true);
+  });
+
+  it('requests the special-aid report, waits until the server has built it and stages it for confirmation (owner, 2026-11-24)', async () => {
+    const staged = async () => db().select({ id: dailyReportImports.id, status: dailyReportImports.status, diagnostics: dailyReportImports.diagnostics }).from(dailyReportImports).where(and(eq(dailyReportImports.tenantId, tenantId), eq(dailyReportImports.kind, 'emdad')));
+    // The scheduled reads after 10:05 have already asked for it; finish whatever is pending.
+    for (let i = 0; i < 6 && !(await staged()).length; i++) { advance(2); await engine.tick(); }
+    const first = await staged();
+    expect(first).toHaveLength(1);
+    expect(first[0]!.diagnostics).toMatchObject({ source: 'pulse' });
+    // The same request (same dates, empty filters as "null") until «result ready».
+    expect(mock.emdadRequests.length).toBeGreaterThanOrEqual(3);
+    const asked = mock.emdadRequests[0]!;
+    expect(asked).toMatchObject({ VarCus: '9999', reportName: 'rep_emdad_vijeh', VarChs: 'null', VarRcptDateTo: jalaliDay(new Date(base)) });
+    expect(mock.emdadRequests.every((r) => JSON.stringify(r) === JSON.stringify(asked))).toBe(true);
+    expect(asked.VarRcptDateFr).toBe(jalaliDay(new Date(base - 150 * 86_400_000)));
+    // Not again the same day; «خواندن گزارش امداد ویژه» asks again, and the same file is not staged twice.
+    const reads = mock.emdadRequests.length;
+    advance(4); await engine.tick();
+    expect(mock.emdadRequests.length).toBe(reads);
+    mock.emdadRequests.length = 0;
+    await admin.post('/pulse/commands', { kind: 'emdad_now' }).expect(201);
+    await engine.tick();
+    for (let i = 0; i < 3; i++) { advance(2); await engine.tick(); }
+    expect(mock.emdadRequests.length).toBe(3);
+    expect(await staged()).toHaveLength(1);
+    await h.app.get(DailyReportsService).processStaged();
+    expect((await staged())[0]!.status).toBe('preview');
+    const runs = (await status()).runs.filter((r) => r.kind === 'emdad');
+    expect(runs.some((r) => r.outcome === 'ok')).toBe(true);
+  });
+
+  it('a special-aid report the server could not build is given up and asked again later', async () => {
+    mock.emdadRequests.length = 0;
+    mock.emdadFails = 'error occurred';
+    await admin.post('/pulse/commands', { kind: 'emdad_now' }).expect(201);
+    await engine.tick();
+    for (let i = 0; i < 2; i++) { advance(2); await engine.tick(); }
+    expect(mock.emdadRequests.length).toBe(3);
+    const failed = (await status()).runs.find((r) => r.kind === 'emdad');
+    expect(failed).toMatchObject({ outcome: 'error', errorCode: 'KASB_REPORT_FAILED' });
+    // No more requests for an hour.
+    advance(10); await engine.tick();
+    expect(mock.emdadRequests.length).toBe(3);
+    mock.emdadFails = null;
+  });
+
+  it('reads the appointment list and prepares a preview only with the layout confirmed once (owner, 2026-11-24)', async () => {
+    const pulsePreviews = async () => db().select({ id: referenceImports.id, status: referenceImports.status, createdBy: referenceImports.createdBy }).from(referenceImports).where(and(eq(referenceImports.tenantId, tenantId), eq(referenceImports.kind, 'appointments'), sql`${referenceImports.fileName} like 'pulse-%'`));
+    // Before any manual confirmation the file is read but nothing is prepared.
+    await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
+    await engine.tick();
+    expect(mock.reportUrlRequests.at(-1)).toMatchObject({ reportName: 'Srv/afs/FncGetNodDturRep', params: { T: '3', Scus: '9999', p_chs: '', Render: true, p_date_fr: jalaliDay(new Date(base + shift - 30 * 86_400_000)), p_date_to: jalaliDay(new Date(base + shift + 30 * 86_400_000)) } });
+    expect((await status()).runs.find((r) => r.kind === 'appointments')).toMatchObject({ outcome: 'error', errorCode: 'PULSE_LAYOUT_UNCONFIRMED' });
+    expect(await pulsePreviews()).toHaveLength(0);
+    // The owner confirms the columns of one file by hand, once.
+    const fileBase64 = Buffer.from(writeWorkbook([{ name: 'نوبت', rows: APPOINTMENT_ROWS }])).toString('base64');
+    const mapping = { chassis: 2, plate: 5, fullName: 6, phone: 7, appointmentNo: 8, status: 11, appointmentDate: 12 };
+    const manual = (await admin.post('/reference-imports', { kind: 'appointments', fileName: 'by-hand.xlsx', fileBase64, sheetIndex: 0, headerRow: 1, mapping }).expect(201)).body as { id: string };
+    await admin.post(`/reference-imports/${manual.id}/apply`, {}).expect(201);
+    // From now on Pulse prepares the preview itself; a person still confirms it.
+    mock.appointmentsXlsx = writeWorkbook([{ name: 'گزارش  نوبت پذیرش', rows: [...APPOINTMENT_ROWS.slice(0, 2), [...APPOINTMENT_ROWS[2]!.slice(0, 11), 'پذيرش شده', ...APPOINTMENT_ROWS[2]!.slice(12)]] }]);
+    await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
+    await engine.tick();
+    const prepared = await pulsePreviews();
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0]!.status).toBe('preview');
+    const preview = (await admin.get(`/reference-imports/${prepared[0]!.id}`).expect(200)).body as { counts: Record<string, number> };
+    expect(preview.counts).toMatchObject({ update: 1, unchanged: 1 });
+    // The same file again is not prepared twice; nothing was applied by Pulse.
+    await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
+    await engine.tick();
+    expect(await pulsePreviews()).toHaveLength(1);
+    expect((await pulsePreviews())[0]!.status).toBe('preview');
+    // A report address that is not the appointment report on the report server is never followed.
+    mock.reportUrlOverride = 'https://evil.example/Report/Show/Srv/afs/FncGetNodDturRep?f=ABCDEF0123456789';
+    await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
+    await engine.tick();
+    expect((await status()).runs.find((r) => r.kind === 'appointments')).toMatchObject({ outcome: 'error', errorCode: 'KASB_NOT_ALLOWED' });
+    mock.reportUrlOverride = null;
   });
 
   it('a repeated read of the same data creates no row, history, audit entry or notification', async () => {

@@ -23,6 +23,18 @@ export const KASB_PATHS = {
    * (application/vnd.ms-excel, an HTML table — byte for byte what staff download by hand).
    */
   stock: 'War/Reports/StkStock',
+  /**
+   * «گزارش امداد ویژه» (owner's recording, 1405/09/03): a report the server builds in the background.
+   * The same request is sent again until `reportStatus` is «result ready»; then `Data` is the
+   * SpreadsheetML text, byte for byte the RepEmdadVijeh.xls staff download. Statuses: «just started»,
+   * «running», «result ready», «expired», «error occurred».
+   */
+  emdadReport: 'Srv/wrh/RepEmdadVijeh/q',
+  /**
+   * «لیست نوبت پذیرش»: the site asks for a one-time report address (b2brep.isaco.ir) and opens it;
+   * with T = 3 that address answers with the Excel file itself. The trailing slash is the site's.
+   */
+  reportUrl: 'Srv/Sec/Public/GetReportUrl/',
 } as const;
 export type KasbPath = (typeof KASB_PATHS)[keyof typeof KASB_PATHS];
 
@@ -41,7 +53,26 @@ export const KASB_ALLOWED_API: ReadonlyMap<string, 'GET' | 'POST'> = new Map<str
   [KASB_PATHS.repairCase, 'POST'],
   [KASB_PATHS.warehouses, 'POST'],
   [KASB_PATHS.stock, 'POST'],
+  [KASB_PATHS.emdadReport, 'POST'],
+  [KASB_PATHS.reportUrl, 'POST'],
 ]);
+/** Report server of کسب‌وکار; only the appointment list is read from it (GET, one-time address). */
+export const KASB_REPORT_ORIGIN = 'https://b2brep.isaco.ir';
+export const KASB_APPOINTMENT_REPORT = 'Srv/afs/FncGetNodDturRep';
+const APPOINTMENT_REPORT_PATH = `/Report/Show/${KASB_APPOINTMENT_REPORT}`;
+/**
+ * A report address returned by GetReportUrl is followed only if it is the appointment report on the
+ * report server (or, in development and tests, on the configured کسب‌وکار origin) with one `f` token.
+ */
+export function allowedReportUrl(origin: string, raw: unknown): URL | null {
+  if (typeof raw !== 'string' || raw.length > 2000) return null;
+  let url: URL;
+  try { url = new URL(raw); } catch { return null; }
+  const host = url.origin === KASB_REPORT_ORIGIN || url.origin === new URL(origin).origin;
+  if (!host || url.pathname !== APPOINTMENT_REPORT_PATH || url.hash || !/^\?f=[0-9A-Fa-f]{16,1024}$/.test(url.search)) return null;
+  return url;
+}
+
 /** Static files of the site, read with GET only (keys and client version). */
 export const KASB_ALLOWED_STATIC: readonly RegExp[] = [/^\/home$/, /^\/version\.txt$/, /^\/static\/js\/main\.[A-Za-z0-9]+\.chunk\.js$/];
 
@@ -67,7 +98,7 @@ export function captchaFields(_answer: string | null): Record<string, string> {
  * with MessageCode 99999. Sec/GetCapcha itself is sent bare ({"Lng":"fa"}).
  */
 /** Changes whenever the way Pulse talks to کسب‌وکار changes; shown in run details to prove which worker code ran. */
-export const PULSE_PROTOCOL_REVISION = 'raw-client-version 2026-11-24';
+export const PULSE_PROTOCOL_REVISION = 'reports 2026-11-24';
 
 export function hashData(payload: unknown, browser: string): { HashData: string } {
   return { HashData: Buffer.from(JSON.stringify(payload), 'utf8').toString('base64') + Buffer.from(browser, 'utf8').toString('base64') };
