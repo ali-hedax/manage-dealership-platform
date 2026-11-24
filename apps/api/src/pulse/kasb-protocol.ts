@@ -98,7 +98,7 @@ export function captchaFields(_answer: string | null): Record<string, string> {
  * with MessageCode 99999. Sec/GetCapcha itself is sent bare ({"Lng":"fa"}).
  */
 /** Changes whenever the way Pulse talks to کسب‌وکار changes; shown in run details to prove which worker code ran. */
-export const PULSE_PROTOCOL_REVISION = 'reports 2026-11-24';
+export const PULSE_PROTOCOL_REVISION = 'card-search 2026-11-24';
 
 export function hashData(payload: unknown, browser: string): { HashData: string } {
   return { HashData: Buffer.from(JSON.stringify(payload), 'utf8').toString('base64') + Buffer.from(browser, 'utf8').toString('base64') };

@@ -19,6 +19,8 @@ export class KasbError extends Error {
     readonly status?: number,
     /** MessageCode of an unsuccessful answer (a short official code, not data). */
     readonly messageCode?: string,
+    /** MessageDes of an unsuccessful answer (the site's own short message, never data). */
+    readonly messageText?: string,
   ) {
     super(code);
     this.name = 'KasbError';
