@@ -171,7 +171,7 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     expect(s.runs.map((r) => r.kind)).toEqual(expect.arrayContaining(['today', 'open', 'lines']));
   });
 
-  it('reads the stock report once a day and stages it for confirmation, never applying it (owner, 2026-11-23)', async () => {
+  it('reads the stock report once a day; with «ثبت خودکار» off it waits for a person (owner, 2026-11-23/24)', async () => {
     const staged = async () => db().select({ id: dailyReportImports.id, status: dailyReportImports.status, diagnostics: dailyReportImports.diagnostics }).from(dailyReportImports).where(and(eq(dailyReportImports.tenantId, tenantId), eq(dailyReportImports.kind, 'stock')));
     // The first scheduled pass after 10:00 already read it from the parts warehouse.
     expect(mock.stockRequests.at(-1)).toMatchObject({ DssdSsd: '14553' });
@@ -186,13 +186,16 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     await engine.tick();
     expect(mock.stockRequests.length).toBe(reads + 1);
     expect(await staged()).toHaveLength(1);
-    // The API turns it into the usual preview; nothing is applied without a person.
+    // With automatic confirmation turned off, the API only prepares the usual preview.
+    const [conn] = await db().select({ settings: pulseConnections.settings }).from(pulseConnections).where(eq(pulseConnections.tenantId, tenantId));
+    await db().update(pulseConnections).set({ settings: { ...conn!.settings, autoApply: false } }).where(eq(pulseConnections.tenantId, tenantId));
     await h.app.get(DailyReportsService).processStaged();
-    expect((await staged())[0]!.status).toBe('preview');
+    expect((await staged())[0]).toMatchObject({ status: 'preview', diagnostics: { autoHold: 'off' } });
+    await db().update(pulseConnections).set({ settings: conn!.settings }).where(eq(pulseConnections.tenantId, tenantId));
     expect((await status()).runs.some((r) => r.kind === 'stock' && r.outcome === 'ok')).toBe(true);
   });
 
-  it('requests the special-aid report, waits until the server has built it and stages it for confirmation (owner, 2026-11-24)', async () => {
+  it('requests the special-aid report, waits until the server has built it and confirms it automatically (owner, 2026-11-24)', async () => {
     const staged = async () => db().select({ id: dailyReportImports.id, status: dailyReportImports.status, diagnostics: dailyReportImports.diagnostics }).from(dailyReportImports).where(and(eq(dailyReportImports.tenantId, tenantId), eq(dailyReportImports.kind, 'emdad')));
     // The scheduled reads after 10:05 have already asked for it; finish whatever is pending.
     for (let i = 0; i < 6 && !(await staged()).length; i++) { advance(2); await engine.tick(); }
@@ -215,8 +218,9 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     for (let i = 0; i < 3; i++) { advance(2); await engine.tick(); }
     expect(mock.emdadRequests.length).toBe(3);
     expect(await staged()).toHaveLength(1);
+    // «ثبت خودکار» (default): confirmed as the person who configured Pulse, dated when Pulse read it.
     await h.app.get(DailyReportsService).processStaged();
-    expect((await staged())[0]!.status).toBe('preview');
+    expect((await staged())[0]!.status).toBe('applied');
     const runs = (await status()).runs.filter((r) => r.kind === 'emdad');
     expect(runs.some((r) => r.outcome === 'ok')).toBe(true);
   });
@@ -236,7 +240,7 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     mock.emdadFails = null;
   });
 
-  it('reads the appointment list and prepares a preview only with the layout confirmed once (owner, 2026-11-24)', async () => {
+  it('reads the appointment list and confirms it automatically once its layout was confirmed by hand (owner, 2026-11-24)', async () => {
     const pulsePreviews = async () => db().select({ id: referenceImports.id, status: referenceImports.status, createdBy: referenceImports.createdBy }).from(referenceImports).where(and(eq(referenceImports.tenantId, tenantId), eq(referenceImports.kind, 'appointments'), sql`${referenceImports.fileName} like 'pulse-%'`));
     // Before any manual confirmation the file is read but nothing is prepared.
     await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
@@ -249,20 +253,20 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     const mapping = { chassis: 2, plate: 5, fullName: 6, phone: 7, appointmentNo: 8, status: 11, appointmentDate: 12 };
     const manual = (await admin.post('/reference-imports', { kind: 'appointments', fileName: 'by-hand.xlsx', fileBase64, sheetIndex: 0, headerRow: 1, mapping }).expect(201)).body as { id: string };
     await admin.post(`/reference-imports/${manual.id}/apply`, {}).expect(201);
-    // From now on Pulse prepares the preview itself; a person still confirms it.
+    // From now on Pulse prepares the preview and confirms it itself.
     mock.appointmentsXlsx = writeWorkbook([{ name: 'گزارش  نوبت پذیرش', rows: [...APPOINTMENT_ROWS.slice(0, 2), [...APPOINTMENT_ROWS[2]!.slice(0, 11), 'پذيرش شده', ...APPOINTMENT_ROWS[2]!.slice(12)]] }]);
     await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
     await engine.tick();
     const prepared = await pulsePreviews();
     expect(prepared).toHaveLength(1);
-    expect(prepared[0]!.status).toBe('preview');
+    expect(prepared[0]!.status).toBe('applied');
+    expect((await status()).runs.find((r) => r.kind === 'appointments')).toMatchObject({ outcome: 'ok' });
     const preview = (await admin.get(`/reference-imports/${prepared[0]!.id}`).expect(200)).body as { counts: Record<string, number> };
     expect(preview.counts).toMatchObject({ update: 1, unchanged: 1 });
-    // The same file again is not prepared twice; nothing was applied by Pulse.
+    // The same file again is neither prepared nor confirmed twice.
     await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
     await engine.tick();
     expect(await pulsePreviews()).toHaveLength(1);
-    expect((await pulsePreviews())[0]!.status).toBe('preview');
     // A report address that is not the appointment report on the report server is never followed.
     mock.reportUrlOverride = 'https://evil.example/Report/Show/Srv/afs/FncGetNodDturRep?f=ABCDEF0123456789';
     await admin.post('/pulse/commands', { kind: 'appointments_now' }).expect(201);
