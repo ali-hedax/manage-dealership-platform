@@ -1,3 +1,10 @@
+## 2026-11-24 — گردش‌کار، موجودی و هویت خودرو — در جریان
+
+- شاخهٔ `feature/workflow-stock-vin-20261124` از `5d39e41`؛ تغییرات قبلی و PRهای مستندات حفظ شدند. main هم‌زمان با PR #130 به `dabf300` جلو رفته؛ پیش از ادغام باید همگام شود.
+- انجام‌شده: گذار یک‌باره و بازگشت audited کنترل کیفیت؛ حفظ بخش جاری؛ جست‌وجوی کاتالوگ و آخرین انبار با موجودی قابل استفاده؛ منع پذیرش فعال تکراری در تراکنش؛ نمایش کد محصول در مشخصات اصلی. قواعد در [راهنمای تغییر](docs/WORKFLOW_STOCK_VIN_FA.md).
+- وضعیت آزمون در [TEST_REPORT](docs/TEST_REPORT.md). آخرین commit مبنا `5d39e41`؛ تغییرات این مأموریت هنوز منتشر نشده‌اند.
+- قدم دقیق بعد: تکمیل اجرای آزمون و Playwright، همگام‌سازی main و CI سبز؛ سپس طبق مجوز صریح همین مأموریت، merge commit، artifact همان main، پشتیبان و بازیابی آزمایشی، نصب و سلامت و ثبت نسخه.
+
 ## 2026-11-23 — Manage Nexus، موجودی با پالس، امداد ویژهٔ جمع‌وجور و قیف — همان PR #124، منتشر نشده
 
 - سند جامع بخش ۲۷. بدون migration تازه (منبع پالس در `diagnostics` گزارش روزانه).
@@ -352,10 +359,3 @@ Technician pause/resume persists in the existing transactional per-task audit st
 - PR 119 and PR 122 incorporated. No additional database migrations required for PR 120. ISACO reconciliation rejects contradictory VIN evidence and considers distinct codes across the entire matched history. A4 Chromium PDF regression added.
 - On f68278d Chromium passed the two formerly failing desktop assessment and guided-workflow cases, including repair-plan focus. Five CI jobs passed; remainder of Chromium cancelled when superseded. Technician milestone fae4c11: focused API 14/14, shared 9/9, web TypeScript passed. Other feature milestones: a624c74 optional labour, 61d7f29 package, 34ffe34 and c6d55d6 employee reports. Check final CI on the current HEAD separately.
 - Next: verify all six checks on this exact candidate, then merge, verify main artifacts, confirm production SHA, independent backup and isolated restoration, migration rehearsal, rollback, deploy and confirm live version. The host's SSH command is sandbox-blocked. No production access or deployment verified in this session.
-## 2026-11-24 — گردش‌کار، موجودی و هویت خودرو — در جریان
-
-- شاخهٔ `feature/workflow-stock-vin-20261124` از `5d39e41`؛ تغییرات قبلی و PRهای مستندات حفظ شدند. main هم‌زمان با PR #130 به `dabf300` جلو رفته؛ پیش از ادغام باید همگام شود.
-- انجام‌شده: گذار یک‌باره و بازگشت audited کنترل کیفیت؛ حفظ بخش جاری؛ جست‌وجوی کاتالوگ و آخرین انبار با موجودی قابل استفاده؛ منع پذیرش فعال تکراری در تراکنش؛ نمایش کد محصول در مشخصات اصلی. قواعد در [راهنمای تغییر](docs/WORKFLOW_STOCK_VIN_FA.md).
-- وضعیت آزمون در [TEST_REPORT](docs/TEST_REPORT.md). آخرین commit مبنا `5d39e41`؛ تغییرات این مأموریت هنوز منتشر نشده‌اند.
-- قدم دقیق بعد: تکمیل اجرای آزمون و Playwright، همگام‌سازی main و CI سبز؛ سپس طبق مجوز صریح همین مأموریت، merge commit، artifact همان main، پشتیبان و بازیابی آزمایشی، نصب و سلامت و ثبت نسخه.
-

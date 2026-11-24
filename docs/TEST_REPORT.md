@@ -1,3 +1,11 @@
+## 2026-11-24 — گردش‌کار، موجودی و هویت خودرو (در حال تکمیل)
+
+- ۱۱۶ آزمون shared پاس. lint و typecheck متوالی پاس؛ اجرای هم‌زمان اولیهٔ lint به خطای حافظه خورد.
+- شش مجموعهٔ مرتبط API: پنج مجموعه پاس (هویت خودرو، کد محصول، QC، مسیر هدایت‌شده، موجودی یکپارچه). مجموعهٔ قدیمی accident به تکراری‌بودن VIN تولیدشده در helper خورد؛ helper به شمارندهٔ یکتا اصلاح شد و اجرای دوباره لازم است.
+- اجرای یکجای API روی Node 26 این لپ‌تاپ پیش از نتیجه با خطای native out-of-memory متوقف شد؛ قبولی محسوب نمی‌شود. CI با Node 22 و اجرای کوچک‌تر محلی در انتظار است.
+- ساخت API پاس؛ ساخت Next کامپایل و بررسی نوع و صفحه‌سازی را تمام کرد اما ابزار با `SecurityFatalError` خروج ناموفق داد؛ تکرار ساخت و نتیجهٔ نهایی هنوز لازم است.
+- Playwright و CI و نصب هنوز تأیید نشده‌اند. این بخش در پایان با نتیجهٔ واقعی به‌روز می‌شود.
+
 ## 2026-11-23 — Manage Nexus، موجودی با پالس، امداد ویژهٔ جمع‌وجور و قیف (PR #124)
 
 - shared: ۱۱۳/۱۱۳ (تازه: `vehicleHeadName` با نمونه‌های واقعی شرح مدل ایساکو).
@@ -1069,11 +1077,3 @@ Technician pause/resume persists in the existing transactional per-task audit st
 - PR 119 and PR 122 incorporated. No additional database migrations required for PR 120. ISACO reconciliation rejects contradictory VIN evidence and considers distinct codes across the entire matched history. A4 Chromium PDF regression added.
 - On f68278d Chromium passed the two formerly failing desktop assessment and guided-workflow cases, including repair-plan focus. Five CI jobs passed; remainder of Chromium cancelled when superseded. Technician milestone fae4c11: focused API 14/14, shared 9/9, web TypeScript passed. Other feature milestones: a624c74 optional labour, 61d7f29 package, 34ffe34 and c6d55d6 employee reports. Check final CI on the current HEAD separately.
 - Next: verify all six checks on this exact candidate, then merge, verify main artifacts, confirm production SHA, independent backup and isolated restoration, migration rehearsal, rollback, deploy and confirm live version. The host's SSH command is sandbox-blocked. No production access or deployment verified in this session.
-## 2026-11-24 — گردش‌کار، موجودی و هویت خودرو (در حال تکمیل)
-
-- ۱۱۶ آزمون shared پاس. lint و typecheck متوالی پاس؛ اجرای هم‌زمان اولیهٔ lint به خطای حافظه خورد.
-- شش مجموعهٔ مرتبط API: پنج مجموعه پاس (هویت خودرو، کد محصول، QC، مسیر هدایت‌شده، موجودی یکپارچه). مجموعهٔ قدیمی accident به تکراری‌بودن VIN تولیدشده در helper خورد؛ helper به شمارندهٔ یکتا اصلاح شد و اجرای دوباره لازم است.
-- اجرای یکجای API روی Node 26 این لپ‌تاپ پیش از نتیجه با خطای native out-of-memory متوقف شد؛ قبولی محسوب نمی‌شود. CI با Node 22 و اجرای کوچک‌تر محلی در انتظار است.
-- ساخت API پاس؛ ساخت Next کامپایل و بررسی نوع و صفحه‌سازی را تمام کرد اما ابزار با `SecurityFatalError` خروج ناموفق داد؛ تکرار ساخت و نتیجهٔ نهایی هنوز لازم است.
-- Playwright و CI و نصب هنوز تأیید نشده‌اند. این بخش در پایان با نتیجهٔ واقعی به‌روز می‌شود.
-
