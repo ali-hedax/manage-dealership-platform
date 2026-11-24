@@ -38,6 +38,7 @@ test('product code stays visible between vehicle type and trim at desktop, table
     const spans=await header.locator('span').allTextContents();
     expect(spans[1]).toBe('تارا');expect(spans[2]).toContain('۰۰۱۲۳۴');expect(spans[3]).toContain('تیپ ساختگی');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
+    await header.scrollIntoViewIfNeeded();
     await page.screenshot({path:test.info().outputPath(`product-code-${width}.png`),fullPage:false});
   }
 });
