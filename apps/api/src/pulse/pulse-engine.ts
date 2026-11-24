@@ -379,6 +379,8 @@ export class PulseEngine {
   private async fail(conn: Connection, run: string, e: unknown, stats: Stats, details: Record<string, unknown>) {
     const code = errorCode(e);
     this.logger.warn(`dealership ${conn.tenantId}: ${safe(e)}`);
+    // The site's own code and short message make a refused read diagnosable from «جزئیات فنی».
+    if (e instanceof KasbError && (e.messageCode || e.messageText)) details = { ...details, messageCode: e.messageCode ?? null, messageText: e.messageText ?? null };
     await this.finishRun(run, 'error', stats, code, Object.keys(details).length ? details : null);
     if (e instanceof PulseStop) {
       // Login stops already set their state; a missing key or configuration is shown as the last error.

@@ -44,5 +44,11 @@ export function extractKeys(bundle: string): BundleKeys {
 
 /** Allowlisted service paths no longer found in the bundle (a sign the site changed its API). */
 export function missingServicePaths(bundle: string, paths: Iterable<string>): string[] {
-  return [...paths].filter((p) => !bundle.includes(p));
+  // The bundle builds some paths from a prefix (Path: n + "RepairCard/Drcds/q" with n = "Srv/rcpt/"),
+  // so a path counts as present when its last three segments appear in quotes.
+  return [...paths].filter((p) => {
+    if (bundle.includes(p)) return false;
+    const tail = p.split('/').filter(Boolean).slice(-3).join('/');
+    return !(tail.split('/').length === 3 && bundle.includes(`"${tail}"`));
+  });
 }

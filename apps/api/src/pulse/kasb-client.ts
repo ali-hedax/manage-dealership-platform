@@ -39,6 +39,17 @@ export interface KasbClientOptions {
  * The site sends /version.txt exactly as served (axios keeps the text, newline included) as
  * ClientVersion; the server answers 99999 «ورژن مرورگر با Cache نامعتبر است» to a trimmed value.
  */
+/** KASB_REJECTED with the site's code and short message (kept for the run's technical details). */
+function rejected(answer: KasbAnswer<unknown>): KasbError {
+  const text = typeof answer.MessageDes === 'string' && answer.MessageDes ? answer.MessageDes.slice(0, 160) : undefined;
+  return new KasbError('KASB_REJECTED', undefined, answer.MessageCode != null ? String(answer.MessageCode).slice(0, 40) : undefined, text);
+}
+
+/** Jalali year (Tehran) as the site stores it at login: moment().format("jYYYY"). */
+function jalaliYear(at: Date): string {
+  return new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', { timeZone: 'Asia/Tehran', year: 'numeric' }).format(at).replace(/\D/g, '').slice(0, 4);
+}
+
 const FALLBACK_CLIENT_VERSION = '3.3.1\n';
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -79,6 +90,8 @@ export class KasbClient {
   private token: { value: string; expiresAt: number } | null = null;
   /** The site's localStorage «browser» value: suffix of every HashData envelope (see hashData). */
   private browser: string | null = null;
+  /** Scus of the signed-in user, as the login answered it. */
+  private scus: string | null = null;
   private scheme: 'raw' | 'bearer' = 'raw';
   private active = 0;
   private nextStart = 0;
@@ -236,7 +249,7 @@ export class KasbClient {
   /** Sec/GetCapcha: a non-empty ImgCapcha (data URL) means the site wants a captcha. */
   async checkCaptcha(): Promise<string | null> {
     const answer = await this.exchange<{ ImgCapcha?: unknown }>(KASB_PATHS.captcha, { Lng: 'fa' }, 'POST', false);
-    if (!answer.Success) throw new KasbError('KASB_REJECTED', undefined, answer.MessageCode != null ? String(answer.MessageCode) : undefined);
+    if (!answer.Success) throw rejected(answer);
     const image = answer.Data?.ImgCapcha;
     this.browser = browserFromServerTime((answer.Data as { ServerTime?: unknown } | undefined)?.ServerTime);
     return typeof image === 'string' && image.length > 0 ? image : null;
@@ -264,6 +277,8 @@ export class KasbClient {
       const byClaim = jwtExpiry(data.Token) ?? Infinity;
       const expiresAt = Math.min(byAge, byClaim) - 5 * 60_000;
       this.token = { value: data.Token, expiresAt };
+      // The site keeps the login answer (user_info) and sends its Scus as VarCus of the admission search.
+      this.scus = data.Scus != null && String(data.Scus).trim() ? String(data.Scus).trim() : payload.Scus;
       return { kind: 'ok', expiresAt: new Date(expiresAt) };
     }
     if (typeof data.ImgCapcha === 'string' && data.ImgCapcha) return { kind: 'captcha', image: data.ImgCapcha };
@@ -276,7 +291,7 @@ export class KasbClient {
   /** Data of an authenticated read. KASB_AUTH without a session; KASB_REJECTED when Success is false. */
   async read<T = unknown>(path: string, payload?: unknown, method: 'GET' | 'POST' = 'POST'): Promise<T> {
     const answer = await this.readAnswer<T>(path, payload, method);
-    if (!answer.Success) throw new KasbError('KASB_REJECTED', undefined, answer.MessageCode != null ? String(answer.MessageCode) : undefined);
+    if (!answer.Success) throw rejected(answer);
     return answer.Data;
   }
 
@@ -310,7 +325,7 @@ export class KasbClient {
       VarCus: dealerCode, VarRcptDateFr: fromJalali, VarRcptDateTo: toJalali, VarDealerSeq: 'null', VarChs: 'null', VarGds: 'null',
       VarOrd: 'null', VarOriSt: 'null', VarResDte: 'null', VarCostOrdsDte: 'null', reportName: 'rep_emdad_vijeh',
     });
-    if (!answer.Success) throw new KasbError('KASB_REJECTED', undefined, answer.MessageCode != null ? String(answer.MessageCode) : undefined);
+    if (!answer.Success) throw rejected(answer);
     const status = String(answer.reportStatus ?? '');
     if (status === 'just started' || status === 'running') return { status: 'pending' };
     if (status === 'result ready' && typeof answer.Data === 'string' && answer.Data.length > 0) return { status: 'ready', file: Buffer.from(answer.Data, 'utf8') };
@@ -341,14 +356,24 @@ export class KasbClient {
   }
 
   /** Admission list (repair cards) of the dealership between two Jalali dates (inclusive). */
+  /**
+   * Admission list between two Jalali dates: every field of the site's own search («تغییرات عملیات
+   * خودرو» → جستجو), empty ones as "", VarYer the Jalali year stored at login. The site answers
+   * Success false to the five documented parameters alone (owner, 1405/09/03).
+   */
   async cards(dealerCode: string, fromJalali: string, toJalali: string): Promise<KasbTable> {
-    return parseTable(await this.read(KASB_PATHS.cards, { VarCus: dealerCode, VarRcptDateFr: fromJalali, VarRcptDateTo: toJalali, VarDealerSeq: '', VarChs: '' }));
+    return parseTable(await this.read(KASB_PATHS.cards, {
+      VarRcptDateFr: fromJalali, VarRcptDateTo: toJalali, VarChs: '', VarDealerSeq: '', VarCus: this.scus ?? dealerCode, VarYer: jalaliYear(new Date(this.now())),
+      VarExitDteFr: '', VarExitDteTo: '', VarCriticSt: '', VarCarSt: '', VarPrimydNo: '', VarPlateSec: '', VarPlateAlph: '', VarPlateThr: '', VarPlateReg: '',
+      VarVaziatErjaBeSalon: '', VarKhoroType: '', VarCardType: '', VarSalonTamirat: '', VarCustName: '', VarEmg: '', VarRefererCus: '',
+    }));
   }
 
   /** Parts, repairs (labour) or defects of one card; `rcd` is DrcdRcd exactly as listed. */
   async lines(kind: LineKind, rcd: unknown): Promise<KasbTable> {
     const path = kind === 'parts' ? KASB_PATHS.parts : kind === 'repairs' ? KASB_PATHS.repairs : KASB_PATHS.defects;
-    return parseTable(await this.read(path, { Rcd: rcd }));
+    // The site sends VarRcd (its service table says Rcd, but every caller uses VarRcd).
+    return parseTable(await this.read(path, { VarRcd: rcd }));
   }
 
   /** Warehouses of the dealership («انبار قطعات ولوازم یدکی», «انبار روغن», …). */

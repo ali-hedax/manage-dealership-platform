@@ -18,6 +18,10 @@ export interface MockCard {
 
 const pem = () => generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
 
+/** Fields of the site's admission search (16.a8261b5d.chunk.js, Search()). */
+const CARD_SEARCH_FIELDS = ['VarRcptDateFr', 'VarRcptDateTo', 'VarChs', 'VarDealerSeq', 'VarCus', 'VarYer', 'VarExitDteFr', 'VarExitDteTo', 'VarCriticSt', 'VarCarSt', 'VarPrimydNo',
+  'VarPlateSec', 'VarPlateAlph', 'VarPlateThr', 'VarPlateReg', 'VarVaziatErjaBeSalon', 'VarKhoroType', 'VarCardType', 'VarSalonTamirat', 'VarCustName', 'VarEmg', 'VarRefererCus'];
+
 /** One synthetic admission row (columns named as in the real Drcds/q answer). */
 export function mockCardRow(n: number, over: Row = {}): Row {
   const seq = String(1405020000 + n);
@@ -248,6 +252,9 @@ export class KasbMock {
         return this.answer(res, { Success: true, Data: this.reportUrlOverride ?? `${this.url}/Report/Show/Srv/afs/FncGetNodDturRep?f=${f}` });
       }
       if (api === 'Srv/rcpt/RepairCard/Drcds/q') {
+        // Like the real site (1405/09/03): the search is refused without its full set of fields.
+        const missing = CARD_SEARCH_FIELDS.filter((k) => !(k in payload));
+        if (missing.length || !/^\d{4}$/.test(String(payload.VarYer))) return this.answer(res, { Success: false, Data: null, MessageCode: '50001', MessageDes: 'پارامتر ورودی نامعتبر است' });
         const from = String(payload.VarRcptDateFr), to = String(payload.VarRcptDateTo);
         const rows = payload.VarCus === this.dealerCode ? this.cards.map((c) => c.row).filter((r) => String(r.DrcdRcptDate) >= from && String(r.DrcdRcptDate) <= to) : [];
         return this.answer(res, { Success: true, Data: this.table(rows) });
@@ -255,7 +262,7 @@ export class KasbMock {
       const kinds: Record<string, 'parts' | 'repairs' | 'defects' | undefined> = { 'Srv/rcpt/RepairCard/Dreps/q': 'parts', 'Srv/rcpt/RepairCard/Drers/q': 'repairs', 'Srv/rcpt/RepairCard/Drefs/q': 'defects' };
       const lineKind = kinds[api];
       if (lineKind) {
-        const card = this.cards.find((c) => String(c.row.DrcdRcd) === String(payload.Rcd));
+        const card = this.cards.find((c) => String(c.row.DrcdRcd) === String(payload.VarRcd));
         const rows = card?.[lineKind] ?? [];
         return this.answer(res, { Success: true, Data: rows.length ? this.table(rows) : { Structure: [], Rows: [] } });
       }
