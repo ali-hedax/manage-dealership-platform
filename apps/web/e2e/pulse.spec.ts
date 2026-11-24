@@ -64,10 +64,17 @@ test('reception lists, folder, outside work and Manage Pulse settings use the ex
   await shot(page, 'reception-today-desktop');
 
   // Search by VIN (sent in the body, not the URL).
+  // Wait until the open tab has really replaced the today tab; typing earlier lands in the old
+  // list, whose state is thrown away when the new one mounts (the search then never runs).
   await page.getByRole('button', { name: 'پذیرش‌های باز' }).click();
-  await page.getByLabel('جست‌وجوی پذیرش').fill('TESTVIN0000000001');
-  await page.getByLabel('جست‌وجوی پذیرش').press('Enter');
-  await expect(page.getByTestId('reception-row')).toHaveCount(1);
+  await expect(page).toHaveURL(/\/reception\/open$/);
+  await expect(page.getByTestId('reception-row')).toHaveCount(3);
+  const search = page.getByLabel('جست‌وجوی پذیرش');
+  await expect(async () => {
+    await search.fill('TESTVIN0000000001');
+    await search.press('Enter');
+    await expect(page.getByTestId('reception-row')).toHaveCount(1, { timeout: 3_000 });
+  }).toPass({ timeout: 15_000 });
   expect(page.url()).not.toContain('TESTVIN');
 
   // The reception folder: read-only lines from کسب‌وکار, a rejected part in grey with its reason.

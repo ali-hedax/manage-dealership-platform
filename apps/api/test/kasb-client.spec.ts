@@ -85,9 +85,18 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     expect(mock.loginAttempts).toBe(1);
   });
 
+  it('keeps the cookies the site sets and sends them back (sticky session)', async () => {
+    mock.requireCookie = true;
+    const c = client();
+    expect(await c.login(creds())).toMatchObject({ kind: 'ok' });
+    expect(c.cookieNames).toEqual(['lb']);
+    expect(await c.login(creds())).toMatchObject({ kind: 'ok' });
+    mock.requireCookie = false;
+  });
+
   it('distinguishes a refused login and a required password change; never retries by itself', async () => {
     const c = client();
-    expect(await c.login({ ...creds(), password: 'wrong' })).toEqual({ kind: 'failed', messageCode: 'E_LOGIN' });
+    expect(await c.login({ ...creds(), password: 'wrong' })).toEqual({ kind: 'failed', messageCode: 'E_LOGIN', messageText: null });
     expect(mock.loginAttempts).toBe(1);
     mock.loginStatus = 1;
     expect(await c.login(creds())).toEqual({ kind: 'password_change' });

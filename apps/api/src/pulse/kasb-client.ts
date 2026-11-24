@@ -21,7 +21,7 @@ export type LoginResult =
   | { kind: 'ok'; expiresAt: Date }
   | { kind: 'captcha'; image: string }
   | { kind: 'password_change' }
-  | { kind: 'failed'; messageCode: string | null };
+  | { kind: 'failed'; messageCode: string | null; messageText: string | null };
 export type LineKind = 'parts' | 'repairs' | 'defects';
 
 export interface KasbClientOptions {
@@ -131,8 +131,9 @@ export class KasbClient {
         body: init.body,
         redirect: 'manual',
         signal: AbortSignal.timeout(this.timeoutMs),
-        headers: { 'User-Agent': KASB_USER_AGENT, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'fa-IR,fa;q=0.9,en;q=0.8', Referer: `${this.origin}/home`, ...init.headers },
+        headers: { 'User-Agent': KASB_USER_AGENT, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'fa-IR,fa;q=0.9,en;q=0.8', Referer: `${this.origin}/home`, ...this.cookieHeader(), ...init.headers },
       });
+      this.keepCookies(res);
       if (res.status >= 300 && res.status < 400) throw new KasbError('KASB_PROTOCOL', res.status);
       return res;
     } catch (e) {
@@ -143,6 +144,30 @@ export class KasbClient {
       this.release();
     }
   }
+
+  /**
+   * Cookies, like a browser (owner's test, 2026-11-23: login answered 99999 although the request
+   * matched the site). The server or its gateway may tie GetCapcha's ServerTime — the HashData
+   * suffix — to a session or balancer cookie; Chrome's HAR export strips cookies, so the recordings
+   * cannot show it. Values stay in memory only, never in logs or the database.
+   */
+  private cookies = new Map<string, string>();
+  private keepCookies(res: Response) {
+    const list = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+    for (const line of list) {
+      const pair = line.split(';', 1)[0] ?? '';
+      const eq = pair.indexOf('=');
+      if (eq <= 0) continue;
+      const name = pair.slice(0, eq).trim(), value = pair.slice(eq + 1).trim();
+      if (/;\s*max-age=0/i.test(line) || /;\s*expires=thu, 01 jan 1970/i.test(line)) this.cookies.delete(name);
+      else this.cookies.set(name, value);
+    }
+  }
+  private cookieHeader(): Record<string, string> {
+    return this.cookies.size ? { Cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ') } : {};
+  }
+  /** Names (never values) of the cookies the site set; shown in the run's technical details. */
+  get cookieNames(): string[] { return [...this.cookies.keys()]; }
 
   private async text(path: string): Promise<string> {
     const res = await this.request('GET', path);
@@ -232,7 +257,8 @@ export class KasbClient {
       return { kind: 'ok', expiresAt: new Date(expiresAt) };
     }
     if (typeof data.ImgCapcha === 'string' && data.ImgCapcha) return { kind: 'captcha', image: data.ImgCapcha };
-    return { kind: 'failed', messageCode: answer.MessageCode != null ? String(answer.MessageCode) : status != null ? `status:${status}` : null };
+    const text = answer.MessageDes;
+    return { kind: 'failed', messageCode: answer.MessageCode != null ? String(answer.MessageCode) : status != null ? `status:${status}` : null, messageText: typeof text === 'string' && text ? text.slice(0, 160) : null };
   }
 
   // ------------------------------------------------------------ reads
