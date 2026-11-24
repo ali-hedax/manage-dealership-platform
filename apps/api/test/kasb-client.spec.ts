@@ -22,7 +22,7 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     const c = client();
     expect(await c.login(creds())).toMatchObject({ kind: 'ok' });
     expect(c.hasSession()).toBe(true);
-    expect(c.clientVersion).toBe('3.3.1');
+    expect(c.clientVersion).toBe('3.3.1\n');
     const today = await c.cards(mock.dealerCode, '1405/09/02', '1405/09/02');
     expect(today.rows).toHaveLength(1);
     expect(today.rows[0]!.DrcdDealerSeq).toBe('1405020001');
@@ -65,6 +65,7 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     const origin = 'https://b2b.isaco.ir';
     expect(() => assertAllowed(origin, 'POST', new URL('https://b2b.isaco.ir/api/Srv/rcpt/RepairCard/Drcds/q'))).not.toThrow();
     expect(() => assertAllowed(origin, 'GET', new URL('https://b2b.isaco.ir/static/js/main.abc123.chunk.js'))).not.toThrow();
+    expect(() => assertAllowed(origin, 'GET', new URL('https://b2b.isaco.ir/version.txt?nocache=0.11312846792800868'))).not.toThrow();
     for (const [m, u] of [
       ['POST', 'https://b2b.isaco.ir/api/Srv/rcpt/RepairCard/Drcd/save'],
       ['DELETE', 'https://b2b.isaco.ir/api/Srv/rcpt/RepairCard/Drcds/q'],
@@ -73,6 +74,8 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
       ['POST', 'https://b2b.isaco.ir/home'],
       ['GET', 'https://b2b.isaco.ir/static/js/2.abc.chunk.js'],
       ['GET', 'https://b2b.isaco.ir/home?x=1'],
+      ['GET', 'https://b2b.isaco.ir/home?nocache=0.5'],
+      ['GET', 'https://b2b.isaco.ir/version.txt?nocache=x&y=1'],
     ] as const) expect(() => assertAllowed(origin, m, new URL(u))).toThrow('KASB_NOT_ALLOWED');
   });
 
@@ -125,7 +128,7 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     mock.rotateKeys('3.3.2');
     // The old session is gone with the old server; a new login uses the new version and keys.
     expect(await c.login(creds())).toMatchObject({ kind: 'ok' });
-    expect(c.clientVersion).toBe('3.3.2');
+    expect(c.clientVersion).toBe('3.3.2\n');
   });
 
   it('keeps at most two requests in flight and spaces their starts', async () => {

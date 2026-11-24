@@ -157,6 +157,7 @@ export class KasbMock {
       if (this.delayMs) await new Promise((r) => setTimeout(r, this.delayMs));
       let raw = '';
       for await (const chunk of req) raw += chunk;
+      // The real file ends with a newline, and the server wants ClientVersion exactly as served.
       if (method === 'GET' && path === '/version.txt') return this.send(res, 200, `${this.version}\n`);
       if (method === 'GET' && path === '/home') return this.send(res, 200, `<!doctype html><html><head><script src="/static/js/2.0f0f0f0f.chunk.js"></script><script src="/static/js/${this.chunk}"></script></head></html>`, 'text/html');
       if (method === 'GET' && path === `/static/js/${this.chunk}`) return this.send(res, 200, this.bundle(), 'application/javascript');
@@ -201,7 +202,7 @@ export class KasbMock {
         // Like a sticky load balancer: the captcha time is only known to the node that issued it.
         if (this.requireCookie && req.headers.cookie !== `lb=${this.serverTime}`) return this.answer(res, { Success: false, MessageCode: '99999', MessageDes: 'نشست نامعتبر', Data: null });
         const okCaptcha = !this.captchaImage || viaCaptcha;
-        const ok = payload.Scus === this.dealerCode && payload.UserName === this.username && payload.Password === this.password && payload.ClientVersion === this.version && okCaptcha;
+        const ok = payload.Scus === this.dealerCode && payload.UserName === this.username && payload.Password === this.password && payload.ClientVersion === `${this.version}\n` && okCaptcha;
         if (!ok) return this.answer(res, { Success: false, MessageCode: 'E_LOGIN', Data: this.captchaImage ? { ImgCapcha: this.captchaImage } : null });
         if (this.loginStatus === 1) return this.answer(res, { Success: true, Data: { status: 1, Token: '' } });
         const token = `${randomBytes(8).toString('hex')}.${Buffer.from(JSON.stringify({ sub: 'test' })).toString('base64url')}.sig`;
