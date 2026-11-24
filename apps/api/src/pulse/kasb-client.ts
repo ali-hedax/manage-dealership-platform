@@ -35,13 +35,19 @@ export interface KasbClientOptions {
   onRequest?: (method: string, path: string) => void;
 }
 
-const FALLBACK_CLIENT_VERSION = '3.3.1';
+/**
+ * The site sends /version.txt exactly as served (axios keeps the text, newline included) as
+ * ClientVersion; the server answers 99999 «ورژن مرورگر با Cache نامعتبر است» to a trimmed value.
+ */
+const FALLBACK_CLIENT_VERSION = '3.3.1\n';
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Throws KASB_NOT_ALLOWED unless the request is on the read-only allowlist of the origin. */
 export function assertAllowed(origin: string, method: string, url: URL): void {
   const base = new URL(origin);
-  if (url.origin !== base.origin || url.search || url.hash) throw new KasbError('KASB_NOT_ALLOWED');
+  // Only /version.txt may carry the site's own cache-busting query (?nocache=<Math.random()>).
+  const bust = url.pathname === '/version.txt' && /^\?nocache=0\.\d{1,20}$/.test(url.search);
+  if (url.origin !== base.origin || (url.search && !bust) || url.hash) throw new KasbError('KASB_NOT_ALLOWED');
   if (url.pathname.startsWith('/api/')) {
     if (KASB_ALLOWED_API.get(url.pathname.slice(5)) !== method) throw new KasbError('KASB_NOT_ALLOWED');
     return;
@@ -69,7 +75,7 @@ export class KasbClient {
   private readonly concurrency: number;
   private readonly timeoutMs: number;
   private readonly onRequest?: (method: string, path: string) => void;
-  private keys: { serverPublic: KeyObject; clientPrivate: KeyObject; version: string } | null = null;
+  private keys: { serverPublic: KeyObject; clientPrivate: KeyObject; version: string; clientVersion: string } | null = null;
   private token: { value: string; expiresAt: number } | null = null;
   /** The site's localStorage «browser» value: suffix of every HashData envelope (see hashData). */
   private browser: string | null = null;
@@ -91,7 +97,7 @@ export class KasbClient {
   }
 
   get clientVersion(): string {
-    return this.keys?.version || FALLBACK_CLIENT_VERSION;
+    return this.keys?.clientVersion || FALLBACK_CLIENT_VERSION;
   }
   /** «Authorization: <token>» or, if the site answers 401 to that, «Bearer <token>». */
   get authScheme(): 'raw' | 'bearer' {
@@ -180,13 +186,15 @@ export class KasbClient {
 
   /** Reads the two RSA keys from the public bundle; cached until /version.txt changes or `force`. */
   async loadKeys(force = false): Promise<void> {
-    const version = (await this.text('/version.txt')).trim().slice(0, 32);
+    // Like the site: a random query so no cache in between can serve an old version.
+    const served = (await this.text(`/version.txt?nocache=${Math.random()}`)).slice(0, 32);
+    const version = served.trim();
     if (!force && this.keys && this.keys.version === version) return;
     const chunk = findMainChunk(await this.text('/home'));
     if (!chunk) throw new KasbError('KASB_KEYS');
     const bundle = await this.text(chunk);
     const { publicKey, privateKey } = extractKeys(bundle);
-    this.keys = { serverPublic: importPublicKey(publicKey), clientPrivate: importPrivateKey(privateKey), version: version || FALLBACK_CLIENT_VERSION };
+    this.keys = { serverPublic: importPublicKey(publicKey), clientPrivate: importPrivateKey(privateKey), version: version || FALLBACK_CLIENT_VERSION.trim(), clientVersion: version ? served : FALLBACK_CLIENT_VERSION };
     this.bundleWarnings = missingServicePaths(bundle, KASB_ALLOWED_API.keys());
   }
 

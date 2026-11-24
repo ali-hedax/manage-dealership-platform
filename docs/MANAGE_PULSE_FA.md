@@ -45,7 +45,7 @@
 - **مسیرها و فهرست مجاز:** `KASB_PATHS` و `KASB_ALLOWED_API`. مسیری که آنجا نباشد فرستاده نمی‌شود. اگر نام یک سرویس در bundle سایت دیگر پیدا نشود، در جزئیات اجرای «ورود» با عنوان `bundleWarnings` ثبت می‌شود.
 - **نام ستون‌ها:** `CARD`، `PART`، `REPAIR`، `DEFECT` و فهرست‌های جایگزین (`CARD_DESCRIPTION_COLUMNS`، `PART_NAME_COLUMNS`). ستون‌ها با نام خوانده می‌شوند؛ ستون تازه گم نمی‌شود چون کل ردیف در `official` نگه داشته می‌شود. نخستین بار که هر فهرست ستون داشت، نام ستون‌ها (بدون مقدار) در جزئیات همان اجرا ثبت می‌شود.
 - **کپچا:** نحوهٔ ارسال عدد کپچا در ضبط مرورگر دیده نشد؛ تابع `captchaFields` را با `submitform` در `main.*.chunk.js` تطبیق دهید.
-- **رمزنگاری:** [`kasb-crypto.ts`](../apps/api/src/pulse/kasb-crypto.ts) (CryptoJS «Salted__» + RSA-OAEP-SHA256). کلیدها از bundle خوانده می‌شوند ([`kasb-keys.ts`](../apps/api/src/pulse/kasb-keys.ts)) و با عوض شدن `version.txt` دوباره خوانده می‌شوند.
+- **رمزنگاری:** [`kasb-crypto.ts`](../apps/api/src/pulse/kasb-crypto.ts) (CryptoJS «Salted__» + RSA-OAEP-SHA256). کلیدها از bundle خوانده می‌شوند ([`kasb-keys.ts`](../apps/api/src/pulse/kasb-keys.ts)) و با عوض شدن `version.txt` دوباره خوانده می‌شوند. `ClientVersion` ورود دقیقاً متن `version.txt` است، با سطر خالی پایانی (سایت آن را trim نمی‌کند و سرور مقدار trim‌شده را با ۹۹۹۹۹ رد می‌کند).
 - **ترخیص:** پذیرش با تاریخ خروج در کسب‌وکار یا متن وضعیتی که با `CLOSED_STATUS_RE` جور است «ترخیص‌شده» می‌شود.
 - آزمون‌ها با یک کسب‌وکار ساختگی ([`apps/api/test/kasb-mock.ts`](../apps/api/test/kasb-mock.ts)) همین پروتکل را با کلید ساختگی اجرا می‌کنند؛ پس از هر اصلاح همان‌ها را به‌روز کنید.
 
