@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { formatJalaliDateInput, formatTimeInput } from '@manage/shared';
-import { login } from './helpers';
+import { login, openCaseTab } from './helpers';
 test.use({ actionTimeout: 15000 });
 
 test('expert and parts: guided admission to delivery and archive with RTL review', async ({ page, browser }, info) => {
@@ -41,7 +41,8 @@ test('expert and parts: guided admission to delivery and archive with RTL review
   await dialog.getByLabel('واحد اجرت').selectOption(body);
   await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
   await assessment.getByRole('button', { name: 'نهایی کردن', exact: true }).click(); await dialog.getByRole('button', { name: 'نهایی کردن', exact: true }).click();
-  await expect(page.locator('#case-plan > summary')).toBeFocused();
+  await expect(assessment).toBeVisible();
+  await openCaseTab(page, 'برنامهٔ تعمیر');
   await page.getByRole('button', { name: 'ساخت مسیر تعمیر', exact: true }).click();
   // The established plan editor is the only place for route order, days and assignees.
   const row = page.getByRole('region', { name: 'ساخت مسیر تعمیر' }).getByRole('listitem').first();
@@ -52,13 +53,33 @@ test('expert and parts: guided admission to delivery and archive with RTL review
   await row.getByRole('textbox', { name: 'شرح', exact: true }).fill('صافکاری');
   await page.getByRole('button', { name: 'ثبت مسیر', exact: true }).click();
   await page.getByRole('button', { name: /تأیید برنامه و شروع اجرا/ }).click();
+  await expect(page.getByRole('button',{name:/برنامه تأیید شد/})).toBeDisabled();
+  await page.getByRole('button',{name:/رفتن به اجرای تعمیر/}).click();
   const task = page.getByTestId('task').filter({ hasText: 'صافکاری' }).first();
   await task.getByRole('button', { name: 'شروع', exact: true }).click();
   await task.getByRole('button', { name: 'اتمام', exact: true }).click();
   await task.getByRole('button', { name: 'تأیید تحویل', exact: true }).click();
   await page.getByRole('button', { name: /رفتن به کنترل کیفیت/ }).click();
   await page.getByRole('button', { name: 'ثبت کنترل کیفیت', exact: true }).click();
+  await page.route(`**/cases/${id}/qc`, route => route.fulfill({ status: 422,
+    json: { code: 'SYNTHETIC_QC_FAILURE', message: 'ثبت آزمایشی انجام نشد؛ دوباره تلاش کنید' } }));
   await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'ثبت', exact: true })).toBeEnabled();
+  await expect(page.getByTestId('completion-panel').getByRole('alert')).toContainText('دوباره تلاش کنید');
+  await page.unroute(`**/cases/${id}/qc`);
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'کنترل کیفیت انجام شد', exact: true })).toBeDisabled();
+  await expect(page.locator('#case-quality')).toBeVisible();
+  await expect(page.getByRole('button', { name: /ادامهٔ تکمیل پرونده/ })).toBeEnabled();
+  await page.getByRole('button', { name: 'بازگشت از کنترل کیفیت', exact: true }).click();
+  await dialog.getByLabel('دلیل بازگشت *', { exact: true }).fill('بازبینی دوبارهٔ ساختگی');
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'ثبت کنترل کیفیت', exact: true })).toBeEnabled();
+  await expect(page.locator('#case-quality')).toBeVisible();
+  await page.getByRole('button', { name: 'ثبت کنترل کیفیت', exact: true }).click();
+  await dialog.getByRole('button', { name: 'ثبت', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'کنترل کیفیت انجام شد', exact: true })).toBeDisabled();
   await expect(page.getByText(/جمع‌آوری فاکتورها با مسئول قطعات/)).toBeVisible();
   const partsContext = await browser.newContext(); const parts = await partsContext.newPage(); await login(parts, 'parts'); await parts.goto('/parts');
   await parts.getByRole('link', { name: 'باز کردن صورت فاکتورها', exact: true }).click();

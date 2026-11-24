@@ -1,9 +1,9 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import request from 'supertest';
 import type { CaseDetail, Department, Task } from '@manage/shared';
 import { newId } from '../src/common/ids';
 import { hashPassword } from '../src/auth/password';
-import { departments, tenants, users } from '../src/db/schema';
+import { cases, departments, tenants, users } from '../src/db/schema';
 import { purgeTestTenants } from '../src/demo/demo-reset';
 import { Client, createHarness, daysAgo, daysAhead, type Harness, TEST_PASSWORD } from './harness';
 
@@ -15,13 +15,14 @@ let parts: Client;
 let admin: Client;
 let depts: Department[];
 let supervisorId: string;
+let syntheticVin = 0;
 
 const dept = (code: string) => depts.find((d) => d.code === code)!.id;
 
 async function newCase(body: object = {}): Promise<CaseDetail> {
   const res = await expert.post('/cases', { isLegacyEntry: true,
     customer: { fullName: 'مشتری آزمون', phone: '09000001111' },
-    vehicle: { brand: 'ایران‌خودرو', model: 'دنا', plate: '۱۲ ب ۳۴۵ - ۶۷', vin: `TESTVIN${Date.now()}`.slice(0, 17) },
+    vehicle: { brand: 'ایران‌خودرو', model: 'دنا', plate: '۱۲ ب ۳۴۵ - ۶۷', vin: `TESTVIN${String(++syntheticVin).padStart(10,'0')}` },
     odometerKm: 1000,
     admittedAt: daysAgo(1),
     damageDescription: 'آزمون',
@@ -152,6 +153,7 @@ describe('acceptance 1: create and search a case', () => {
 
   it('treats a second visit of the same VIN as a new case on the same vehicle', async () => {
     const first = await newCase({ vehicle: { model: 'رانا', vin: 'TESTVIN0000000777' } });
+    await h.db.db.update(cases).set({status:'closed',stage:'delivered'}).where(eq(cases.id,first.id));
     const second = await newCase({ vehicle: { vin: 'TESTVIN0000000777', plate: '۱۰ ل ۱۰۰ - ۱۰' } });
     expect(second.id).not.toBe(first.id);
     expect(second.vehicle.id).toBe(first.vehicle.id);

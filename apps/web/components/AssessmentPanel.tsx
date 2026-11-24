@@ -95,6 +95,7 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   const {data:requests}=useSWR<Part[]>(can('part.request')?`/cases/${kase.id}/parts`:null,fetcher);
   const [selected,setSelected]=useState<string[]>([]),[sending,setSending]=useState(false);
   const dispatching = useRef(false);
+  const submitting = useRef(false);
   const [dispatchMessage,setDispatchMessage]=useState<{ok:boolean;text:string}|null>(null);
 
   // Dialog state.
@@ -179,6 +180,8 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
   }
 
   async function run(fn: () => Promise<unknown>, done: string, afterSuccess?: () => void) {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     try {
       await fn();
@@ -188,9 +191,8 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
     } catch (err) {
       toast(errorMessage(err), 'error');
     } finally {
-      setBusy(false);
-      void mutate();
-      onChange();
+      try { await mutate(); await onChange(); }
+      finally { submitting.current = false; setBusy(false); }
     }
   }
 
@@ -242,7 +244,6 @@ export function AssessmentPanel({ kase, onChange }: { kase: CaseDetail; onChange
             },
           }),
         'کارشناسی نهایی شد؛ مرحله بعد: برنامه تعمیر',
-        () => requestAnimationFrame(() => { window.location.hash = 'case-plan'; }),
       );
     } else {
       await run(

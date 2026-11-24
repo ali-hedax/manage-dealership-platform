@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Patch, Post, Query } from '@nestjs/common';
 import {
   workflowActionSchema,
+  activeVehicleCheckSchema,
   blockerFollowUpSchema,
   caseListQuerySchema,
   changeStageSchema,
@@ -57,6 +58,12 @@ export class CasesController {
   @RequirePermissions('case.create')
   create(@CurrentActor() actor: Actor, @Body(new ZodPipe(createCaseSchema)) body: CreateCaseInput) {
     return this.cases.create(actor, body);
+  }
+
+  @Post('active-identity')
+  @RequirePermissions('case.create')
+  activeIdentity(@CurrentActor() actor: Actor, @Body(new ZodPipe(activeVehicleCheckSchema)) body: {identity:string;excludeCaseId?:string}) {
+    return this.cases.checkActiveVehicle(actor,body);
   }
 
   @Get(':id')

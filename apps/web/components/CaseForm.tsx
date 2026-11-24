@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
@@ -10,13 +11,17 @@ import {
   STAGE_LABELS,
   toLatinDigits,
   repairDayPlan,
+  ACTIVE_ACCIDENT_DUPLICATE_MESSAGE,
+  isVehicleIdentity,
+  vehicleIdentityKey,
+  type ActiveVehicleCheck,
   type CalendarRevision,
   type CaseDetail,
   type CaseStage,
   type CoverageType,
   type UserRef,
 } from '@manage/shared';
-import { api, errorMessage, fetcher, newKey } from '@/lib/api';
+import { ApiError, api, errorMessage, fetcher, newKey } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import {formatJalali} from '@/lib/format';
@@ -93,7 +98,7 @@ function fromCase(c: CaseDetail): FormState {
   return {
     admissionNo: c.admissionNo??'',
     plate: c.vehicle.plate ?? '',
-    vin: c.vehicle.vin ?? '',
+    vin: c.vehicle.vin ?? c.vehicle.chassisRef ?? '',
     brand: c.vehicle.brand ?? '',
     model: c.vehicle.model ?? '',
     trim: c.vehicle.trim ?? '',
@@ -146,6 +151,9 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
   // A system administrator who is not the owner gives a reason when correcting a recorded value.
   const supportAccount = !me.isOwner && me.roles.includes('system_admin');
   const editing = !!existing;
+  const submitting = useRef(false);
+  const [identityResult,setIdentityResult] = useState<{key:string;result:ActiveVehicleCheck}|null>(null);
+  const [checkingIdentity,setCheckingIdentity] = useState(false);
   const [f, setF] = useState<FormState>(() => (existing ? fromCase(existing) : empty()));
   const [restored, setRestored] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -196,6 +204,26 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
     onChange: (e: { target: { value: string } }) => set(key, e.target.value as never),
   });
 
+  const identityKey = vehicleIdentityKey(f.vin);
+  const originalIdentity = vehicleIdentityKey(existing?.vehicle.vin || existing?.vehicle.chassisRef);
+  const checkIdentity = !editing || identityKey !== originalIdentity;
+  const duplicate = identityResult?.key === identityKey ? identityResult.result : null;
+  useEffect(() => {
+    setIdentityResult(null);
+    setError(e=>e===ACTIVE_ACCIDENT_DUPLICATE_MESSAGE?'':e);
+    if (!can('case.create') || !checkIdentity || !isVehicleIdentity(identityKey)) { setCheckingIdentity(false); return; }
+    let cancelled = false;
+    setCheckingIdentity(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await api<ActiveVehicleCheck>('/cases/active-identity',{body:{identity:identityKey,excludeCaseId:existing?.id}});
+        if (!cancelled) setIdentityResult({key:identityKey,result});
+      } catch { /* Final submission repeats this check and the transactional server guard remains authoritative. */ }
+      finally { if(!cancelled)setCheckingIdentity(false); }
+    },200);
+    return ()=>{cancelled=true;window.clearTimeout(timer);};
+  },[identityKey,checkIdentity,existing?.id,can]);
+
   const sensitiveChanged =
     editing &&
     (planChanged||f.officialDeadlineAt !== existing!.officialDeadlineAt ||
@@ -203,11 +231,13 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if(submitting.current)return;
     setError('');
     if (!f.admittedAt) return setError('زمان پذیرش را وارد کنید');
     if(existing?.repairPlan&&!f.repairDurationDays)return setError('مدت برنامه قبلی را خالی نکنید؛ برای اصلاح، تعداد روز تازه وارد کنید');
     if(f.trim.length>1000)return setError('شرح تیپ خودرو بیش از ۱۰۰۰ نویسه است؛ متن حفظ شده، لطفاً آن را کوتاه کنید');
     if (sensitiveChanged && !f.reason.trim()) return setError('برای تغییر مهلت رسمی یا زمان پذیرش، دلیل را بنویسید');
+    submitting.current=true;
     setBusy(true);
     const nul = (v: string) => (v.trim() === '' ? null : v.trim());
     const payload: Record<string, unknown> = {
@@ -243,6 +273,11 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
     payload.customer = customer;
 
     try {
+      if(checkIdentity && identityKey.length>=6 && can('case.create')) {
+        const result=await api<ActiveVehicleCheck>('/cases/active-identity',{body:{identity:identityKey,excludeCaseId:existing?.id}});
+        setIdentityResult({key:identityKey,result});
+        if(result.exists){setError(ACTIVE_ACCIDENT_DUPLICATE_MESSAGE);setBusy(false);return;}
+      }
       let saved: CaseDetail;
       if (editing) {
         saved = await api<CaseDetail>(`/cases/${existing!.id}`, {
@@ -267,10 +302,14 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
       }
       router.push(`/cases/${saved.id}${editing ? '' : '#case-assessment'}`);
     } catch (err) {
+      if(err instanceof ApiError && err.code==='ACTIVE_ACCIDENT_CASE_EXISTS') {
+        const details=err.details as {existingCase?:ActiveVehicleCheck['existingCase']}|undefined;
+        setIdentityResult({key:identityKey,result:{valid:isVehicleIdentity(identityKey),exists:true,existingCase:details?.existingCase??null}});
+      }
       idempotencyKey.current = newKey();
       setError(errorMessage(err));
       setBusy(false);
-    }
+    } finally { submitting.current=false; }
   }
 
   return (
@@ -315,8 +354,18 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </label>
         <label className="field">
           <span>VIN (شماره شاسی)</span>
-          <input className="input ltr-input" name="vin" maxLength={32} {...text('vin')} />
+          <input className="input ltr-input" name="vin" aria-label="VIN (شماره شاسی)" maxLength={32} {...text('vin')} />
         </label>
+        <div className="field">
+          {checkingIdentity && <span className="xs muted" role="status">در حال بررسی پروندهٔ فعال این شاسی…</span>}
+          {duplicate?.exists && <div className="callout callout-red small" role="alert" data-testid="duplicate-reception">
+            <p>{ACTIVE_ACCIDENT_DUPLICATE_MESSAGE}</p>
+            {duplicate.existingCase && can('case.read') && <>
+              <p>{duplicate.existingCase.vehicle} · پذیرش {duplicate.existingCase.admissionNo || duplicate.existingCase.caseNumber} · {STAGE_LABELS[duplicate.existingCase.stage]}</p>
+              <Link className="btn btn-sm" href={`/cases/${duplicate.existingCase.id}`}>مشاهده پرونده موجود</Link>
+            </>}
+          </div>}
+        </div>
         <label className="field">
           <span>کیلومتر</span>
           <input className="input ltr-input num" name="odometerKm" inputMode="numeric" {...text('odometerKm')} />
@@ -519,7 +568,7 @@ export function CaseForm({ existing }: { existing?: CaseDetail }) {
         </div>
       )}
       <div className="row">
-        <button className="btn btn-primary" type="submit" disabled={busy}>
+        <button className="btn btn-primary" type="submit" disabled={busy || !!duplicate?.exists}>
           {busy ? 'در حال ذخیره…' : editing ? 'ذخیره تغییرات' : 'ثبت پرونده'}
         </button>
         <button className="btn" type="button" onClick={() => router.back()}>

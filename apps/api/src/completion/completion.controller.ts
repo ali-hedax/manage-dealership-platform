@@ -4,6 +4,8 @@ import {
   financialCloseSchema,
   recordQcSchema,
   technicalCloseSchema,
+  undoQcSchema,
+  type UndoQcInput,
   type DeliveryInput,
   type FinancialCloseInput,
   type RecordQcInput,
@@ -39,6 +41,12 @@ export class CompletionController {
     @Body(new ZodPipe(technicalCloseSchema)) body: TechnicalCloseInput,
   ) {
     return this.completion.technicalClose(actor, id, body);
+  }
+
+  @Post(':id/qc/undo')
+  @RequirePermissions('qc.inspect')
+  undoQc(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(undoQcSchema)) body: UndoQcInput) {
+    return this.completion.undoQc(actor, id, body);
   }
 
   @Post(':id/financial-close')

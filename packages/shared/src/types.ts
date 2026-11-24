@@ -578,6 +578,8 @@ export interface QcInspection {
   note: string | null;
   inspectedAt: string;
   inspectedBy: UserRef;
+  reversedAt?: string | null;
+  reversalReason?: string | null;
 }
 
 export interface CompletionIssue {
@@ -602,6 +604,7 @@ export interface CloseState {
 
 export interface CaseCompletion {
   caseId: string;
+  qcState: { passed: boolean; canUndo: boolean; undoBlockedReason: string | null };
   qc: QcInspection[];
   technical: CloseState;
   financial: CloseState & {
@@ -617,6 +620,12 @@ export interface CaseCompletion {
   } | null;
   /** Issues that still prevent the handover. */
   deliveryIssues: CompletionIssue[];
+}
+
+export interface ActiveVehicleCheck {
+  valid: boolean;
+  exists: boolean;
+  existingCase: { id:string; caseNumber:string; admissionNo:string|null; vehicle:string; stage:CaseStage } | null;
 }
 
 export interface VehicleImportMessage {

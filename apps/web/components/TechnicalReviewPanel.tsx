@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR, {useSWRConfig} from 'swr';
 import type { Assessment } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
@@ -28,27 +28,29 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
   const {data:handoff,mutate:refreshHandoff}=useSWR<{submitted:boolean}>(`/assessments/${assessment.id}/package`,fetcher);
   const {mutate:refreshCache}=useSWRConfig();
   const [codes,setCodes]=useState<Record<string,string>>({});
+  const pending = useRef(false);
   async function packageAction(path:string, method:'POST'|'PATCH'='POST', extra:Record<string,string>={}) {
-    if (busy) return;
+    if (pending.current) return;
+    pending.current = true;
     setBusy(path);
     try {
       await api(path,{method,body:{expectedVersion:assessment.version,...extra}});
       await Promise.all([mutate(),refreshHandoff(),refreshCache(`/cases/${caseId}/assessments`),refreshCache(`/cases/${caseId}`)]);
       toast('عملیات کارشناسی ثبت شد');
-      if (path.endsWith('/finalize')) window.location.hash='case-plan';
     } catch (err) {
       toast(errorMessage(err),'error');
       await Promise.all([mutate(),refreshHandoff(),refreshCache(`/cases/${caseId}/assessments`)]);
-    } finally { setBusy(null); }
+    } finally { pending.current = false; setBusy(null); }
   }
   const [reason,setReason]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState<string|null>(null);
   const rows=(data??[]).filter(r=>r.assessmentId===assessment.id);
   if(!rows.length) return null;
   async function decide(r:Review,action:'accept'|'return'|'reset') {
-    if(busy) return;
+    if(pending.current) return;
     const explanation=(reason[r.itemId]??'').trim();
     if(action==='return'&&!explanation){toast('برای برگشت قطعه، دلیل اصلاح را وارد کنید','error');return;}
+    pending.current = true;
     setBusy(r.itemId);
     try{
       await api(`/assessment-items/${r.itemId}/technical-review`,{
@@ -60,7 +62,7 @@ export function TechnicalReviewPanel({caseId, assessment}:{caseId:string;assessm
     }catch(e){
       toast(errorMessage(e),'error');
       await mutate();
-    }finally{setBusy(null);}
+    }finally{pending.current=false;setBusy(null);}
   }
   const accepted=rows.filter(r=>r.status==='accepted').length;
   const returned=rows.filter(r=>r.status==='returned').length;

@@ -155,6 +155,64 @@ afterAll(async () => {
 });
 
 describe('acceptance 9: QC, corrective work, settlement, delivery', () => {
+  it('records a valid QC only once, reverses it with audit and preserves the actual previous stage', async () => {
+    const c = await newCase({ coverageType: 'personal' });
+    await authorized(c.id, 'customer');
+    await addApprovedTask(c.id);
+    const before = await caseOf(c.id);
+    const payload = { expectedVersion: before.version, checks: checks() };
+    const attempts = await Promise.all([qc.post(`/cases/${c.id}/qc`, payload), qc.post(`/cases/${c.id}/qc`, payload)]);
+    expect(attempts.map(r => r.status).sort()).toEqual([201, 409]);
+    let state = await completionOf(c.id);
+    expect(state.qc).toHaveLength(1);
+    expect(state.qcState).toMatchObject({ passed: true, canUndo: true });
+    let current = await caseOf(c.id);
+    expect((await qc.post(`/cases/${c.id}/qc`, { ...payload, expectedVersion: current.version })).body.code).toBe('QC_ALREADY_PASSED');
+    const undo = { inspectionId: state.qc[0]!.id, expectedVersion: current.version, reason: 'بازبینی دوباره برای اصلاح نتیجه' };
+    expect((await parts.post(`/cases/${c.id}/qc/undo`, undo)).status).toBe(403);
+    expect((await qc.post(`/cases/${c.id}/qc/undo`, { ...undo, inspectionId: '00000000-0000-4000-8000-000000000001' })).body.code).toBe('QC_UNDO_INVALID');
+    const reversed = await qc.post(`/cases/${c.id}/qc/undo`, undo);
+    expect(reversed.status).toBe(201);
+    expect(reversed.body.qcState.passed).toBe(false);
+    expect(reversed.body.qc[0].reversalReason).toBe(undo.reason);
+    current = await caseOf(c.id);
+    expect(current.stage).toBe(before.stage);
+    expect((await expert.get(`/cases/${c.id}/workflow`)).body.record.invoiceRequestedAt).toBeUndefined();
+    expect((await qc.post(`/cases/${c.id}/qc/undo`, { ...undo, expectedVersion: current.version })).body.code).toBe('QC_UNDO_INVALID');
+    const timeline = (await supervisor.get(`/cases/${c.id}/timeline`)).body as TimelineEvent[];
+    expect(timeline.some(e => e.action === 'qc.reversed')).toBe(true);
+    expect((await qc.post(`/cases/${c.id}/qc`, { ...payload, expectedVersion: current.version })).status).toBe(201);
+    state = await completionOf(c.id);
+    expect(state.qc).toHaveLength(2);
+    expect(state.qcState.passed).toBe(true);
+  });
+
+  it('refuses QC reversal once parts has finalized the downstream invoice', async () => {
+    const c = await newCase({ coverageType: 'personal' });
+    await authorized(c.id, 'customer');
+    await installPart(c.id);
+    await addApprovedTask(c.id);
+    expect((await recordQc(c.id)).status).toBe(201);
+    const state = await completionOf(c.id);
+    expect(state.qcState.canUndo).toBe(false);
+    const response = await qc.post(`/cases/${c.id}/qc/undo`, {
+      inspectionId: state.qc.at(-1)!.id, expectedVersion: (await caseOf(c.id)).version, reason: 'تلاش پس از ارسال فاکتور',
+    });
+    expect(response.body.code).toBe('QC_UNDO_BLOCKED');
+    expect(response.body.message).toMatch(/صورت فاکتورها/);
+  });
+
+  it('refuses QC reversal after downstream technical or financial close', async () => {
+    const c = await technicallyClosedGoldenCard();
+    const state = await completionOf(c.id);
+    expect(state.qcState.canUndo).toBe(false);
+    const response = await qc.post(`/cases/${c.id}/qc/undo`, {
+      inspectionId: state.qc.at(-1)!.id, expectedVersion: c.version, reason: 'تلاش نامعتبر برای بازگشت',
+    });
+    expect(response.body.code).toBe('QC_UNDO_BLOCKED');
+    expect(response.body.message).toMatch(/بستن فنی/);
+    expect((await completionOf(c.id)).qcState.passed).toBe(true);
+  });
   it('runs a personal case from failed QC through settlement to an archived handover', async () => {
     const c = await newCase({ coverageType: 'personal' });
     await authorized(c.id, 'customer');

@@ -50,7 +50,7 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await expect(panel.getByTestId('dispatch-result')).toContainText('۱ قلم به «قطعات و تأمین» ارسال شد');
   await dialog.getByRole('button', { name: 'نهایی کردن' }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator('#case-plan > summary')).toBeFocused();
+  await expect(panel).toBeVisible();
   await openCaseTab(page, 'قطعات');
   await expect(page.getByTestId('part')).toHaveCount(1);
   await openCaseTab(page, 'کارشناسی');
@@ -72,7 +72,7 @@ test('expert: assessment, authorization and a supplement that keeps the approved
   await current.getByRole('button', { name: 'نهایی کردن' }).click();
   await dialog.getByRole('button', { name: 'نهایی کردن' }).click();
 
-  await expect(page.locator('#case-plan > summary')).toBeFocused();
+  await expect(panel).toBeVisible();
   await openCaseTab(page, 'کارشناسی');
   await expect(current).toContainText('نیاز به مجوز جدید ندارد');
   await expect(current).toContainText('نسبت به نسخه قبل: افزایش ۲۵,۰۰۰,۰۰۰ ریال');

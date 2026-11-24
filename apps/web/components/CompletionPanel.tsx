@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   QC_CHECK_ITEMS,
@@ -27,7 +27,7 @@ import { useToast } from '@/lib/toast';
 import { Dialog } from './Dialog';
 import { JalaliInput } from './JalaliInput';
 
-type Mode = 'qc' | 'technical' | 'financial' | 'delivery' | null;
+type Mode = 'qc' | 'qcUndo' | 'technical' | 'financial' | 'delivery' | null;
 interface CheckDraft {
   result: QcResult;
   note: string;
@@ -82,6 +82,8 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
   const { data: departments } = useSWR<Department[]>(kase.status === 'open' ? '/departments' : null, fetcher);
   const [mode, setMode] = useState<Mode>(null);
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
+  const [error, setError] = useState('');
   const [checks, setChecks] = useState(freshChecks);
   const [note, setNote] = useState('');
   const [at, setAt] = useState<string | null>(null);
@@ -109,6 +111,7 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
   const financialOthers = c.financial.issues.filter((i) => !i.warning && i.code !== 'balance_due');
 
   function start(m: NonNullable<Mode>) {
+    setError('');
     setMode(m);
     setNote('');
     setAt(new Date().toISOString());
@@ -125,8 +128,10 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
     setChecks((prev) => ({ ...prev, [item]: { ...prev[item], ...patch } }));
 
   async function submit() {
-    if (!mode) return;
+    if (!mode || pending.current) return;
+    pending.current = true;
     setBusy(true);
+    setError('');
     try {
       const base = { expectedVersion: kase.version };
       if (mode === 'qc') {
@@ -151,6 +156,9 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
             ? 'کنترل کیفیت قبول شد'
             : 'کنترل کیفیت رد شد؛ فعالیت اصلاحی ساخته شد و پرونده به تعمیر برگشت',
         );
+      } else if (mode === 'qcUndo') {
+        await api(`/cases/${kase.id}/qc/undo`, { body: { ...base, inspectionId: latest!.id, reason: note } });
+        toast('قبولی کنترل کیفیت لغو شد؛ همین پرونده برای بازبینی آماده است');
       } else if (mode === 'technical') {
         await api(`/cases/${kase.id}/technical-close`, { body: { ...base, note: note || null } });
         toast('بستن فنی ثبت شد؛ خودرو آماده تحویل است');
@@ -165,9 +173,10 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
       }
       setMode(null);
     } catch (err) {
+      setError(errorMessage(err));
       toast(errorMessage(err), 'error');
     } finally {
-      try { await Promise.all([mutate(), onChange()]); } finally { setBusy(false); }
+      try { await Promise.all([mutate(), onChange()]); } finally { pending.current = false; setBusy(false); }
     }
   }
 
@@ -175,6 +184,7 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
   const canSubmit =
     mode === 'qc'
       ? qcValid
+      : mode === 'qcUndo' ? note.trim().length >= 3
       : mode === 'financial'
         ? !waive || !!note.trim()
         : mode === 'delivery'
@@ -188,8 +198,8 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
         {open && (
           <div className="row" style={{ gap: 6 }}>
             {view === 'quality' && can('qc.inspect') && (
-              <button className="btn btn-sm" disabled={busy || !workDone} onClick={() => start('qc')}>
-                ثبت کنترل کیفیت
+              <button className="btn btn-sm" disabled={busy || !workDone || c.qcState.passed} onClick={() => start('qc')}>
+                {c.qcState.passed ? 'کنترل کیفیت انجام شد' : 'ثبت کنترل کیفیت'}
               </button>
             )}
             {view === 'completion' && can('case.technical_close') && !c.technical.valid && (
@@ -215,6 +225,13 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
         )}
       </div>
       <div className="panel-body stack" style={{ gap: 12 }}>
+        {view === 'quality' && c.qcState.passed && <div className="stack" role="status">
+          <strong className="small">کنترل کیفیت قبول شد؛ قدم بعدی: تکمیل پرونده و تحویل</strong>
+          {can('qc.inspect') && <div><button type="button" className="btn btn-sm btn-ghost" disabled={busy || !c.qcState.canUndo}
+            onClick={() => start('qcUndo')}>بازگشت از کنترل کیفیت</button>
+            {c.qcState.undoBlockedReason && <p className="xs muted">{c.qcState.undoBlockedReason}</p>}</div>}
+        </div>}
+        {error && <p className="callout callout-red small" role="alert">{error}</p>}
         {c.delivery ? (
           <div className="callout callout-blue small" data-testid="delivery-done">
             تحویل به {c.delivery.recipientName} ({RECIPIENT_RELATION_LABELS[c.delivery.recipientRelation]})،{' '}
@@ -249,6 +266,7 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
                     {formatJalali(q.inspectedAt, { time: true })}
                     {q.note ? `؛ ${q.note}` : ''}
                   </div>
+                  {q.reversedAt && <p className="small muted">قبولی لغو شد — {q.reversalReason}، {formatJalali(q.reversedAt, { time: true })}</p>}
                   {notable.length > 0 && (
                     <ul className="issues small">
                       {notable.map((x) => (
@@ -284,6 +302,7 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
         title={
           mode === 'qc'
             ? `کنترل کیفیت — دور ${faNum((latest?.round ?? 0) + 1)}`
+            : mode === 'qcUndo' ? 'بازگشت از کنترل کیفیت'
             : mode === 'technical'
               ? 'بستن فنی'
               : mode === 'financial'
@@ -359,6 +378,11 @@ export function CompletionPanel({ kase, onChange, mode: view = 'completion' }: {
             </label>
           </>
         )}
+        {mode === 'qcUndo' && <div className="stack">
+          <p className="small">قبولی این دور لغو می‌شود؛ نتیجهٔ قبلی و دلیل بازگشت در تاریخچه می‌مانند.</p>
+          <label className="field"><span>دلیل بازگشت *</span><textarea className="input" value={note} maxLength={500}
+            onChange={e => setNote(e.target.value)} /></label>
+        </div>}
         {mode === 'technical' && (
           <>
             <div className="small">

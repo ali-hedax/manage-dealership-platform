@@ -612,6 +612,15 @@ export const recordQcSchema = z
   });
 export type RecordQcInput = z.infer<typeof recordQcSchema>;
 
+export const undoQcSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  inspectionId: z.uuid(),
+  reason: z.string().trim().min(3, 'دلیل بازگشت را بنویسید').max(500),
+});
+export type UndoQcInput = z.infer<typeof undoQcSchema>;
+
+export const activeVehicleCheckSchema = z.object({ identity: z.string().trim().max(64), excludeCaseId: z.uuid().optional() });
+
 export const technicalCloseSchema = z.object({
   expectedVersion: z.number().int().min(1),
   note: optionalText(1000),

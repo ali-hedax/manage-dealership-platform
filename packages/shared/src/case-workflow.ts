@@ -5,6 +5,10 @@ export const CASE_STEPS = ['intake', 'assessment', 'plan', 'execution', 'quality
 export type CaseStep = typeof CASE_STEPS[number];
 export const CASE_STEP_LABELS: Record<CaseStep, string> = { intake: 'پذیرش', assessment: 'کارشناسی', plan: 'برنامهٔ تعمیر', execution: 'اجرای تعمیر', quality: 'کنترل کیفیت', completion: 'تکمیل پرونده و تحویل' };
 export interface WorkflowRecord {
+  /** QC history stays immutable; reversal metadata belongs to the versioned case. */
+  qcReversals?: Record<string, { at: string; reason: string; by: string }>;
+  qcTransition?: { inspectionId: string; previousStage: import('./enums').CaseStage; invoiceVersion: number;
+    invoiceRequestedAt?: string; invoiceCompletedAt?: string; invoiceAssigneeId?: string | null };
   guided?: boolean;
   planConfirmedAt?: string;
   planTaskIds?: string[];
@@ -16,6 +20,7 @@ export interface WorkflowRecord {
   deductible?: { percent: number; source: 'assessment' | 'manual'; assessmentId?: string };
 }
 export interface CaseWorkflow {
+  planConfirmed: boolean;
   current: CaseStep;
   record: WorkflowRecord;
   requirements: Record<'plan' | 'execution' | 'quality', string[]>;
