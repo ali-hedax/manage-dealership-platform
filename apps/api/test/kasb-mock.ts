@@ -81,6 +81,17 @@ export class KasbMock {
   /** Synthetic stock report: the same HTML-table-as-.xls file staff download (leading whitespace included). */
   stockHtml = `\n    <html><head><meta charset="UTF-8"></head><body><table><tr><th>کد کالا</th><th>شرح کالا</th><th>واحد شمارش</th><th>مدل خودرو</th><th>موجودي</th><th>قيمت ميانگين</th><th>قيمت فروش</th><th>آدرس</th><th>شرح لوکيشن</th><th>وضعيت مبنا</th></tr><tr><td>1720104599</td><td>قطعهٔ ساختگی</td><td>عدد</td><td>ساختگی</td><td>3</td><td>1000</td><td>1200</td><td>A1</td><td>قفسه</td><td>فعال</td></tr></table></body></html>`;
   stockRequests: Record<string, unknown>[] = [];
+  /** Special-aid report: answered «just started», then «running», then the file (or `emdadFails`). */
+  emdadXml = '';
+  emdadReadyAfter = 2;
+  emdadFails: string | null = null;
+  emdadRequests: Record<string, unknown>[] = [];
+  /** Appointment list: GetReportUrl gives a one-time address; GET on it returns this xlsx. */
+  appointmentsXlsx: Uint8Array = new Uint8Array();
+  reportUrlRequests: Record<string, unknown>[] = [];
+  /** Address GetReportUrl answers with (default: the one-time address on this server). */
+  reportUrlOverride: string | null = null;
+  private readonly reportTokens = new Set<string>();
   serverTime = 0;
   /** Requests that were not inside a valid HashData envelope (must stay 0). */
   bareRequests = 0;
@@ -134,7 +145,7 @@ export class KasbMock {
   }
   private bundle() {
     return `!function(){var e={NODE_ENV:"production",PUBLIC_URL:"",REACT_APP_PUBLIC_KEY:${JSON.stringify(this.serverKeys.publicKey)},REACT_APP_PRIVATE_KEY:${JSON.stringify(this.clientKeys.privateKey)}};` +
-      `var p=["Sec/GetCapcha","Sec/Login/v2","Sec/Code","Srv/rcpt/RepairCard/Drcds/q","Srv/rcpt/RepairCard/Drefs/q","Srv/rcpt/RepairCard/Drers/q","Srv/rcpt/RepairCard/Dreps/q","Srv/RepairCase/RepairCase","War/General/ScusStks","War/Reports/StkStock"]}();`;
+      `var p=["Sec/GetCapcha","Sec/Login/v2","Sec/Code","Srv/rcpt/RepairCard/Drcds/q","Srv/rcpt/RepairCard/Drefs/q","Srv/rcpt/RepairCard/Drers/q","Srv/rcpt/RepairCard/Dreps/q","Srv/RepairCase/RepairCase","War/General/ScusStks","War/Reports/StkStock","Srv/wrh/RepEmdadVijeh/q","Srv/Sec/Public/GetReportUrl/"]}();`;
   }
   private table(rows: Row[]) {
     // Columns in an order unlike the rows' own, to prove mapping by name.
@@ -161,6 +172,13 @@ export class KasbMock {
       if (method === 'GET' && path === '/version.txt') return this.send(res, 200, `${this.version}\n`);
       if (method === 'GET' && path === '/home') return this.send(res, 200, `<!doctype html><html><head><script src="/static/js/2.0f0f0f0f.chunk.js"></script><script src="/static/js/${this.chunk}"></script></head></html>`, 'text/html');
       if (method === 'GET' && path === `/static/js/${this.chunk}`) return this.send(res, 200, this.bundle(), 'application/javascript');
+      // The report server (b2brep.isaco.ir): a one-time address, no session needed.
+      if (method === 'GET' && path === '/Report/Show/Srv/afs/FncGetNodDturRep') {
+        const f = new URL(req.url ?? '/', 'http://x').searchParams.get('f') ?? '';
+        if (!this.reportTokens.delete(f)) return this.send(res, 404, '<html>expired</html>', 'text/html');
+        res.writeHead(200, { 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        return res.end(Buffer.from(this.appointmentsXlsx));
+      }
       if (!path.startsWith('/api/')) return this.send(res, 404, 'not found');
       const api = path.slice(5);
       if (method === 'GET' && api === 'Sec/Code') {
@@ -214,6 +232,19 @@ export class KasbMock {
         this.stockRequests.push(payload);
         res.writeHead(200, { 'content-type': 'application/vnd.ms-excel', 'content-disposition': 'attachment;filename=IsacoDownload.xls' });
         return res.end(this.stockHtml);
+      }
+      if (api === 'Srv/wrh/RepEmdadVijeh/q') {
+        this.emdadRequests.push(payload);
+        const n = this.emdadRequests.length - 1;
+        if (n < this.emdadReadyAfter) return this.answer(res, { Success: true, Data: null, reportStatus: n === 0 ? 'just started' : 'running' });
+        if (this.emdadFails) return this.answer(res, { Success: true, Data: null, reportStatus: this.emdadFails });
+        return this.answer(res, { Success: true, Data: this.emdadXml, reportStatus: 'result ready' });
+      }
+      if (api === 'Srv/Sec/Public/GetReportUrl/') {
+        this.reportUrlRequests.push(payload);
+        const f = randomBytes(32).toString('hex').toUpperCase();
+        this.reportTokens.add(f);
+        return this.answer(res, { Success: true, Data: this.reportUrlOverride ?? `${this.url}/Report/Show/Srv/afs/FncGetNodDturRep?f=${f}` });
       }
       if (api === 'Srv/rcpt/RepairCard/Drcds/q') {
         const from = String(payload.VarRcptDateFr), to = String(payload.VarRcptDateTo);

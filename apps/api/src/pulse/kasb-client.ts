@@ -3,7 +3,7 @@ import { kasbCredentialText } from '@manage/shared';
 import { importPrivateKey, importPublicKey, openAnswer, sealRequest, type KasbAnswer } from './kasb-crypto';
 import { KasbError } from './kasb-errors';
 import { extractKeys, findMainChunk, missingServicePaths } from './kasb-keys';
-import { browserFromServerTime, captchaFields, hashData, KASB_ALLOWED_API, KASB_ALLOWED_STATIC, KASB_ORIGIN, KASB_PATHS, KASB_USER_AGENT, LOGIN_STATUS_CHANGE_PASSWORD, LOGIN_STATUS_OK } from './kasb-protocol';
+import { allowedReportUrl, browserFromServerTime, captchaFields, KASB_APPOINTMENT_REPORT, hashData, KASB_ALLOWED_API, KASB_ALLOWED_STATIC, KASB_ORIGIN, KASB_PATHS, KASB_USER_AGENT, LOGIN_STATUS_CHANGE_PASSWORD, LOGIN_STATUS_OK } from './kasb-protocol';
 import { parseTable, type KasbTable } from './kasb-table';
 
 // HTTP client of کسب‌وکار: the same JSON API the browser calls, over plain HTTPS (no browser
@@ -126,9 +126,10 @@ export class KasbClient {
     else this.active--;
   }
 
-  private async request(method: 'GET' | 'POST', path: string, init: { body?: string; headers?: Record<string, string> } = {}): Promise<Response> {
-    const url = new URL(path, `${this.origin}/`);
-    assertAllowed(this.origin, method, url);
+  private async request(method: 'GET' | 'POST', path: string, init: { body?: string; headers?: Record<string, string> } = {}, report?: URL): Promise<Response> {
+    // `report`: an address already checked by allowedReportUrl (the report server); no cookies go there.
+    const url = report ?? new URL(path, `${this.origin}/`);
+    if (!report) assertAllowed(this.origin, method, url);
     await this.acquire();
     try {
       this.onRequest?.(method, url.pathname);
@@ -136,10 +137,11 @@ export class KasbClient {
         method,
         body: init.body,
         redirect: 'manual',
-        signal: AbortSignal.timeout(this.timeoutMs),
-        headers: { 'User-Agent': KASB_USER_AGENT, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'fa-IR,fa;q=0.9,en;q=0.8', Referer: `${this.origin}/home`, ...this.cookieHeader(), ...init.headers },
+        // Report files are large (the special-aid file of five months is ~20 MB): up to three minutes.
+        signal: AbortSignal.timeout(report || url.pathname === `/api/${KASB_PATHS.emdadReport}` ? Math.max(this.timeoutMs, 180_000) : this.timeoutMs),
+        headers: { 'User-Agent': KASB_USER_AGENT, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'fa-IR,fa;q=0.9,en;q=0.8', Referer: `${this.origin}/home`, ...(report ? {} : this.cookieHeader()), ...init.headers },
       });
-      this.keepCookies(res);
+      if (!report) this.keepCookies(res);
       if (res.status >= 300 && res.status < 400) throw new KasbError('KASB_PROTOCOL', res.status);
       return res;
     } catch (e) {
@@ -273,6 +275,13 @@ export class KasbClient {
 
   /** Data of an authenticated read. KASB_AUTH without a session; KASB_REJECTED when Success is false. */
   async read<T = unknown>(path: string, payload?: unknown, method: 'GET' | 'POST' = 'POST'): Promise<T> {
+    const answer = await this.readAnswer<T>(path, payload, method);
+    if (!answer.Success) throw new KasbError('KASB_REJECTED', undefined, answer.MessageCode != null ? String(answer.MessageCode) : undefined);
+    return answer.Data;
+  }
+
+  /** The whole answer of an authenticated read (Success not checked). */
+  async readAnswer<T = unknown>(path: string, payload?: unknown, method: 'GET' | 'POST' = 'POST'): Promise<KasbAnswer<T>> {
     if (!this.hasSession()) throw new KasbError('KASB_AUTH');
     let answer: KasbAnswer<T>;
     try {
@@ -288,8 +297,47 @@ export class KasbClient {
         throw again;
       }
     }
+    return answer;
+  }
+
+  /**
+   * «گزارش امداد ویژه» for admissions between two Jalali dates. The first call starts the report on
+   * the server; the same call (same dates) is repeated later until the file is ready. Empty filters
+   * are the string "null", as the site sends them (null2NullStr).
+   */
+  async emdadReport(dealerCode: string, fromJalali: string, toJalali: string): Promise<{ status: 'pending' } | { status: 'ready'; file: Buffer } | { status: 'failed'; reason: string }> {
+    const answer = await this.readAnswer<unknown>(KASB_PATHS.emdadReport, {
+      VarCus: dealerCode, VarRcptDateFr: fromJalali, VarRcptDateTo: toJalali, VarDealerSeq: 'null', VarChs: 'null', VarGds: 'null',
+      VarOrd: 'null', VarOriSt: 'null', VarResDte: 'null', VarCostOrdsDte: 'null', reportName: 'rep_emdad_vijeh',
+    });
     if (!answer.Success) throw new KasbError('KASB_REJECTED', undefined, answer.MessageCode != null ? String(answer.MessageCode) : undefined);
-    return answer.Data;
+    const status = String(answer.reportStatus ?? '');
+    if (status === 'just started' || status === 'running') return { status: 'pending' };
+    if (status === 'result ready' && typeof answer.Data === 'string' && answer.Data.length > 0) return { status: 'ready', file: Buffer.from(answer.Data, 'utf8') };
+    if (status === 'expired' || status === 'error occurred') return { status: 'failed', reason: status };
+    throw new KasbError('KASB_PROTOCOL');
+  }
+
+  /**
+   * «لیست نوبت پذیرش» between two Jalali dates as the Excel file (T = 3), all other filters empty.
+   * GetReportUrl returns a one-time address on the report server; only that address is followed.
+   */
+  async appointmentsFile(dealerCode: string, fromJalali: string, toJalali: string): Promise<Buffer> {
+    const address = await this.read<unknown>(KASB_PATHS.reportUrl, {
+      reportName: KASB_APPOINTMENT_REPORT,
+      params: {
+        p_date_fr: fromJalali, p_date_to: toJalali, p_chs: '', p_ctp: '', p_tur: '', p_cnl: '', p_dtur_st: '', p_dtur_shift: '', p_tpc: '', p_trb: '',
+        Scus: dealerCode, FncGetNodDturRep: 'FncGetNodDturRep', T: '3', D: 'CURRENT_DATE_MILADI HH:MM', Render: true,
+      },
+    });
+    const url = allowedReportUrl(this.origin, address);
+    if (!url) throw new KasbError('KASB_NOT_ALLOWED');
+    const res = await this.request('GET', url.toString(), { headers: { Accept: '*/*' } }, url);
+    if (!res.ok) throw new KasbError(res.status >= 500 ? 'KASB_UNREACHABLE' : 'KASB_PROTOCOL', res.status);
+    const file = Buffer.from(await res.arrayBuffer());
+    // An xlsx file is a zip archive; anything else (an HTML error page) is not the report.
+    if (file.length < 4 || file.readUInt32LE(0) !== 0x04034b50) throw new KasbError('KASB_PROTOCOL');
+    return file;
   }
 
   /** Admission list (repair cards) of the dealership between two Jalali dates (inclusive). */
