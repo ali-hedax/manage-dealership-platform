@@ -2,6 +2,7 @@ import { generateKeyPairSync, randomBytes, type KeyObject, createPrivateKey, cre
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { openRequest, sealAnswer, type KasbAnswer } from '../src/pulse/kasb-crypto';
+import { KASB_PATHS } from '../src/pulse/kasb-protocol';
 
 // A synthetic «کسب‌وکار» for tests: same protocol (encrypted envelopes, keys in the bundle,
 // Structure/Rows answers) with keys generated here and invented data only (TESTVIN…, 0900…).
@@ -233,14 +234,14 @@ export class KasbMock {
         res.writeHead(200, { 'content-type': 'application/vnd.ms-excel', 'content-disposition': 'attachment;filename=IsacoDownload.xls' });
         return res.end(this.stockHtml);
       }
-      if (api === 'Srv/wrh/RepEmdadVijeh/q') {
+      if (api === KASB_PATHS.emdadReport) {
         this.emdadRequests.push(payload);
         const n = this.emdadRequests.length - 1;
         if (n < this.emdadReadyAfter) return this.answer(res, { Success: true, Data: null, reportStatus: n === 0 ? 'just started' : 'running' });
         if (this.emdadFails) return this.answer(res, { Success: true, Data: null, reportStatus: this.emdadFails });
         return this.answer(res, { Success: true, Data: this.emdadXml, reportStatus: 'result ready' });
       }
-      if (api === 'Srv/Sec/Public/GetReportUrl/') {
+      if (api === KASB_PATHS.reportUrl) {
         this.reportUrlRequests.push(payload);
         const f = randomBytes(32).toString('hex').toUpperCase();
         this.reportTokens.add(f);
