@@ -13,7 +13,7 @@ import { SpecialAidRecordsService } from '../special-aid/special-aid-records.ser
 import { isAidVehicleKey } from '../vehicle-import/vehicle-sheet';
 import { readWorkbook, writeSheet } from '../parts/xlsx';
 import { StockService } from '../daily-reports/stock.service';
-import { isUniversalAssessmentSupply, parseStockCode, hasFitment } from '@manage/shared';
+import { isUniversalAssessmentSupply, parseStockCode, hasFitment, isFullVehicleVin } from '@manage/shared';
 
 type Entry = typeof referenceEntries.$inferSelect;
 type UnifiedPart = {
@@ -79,7 +79,7 @@ export class ReferenceDataService {
    // The ISACO appointment number is the identity; otherwise vehicle + date + time (a re-import updates the status).
    key=data.appointmentNo?'no:'+code(data.appointmentNo):'at:'+hash([lookupKey,data.appointmentDate||'',data.appointmentTime||''].join('|'));
   }else{
-   if(data.vin){data.vin=normalizeVin(data.vin);if(!/^[A-HJ-NPR-Z0-9]{17}$/.test(data.vin))fail('VIN کامل باید ۱۷ نویسه معتبر داشته باشد');}
+   if(data.vin){data.vin=normalizeVin(data.vin);if(!isFullVehicleVin(data.vin))fail('VIN کامل باید ۱۷ نویسه معتبر داشته باشد');}
    if(data.chassis)data.chassis=code(data.chassis);
    // «کد محصول ایساکو» is an identifier: digits Latin, spaces removed, leading zeros kept.
    if(data.isacoCode){data.isacoCode=code(data.isacoCode);if(data.isacoCode.length>40)fail('کد محصول ایساکو بیش از ۴۰ نویسه است');}

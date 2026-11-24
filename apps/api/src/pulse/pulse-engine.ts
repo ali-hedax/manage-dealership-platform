@@ -19,6 +19,7 @@ import { stageAutomaticReport } from '../daily-reports/auto-stage';
 import { decryptSecret } from './pulse-secret';
 import type { Actor } from '../auth/auth.types';
 import { ReferenceDataService } from '../reference-data/reference-data.service';
+import { StockService } from '../daily-reports/stock.service';
 import type { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
 import { ReportCenterService } from '../special-aid/report-center.service';
 
@@ -353,7 +354,7 @@ export class PulseEngine {
       if (same) { outcome = same.status === 'applied' ? 'unchanged' : 'waiting'; previewId = same.id; }
       else {
         // preview() never uses the special-aid records service (only apply() does).
-        const refs = new ReferenceDataService(this.handle, this.audit, null as unknown as SpecialAidRecordsService);
+        const refs = new ReferenceDataService(this.handle, this.audit, null as unknown as SpecialAidRecordsService, new StockService(this.handle, this.audit));
         const preview = await refs.preview(actor, { kind: 'appointments', fileName, fileBase64, sheetIndex: found.sheetIndex, headerRow: found.headerRow, offset: 0, mapping: found.mapping });
         outcome = 'staged'; previewId = preview.id; stats.created = preview.counts.new; stats.changed = preview.counts.update;
       }

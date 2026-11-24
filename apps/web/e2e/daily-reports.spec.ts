@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import { formatJalaliDateInput } from '@manage/shared';
+import { formatJalaliDateInput, formatTimeInput } from '@manage/shared';
 import { buildEmdadXml, buildStockXlsx, emdadRow, type StockRow } from '../../api/src/daily-reports/fixtures';
-import { login } from './helpers';
+import { login, openCaseTab } from './helpers';
 
 // Daily parts reports through the real browser, web proxy and API. Synthetic data only.
 
@@ -263,4 +263,33 @@ test('permissions, a full-size file through the web proxy and internal reminders
   await bar.getByRole('button', { name: 'خواندم' }).click();
   await expect(bar.getByRole('button', { name: 'خواندم' })).toHaveCount(0);
   await expect(bar.getByRole('button', { name: 'انجام شد' })).toBeVisible();
+});
+
+test('unified assessment selects a warehouse-only item and parts sees the exact line once',async({page,browser})=>{
+  await login(page,'manager');
+  const profile=await (await page.request.get('/api/v1/daily-reports/profiles/stock')).json();
+  expect((await page.request.patch('/api/v1/daily-reports/profiles/stock',{headers,data:{expectedVersion:profile.version,scope:'انبار مصنوعی',completeness:'full',quantityMeaning:'on_hand',currency:'IRR'}})).status()).toBe(200);
+  const uploaded=await page.request.post('/api/v1/daily-reports/uploads?kind=stock&fileName=synthetic-unified.xlsx',{headers:{...headers,'content-type':'application/octet-stream'},data:Buffer.from(buildStockXlsx([{'کد کالا':'9922446601','شرح کالا':'چسب شيشه عمومی یکپارچه','موجودي':'4','آدرس':'UI-1'}]))});
+  expect(uploaded.status()).toBe(201);const upload=await uploaded.json();
+  await expect.poll(async()=>(await(await page.request.get(`/api/v1/daily-reports/imports/${upload.id}`)).json()).status).toBe('preview');
+  const at=new Date(Date.now()-60000);
+  expect((await page.request.post(`/api/v1/daily-reports/imports/${upload.id}/apply`,{headers,data:{declaration:true,declaredToday:true,acceptTemplate:true,reportDate:formatJalaliDateInput(at),reportTime:formatTimeInput(at)}})).status()).toBe(201);
+  const created=await page.request.post('/api/v1/cases',{headers,data:{admittedAt:at.toISOString(),coverageType:'personal',vehicle:{model:'تارا',vin:'TESTVIN9922446601'}}});
+  expect(created.status()).toBe(201);const c=await created.json();
+  expect((await page.request.post(`/api/v1/cases/${c.id}/assessments`,{headers,data:{kind:'initial',assessorName:'کارشناس ساختگی'}})).status()).toBe(201);
+  await page.goto(`/cases/${c.id}`);await openCaseTab(page,'کارشناسی');
+  const picker=page.getByTestId('smart-assessment-entry');const search=picker.getByRole('combobox',{name:'جست‌وجوی قطعه'});
+  await search.fill('چسب شیشه');const option=picker.getByRole('option').filter({hasText:'9922446601'});
+  await expect(option).toContainText('انبار');await expect(option.getByTestId('smart-availability')).toContainText('موجود · ۴');
+  await option.click();await expect(search).toHaveValue('');await page.reload();await openCaseTab(page,'کارشناسی');
+  await expect(page.getByTestId('smart-picked')).toContainText('۹۹۲۲۴۴۶۶');
+  const context=await browser.newContext();const parts=await context.newPage();await login(parts,'parts');
+  const reviews=await(await parts.request.get(`/api/v1/cases/${c.id}/technical-reviews`)).json();
+  expect((await parts.request.post(`/api/v1/assessment-items/${reviews[0].itemId}/technical-review`,{headers,data:{expectedVersion:reviews[0].version,action:'accept'}})).status()).toBe(201);
+  await page.reload();await openCaseTab(page,'کارشناسی');
+  const panel=page.getByTestId('assessment-panel');await panel.getByRole('checkbox',{name:'انتخاب همه قطعات قابل ارسال'}).check();
+  await panel.getByRole('button',{name:/ارسال به قطعات و تأمین/}).click();await expect(panel.getByTestId('dispatch-result')).toContainText('۱ قلم');
+  await parts.goto(`/cases/${c.id}`);await openCaseTab(parts,'قطعات');
+  await expect(parts.getByTestId('part').filter({hasText:'99224466'})).toHaveCount(1);await parts.reload();await openCaseTab(parts,'قطعات');
+  await expect(parts.getByTestId('part').filter({hasText:'99224466'})).toHaveCount(1);await context.close();
 });
