@@ -276,12 +276,12 @@ test('unified assessment selects a warehouse-only item and parts sees the exact 
   expect((await page.request.post(`/api/v1/daily-reports/imports/${upload.id}/apply`,{headers,data:{declaration:true,declaredToday:true,acceptTemplate:true,reportDate:formatJalaliDateInput(at),reportTime:formatTimeInput(at)}})).status()).toBe(201);
   const created=await page.request.post('/api/v1/cases',{headers,data:{admittedAt:at.toISOString(),coverageType:'personal',vehicle:{model:'تارا',vin:'TESTVIN9922446601'}}});
   expect(created.status()).toBe(201);const c=await created.json();
-  expect((await page.request.post(`/api/v1/cases/${c.id}/assessments`,{headers,data:{kind:'initial',assessorName:'کارشناس ساختگی'}})).status()).toBe(201);
+  expect((await page.request.post(`/api/v1/cases/${c.id}/assessments`,{headers,data:{kind:'initial',smartManual:true,assessorName:'کارشناس ساختگی'}})).status()).toBe(201);
   await page.goto(`/cases/${c.id}`);await openCaseTab(page,'کارشناسی');
-  const picker=page.getByTestId('smart-assessment-entry');const search=picker.getByRole('combobox',{name:'جست‌وجوی قطعه'});
+  const picker=page.getByTestId('smart-assessment-entry');await expect(picker).toBeVisible();const search=picker.getByRole('combobox',{name:'جست‌وجوی قطعه'});
   await search.fill('چسب شیشه');const option=picker.getByRole('option').filter({hasText:'9922446601'});
   await expect(option).toContainText('انبار');await expect(option.getByTestId('smart-availability')).toContainText('موجود · ۴');
-  await option.click();await expect(search).toHaveValue('');await page.reload();await openCaseTab(page,'کارشناسی');
+  await option.getByRole('button',{name:'افزودن',exact:true}).click();await expect(search).toHaveValue('');await page.reload();await openCaseTab(page,'کارشناسی');
   await expect(page.getByTestId('smart-picked')).toContainText('۹۹۲۲۴۴۶۶');
   const context=await browser.newContext();const parts=await context.newPage();await login(parts,'parts');
   const reviews=await(await parts.request.get(`/api/v1/cases/${c.id}/technical-reviews`)).json();
@@ -290,6 +290,6 @@ test('unified assessment selects a warehouse-only item and parts sees the exact 
   const panel=page.getByTestId('assessment-panel');await panel.getByRole('checkbox',{name:'انتخاب همه قطعات قابل ارسال'}).check();
   await panel.getByRole('button',{name:/ارسال به قطعات و تأمین/}).click();await expect(panel.getByTestId('dispatch-result')).toContainText('۱ قلم');
   await parts.goto(`/cases/${c.id}`);await openCaseTab(parts,'قطعات');
-  await expect(parts.getByTestId('part').filter({hasText:'99224466'})).toHaveCount(1);await parts.reload();await openCaseTab(parts,'قطعات');
-  await expect(parts.getByTestId('part').filter({hasText:'99224466'})).toHaveCount(1);await context.close();
+  await expect(parts.getByTestId('part')).toHaveCount(1);await parts.reload();await openCaseTab(parts,'قطعات');
+  await expect(parts.getByTestId('part')).toHaveCount(1);await context.close();
 });

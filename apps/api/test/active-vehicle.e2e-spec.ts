@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { ACTIVE_ACCIDENT_DUPLICATE_MESSAGE } from '@manage/shared';
-import { cases } from '../src/db/schema';
+import { cases, users } from '../src/db/schema';
 import { createHarness, daysAgo, type Client, type Harness } from './harness';
 
 let h: Harness, expert: Client;
@@ -45,4 +45,29 @@ it('handles the verified eight-character ISACO chassis and enforces read permiss
   const hidden=await restricted.post('/cases/active-identity',{identity:'AB123456'});
   expect(hidden.status).toBe(201);expect(hidden.body).toMatchObject({exists:true,existingCase:null});
   expect((await restricted.post('/cases',payload('AB123456'))).body.details.existingCase).toBeNull();
+});
+
+it('preserves historical duplicate cases and still permits editing their unchanged identity',async()=>{
+  const vin='TESTVIN0000100005';
+  const first=await expert.post('/cases',payload(vin));expect(first.status).toBe(201);
+  await h.db.db.update(cases).set({status:'closed',stage:'delivered'}).where(eq(cases.id,first.body.id));
+  const second=await expert.post('/cases',payload(vin));expect(second.status).toBe(201);
+  // A pre-existing duplicate is represented only in the isolated synthetic fixture.
+  await h.db.db.update(cases).set({status:'open',stage:'reception'}).where(eq(cases.id,first.body.id));
+  const edited=await expert.patch(`/cases/${first.body.id}`,{expectedVersion:first.body.version,vehicle:{vin},damageDescription:'اصلاح شرح بدون تغییر هویت'});
+  expect(edited.status).toBe(200);
+  expect((await expert.get(`/cases?q=${vin}`)).body.items).toHaveLength(2);
+  expect((await expert.post('/cases',payload(vin))).status).toBe(409);
+});
+
+it('cannot restore a deleted active case while another active reception exists',async()=>{
+  const vin='TESTVIN0000100006';
+  const first=await expert.post('/cases',payload(vin));expect(first.status).toBe(201);
+  await h.db.db.update(cases).set({status:'deleted',deletedFromStatus:'open',deletedAt:new Date()}).where(eq(cases.id,first.body.id));
+  expect((await expert.post('/cases',payload(vin))).status).toBe(201);
+  const owner=await h.loginAs('identity-owner',['system_admin']);
+  await h.db.db.update(users).set({isOwner:true}).where(eq(users.username,'identity-owner'));
+  const restored=await owner.post(`/cases/${first.body.id}/restore`,{expectedVersion:first.body.version});
+  expect(restored.status).toBe(409);expect(restored.body.code).toBe('ACTIVE_ACCIDENT_CASE_EXISTS');
+  expect((await h.db.db.select().from(cases).where(eq(cases.id,first.body.id)))[0]!.status).toBe('deleted');
 });

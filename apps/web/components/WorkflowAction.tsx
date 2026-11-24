@@ -21,7 +21,7 @@ export function WorkflowAction({ kase, workflow: w, tab, onTab, onChange }: { ka
     if (pending.current || w.planConfirmed) return;
     pending.current = true;
     setBusy(true); setError('');
-    try { const result = await api<CaseWorkflow>(`/cases/${kase.id}/workflow`, { body: { action: 'confirm_plan', expectedVersion: kase.version } }); await mutate(`/cases/${kase.id}/workflow`, result, false); setShown(null); onChange(); }
+    try { const result = await api<CaseWorkflow>(`/cases/${kase.id}/workflow`, { body: { action: 'confirm_plan', expectedVersion: kase.version } }); await mutate(key => typeof key === 'string' && key.startsWith(`/cases/${kase.id}/workflow`), result, {revalidate:false}); setShown(null); await onChange(); }
     catch (e) { const list = e instanceof ApiError ? blockersOf(e.details) : []; if (list.length) setShown(list); else setError(errorMessage(e)); onChange(); } finally { pending.current = false; setBusy(false); }
   }
   const future = next && CASE_STEPS.indexOf(next) > CASE_STEPS.indexOf(w.current);
