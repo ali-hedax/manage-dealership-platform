@@ -103,4 +103,25 @@ describe('Staff identifiers and legacy compatibility', () => {
     expect((await admin.put(`/staff/technicians/${clerk!.id}/expert-code`, { personnelCode: '20' })).status).toBe(200);
     expect((await h.db.db.select().from(auditEvents)).filter(e => e.action === 'user.username_changed')).toHaveLength(1);
   });
+  it('creates MGR for a service manager and GST for a guest; an existing EXP manager keeps signing in until the code is changed (spec 29)', async () => {
+    const mgr = await admin.post('/staff/technicians', { displayName: 'مدیر ساختگی', personnelCode: '۰۱', role: 'service_manager', pin: '4815' });
+    expect(mgr.status).toBe(201);
+    expect(mgr.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'mgr01' })]));
+    expect((await login('MGR ۰۱', '4815', '')).status).toBe(200);
+    // A code that does not match the role's prefix is refused.
+    expect((await admin.post('/staff/technicians', { displayName: 'مدیر دوم', personnelCode: '02', username: 'exp02', role: 'service_manager', pin: '4815' })).body.code).toBe('USERNAME_CODE_MISMATCH');
+    // A guest needs an end of access.
+    expect((await admin.post('/staff/technicians', { displayName: 'مهمان ساختگی', personnelCode: '05', role: 'guest', pin: '4815' })).status).toBe(400);
+    const gst = await admin.post('/staff/technicians', { displayName: 'مهمان ساختگی', personnelCode: '05', role: 'guest', pin: '4815', accessExpiresAt: new Date(Date.now() + 86_400_000).toISOString() });
+    expect(gst.status).toBe(201);
+    expect(gst.body).toEqual(expect.arrayContaining([expect.objectContaining({ username: 'gst05' })]));
+    // A manager created earlier with EXP keeps it; «تعیین کد» now gives MGR.
+    const old = await admin.post('/staff/technicians', { displayName: 'مدیر قدیمی', username: 'exp30', role: 'service_manager', pin: '4815' });
+    expect(old.status).toBe(201);
+    expect((await login('EXP 30', '4815', '')).status).toBe(200);
+    const id = (old.body as { id: string; username: string }[]).find((t) => t.username === 'exp30')!.id;
+    const changed = await admin.put(`/staff/technicians/${id}/expert-code`, { personnelCode: '30' });
+    expect(changed.body).toEqual(expect.arrayContaining([expect.objectContaining({ id, username: 'mgr30' })]));
+    expect((await login('MGR 30', '4815', '')).status).toBe(200);
+  });
 });

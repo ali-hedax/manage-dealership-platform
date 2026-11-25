@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   EMDAD_ARRIVED_CATEGORIES, NON_CONSUMPTION_REASONS, SPECIAL_AID_FINAL_STATES, SPECIAL_AID_RULES,
-  TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isWorkingDay, maskPhone, nextItemState,
+  TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isMaskedViewer, isWorkingDay, maskPersonName, maskPhone, maskVin, nextItemState,
   parseProcurementCode, assessmentCodeOf, shortVehicleName, vehicleHeadName, tehranDay,
   type AidContactFacts, type AidItemFacts, type ContactInput, type DossierSearchInput, type ItemActionInput, type NonConsumptionInput,
   type NonConsumptionReason, type Paged, type Permission, type PostponeInput, type SpecialAidContact, type SpecialAidDossier, type SpecialAidDossierRow,
@@ -30,6 +30,9 @@ import { idKey, isAidVehicleKey, isNonUniqueAdmission } from '../vehicle-import/
 
 type ItemRow = typeof specialAidItems.$inferSelect;
 const withoutTasks = <T extends { tasks: unknown }>(r: T): Omit<T, 'tasks'> => { const copy: Partial<T> = { ...r }; delete copy.tasks; return copy as Omit<T, 'tasks'>; };
+/** What a guest may search by: the masked chassis and name, never the full values (spec 29.7). */
+const guestSearchKey = (l: { dossier: { vin: string }; vehicle: SpecialAidVehicle; items: SpecialAidItem[] }) =>
+  idKey([maskVin(l.dossier.vin), maskPersonName(l.vehicle.customerName), l.vehicle.plate, l.vehicle.model, ...l.items.flatMap((x) => [x.emdadNo, x.admissionNo, x.assessmentCode, x.procurementCode, x.description])].filter(Boolean).join(' '));
 type RequestRow = typeof emdadRequests.$inferSelect;
 const ARRIVED = EMDAD_ARRIVED_CATEGORIES as readonly string[];
 const HOLD_ACTIVE = ['reserved', 'issued'];
@@ -290,8 +293,10 @@ export class SpecialAidService {
     this.need(actor, 'special_aid.read');
     const now = new Date();
     const term = q.q ? idKey(q.q) : '';
+    // A guest searches only what a guest can see (spec 29.7): the full chassis or name never confirms a dossier.
+    const masked = isMaskedViewer(actor.user.roles, actor.user.isOwner);
     const rows = (await this.load(actor.user.tenantId, undefined, actor.user.permissions.has('customer.pii.read')))
-      .filter((l) => !term || l.search.includes(term))
+      .filter((l) => !term || (masked ? guestSearchKey(l) : l.search).includes(term))
       .map((l) => ({ l, r: this.row(l, now) }))
       .filter(({ l, r }) => q.view === 'all' || (q.view === 'action' && r.actionCount > 0) || (q.view === 'arrived' && r.arrived > 0) || (q.view === 'pending' && r.pending > 0)
         || (q.view === 'review' && l.items.some((i) => !!i.holdNote)))
