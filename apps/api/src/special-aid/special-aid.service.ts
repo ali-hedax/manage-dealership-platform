@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   EMDAD_ARRIVED_CATEGORIES, NON_CONSUMPTION_REASONS, SPECIAL_AID_FINAL_STATES, SPECIAL_AID_RULES,
-  TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isWorkingDay, maskPhone, nextItemState,
+  SPECIAL_AID_QUEUES, dossierQueue, isUnreached, TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isWorkingDay, maskPhone, nextItemState,
   parseProcurementCode, assessmentCodeOf, shortVehicleName, vehicleHeadName, tehranDay,
   type AidContactFacts, type AidItemFacts, type ContactInput, type DossierSearchInput, type ItemActionInput, type NonConsumptionInput,
   type NonConsumptionReason, type Paged, type Permission, type PostponeInput, type SpecialAidContact, type SpecialAidDossier, type SpecialAidDossierRow,
@@ -294,7 +294,9 @@ export class SpecialAidService {
       .filter((l) => !term || l.search.includes(term))
       .map((l) => ({ l, r: this.row(l, now) }))
       .filter(({ l, r }) => q.view === 'all' || (q.view === 'action' && r.actionCount > 0) || (q.view === 'arrived' && r.arrived > 0) || (q.view === 'pending' && r.pending > 0)
-        || (q.view === 'review' && l.items.some((i) => !!i.holdNote)))
+        || (q.view === 'review' && l.items.some((i) => !!i.holdNote))
+        // The four queues of the reconstruction scenario (owner 2026-11-25).
+        || ((SPECIAL_AID_QUEUES as readonly string[]).includes(q.view) && dossierQueue(l.facts, l.contacts) === q.view))
       .sort((a, b) => Number(b.r.urgent) - Number(a.r.urgent) || b.r.actionCount - a.r.actionCount || b.l.dossier.updatedAt.getTime() - a.l.dossier.updatedAt.getTime());
     const items = rows.slice((q.page - 1) * q.pageSize, q.page * q.pageSize).map(({ r }) => withoutTasks(r));
     return { items, total: rows.length, page: q.page, pageSize: q.pageSize };
@@ -356,20 +358,20 @@ export class SpecialAidService {
       const now = new Date();
       const contactId = newId();
       await tx.insert(specialAidContacts).values({ id: contactId, tenantId: actor.user.tenantId, dossierId: id, outcome: input.outcome, note: input.note || null, promisedAt: input.promisedAt ? new Date(input.promisedAt) : null, itemIds: input.itemIds, createdBy: actor.user.id, isTest: actor.user.isTestTenant });
-      if (input.outcome !== 'no_answer') {
+      if (!isUnreached(input.outcome)) {
         for (const i of items.filter((x) => !x.informedAt && x.state !== 'pending')) await tx.update(specialAidItems).set({ informedAt: now, updatedAt: now, version: i.version + 1 }).where(and(eq(specialAidItems.id, i.id), eq(specialAidItems.version, i.version)));
       }
       const all = await tx.select({ at: specialAidContacts.createdAt, outcome: specialAidContacts.outcome }).from(specialAidContacts).where(and(eq(specialAidContacts.tenantId, actor.user.tenantId), eq(specialAidContacts.dossierId, id)));
       const failed = failedAttemptDays(all.map((c) => ({ at: c.at.toISOString(), outcome: c.outcome as ContactInput['outcome'], itemIds: [] })));
       const patch: Partial<typeof specialAidDossiers.$inferInsert> = {};
-      if (input.outcome !== 'no_answer' && d.postponedUntil) { patch.postponedUntil = null; patch.postponeReason = null; }
+      if (!isUnreached(input.outcome) && d.postponedUntil) { patch.postponedUntil = null; patch.postponeReason = null; }
       if (failed >= SPECIAL_AID_RULES.failedAttemptsEscalation && !d.escalatedAt) {
         patch.escalatedAt = now;
         const managers = await usersWithRole(tx, actor.user.tenantId, ['service_manager']);
         const owners = await tx.select({ id: users.id }).from(users).where(and(eq(users.tenantId, actor.user.tenantId), eq(users.isOwner, true), eq(users.isActive, true)));
         await notifyUsers(tx, actor.user.tenantId, [...managers, ...owners.map((o) => o.id)], { kind: 'special_aid.escalation', urgent: true, category: 'special_aid', title: `سه تماس بی‌پاسخ در سه روز جدا · شاسی ${d.vin}`, body: 'مشتری از رسیدن قطعهٔ امداد ویژه خبر ندارد؛ پیگیری مدیریتی لازم است.', link: `/special-aid/vehicles/${id}`, dedupeKey: `special-aid:escalation:${id}:${tehranDay(now)}` });
       }
-      if (input.outcome !== 'no_answer') patch.escalatedAt = null;
+      if (!isUnreached(input.outcome)) patch.escalatedAt = null;
       const saved = await this.bump(tx, d, patch);
       await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: id, action: 'special_aid.contact', after: { contactId, outcome: input.outcome, items: input.itemIds, promisedAt: input.promisedAt ?? null, failedAttemptDays: failed }, snapshot: { version: saved.version, row: saved } });
     });
@@ -622,7 +624,7 @@ export class SpecialAidService {
       const attended = !!l.dossier.attendedAt || installed || items.some((i) => ['delivered', 'installation_pending'].includes(i.state));
       c.registered += 1;
       if (items.some(arrivedState)) c.arrived += 1;
-      if (items.some((i) => i.informedAt) || contacts.some((x) => x.outcome !== 'no_answer')) c.informed += 1;
+      if (items.some((i) => i.informedAt) || contacts.some((x) => !isUnreached(x.outcome))) c.informed += 1;
       if (contacts.some((x) => x.outcome === 'appointment_coordinated' || x.outcome === 'promised_visit')) c.invited += 1;
       if (attended) c.attended += 1;
       if (installed) c.installed += 1;
