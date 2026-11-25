@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   BLOCKER_REASONS,
@@ -70,6 +70,7 @@ export function TasksPanel({ kase: fullCase, onChange, mode = 'execution' }: { k
   // Parts a "not arrived" blocker can wait for; handing one over resolves the blocker.
   const waitingParts = (parts ?? []).filter((p) => p.status !== 'handed_over' && p.status !== 'cancelled');
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
   const [blocked, setBlocked] = useState<{ blockers: WorkflowBlocker[]; retry: () => void; opener: HTMLElement | null } | null>(null);
   const manage = can('task.manage');
   const editable = kase.status === 'open' && kase.stage !== 'delivered';
@@ -94,6 +95,8 @@ export function TasksPanel({ kase: fullCase, onChange, mode = 'execution' }: { k
   }
 
   async function run(fn: () => Promise<unknown>, done: string, retry?: () => Promise<void>) {
+    if (submitting.current) return;
+    submitting.current = true;
     const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     setBusy(true);
     try {
@@ -101,13 +104,14 @@ export function TasksPanel({ kase: fullCase, onChange, mode = 'execution' }: { k
       toast(done);
       setPending(null);
       setBlocked(null);
-      onChange();
+      await onChange();
     } catch (err) {
       const list = err instanceof ApiError ? blockersOf(err.details) : [];
       if (list.length && retry) setBlocked({ blockers: list, retry: () => void retry(), opener });
       else toast(errorMessage(err), 'error');
-      onChange();
+      await onChange();
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }

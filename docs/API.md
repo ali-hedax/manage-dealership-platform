@@ -213,6 +213,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/parts/from-assessment` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/cases/:id/parts/import` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/cases/:id/parts` | [source](../apps/api/src/parts/parts.controller.ts) |
+| POST | `/api/v1/cases/:id/qc/undo` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/qc` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/repair-plan/steps` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases/:id/restore` | [source](../apps/api/src/cases/case-deletion.controller.ts) |
@@ -221,6 +222,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/technical-close` | [source](../apps/api/src/completion/completion.controller.ts) |
 | POST | `/api/v1/cases/:id/transfer` | [source](../apps/api/src/people/people.controllers.ts) |
 | POST | `/api/v1/cases/:id/workflow` | [source](../apps/api/src/accident/accident.controllers.ts) |
+| POST | `/api/v1/cases/active-identity` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/cases` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/code-corrections/:id/resolve` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/daily-reports/imports/:id/apply` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |

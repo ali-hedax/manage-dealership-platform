@@ -37,7 +37,8 @@ import {
 } from '@manage/shared';
 import { AuditService, diff } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
-import { badRequest, notFound, versionConflict } from '../common/errors';
+import { badRequest, conflict, notFound, versionConflict } from '../common/errors';
+import { ACTIVE_ACCIDENT_DUPLICATE_MESSAGE, isVehicleIdentity, vehicleIdentityKey, type ActiveVehicleCheck } from '@manage/shared';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import {calendarAt} from '../workshop/work-calendar';
@@ -181,6 +182,37 @@ export class CasesService {
 
   // ---------------------------------------------------------------- commands
 
+  /** One shared tenant lock covers creation, identity edits, imports and recovery. */
+  async lockVehicleIdentity(tx: DbOrTx, tenantId: string) { await this.emdad.lock(tx, tenantId); }
+
+  private async activeVehicle(db: DbOrTx, actor: Actor, identities: (string | null | undefined)[], excludeCaseId?: string) {
+    const keys = [...new Set(identities.map(vehicleIdentityKey).filter(k => k.length >= 6))];
+    if (!keys.length) return null;
+    const fold = (col: typeof vehicles.vin | typeof vehicles.chassisRef) => sql<string>`upper(regexp_replace(
+      translate(coalesce(${col},''),'۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩','01234567890123456789'),'[-_/.[:space:]‌]','','g'))`;
+    const [row] = await db.select({ id: cases.id, caseNumber: cases.caseNumber, admissionNo: cases.admissionNo,
+      stage: cases.stage, model: vehicles.model, brand: vehicles.brand, trim: vehicles.trim })
+      .from(cases).innerJoin(vehicles,and(eq(vehicles.id,cases.vehicleId),eq(vehicles.tenantId,actor.user.tenantId)))
+      .where(and(eq(cases.tenantId,actor.user.tenantId),ne(cases.status,'deleted'),
+        sql`not (${cases.status}='closed' and ${cases.stage}='delivered')`,
+        sql`(${inArray(fold(vehicles.vin),keys)} or ${inArray(fold(vehicles.chassisRef),keys)})`,
+        excludeCaseId ? ne(cases.id,excludeCaseId) : undefined))
+      .orderBy(desc(cases.admittedAt),desc(cases.id)).limit(1);
+    return row ? {id:row.id,caseNumber:row.caseNumber,admissionNo:row.admissionNo,stage:row.stage as CaseStage,
+      vehicle:shortVehicleName(row.brand,row.model)} : null;
+  }
+
+  async checkActiveVehicle(actor: Actor, input: {identity:string;excludeCaseId?:string}): Promise<ActiveVehicleCheck> {
+    const found = await this.activeVehicle(this.db,actor,[input.identity],input.excludeCaseId);
+    return {valid:isVehicleIdentity(input.identity),exists:!!found,existingCase:actor.user.permissions.has('case.read')?found:null};
+  }
+
+  async assertVehicleAvailable(tx: DbOrTx, actor: Actor, identities: (string | null | undefined)[], excludeCaseId?: string) {
+    const found = await this.activeVehicle(tx,actor,identities,excludeCaseId);
+    if (found) throw conflict('ACTIVE_ACCIDENT_CASE_EXISTS',ACTIVE_ACCIDENT_DUPLICATE_MESSAGE,
+      {existingCase:actor.user.permissions.has('case.read')?found:null});
+  }
+
   async create(actor: Actor, input: CreateCaseInput, extra: CaseImportFields = {}): Promise<CaseDetail> {
     const tenantId = actor.user.tenantId;
     const admittedAt = new Date(input.admittedAt);
@@ -193,8 +225,9 @@ export class CasesService {
     const id = newId();
     await this.db.transaction(async (tx) => {
       await this.emdad.lock(tx, tenantId);
+      await this.assertVehicleAvailable(tx,actor,[input.vehicle?.vin,extra.chassisRef]);
       const repairPlan=input.repairDurationDays!==undefined?repairDayPlan(input.admittedAt,input.repairDurationDays,await calendarAt(tx,tenantId,input.admittedAt)):null;
-      let vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null);
+      let vehicle = await this.upsertVehicle(tx, actor, input.vehicle ?? {}, null, extra.chassisRef);
       if (extra.chassisRef && !vehicle.chassisRef) vehicle = await this.setChassisRef(tx, vehicle, extra.chassisRef);
       const customer = await this.upsertCustomer(tx, actor, input.customer ?? {}, null);
       const year = currentJalaliYear();
@@ -263,6 +296,12 @@ export class CasesService {
     await this.db.transaction(async (tx) => {
       await this.emdad.lock(tx, tenantId);
       const current = await this.loadForWrite(tx, tenantId, id, input.expectedVersion);
+      if (input.vehicle?.vin !== undefined || extra.chassisRef) {
+        const [existingVehicle] = await tx.select().from(vehicles).where(and(eq(vehicles.id,current.vehicleId),eq(vehicles.tenantId,tenantId)));
+        const currentKeys = new Set([existingVehicle?.vin,existingVehicle?.chassisRef].map(vehicleIdentityKey));
+        const changedKeys = [input.vehicle?.vin,extra.chassisRef].filter(k=>!!k&&!currentKeys.has(vehicleIdentityKey(k)));
+        if(changedKeys.length)await this.assertVehicleAvailable(tx,actor,changedKeys,id);
+      }
 
       const admittedAt = input.admittedAt === undefined ? undefined : new Date(input.admittedAt);
       const deadline = input.officialDeadlineAt === undefined ? undefined : toDate(input.officialDeadlineAt);
@@ -413,12 +452,12 @@ export class CasesService {
     const quality = [...plan];
     if (!work.length || work.some(t => t.status !== 'approved')) quality.push('همهٔ فعالیت‌ها و کارهای اصلاحی باید تأیید شوند');
     const latest = qc[0];
-    const passed = latest?.outcome === 'passed' && work.every(t => t.updatedAt <= latest.createdAt);
+    const passed = latest?.outcome === 'passed' && !record.qcReversals?.[latest.id] && work.every(t => t.updatedAt <= latest.createdAt);
     // Historical cases resume from actual work/QC, not a guessed stage number.
     const current = c.stage === 'delivered' || (passed && !quality.length) || c.technicalClosedAt ? 'completion'
       : work.length && work.every(t => t.status === 'approved') && !plan.length ? 'quality'
       : started || confirmed ? 'execution' : !plan.length ? 'plan' : 'assessment';
-    return { current, record, requirements: { plan, execution, quality },
+    return { current, record, planConfirmed: confirmed, requirements: { plan, execution, quality },
       blockers: { plan: planCodes.map(code => workflowBlocker(code, id)), execution: executionCodes.map(code => workflowBlocker(code, id)) },
       invoicePending: !!record.invoiceRequestedAt && !record.invoiceCompletedAt && !!passed && c.status === 'open' };
   }
@@ -436,6 +475,8 @@ export class CasesService {
     await this.db.transaction(async tx => {
       const c = await this.loadForWrite(tx, actor.user.tenantId, id, expectedVersion);
       const progress = await this.workflow(actor, id, tx);
+      if (c.status !== 'open' || c.stage === 'delivered') throw conflict('CASE_CLOSED', 'پرونده بسته است');
+      if (progress.planConfirmed) throw conflict('PLAN_ALREADY_CONFIRMED', 'این برنامه قبلاً تأیید شده است');
       if (progress.requirements.execution.length) throw badRequest('REPAIR_PLAN_INCOMPLETE', progress.requirements.execution.join('؛ '), { blockers: progress.blockers?.execution ?? [] });
       const work = await tx.select().from(tasks).where(and(eq(tasks.tenantId, actor.user.tenantId), eq(tasks.caseId, id), ne(tasks.status, 'cancelled')));
       await this.applyPatch(tx, actor, c, { workflow: { ...c.workflow, guided: true, planConfirmedAt: new Date().toISOString(), planTaskIds: work.map(t => t.id), planSignature: planSignature(work) }, stage: 'in_repair' }, 'case.plan_confirmed', null);
@@ -947,26 +988,32 @@ export class CasesService {
     return row!;
   }
 
-  private async upsertVehicle(tx: DbOrTx, actor: Actor, input: VehicleInput, current: CaseRow | null) {
+  private async upsertVehicle(tx: DbOrTx, actor: Actor, input: VehicleInput, current: CaseRow | null, chassisRef?:string|null) {
     const tenantId = actor.user.tenantId;
+    const inputKey=input.vin?vehicleIdentityKey(input.vin):'';
+    const chassisKey=chassisRef?vehicleIdentityKey(chassisRef):isAidVehicleKey(inputKey)&&!isFullVin(inputKey)?inputKey:undefined;
     const normalized = {
       brand: clean(input.brand),
       model: clean(input.model),
       trim: clean(input.trim),
       modelYear: input.modelYear,
       plate: clean(input.plate),
-      vin: input.vin === undefined ? undefined : input.vin ? normalizeVin(input.vin) : null,
+      vin: input.vin === undefined || (chassisKey===inputKey&&!!chassisKey) ? undefined : input.vin ? inputKey : null,
+      chassisRef: chassisKey,
       color: clean(input.color),
     };
 
     let existing: typeof vehicles.$inferSelect | undefined;
     if (current) {
       [existing] = await tx.select().from(vehicles).where(eq(vehicles.id, current.vehicleId));
-    } else if (normalized.vin) {
+    } else if (normalized.vin || normalized.chassisRef) {
       [existing] = await tx
         .select()
         .from(vehicles)
-        .where(and(eq(vehicles.tenantId, tenantId), eq(vehicles.vin, normalized.vin)));
+        .where(and(eq(vehicles.tenantId, tenantId),sql`(${normalized.vin?eq(vehicles.vin,normalized.vin):sql`false`}
+          or ${normalized.chassisRef?sql`(${eq(vehicles.chassisRef,normalized.chassisRef)} or ${eq(vehicles.vin,normalized.chassisRef)})`:sql`false`})`));
+      if(existing?.vin && normalized.vin && existing.vin!==normalized.vin)
+        throw conflict('VEHICLE_IDENTITY_CONFLICT','VIN با سابقهٔ همین شماره شاسی اختلاف دارد؛ هویت خودرو را بررسی کنید');
     }
 
     if (!existing) {
@@ -981,6 +1028,7 @@ export class CasesService {
           modelYear: normalized.modelYear ?? null,
           plate: normalized.plate ?? null,
           vin: normalized.vin ?? null,
+          chassisRef: normalized.chassisRef ?? null,
           color: normalized.color ?? null,
           isTest: actor.user.isTestTenant,
         })

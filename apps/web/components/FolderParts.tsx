@@ -89,17 +89,20 @@ export function VehicleImage({ vehicle, size = 'md' }: { vehicle: string; size?:
 export function VehicleTechDetails({ brand, model, trim, vin, modelYear, isacoCode, isacoConflict }: { brand?: string | null; model?: string | null; trim?: string | null; vin?: string | null; modelYear?: number | null; isacoCode?: string | null; isacoConflict?: boolean }) {
   if (!brand && !model && !trim && !vin && !isacoCode) return null;
   return (
-    <details className="veh-tech" data-testid="vehicle-tech-details">
+      <div className="veh-tech" data-testid="vehicle-tech-details">
+        <dl aria-label="مشخصات اصلی خودرو">
+          <dt>نوع خودرو</dt><dd>{model || brand || 'ثبت نشده'}</dd>
+          <dt>کد محصول ایساکو</dt><dd data-testid="isaco-code">{isacoCode ? <bdi dir="ltr">{isacoCode}</bdi> : isacoConflict ? 'سوابق پذیرش این شاسی کدهای متفاوت دارند' : 'ثبت نشده'}</dd>
+          <dt>تیپ خودرو</dt><dd>{trim || 'ثبت نشده'}</dd>
+        </dl>
+      <details>
       <summary>جزئیات فنی خودرو</summary>
       <dl>
         {brand && <><dt>برند</dt><dd>{brand}</dd></>}
-        {model && <><dt>مدل کامل</dt><dd>{model}</dd></>}
-        {trim && <><dt>تیپ</dt><dd>{trim}</dd></>}
         {modelYear && <><dt>سال ساخت</dt><dd>{modelYear}</dd></>}
         {vin && <><dt>VIN</dt><dd><bdi dir="ltr">{vin}</bdi></dd></>}
-        {/* From the customer-history file of this exact VIN/chassis; never guessed. */}
-        <dt>کد محصول ایساکو</dt><dd data-testid="isaco-code">{isacoCode ? <bdi dir="ltr">{isacoCode}</bdi> : isacoConflict ? 'سوابق پذیرش این شاسی کدهای متفاوت دارند' : 'ثبت نشده'}</dd>
       </dl>
     </details>
+      </div>
   );
 }

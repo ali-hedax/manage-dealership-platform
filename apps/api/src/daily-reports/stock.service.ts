@@ -20,6 +20,8 @@ import {
   type StockSearchQuery,
   type StockSnapshotInfo,
   type StockAliasInput,
+  assessmentSearchWords,
+  normalizeAssessmentSearch,
 } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
@@ -86,6 +88,48 @@ export class StockService {
       .from(stockSnapshots)
       .where(and(eq(stockSnapshots.tenantId, tenantId), eq(stockSnapshots.status, 'active')));
     return s ?? null;
+  }
+
+  /** Current applicability labels only; a newly applied report is visible immediately. */
+  async assessmentModels(actor: Actor) {
+    if (!actor.user.permissions.has('stock.read')) return [];
+    const snap = await this.active(this.db, actor.user.tenantId);
+    if (!snap) return [];
+    return this.db.select({ label: stockSnapshotItems.vehicleModel, n: sql<number>`count(*)::int` })
+      .from(stockSnapshotItems).where(and(eq(stockSnapshotItems.tenantId, actor.user.tenantId), eq(stockSnapshotItems.snapshotId, snap.id)))
+      .groupBy(stockSnapshotItems.vehicleModel);
+  }
+
+  /** Read-only assessment search, including zero rows; reservation/issue subtraction is identical to the stock desk. */
+  async assessmentSearch(actor: Actor, query: string, catalogCodes: string[], limit = 2001) {
+    if (!actor.user.permissions.has('stock.read')) return { snapshot: null, items: [] };
+    const tenantId = actor.user.tenantId;
+    const snap = await this.active(this.db, tenantId);
+    if (!snap) return { snapshot: null, items: [] };
+    const c = this.commitments(this.db, tenantId);
+    const base = sql<string>`coalesce(${stockSnapshotItems.basePartNumber}, ${stockCodeAliases.basePartNumber})`;
+    const folded = sql`regexp_replace(translate(lower(concat(${stockSnapshotItems.description},' ',${stockSnapshotItems.vehicleModel})),
+      'يىكأإٱآۀة۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩','ییکااااهه01234567890123456789'), '[[:space:][:punct:]‌‍‎‏ً-ٰٟـ]', '', 'g')`;
+    const words = assessmentSearchWords(query);
+    const nameMatch = words.length > 1 ? sql.join(words.map(w => sql`${folded} like ${'%'+w+'%'}`), sql` and `)
+      : sql`${folded} like ${'%'+normalizeAssessmentSearch(query)+'%'}`;
+    const code = normalizeAssessmentSearch(query).toUpperCase();
+    const codes = [...new Set(catalogCodes.map(v => parseStockCode(v)?.fullStockCode).filter((v): v is string => !!v))];
+    const match = sql`((${nameMatch}) or ${stockSnapshotItems.fullStockCode} ilike ${'%'+code+'%'}
+      or ${base} ilike ${'%'+code+'%'} ${codes.length ? sql`or ${inArray(stockSnapshotItems.fullStockCode,codes)}` : sql``})`;
+    const rows = await this.db.select({
+      partNumber: stockSnapshotItems.fullStockCode,
+      basePartNumber: sql<string | null>`max(${base})`,
+      name: sql<string>`coalesce(min(${stockSnapshotItems.description}),'')`,
+      models: sql<string[]>`array_agg(distinct coalesce(${stockSnapshotItems.vehicleModel},''))`,
+      // Availability can never go below zero at a location. No reservation is created here.
+      available: sql<string>`sum(greatest(${stockSnapshotItems.quantity}-coalesce(${c.reserved},0)-coalesce(${c.issued},0),0))::text`,
+    }).from(stockSnapshotItems)
+      .leftJoin(stockCodeAliases, and(eq(stockCodeAliases.tenantId,tenantId),eq(stockCodeAliases.fullStockCode,stockSnapshotItems.fullStockCode)))
+      .leftJoin(c,and(eq(c.code,stockSnapshotItems.fullStockCode),eq(c.loc,stockSnapshotItems.locationAddress)))
+      .where(and(eq(stockSnapshotItems.tenantId,tenantId),eq(stockSnapshotItems.snapshotId,snap.id),match))
+      .groupBy(stockSnapshotItems.fullStockCode).orderBy(asc(stockSnapshotItems.fullStockCode)).limit(limit);
+    return { snapshot: snapshotInfo(snap), items: rows.map(r => ({ ...r, available: snapshotInfo(snap).reservable ? dec(r.available) : null })) };
   }
 
   /** Manage commitments per code and location: active reservations and issues not yet in the report. */

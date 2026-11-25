@@ -173,7 +173,7 @@ export class ReportsService {
         built = this.accidentView(base, now);
         break;
       case 'workshop':
-        built = await this.workshopView(base, q, now);
+        built = await this.workshopView(base, q, now, actor.user.tenantId);
         break;
     }
 
@@ -657,7 +657,7 @@ export class ReportsService {
 
   // ----------------------------------------------------------- workshop view
 
-  private async workshopView(base: BaseCase[], q: ReportQuery, now: Date) {
+  private async workshopView(base: BaseCase[], q: ReportQuery, now: Date, tenantId: string) {
     const byId = new Map(base.map((c) => [c.id, c]));
     const rows = base.length
       ? await this.db
@@ -682,7 +682,10 @@ export class ReportsService {
     const qcIds = qcCandidates.map((c) => c.id);
     const passed = qcIds.length
       ? await this.db.execute<{ case_id: string }>(
-          sql`select q.case_id from qc_inspections q where q.case_id in (${sql.join(qcIds.map((id) => sql`${id}`), sql`, `)}) and q.outcome = 'passed' and q.created_at >= (select max(t.updated_at) from tasks t where t.case_id = q.case_id)`,
+          sql`select q.case_id from qc_inspections q where q.tenant_id = ${tenantId} and q.case_id in (${sql.join(qcIds.map((id) => sql`${id}`), sql`, `)}) and q.outcome = 'passed'
+            and q.round = (select max(q2.round) from qc_inspections q2 where q2.case_id=q.case_id and q2.tenant_id=${tenantId})
+            and not exists (select 1 from cases c where c.id=q.case_id and c.tenant_id=${tenantId} and jsonb_exists(coalesce(c.workflow->'qcReversals','{}'::jsonb),q.id::text))
+            and q.created_at >= (select max(t.updated_at) from tasks t where t.case_id = q.case_id and t.tenant_id=${tenantId})`,
         )
       : { rows: [] };
     const passedIds = new Set(((passed as { rows?: { case_id: string }[] }).rows ?? (passed as unknown as { case_id: string }[])).map((r) => r.case_id));

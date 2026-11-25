@@ -12,8 +12,15 @@ import { detectFormat, readHtmlTable, readSpreadsheetML } from '../daily-reports
 import { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
 import { isAidVehicleKey } from '../vehicle-import/vehicle-sheet';
 import { readWorkbook, writeSheet } from '../parts/xlsx';
+import { StockService } from '../daily-reports/stock.service';
+import { isUniversalAssessmentSupply, parseStockCode, hasFitment, isFullVehicleVin } from '@manage/shared';
 
 type Entry = typeof referenceEntries.$inferSelect;
+type UnifiedPart = {
+ id:string;name:string;partNumber:string;aliases:string[];vehicleUse:string;
+ fitment:ReturnType<typeof partFitment>;compatibility:PartCompatibility;vehicleMatch:'verified'|'unknown';
+ source:'catalog'|'warehouse'|'both';available:string|null;reference:string|null;
+};
 /** Catalog rows read per assessment search; when a query matches more, the response says so (`limited`). */
 const SEARCH_READ_LIMIT=2000;
 const COMPAT_ORDER:Record<PartCompatibility,number>={verified:0,'trim-review':1,'other-family':2,unknown:3};
@@ -33,7 +40,7 @@ export function readSheets(bytes:Uint8Array):{name:string;rows:string[][]}[]{
 
 @Injectable()
 export class ReferenceDataService {
- constructor(@Inject(DATABASE)private readonly handle:DatabaseHandle,private readonly audit:AuditService,private readonly aidRecords:SpecialAidRecordsService){}
+ constructor(@Inject(DATABASE)private readonly handle:DatabaseHandle,private readonly audit:AuditService,private readonly aidRecords:SpecialAidRecordsService,private readonly stock:StockService){}
  private get db(){return this.handle.db;}
  private allow(actor:Actor,kind:ReferenceKind,manage=false){
   const permission=`reference.${kind}.${manage?'manage':'read'}` as const;
@@ -72,7 +79,7 @@ export class ReferenceDataService {
    // The ISACO appointment number is the identity; otherwise vehicle + date + time (a re-import updates the status).
    key=data.appointmentNo?'no:'+code(data.appointmentNo):'at:'+hash([lookupKey,data.appointmentDate||'',data.appointmentTime||''].join('|'));
   }else{
-   if(data.vin){data.vin=normalizeVin(data.vin);if(!/^[A-HJ-NPR-Z0-9]{17}$/.test(data.vin))fail('VIN کامل باید ۱۷ نویسه معتبر داشته باشد');}
+   if(data.vin){data.vin=normalizeVin(data.vin);if(!isFullVehicleVin(data.vin))fail('VIN کامل باید ۱۷ نویسه معتبر داشته باشد');}
    if(data.chassis)data.chassis=code(data.chassis);
    // «کد محصول ایساکو» is an identifier: digits Latin, spaces removed, leading zeros kept.
    if(data.isacoCode){data.isacoCode=code(data.isacoCode);if(data.isacoCode.length>40)fail('کد محصول ایساکو بیش از ۴۰ نویسه است');}
@@ -224,7 +231,12 @@ export class ReferenceDataService {
    .where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'customers'),
     sql`(upper(coalesce(${referenceEntries.data}->>'vin','')) in (${sql.join(ids.map(x=>sql`${x}`),sql`, `)}) or upper(coalesce(${referenceEntries.data}->>'chassis','')) in (${sql.join(ids.map(x=>sql`${x}`),sql`, `)}))`)).limit(20):[];
   const vinTexts=admissions.flatMap(r=>{const d=r.data as Record<string,unknown>;return [String(d.model??''),String(d.trim??'')];});
-  const {labels,counts:labelCounts}=await this.fitmentLabelCounts(tenantId);
+  const existing=await this.fitmentLabelCounts(tenantId);
+  const labelCounts=new Map(existing.counts);
+  for(const row of await this.stock.assessmentModels(actor)){
+   if(row.label?.trim()&&!isUniversalAssessmentSupply('',row.label))labelCounts.set(row.label,(labelCounts.get(row.label)??0)+Number(row.n));
+  }
+  const labels=[...labelCounts.keys()];
   const catalog=fitmentCatalog(labels);
   const fit=resolveVehicleFamily([context.model,context.trim],vinTexts,labels,catalog);
   const caseVehicle=[context.model,context.brand].find(x=>x&&x.trim())?.trim()??null;
@@ -269,12 +281,12 @@ export class ReferenceDataService {
   let scopeFamily:{key:string;name:string}|null=null;
   if(scope==='case'){
    if(!verified){
-    return {...base,scopeFamily,results:[],offset,total:0,hasMore:false,limited:false,
-     message:fit.status==='conflict'?'مدل ثبت‌شده در پرونده با سابقهٔ پذیرش همین VIN یکی نیست؛ سازگاری قطعات قابل تأیید نیست. مدل خودرو را در پرونده اصلاح کنید.':'خانوادهٔ این خودرو در کاتالوگ قطعات قابل تشخیص نیست؛ برای جلوگیری از قطعهٔ نامرتبط، پیشنهادی نمایش داده نمی‌شود. مدل خودرو را در پرونده کامل کنید یا قلم را دستی ثبت کنید.'};
+    // Ordinary universal supplies remain valid even when this case's vehicle is unresolved.
+    allowed=labels.filter(isCommonFitment);
+   }else{
+    allowed=labels.filter(l=>partFitment(l,fit,catalog)!==null);
+    scopeFamily={key:fit.family,name:fit.familyName};
    }
-   // Every catalog label of the vehicle family (trim variants included) plus explicitly common parts.
-   allowed=labels.filter(l=>partFitment(l,fit,catalog)!==null);
-   scopeFamily={key:fit.family,name:fit.familyName};
   }else if(scope==='vehicle'){
    // Only a family of this tenant's own catalog; the key is checked here, never trusted from the browser.
    const chosen=catalogFamilies(labels,catalog).find(f=>f.key===family);
@@ -298,40 +310,80 @@ export class ReferenceDataService {
   const direct=codeQuery
    ? sql`(${folded} like ${'%'+normalized+'%'} or ${referenceEntries.lookupKey} like ${codeQuery+'%'})`
    : sql`${folded} like ${'%'+normalized+'%'}`;
-  if(allowed&&!allowed.length)return {...base,scopeFamily,results:[],offset,total:0,hasMore:false,limited:false};
+  const generic=sql`(${vehicleUse} in ('عمومی','مشترک','همه خودروها','تمام خودروها','یونیورسال')
+   or (${vehicleUse} in ('','نامشخص') and ${referenceEntries.data}->>'description' ~ '^(چسب|پیچ|مهره|واشر|درزگیر|سیلانت)'))`;
   const rows=await this.db.select({id:referenceEntries.id,data:referenceEntries.data})
    .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts'),
-    ...(allowed?[inArray(vehicleUse,allowed)]:[]),prefilter))
+    ...(allowed?[sql`(${allowed.length?inArray(vehicleUse,allowed):sql`false`} or ${generic})`]:[]),prefilter))
    // Full-text and code matches first, then the vehicle's own catalog label, so a large catalog never
    // crowds the real matches out of the bounded read.
    .orderBy(sql`case when ${direct} then 0 else 1 end`,
     ...(exact.length?[sql`case when ${vehicleUse} in (${sql.join(exact.map(x=>sql`${x}`),sql`, `)}) then 0 else 1 end`]:[]),
     referenceEntries.lookupKey).limit(SEARCH_READ_LIMIT+1);
-  const limited=rows.length>SEARCH_READ_LIMIT;
-  const candidates=rows.slice(0,SEARCH_READ_LIMIT).map(row=>{
+  const inventory=await this.stock.assessmentSearch(actor,query,rows.map(r=>String((r.data as Record<string,unknown>).partNumber??'')),SEARCH_READ_LIMIT+1);
+  const limited=rows.length>SEARCH_READ_LIMIT||inventory.items.length>SEARCH_READ_LIMIT;
+  const absentKnown=!!inventory.snapshot?.reservable&&inventory.snapshot.completeness==='full';
+  const candidates:UnifiedPart[]=rows.slice(0,SEARCH_READ_LIMIT).map(row=>{
    const data=row.data as Record<string,unknown>;
    const use=typeof data.vehicleUse==='string'?data.vehicleUse:'';
-   const fitment=partFitment(use,fit,catalog);
-   const compatibility=partCompatibility(use,fit,catalog);
    const name=String(data.description??'');
-   return {id:row.id,name,aliases:[use,`${name} ${use}`,`${use} ${name}`],partNumber:String(data.partNumber??''),vehicleUse:use,fitment,compatibility,
+   const universal=isUniversalAssessmentSupply(name,use);
+   const fitment=universal?'common' as const:partFitment(use,fit,catalog);
+   const compatibility=universal?'verified' as const:partCompatibility(use,fit,catalog);
+   const partNumber=String(data.partNumber??'');
+   return {id:row.id,name,aliases:[use,`${name} ${use}`,`${use} ${name}`],partNumber,vehicleUse:use,fitment,compatibility,
+    source:'catalog' as const,available:absentKnown?'0':null,reference:assessmentReference(partNumber),
     // Only the case family's own label (and common parts) is verified; everything else ranks after it.
     vehicleMatch:(compatibility==='verified'?'verified':'unknown') as 'verified'|'unknown'};
    // Defence in depth: scope `case` never offers another vehicle.
   }).filter(row=>row.name&&row.partNumber&&(scope!=='case'||row.fitment!==null));
-  const byId=new Map(candidates.map(row=>[row.id,row]));
+  // Look up the exact identity even when only the warehouse name matched the query.
+  const stockCodes=inventory.items.slice(0,SEARCH_READ_LIMIT).map(i=>i.partNumber);
+  const catalogForStock=stockCodes.length?await this.db.select({id:referenceEntries.id,data:referenceEntries.data})
+   .from(referenceEntries).where(and(eq(referenceEntries.tenantId,tenantId),eq(referenceEntries.kind,'parts'),inArray(referenceEntries.lookupKey,stockCodes))):[];
+  const exactCatalog=new Map(catalogForStock.map(r=>[code(String((r.data as Record<string,unknown>).partNumber??'')),r]));
+  const merged=new Map(candidates.map(r=>[parseStockCode(r.partNumber)?.fullStockCode??r.partNumber,r]));
+  for(const item of inventory.items.slice(0,SEARCH_READ_LIMIT)){
+   const entry=exactCatalog.get(item.partNumber);
+   const data=entry?.data as Record<string,unknown>|undefined;
+   const catalogUse=data&&typeof data.vehicleUse==='string'?data.vehicleUse:'';
+   const models=item.models.filter(hasFitment);
+   const universal=!catalogUse&&(!models.length||models.every(m=>isUniversalAssessmentSupply(item.name,m)))&&isUniversalAssessmentSupply(item.name,models[0]);
+   const uses=[...(catalogUse?[catalogUse]:[]),...models];
+   const ownUse=uses.find(u=>partFitment(u,fit,catalog)!==null);
+   const incompatible=uses.some(u=>!isCommonFitment(u)&&!isUniversalAssessmentSupply(item.name,u)&&partFitment(u,fit,catalog)===null);
+   const allowedInScope=scope==='all'||(universal&&!catalogUse)||uses.some(u=>allowed?.includes(u));
+   if(!allowedInScope||(scope==='case'&&incompatible))continue;
+   const use=catalogUse||ownUse||models[0]||'';
+   const common=universal||uses.some(isCommonFitment);
+   const compatibility:PartCompatibility=common&&!incompatible?'verified':partCompatibility(use,fit,catalog);
+   const existing=merged.get(item.partNumber);
+   const name=String(data?.description??item.name);
+   const aliases=[item.name,...uses,`${item.name} ${use}`,`${use} ${item.name}`,`${name} ${use}`,`${use} ${name}`];
+   merged.set(item.partNumber,{id:entry?.id??existing?.id??`stock-${item.partNumber}`,name,partNumber:item.partNumber,aliases,
+    vehicleUse:common&&!use?'عمومی':use,fitment:common&&!incompatible?'common':partFitment(use,fit,catalog),compatibility,
+    vehicleMatch:compatibility==='verified'?'verified':'unknown',source:entry||existing?'both':'warehouse',available:item.available,
+    reference:item.basePartNumber??assessmentReference(item.partNumber)});
+  }
+  const unified=[...merged.values()];
+  const byId=new Map(unified.map(row=>[row.id,row]));
+  const availabilityRank=(r:UnifiedPart)=>r.available===null?2:Number(r.available)>0?0:1;
   // Equal matches: the case family's other trims before other vehicles, and those before unlabelled parts.
-  const ranked=scoreAssessmentCandidates(query,candidates)
-   .sort((a,b)=>b.score-a.score||COMPAT_ORDER[byId.get(a.id)!.compatibility]-COMPAT_ORDER[byId.get(b.id)!.compatibility]);
+  const ranked=scoreAssessmentCandidates(query,unified)
+   .sort((a,b)=>b.score-a.score||COMPAT_ORDER[byId.get(a.id)!.compatibility]-COMPAT_ORDER[byId.get(b.id)!.compatibility]
+    ||availabilityRank(byId.get(a.id)!)-availabilityRank(byId.get(b.id)!));
   const results=ranked.slice(offset,offset+ASSESSMENT_SEARCH_PAGE).map(item=>{
    const row=byId.get(item.id)!;
    return {...item,vehicleUse:row.vehicleUse,
     // The catalog family of the part itself (its source vehicle), shown beside every result.
     vehicleFamily:isCommonFitment(row.vehicleUse)?null:catalog.familyOf(row.vehicleUse)?.name??null,
     fitment:row.fitment,compatibility:row.compatibility,common:row.fitment==='common',
-    fitmentNote:COMPATIBILITY_NOTES[row.compatibility],reference:assessmentReference(item.partNumber)};
+    fitmentNote:COMPATIBILITY_NOTES[row.compatibility],reference:row.reference,
+    available:row.available,availability:row.available===null?'unknown':Number(row.available)>0?'available':'unavailable',source:row.source};
   });
-  return {...base,scopeFamily,results,offset,total:ranked.length,hasMore:offset+ASSESSMENT_SEARCH_PAGE<ranked.length,limited};
+  return {...base,scopeFamily,results,offset,total:ranked.length,hasMore:offset+ASSESSMENT_SEARCH_PAGE<ranked.length,limited,
+   message:!verified&&scope==='case'?'خانوادهٔ این خودرو قابل تشخیص نیست یا با سابقه اختلاف دارد؛ فقط اقلام عمومی معتبر پیشنهاد می‌شوند.':undefined,
+   stockReportedAt:inventory.snapshot?.reportedAt??null};
  }
 
  private record(e:Entry,fileName:string):ReferenceRecord{return {id:e.id,kind:e.kind as ReferenceKind,data:e.data as ReferenceRecord['data'],fileName,importedAt:e.updatedAt.toISOString(),version:e.version};}

@@ -19,6 +19,9 @@ type Suggestion = {
   compatibility?: PartCompatibility;
   /** Trim check, other vehicle or unknown applicability; null when verified. */
   fitmentNote?: string | null;
+  available?: string | null;
+  availability?: 'available' | 'unavailable' | 'unknown';
+  source?: 'catalog' | 'warehouse' | 'both';
 };
 type Response = {
   results: Suggestion[]; limited: boolean; fitmentVerified: boolean; family?: string; caseVehicle?: string | null; trimReview?: boolean; message?: string;
@@ -40,6 +43,7 @@ const fitEvidence = (s: Suggestion) => (!s.compatibility || s.compatibility === 
 
 /** The line's assessment reference: the 8-digit code (or the whole code when it has no 8-digit start). */
 const refOf = (code: string | null | undefined) => assessmentReference(code) ?? normalizedPartCode(code);
+const suggestionRef = (s: Suggestion) => s.reference ?? refOf(s.partNumber);
 
 /**
  * Smart accident assessment, quick entry (owner, 2026-11-19). The catalog search returns
@@ -144,7 +148,7 @@ export function SmartAssessmentEntry({
 
   async function add(s: Suggestion) {
     if (saving.current) return;
-    if (pickedRefs.has(refOf(s.partNumber))) {
+    if (pickedRefs.has(suggestionRef(s))) {
       toast('این قطعه (همین کد ۸ رقمی) قبلاً اضافه شده است؛ تعداد همان ردیف را تغییر دهید.', 'error');
       return;
     }
@@ -157,18 +161,18 @@ export function SmartAssessmentEntry({
           expectedVersion: version,
           action: 'replace',
           description: s.name,
-          partNumber: refOf(s.partNumber),
+          partNumber: suggestionRef(s),
           sourcePartNumber: s.partNumber,
           quantity,
           unitPriceRial: 0,
           labourRial: 0,
           labourDepartmentId: null,
           // Source vehicle and the required technical check stay on the line when not verified.
-          evidence: fitEvidence(s),
+          evidence: [s.source === 'warehouse' ? `منبع انبار: ${s.partNumber}` : null, fitEvidence(s)].filter(Boolean).join(' — ') || null,
         },
       });
       await refresh();
-      setJustAdded(refOf(s.partNumber));
+      setJustAdded(suggestionRef(s));
       setQuery(''); setData(null); setOpen(false); setQuantity(1);
       inputRef.current?.focus();
     } catch (e) {
@@ -200,8 +204,8 @@ export function SmartAssessmentEntry({
 
   return <div className="panel-body stack smart-entry" data-testid="smart-assessment-entry" dir="rtl">
     <div>
-      <strong>ثبت سریع قطعات از کاتالوگ</strong>
-      <p className="small muted">نام قطعه یا شماره فنی را بنویسید، با کلیدهای جهت‌دار انتخاب کنید و Enter بزنید. به‌طور پیش‌فرض فقط قطعات سازگار با همین خودرو نشان داده می‌شوند.</p>
+      <strong>ثبت سریع قطعات از کاتالوگ و انبار</strong>
+      <p className="small muted">نام قطعه یا شماره فنی را بنویسید، با کلیدهای جهت‌دار انتخاب کنید و Enter بزنید. قطعات سازگار و اقلام عمومی معتبر پیشنهاد می‌شوند؛ انتخاب قطعه به‌تنهایی رزرو نمی‌کند.</p>
     </div>
     <div className="smart-scope" data-testid="smart-scope">
       <div className="segmented" role="group" aria-label="دامنهٔ جست‌وجوی خودرو">
@@ -269,15 +273,21 @@ export function SmartAssessmentEntry({
     {loading && <p className="small muted" role="status">در حال جست‌وجوی کاتالوگ…</p>}
     {error && <p className="callout callout-red small" role="alert">{error}</p>}
     {open && !loading && data && !data.fitmentVerified && data.message && <p className="callout callout-amber small" role="alert" data-testid="smart-fitment-unverified">{data.message} برای جست‌وجو در کاتالوگ خودروی دیگر «انتخاب خودرو» یا «همه خودروها» را بزنید.</p>}
-    {open && !loading && data && (data.fitmentVerified || scope !== 'case') && <div id="smart-assessment-results" className="smart-results" role="listbox" aria-label="قطعات پیشنهادی">
+    {open && !loading && data && (data.fitmentVerified || scope !== 'case' || results.length > 0) && <div id="smart-assessment-results" className="smart-results" role="listbox" aria-label="قطعات پیشنهادی">
       {results.length === 0 ? <p className="small muted">{scope === 'case' ? 'قطعهٔ سازگاری با این نام یا شماره پیدا نشد.' : 'قطعه‌ای با این نام یا شماره در این دامنه پیدا نشد.'}</p> :
         results.map((s, i) => {
-          const added = pickedRefs.has(refOf(s.partNumber));
+          const added = pickedRefs.has(suggestionRef(s));
           return <div key={s.id} id={`smart-part-${s.id}`} role="option" aria-selected={i === active} className={`smart-option${i === active ? ' on' : ''}`}
             onMouseEnter={() => setActive(i)}>
             <div className="smart-option-text">
               <strong>{s.name}</strong>
-              <span className="smart-ref"><bdi dir="ltr">{toPersianDigits(refOf(s.partNumber))}</bdi></span>
+              <span className="smart-ref"><bdi dir="ltr">{toPersianDigits(suggestionRef(s))}</bdi></span>
+              <span className="row xs" data-testid="smart-availability">
+                <span className={`chip${s.availability === 'available' ? ' chip-green' : ''}`}>
+                  {s.availability === 'available' ? `موجود · ${toPersianDigits(s.available ?? '')}` : s.availability === 'unavailable' ? 'ناموجود · ۰' : 'موجودی نامشخص'}
+                </span>
+                <span>{s.source === 'both' ? 'انبار و کاتالوگ' : s.source === 'warehouse' ? 'انبار' : 'کاتالوگ'}</span>
+              </span>
               <span className="xs muted" data-testid="smart-source">کد کامل: <bdi dir="ltr">{s.partNumber}</bdi>{s.common ? ' · مشترک همهٔ خودروها' : ` · خودروی کاتالوگ: ${s.vehicleFamily && s.vehicleFamily !== s.vehicleUse.trim() ? `${s.vehicleFamily} (${s.vehicleUse})` : s.vehicleUse || 'نامشخص'}`}</span>
               {s.compatibility === 'verified' && <span className="smart-fit-ok xs" data-testid="smart-compat">{VERIFIED_LABEL}</span>}
               {s.fitmentNote && <span className={`smart-fit-note${s.compatibility === 'other-family' || s.compatibility === 'unknown' ? ' cross' : ''}`} data-testid="smart-fit-note">{s.fitmentNote}</span>}
@@ -298,7 +308,7 @@ export function SmartAssessmentEntry({
         <ul className="smart-picked-list">
           {picked.map((item) => (
             <li key={item.id} className={`smart-picked-row${justAdded && refOf(item.partNumber) === justAdded ? ' fresh' : ''}`} data-testid="smart-picked-row">
-              <span className="smart-picked-name">{item.description}{item.evidence?.startsWith('منبع کاتالوگ:') && <span className="smart-picked-note xs" data-testid="smart-picked-note">{item.evidence}</span>}</span>
+              <span className="smart-picked-name">{item.description}{item.evidence?.startsWith('منبع') && <span className="smart-picked-note xs" data-testid="smart-picked-note">{item.evidence}</span>}</span>
               <span className="smart-ref" title={item.sourcePartNumber ? `کد کامل: ${item.sourcePartNumber}` : undefined}><bdi dir="ltr">{toPersianDigits(item.partNumber ?? '—')}</bdi></span>
               <label className="smart-picked-qty">
                 <span className="sr-only">تعداد {item.description}</span>

@@ -8,6 +8,7 @@ import { conflict, forbidden, notFound, versionConflict } from '../common/errors
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { cases, partRequests, stockReservations, users, vehicles } from '../db/schema';
 import { StockService } from '../daily-reports/stock.service';
+import { CasesService } from './cases.service';
 
 const deletedByUser = alias(users, 'case_deleted_by');
 
@@ -25,6 +26,7 @@ export class CaseDeletionService {
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
     private readonly audit: AuditService,
     private readonly stock: StockService,
+    private readonly caseService: CasesService,
   ) {}
 
   private get db() {
@@ -75,11 +77,16 @@ export class CaseDeletionService {
     const tenantId = actor.user.tenantId;
     return this.db.transaction(async (tx) => {
       await this.assertOwner(tx, actor);
+      await this.caseService.lockVehicleIdentity(tx,tenantId);
       const [c] = await tx.select().from(cases).where(and(eq(cases.id, id), eq(cases.tenantId, tenantId))).for('update');
       if (!c) throw notFound('پرونده');
       if (c.status !== 'deleted') throw conflict('CASE_NOT_DELETED', 'این پرونده حذف نشده است');
       if (c.version !== input.expectedVersion) throw versionConflict(c.version);
       const status = c.deletedFromStatus && c.deletedFromStatus !== 'deleted' ? c.deletedFromStatus : 'open';
+      if(status==='open') {
+        const [vehicle]=await tx.select().from(vehicles).where(and(eq(vehicles.id,c.vehicleId),eq(vehicles.tenantId,tenantId)));
+        await this.caseService.assertVehicleAvailable(tx,actor,[vehicle?.vin,vehicle?.chassisRef],id);
+      }
       const now = new Date();
       // No reservation or stock movement is created; released reservations stay released and are decided again.
       const [row] = await tx.update(cases).set({ status, deletedFromStatus: null, deletedAt: null, deletedBy: null, deleteReason: null, updatedAt: now, updatedBy: actor.user.id, version: c.version + 1 })

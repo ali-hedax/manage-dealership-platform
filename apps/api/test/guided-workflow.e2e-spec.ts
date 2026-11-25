@@ -28,6 +28,8 @@ it('enforces the guided journey, corrective QC, one invoice handoff, allocation,
   expect((await expert.post(`/tasks/${task.id}/actions`, { action: 'start', expectedVersion: task.version })).body.code).toBe('PLAN_CONFIRM_REQUIRED');
   c = await getCase(c.id);
   expect((await expert.post(`/cases/${c.id}/workflow`, { action: 'confirm_plan', expectedVersion: c.version })).status).toBe(201);
+  c = await getCase(c.id);
+  expect((await expert.post(`/cases/${c.id}/workflow`, { action: 'confirm_plan', expectedVersion: c.version })).body.code).toBe('PLAN_ALREADY_CONFIRMED');
   const run = async (t: Task) => { for (const action of ['start', 'complete', 'approve']) { const r = await expert.post(`/tasks/${t.id}/actions`, { action, expectedVersion: t.version }); expect(r.status).toBe(201); t = r.body; } return t; };
   const changed = await expert.patch(`/tasks/${task.id}`, { expectedVersion: task.version, dependsOn: [], scheduleReason: 'بازبینی وابستگی ساختگی' });
   expect(changed.status).toBe(200); task = changed.body;
@@ -42,11 +44,13 @@ it('enforces the guided journey, corrective QC, one invoice handoff, allocation,
   expect(r.status).toBe(201);
   expect((await expert.get(`/cases/${c.id}/workflow`)).body.current).toBe('execution');
   c = await getCase(c.id); const fix = c.tasks.find(t => t.qcInspectionId)!;
-  const edited = await expert.patch(`/tasks/${fix.id}`, { expectedVersion: fix.version, assignedUserId: tech!.id, stationId: station.id, durationDays: 1, scheduleReason: 'ارجاع کار اصلاحی' });
-  expect(edited.status).toBe(200);
+  const edited = await expert.patch(`/tasks/${fix.id}`, { expectedVersion: fix.version, assignedUserId: tech!.id, stationId: station.id, durationDays: 1, plannedStartAt: task.plannedEndAt, scheduleReason: 'ارجاع کار اصلاحی پس از زمان برنامهٔ فعالیت اول' });
+  expect({ status: edited.status, error: edited.status === 200 ? null : edited.body }).toMatchObject({ status: 200 });
   c = await getCase(c.id); await expert.post(`/cases/${c.id}/workflow`, { action: 'confirm_plan', expectedVersion: c.version });
   await run(edited.body);
-  await qc(false); await qc(false);
+  await qc(false);
+  c = await getCase(c.id);
+  expect((await expert.post(`/cases/${c.id}/qc`, { expectedVersion: c.version, checks: QC_CHECK_ITEMS.map(item => ({ item, result: 'ok' })) })).body.code).toBe('QC_ALREADY_PASSED');
   const notices = (await parts.get('/parts/workbench/notices')).body as { key: string }[];
   expect(notices.filter(n => n.key === `invoice-${c.id}`)).toHaveLength(1);
   expect(await h.db.db.select().from(notifications).where(and(eq(notifications.kind, 'invoice_collection'), eq(notifications.userId, (await h.db.db.select().from(users).where(eq(users.username, 'parts')))[0]!.id)))).toHaveLength(1);
@@ -66,9 +70,9 @@ it('enforces the guided journey, corrective QC, one invoice handoff, allocation,
   expect((await parts.post(`/cases/${c.id}/parts-statement/deductible`, { expectedVersion: c.version, percent: 10 })).status).toBe(201);
   expect((await getCase(c.id)).version).toBe(completedVersion);
   expect((await expert.get(`/cases/${c.id}/workflow`)).body.invoicePending).toBe(false);
-  await qc(false);
-  expect((await parts.get(`/cases/${c.id}/parts-statement`)).body.readyToSend).toBe(true);
-  expect((await parts.post(`/cases/${c.id}/parts-statement`, { expectedVersion: 1 })).status).toBe(201);
+  c = await getCase(c.id);
+  expect((await expert.post(`/cases/${c.id}/qc`, { expectedVersion: c.version, checks: QC_CHECK_ITEMS.map(item => ({ item, result: 'ok' })) })).body.code).toBe('QC_ALREADY_PASSED');
+  expect((await parts.get(`/cases/${c.id}/parts-statement`)).body.readyToSend).toBe(false);
 
   expect((await expert.get(`/cases/${c.id}/finance`)).body.customerShareRial).toBe(100000);
   for (const action of ['technical-close', 'financial-close']) { c = await getCase(c.id); const result = await expert.post(`/cases/${c.id}/${action}`, { expectedVersion: c.version }); expect({ status: result.status, body: result.status === 201 ? null : result.body }).toMatchObject({ status: 201 }); }

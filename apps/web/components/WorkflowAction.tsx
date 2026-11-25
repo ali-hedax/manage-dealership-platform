@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useSWRConfig } from 'swr';
 import { CASE_STEPS, CASE_STEP_LABELS, blockersOf, type CaseDetail, type CaseWorkflow, type WorkflowBlocker } from '@manage/shared';
 import { ApiError, api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -7,6 +8,8 @@ import type { CaseTab } from './CaseFolderHeader';
 import { WorkflowBlockerDialog } from './WorkflowBlockerDialog';
 export function WorkflowAction({ kase, workflow: w, tab, onTab, onChange }: { kase: CaseDetail; workflow: CaseWorkflow; tab: CaseTab; onTab: (t: CaseTab, anchor?: string) => void; onChange: () => void }) {
   const { can } = useAuth();
+  const pending = useRef(false);
+  const { mutate } = useSWRConfig();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState<WorkflowBlocker[] | null>(null);
@@ -15,9 +18,11 @@ export function WorkflowAction({ kase, workflow: w, tab, onTab, onChange }: { ka
   const requirements = next ? w.requirements[next] : [];
   const blockers = next === 'plan' || next === 'execution' ? (w.blockers?.[next] ?? []) : [];
   async function confirm() {
+    if (pending.current || w.planConfirmed) return;
+    pending.current = true;
     setBusy(true); setError('');
-    try { await api(`/cases/${kase.id}/workflow`, { body: { action: 'confirm_plan', expectedVersion: kase.version } }); setShown(null); onChange(); onTab('execution'); }
-    catch (e) { const list = e instanceof ApiError ? blockersOf(e.details) : []; if (list.length) setShown(list); else setError(errorMessage(e)); onChange(); } finally { setBusy(false); }
+    try { const result = await api<CaseWorkflow>(`/cases/${kase.id}/workflow`, { body: { action: 'confirm_plan', expectedVersion: kase.version } }); await mutate(key => typeof key === 'string' && key.startsWith(`/cases/${kase.id}/workflow`), result, {revalidate:false}); setShown(null); await onChange(); }
+    catch (e) { const list = e instanceof ApiError ? blockersOf(e.details) : []; if (list.length) setShown(list); else setError(errorMessage(e)); onChange(); } finally { pending.current = false; setBusy(false); }
   }
   const future = next && CASE_STEPS.indexOf(next) > CASE_STEPS.indexOf(w.current);
   return <section className="cf-next" aria-label="قدم بعدی پرونده">
@@ -25,7 +30,8 @@ export function WorkflowAction({ kase, workflow: w, tab, onTab, onChange }: { ka
     {!!requirements.length && <p>{requirements.join('؛ ')}</p>}
     {/* A disabled step keeps its explanation and next step reachable (keyboard included). */}
     {!!blockers.length && <button type="button" className="m-btn2-s" onClick={() => setShown(blockers)}>چرا و چه باید کرد؟</button>}
-    {next && can('case.update') && <button type="button" className="m-btn" disabled={busy || !!requirements.length || (next === 'quality' && !!future)} onClick={() => tab === 'plan' ? void confirm() : onTab(next)}>{tab === 'plan' ? 'تأیید برنامه و شروع اجرا' : `رفتن به ${CASE_STEP_LABELS[next]}`} ←</button>}
+    {next && can('case.update') && <button type="button" className="m-btn" disabled={busy || !!requirements.length || (tab === 'plan' && w.planConfirmed) || (next === 'quality' && !!future)} onClick={() => tab === 'plan' ? void confirm() : onTab(next)}>{tab === 'plan' ? w.planConfirmed ? 'برنامه تأیید شد' : 'تأیید برنامه و شروع اجرا' : `رفتن به ${CASE_STEP_LABELS[next]}`} ←</button>}
+    {tab === 'plan' && w.planConfirmed && <button type="button" className="m-btn" onClick={() => onTab('execution')}>رفتن به اجرای تعمیر ←</button>}
     {tab !== w.current && !next && <button type="button" className="m-btn" onClick={() => onTab(w.current)}>ادامهٔ {CASE_STEP_LABELS[w.current]}</button>}
     {w.invoicePending && <p className="callout callout-red">جمع‌آوری فاکتورها با مسئول قطعات در انتظار تکمیل است.</p>}
     {error && <p role="alert">{error}</p>}

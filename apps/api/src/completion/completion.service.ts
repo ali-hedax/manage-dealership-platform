@@ -16,11 +16,13 @@ import {
   type RecipientRelation,
   type RecordQcInput,
   type TechnicalCloseInput,
+  type UndoQcInput,
+  type CaseStage,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
 import { assertNotFuture, CasesService, MINUTE_TOLERANCE_MS } from '../cases/cases.service';
-import { badRequest, notFound } from '../common/errors';
+import { badRequest, conflict, notFound } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { assessments, blockers, cases, departments, partRequests, qcInspections, tasks, users } from '../db/schema';
@@ -52,6 +54,7 @@ interface Evaluation {
   financialValid: boolean;
   invoiceVersion: number | null;
   deliveryIssues: CompletionIssue[];
+  qcState: CaseCompletion['qcState'];
 }
 
 /**
@@ -86,6 +89,8 @@ export class CompletionService {
     await this.db.transaction(async (tx) => {
       const kase = await this.cases.loadForWrite(tx, tenantId, caseId, input.expectedVersion);
       assertOpen(kase);
+      const previous = await this.evaluate(tx, kase, actor);
+      if (previous.qcState.passed) throw conflict('QC_ALREADY_PASSED', 'کنترل کیفیت قبلاً قبول شده است؛ برای اصلاح از «بازگشت از کنترل کیفیت» استفاده کنید');
       const workflow = await this.cases.workflow(actor, caseId, tx);
       if (workflow.requirements.quality.length) throw badRequest('QC_WORK_UNFINISHED', workflow.requirements.quality.join('؛ '));
       const work = await tx
@@ -198,16 +203,48 @@ export class CompletionService {
           `خودکار: رد کنترل کیفیت دور ${round} — کار اصلاحی`,
         );
       } else {
+        const statement = await this.operations.statement(actor, caseId, tx);
         const recipients = await usersWithRole(tx, tenantId, ['parts_clerk']);
         const alreadyPending = !!kase.workflow?.invoiceRequestedAt && !kase.workflow.invoiceCompletedAt;
         const requestedAt = alreadyPending ? kase.workflow!.invoiceRequestedAt! : new Date().toISOString();
         await this.cases.applyPatch(tx, actor, kase, { stage: 'quality_control', workflow: {
           ...kase.workflow, invoiceRequestedAt: requestedAt, invoiceCompletedAt: undefined,
           invoiceAssigneeId: kase.workflow?.invoiceAssigneeId ?? recipients[0] ?? null,
+          qcTransition: { inspectionId: id, previousStage: kase.stage as CaseStage,
+            invoiceVersion: statement.versions.at(-1)?.number ?? 0,
+            invoiceRequestedAt: kase.workflow?.invoiceRequestedAt,
+            invoiceCompletedAt: kase.workflow?.invoiceCompletedAt,
+            invoiceAssigneeId: kase.workflow?.invoiceAssigneeId },
         } }, 'case.invoice_collection_requested', null);
         await notifyUsers(tx, tenantId, recipients, { kind: 'invoice_collection', title: `جمع‌آوری فاکتورها · ${kase.caseNumber}`,
           link: `/cases/${caseId}#case-invoice`, dedupeKey: `invoice_collection:${caseId}:${requestedAt}` });
       }
+    });
+    return this.get(actor, caseId);
+  }
+
+  async undoQc(actor: Actor, caseId: string, input: UndoQcInput): Promise<CaseCompletion> {
+    await this.db.transaction(async tx => {
+      const kase = await this.cases.loadForWrite(tx, actor.user.tenantId, caseId, input.expectedVersion);
+      assertOpen(kase);
+      const ev = await this.evaluate(tx, kase, actor);
+      const latest = ev.qc.at(-1);
+      if (!latest || latest.id !== input.inspectionId || !ev.qcState.passed)
+        throw conflict('QC_UNDO_INVALID', 'این کنترل کیفیت دیگر دور معتبر جاری نیست؛ صفحه را تازه کنید');
+      if (!ev.qcState.canUndo) throw badRequest('QC_UNDO_BLOCKED', ev.qcState.undoBlockedReason!);
+      const before = kase.workflow!.qcTransition!;
+      const now = new Date().toISOString();
+      await this.cases.applyPatch(tx, actor, kase, { stage: before.previousStage, workflow: {
+        ...kase.workflow,
+        qcReversals: { ...kase.workflow?.qcReversals, [latest.id]: { at: now, reason: input.reason, by: actor.user.id } },
+        invoiceRequestedAt: before.invoiceRequestedAt, invoiceCompletedAt: before.invoiceCompletedAt,
+        invoiceAssigneeId: before.invoiceAssigneeId,
+      } }, 'qc.reversed', input.reason);
+      await notifyUsers(tx, actor.user.tenantId, await usersWithRole(tx, actor.user.tenantId, ['parts_clerk']), {
+        kind: 'qc_reversed', title: `بازگشت از کنترل کیفیت · ${kase.caseNumber}`,
+        body: 'قبولی کنترل کیفیت لغو شد؛ جمع‌آوری فاکتورها از این دور منتظر نمی‌ماند.',
+        link: `/cases/${caseId}#case-quality`, dedupeKey: `qc_reversed:${latest.id}`,
+      });
     });
     return this.get(actor, caseId);
   }
@@ -353,6 +390,7 @@ export class CompletionService {
 
     return {
       caseId,
+      qcState: ev.qcState,
       qc: ev.qc.map(
         (q): QcInspection => ({
           id: q.id,
@@ -362,6 +400,8 @@ export class CompletionService {
           note: q.note,
           inspectedAt: q.inspectedAt.toISOString(),
           inspectedBy: ref(q.inspectedBy)!,
+          reversedAt: kase.workflow?.qcReversals?.[q.id]?.at ?? null,
+          reversalReason: kase.workflow?.qcReversals?.[q.id]?.reason ?? null,
         }),
       ),
       technical: close(
@@ -449,10 +489,12 @@ export class CompletionService {
     // Any activity touched after the round was recorded (reopened, re-approved,
     // added) needs a new round. Both times come from the application clock.
     const lastChange = Math.max(0, ...work.map((t) => t.updatedAt.getTime()));
-    if (!latest) technicalIssues.push(issue('qc_missing'));
+    const reversed = !!latest && !!kase.workflow?.qcReversals?.[latest.id];
+    if (!latest || reversed) technicalIssues.push(issue('qc_missing'));
     else if (latest.outcome === 'failed') technicalIssues.push(issue('qc_failed'));
     else if (lastChange > latest.createdAt.getTime()) technicalIssues.push(issue('qc_stale'));
     // A close made before the latest QC round must be confirmed again.
+    const qcPassed = !!latest && !reversed && latest.outcome === 'passed' && lastChange <= latest.createdAt.getTime() && !unapproved;
     const technicalValid =
       !!kase.technicalClosedAt &&
       !!latest &&
@@ -484,7 +526,15 @@ export class CompletionService {
     if (!technicalValid) deliveryIssues.push(issue('technical_not_closed'));
     if (!financialValid) deliveryIssues.push(issue('financial_not_closed'));
 
-    return { kase, qc, technicalIssues, technicalValid, finance, financialIssues, financialValid, invoiceVersion, deliveryIssues };
+    const transition = kase.workflow?.qcTransition;
+    const undoBlockedReason = !qcPassed ? null
+      : kase.status !== 'open' || kase.stage === 'delivered' ? 'پرونده بسته یا تحویل شده است؛ بازگشت از کنترل کیفیت ممکن نیست'
+      : kase.technicalClosedAt || kase.financialClosedAt ? 'پس از بستن فنی یا مالی، بازگشت از کنترل کیفیت ممکن نیست'
+      : !transition || transition.inspectionId !== latest!.id ? 'مرحلهٔ پیش از این کنترل کیفیت قدیمی ثبت نشده است؛ بازگشت خودکار ایمن نیست'
+      : (invoiceVersion ?? 0) > transition.invoiceVersion ? 'پس از نهایی‌شدن صورت فاکتورها، بازگشت از کنترل کیفیت ممکن نیست'
+      : null;
+    return { kase, qc, technicalIssues, technicalValid, finance, financialIssues, financialValid, invoiceVersion, deliveryIssues,
+      qcState: { passed: qcPassed, canUndo: qcPassed && !undoBlockedReason, undoBlockedReason } };
   }
 }
 

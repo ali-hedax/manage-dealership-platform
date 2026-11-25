@@ -67,6 +67,17 @@ suite('daily reports on real PostgreSQL', () => {
     await h?.close();
   });
 
+  it('serializes simultaneous accident receptions for one normalized VIN across database connections', async () => {
+    const payload={admittedAt:daysAgo(1),coverageType:'personal',vehicle:{model:'خودروی ساختگی هم‌زمان',vin:'TESTVIN9911337701'}};
+    const results=await Promise.all(Array.from({length:8},(_,i)=>expert.post('/cases',{
+      ...payload,vehicle:{...payload.vehicle,vin:i%2?'testvin-۹۹۱۱۳۳۷۷۰۱':payload.vehicle.vin},
+    })));
+    expect(results.filter(r=>r.status===201)).toHaveLength(1);
+    expect(results.filter(r=>r.status===409&&r.body.code==='ACTIVE_ACCIDENT_CASE_EXISTS')).toHaveLength(7);
+    const list=await expert.get('/cases?q=TESTVIN9911337701');
+    expect(list.body.items).toHaveLength(1);
+  });
+
   it('never oversells a code when many people reserve it at once', async () => {
     const needs = await Promise.all(Array.from({ length: 8 }, (_, i) => need(`82000${i}`, 1)));
     const results = await Promise.all(needs.map((n) => parts.post('/stock/reservations', { partRequestId: n.id, fullStockCode: '1234567801', locationAddress: 'A-01', snapshotId, quantity: '1', confirm: true })));

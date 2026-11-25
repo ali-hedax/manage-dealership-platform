@@ -1,4 +1,6 @@
 import {
+  isFullVehicleVin,
+  isIsacoVehicleChassis,
   normalizePersian,
   parseJalali,
   searchKey,
@@ -178,13 +180,11 @@ export function isNonUniqueAdmission(value: string): boolean {
 
 // Real VINs exclude I, O and Q (catches O/0 typos). Synthetic test VINs use the
 // TESTVIN prefix (AGENTS.md), which is accepted explicitly.
-const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
-export const isFullVin = (key: string) => VIN_RE.test(key) || /^TESTVIN[A-Z0-9]{10}$/.test(key);
+export const isFullVin = isFullVehicleVin;
 
 // ISACO's Emdad and reception reports identify a vehicle only by its 8-character chassis
 // number (two or three letters, then digits), e.g. AAA12345 or AA123456.
-const ISACO_CHASSIS_RE = /^(?=.{8}$)[A-Z]{2,3}[0-9]{5,6}$/;
-export const isIsacoChassis = (key: string) => ISACO_CHASSIS_RE.test(key);
+export const isIsacoChassis = isIsacoVehicleChassis;
 /** Vehicle identity of the special-aid module: a full VIN or the ISACO 8-character chassis. */
 export const isAidVehicleKey = (key: string) => isFullVin(key) || isIsacoChassis(key);
 

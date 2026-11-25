@@ -43,3 +43,5 @@ export * from './special-aid';
 export * from './report-center';
 export * from './pulse';
 export * from './case-order';
+export * from './assessment-supplies';
+export * from './vehicle-identity';

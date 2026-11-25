@@ -19,6 +19,7 @@ import { stageAutomaticReport } from '../daily-reports/auto-stage';
 import { decryptSecret } from './pulse-secret';
 import { pulseActor, pulseAutoApply } from './pulse-actor';
 import { ReferenceDataService } from '../reference-data/reference-data.service';
+import { StockService } from '../daily-reports/stock.service';
 import { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
 import type { CardTextExtractor } from '../special-aid/card-extractor';
 import { ReportCenterService } from '../special-aid/report-center.service';
@@ -338,7 +339,7 @@ export class PulseEngine {
       const [same] = await this.db.select({ id: referenceImports.id, status: referenceImports.status }).from(referenceImports)
         .where(and(eq(referenceImports.tenantId, conn.tenantId), eq(referenceImports.kind, 'appointments'), eq(referenceImports.fileSha256, sha)))
         .orderBy(desc(referenceImports.createdAt)).limit(1);
-      const refs = new ReferenceDataService(this.handle, this.audit, new SpecialAidRecordsService(this.handle, this.audit, NO_CARD_EXTRACTOR));
+      const refs = new ReferenceDataService(this.handle, this.audit, new SpecialAidRecordsService(this.handle, this.audit, NO_CARD_EXTRACTOR), new StockService(this.handle, this.audit));
       let outcome: string, previewId: string, counts: Record<string, number>;
       if (same) {
         outcome = same.status === 'applied' ? 'unchanged' : 'waiting'; previewId = same.id;
