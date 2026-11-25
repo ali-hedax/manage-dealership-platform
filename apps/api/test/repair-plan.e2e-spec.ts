@@ -7,6 +7,7 @@ import { createHarness, type Client, type Harness } from './harness';
 let h: Harness;
 let expert: Client, tech: Client, manager: Client;
 let techId: string, body: string, paint: string;
+let syntheticVin = 0;
 
 beforeAll(async () => {
   h = await createHarness({ config: { DAILY_SCHEDULER: 'false' } });
@@ -21,7 +22,7 @@ afterAll(async () => h?.close());
 
 async function newCase() {
   const res = await expert.post('/cases', { isLegacyEntry: true,
-    vehicle: { model: 'خودرو آزمون مسیر تعمیر', plate: '۱۲ ب ۵۵۵ - ۶۷', vin: 'TESTVIN5000000001' },
+    vehicle: { model: 'خودرو آزمون مسیر تعمیر', plate: '۱۲ ب ۵۵۵ - ۶۷', vin: `TESTVIN5000${String(++syntheticVin).padStart(6,'0')}` },
     customer: { fullName: 'مشتری آزمون مسیر', phone: '09005000001' },
     admittedAt: new Date().toISOString(),
     coverageType: 'golden_card',

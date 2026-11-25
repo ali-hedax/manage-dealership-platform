@@ -106,7 +106,7 @@ describe('vehicle-specific catalog search', () => {
     // Unrelated look-alikes are not a family.
     for (const model of ['ستارا', 'پژو 2007']) {
       const u = await newCase({ model });
-      expect((await search(u.id, 'سپر')).body).toMatchObject({ fitmentVerified: false, results: [] });
+      expect((await search(u.id, 'سپر')).body).toMatchObject({ fitmentVerified: false, results: [{partNumber:'0088800101',fitment:'common'}] });
     }
   });
 
@@ -121,19 +121,19 @@ describe('vehicle-specific catalog search', () => {
     expect(b.body).toMatchObject({ fitmentVerified: true, family: 'دنا', trimReview: true });
     expect(b.body.results.filter((x: { fitmentNote: string | null }) => !x.fitmentNote).map((x: { partNumber: string }) => x.partNumber)).toEqual(['0088800101']);
     const other = await newCase({ model: 'سورن ELX', vin: 'TESTVNA0000099005' });
-    expect((await search(other.id, 'سپر')).body).toMatchObject({ fitmentVerified: false, results: [], fitment: { status: 'conflict' } });
+    expect((await search(other.id, 'سپر')).body).toMatchObject({ fitmentVerified: false, results: [{partNumber:'0088800101',fitment:'common'}], fitment: { status: 'conflict' } });
   });
 
-  it('shows nothing when the vehicle cannot be verified, or when the VIN record disagrees', async () => {
+  it('shows only universal supplies when the vehicle cannot be verified or the VIN record disagrees', async () => {
     const unknown = await newCase({ model: 'خودروی نامعلوم' });
     const u = await search(unknown.id, 'سپر');
-    expect(u.body).toMatchObject({ fitmentVerified: false, results: [] });
+    expect(u.body).toMatchObject({ fitmentVerified: false, results: [{partNumber:'0088800101',fitment:'common'}] });
     expect(u.body.fitment.status).toBe('unresolved');
     expect(u.body.message).toContain('قابل تشخیص نیست');
 
     const conflict = await newCase({ model: 'تارا', vin: 'TESTVNA0000099001' });
     const c = await search(conflict.id, 'سپر');
-    expect(c.body).toMatchObject({ fitmentVerified: false, results: [] });
+    expect(c.body).toMatchObject({ fitmentVerified: false, results: [{partNumber:'0088800101',fitment:'common'}] });
     expect(c.body.fitment.status).toBe('conflict');
 
     // No model on the case: the dealership's admission record of the same VIN decides.

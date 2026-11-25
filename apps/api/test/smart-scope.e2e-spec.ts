@@ -127,7 +127,7 @@ describe('three search scopes for a «سورن ELX» case', () => {
 
   it('a case whose family is unknown still searches another vehicle or all vehicles, never verified', async () => {
     const caseId = await newCase('خودروی ناشناخته آزمون');
-    expect((await search(caseId, { query: 'سپر' })).body).toMatchObject({ fitmentVerified: false, results: [] });
+    expect((await search(caseId, { query: 'سپر' })).body).toMatchObject({ fitmentVerified: false, results: [{partNumber:'0031400101',fitment:'common'}] });
     const all = await search(caseId, { query: 'سپر', scope: 'all' });
     expect(all.body.results.length).toBe(5);
     expect(all.body.results.filter((x: Result) => x.compatibility === 'verified').map((x: Result) => x.partNumber)).toEqual(['0031400101']);
