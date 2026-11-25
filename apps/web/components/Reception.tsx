@@ -57,7 +57,7 @@ export function ReceptionRowLink({ r }: { r: ReceptionRow }) {
  */
 export function ReceptionStats() {
   const { can } = useAuth();
-  const { data, error } = useSWR<ReceptionDayStats>(['/reception/stats', '{}'], ([p]: [string]) => api<ReceptionDayStats>(p, { body: {} }), { refreshInterval: 120_000 });
+  const { data, error } = useSWR<ReceptionDayStats>(['/reception/stats', '{}'], ([p]: [string, string]) => api<ReceptionDayStats>(p, { body: {} }), { refreshInterval: 120_000 });
   if (error) return <p role="alert" className="m-error">{errorMessage(error)}</p>;
   if (!data) return null;
   return (
