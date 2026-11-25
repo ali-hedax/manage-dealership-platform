@@ -40,12 +40,15 @@ export function SmartPartEntry({ caseId, parts, onAdded }: { caseId: string; par
   const searchRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
   const saving = useRef(false);
+  // Focus returns to the search once saving ends (a disabled input cannot take focus).
+  const refocus = useRef(false);
   const search = useCatalogSearch(`/cases/${caseId}/parts-catalog/search`, picked ? '' : query, scope, '', () => { setActive(0); setOpen(true); });
   const { data, loading } = search;
   const results = data?.results ?? [];
 
   useEffect(() => { searchRef.current?.focus(); }, []);
   useEffect(() => { if (picked) qtyRef.current?.select(); }, [picked]);
+  useEffect(() => { if (!busy && refocus.current) { refocus.current = false; searchRef.current?.focus(); } }, [busy]);
 
   const existingOf = (s: CatalogSuggestion) => {
     const key = partCodeKey(refOf(s));
@@ -62,7 +65,8 @@ export function SmartPartEntry({ caseId, parts, onAdded }: { caseId: string; par
   }
   function reset() {
     setPicked(null); setQuery(''); setQty('1'); setFitChecked(false); search.clear(); setOpen(false);
-    window.setTimeout(() => searchRef.current?.focus(), 0);
+    refocus.current = true;
+    window.setTimeout(() => { if (!saving.current) { refocus.current = false; searchRef.current?.focus(); } }, 0);
   }
 
   async function add() {

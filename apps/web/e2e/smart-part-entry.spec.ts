@@ -33,8 +33,8 @@ test('manual add part: search, pick, add and continue for several parts; the sam
   const search = entry.getByTestId('smart-part-search');
   await expect(search).toBeFocused();
 
-  // 1) «سپر»: compatible result with its code; Enter picks the highlighted row, Enter on quantity adds.
-  await search.fill('سپر');
+  // 1) «سپر» (with this test's own word, the shared test catalog has other Rira bumpers): compatible result with its code; Enter picks the highlighted row, Enter on quantity adds.
+  await search.fill('سپر دستی');
   const option = entry.getByTestId('smart-part-option');
   await expect(option).toHaveCount(1);
   await expect(option.first()).toContainText('سازگار با خودروی پرونده');
@@ -51,7 +51,7 @@ test('manual add part: search, pick, add and continue for several parts; the sam
   await expect(search).toBeFocused();
 
   // 2) «چراغ جلو»: two results; the second chosen with the arrow keys, quantity 2.
-  await search.fill('چراغ جلو');
+  await search.fill('چراغ جلو دستی');
   await expect(option).toHaveCount(2);
   await search.press('ArrowDown');
   await search.press('Enter');
@@ -60,14 +60,14 @@ test('manual add part: search, pick, add and continue for several parts; the sam
   await expect(ledger.getByTestId('part')).toHaveCount(2);
 
   // 3) a third part by mouse.
-  await search.fill('گلگیر');
+  await search.fill('گلگیر دستی');
   await option.first().click();
   await entry.getByRole('button', { name: 'افزودن و ادامه' }).click();
   await expect(ledger.getByTestId('part')).toHaveCount(3);
   await expect(entry.getByTestId('smart-part-recent').getByRole('listitem')).toHaveCount(3);
 
   // The same part again: no duplicate line, its quantity is raised (existing rule of the parts list).
-  await search.fill('سپر');
+  await search.fill('سپر دستی');
   await expect(option.first()).toContainText('در فهرست');
   await search.press('Enter');
   await expect(entry.getByRole('button', { name: 'افزایش تعداد و ادامه' })).toBeVisible();
