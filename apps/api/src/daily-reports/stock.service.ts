@@ -124,12 +124,14 @@ export class StockService {
       models: sql<string[]>`array_agg(distinct coalesce(${stockSnapshotItems.vehicleModel},''))`,
       // Availability can never go below zero at a location. No reservation is created here.
       available: sql<string>`sum(greatest(${stockSnapshotItems.quantity}-coalesce(${c.reserved},0)-coalesce(${c.issued},0),0))::text`,
+      // The report's sale price (one code may sit in several locations: the highest is shown).
+      salePrice: sql<string | null>`max(${stockSnapshotItems.salePrice})::text`,
     }).from(stockSnapshotItems)
       .leftJoin(stockCodeAliases, and(eq(stockCodeAliases.tenantId,tenantId),eq(stockCodeAliases.fullStockCode,stockSnapshotItems.fullStockCode)))
       .leftJoin(c,and(eq(c.code,stockSnapshotItems.fullStockCode),eq(c.loc,stockSnapshotItems.locationAddress)))
       .where(and(eq(stockSnapshotItems.tenantId,tenantId),eq(stockSnapshotItems.snapshotId,snap.id),match))
       .groupBy(stockSnapshotItems.fullStockCode).orderBy(asc(stockSnapshotItems.fullStockCode)).limit(limit);
-    return { snapshot: snapshotInfo(snap), items: rows.map(r => ({ ...r, available: snapshotInfo(snap).reservable ? dec(r.available) : null })) };
+    return { snapshot: snapshotInfo(snap), items: rows.map(r => ({ ...r, available: snapshotInfo(snap).reservable ? dec(r.available) : null, salePrice: dec(r.salePrice) })) };
   }
 
   /** Manage commitments per code and location: active reservations and issues not yet in the report. */
