@@ -47,3 +47,4 @@ export * from './assessment-supplies';
 export * from './vehicle-identity';
 export * from './reception-stats';
 export * from './night-list';
+export * from './guest-mask';
