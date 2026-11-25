@@ -35,6 +35,15 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     expect(c.bundleWarnings).toEqual([]);
   });
 
+  it('searches admissions with every field of the site\'s search and reads lines by VarRcd; a refusal keeps the site\'s message (owner, 1405/09/03)', async () => {
+    const c = client();
+    await c.login(creds());
+    expect((await c.cards(mock.dealerCode, '1405/09/02', '1405/09/02')).rows).toHaveLength(1);
+    // Only the five documented parameters: refused, as on the real site.
+    const refused = await c.read(KASB_PATHS.cards, { VarCus: mock.dealerCode, VarRcptDateFr: '1405/09/02', VarRcptDateTo: '1405/09/02', VarDealerSeq: '', VarChs: '' }).catch((e: unknown) => e);
+    expect(refused).toMatchObject({ code: 'KASB_REJECTED', messageCode: '50001', messageText: 'پارامتر ورودی نامعتبر است' });
+  });
+
   it('lists warehouses and downloads the stock report file unchanged (owner, 2026-11-23)', async () => {
     const c = client();
     await expect(c.warehouses()).rejects.toMatchObject({ code: 'KASB_AUTH' });

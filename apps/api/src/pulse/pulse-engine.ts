@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { DEFAULT_PULSE_SETTINGS, normalizeRoles, permissionsFor, REPORT_CENTER_DEFAULTS, type ReportCenterKind, type Role, PULSE_ATTENTION_STATES, PULSE_ERROR_LABELS, PULSE_STATE_LABELS, parseJalali, type PulseCursor, type PulseRunKind, type PulseSettings, type PulseState } from '@manage/shared';
+import { DEFAULT_PULSE_SETTINGS, normalizeRoles, REPORT_CENTER_DEFAULTS, type ReportCenterKind, PULSE_ATTENTION_STATES, PULSE_ERROR_LABELS, PULSE_STATE_LABELS, parseJalali, type PulseCursor, type PulseRunKind, type PulseSettings, type PulseState } from '@manage/shared';
 import type { AuditService } from '../audit/audit.service';
 import type { AppConfig } from '../config';
 import { newId } from '../common/ids';
@@ -17,10 +17,11 @@ import { dayChunks, diffLines, isClosed, jalaliDay, mapCard, mapDefect, mapPart,
 import { findCaseLink } from './pulse-link';
 import { stageAutomaticReport } from '../daily-reports/auto-stage';
 import { decryptSecret } from './pulse-secret';
-import type { Actor } from '../auth/auth.types';
+import { pulseActor, pulseAutoApply } from './pulse-actor';
 import { ReferenceDataService } from '../reference-data/reference-data.service';
 import { StockService } from '../daily-reports/stock.service';
-import type { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
+import { SpecialAidRecordsService } from '../special-aid/special-aid-records.service';
+import type { CardTextExtractor } from '../special-aid/card-extractor';
 import { ReportCenterService } from '../special-aid/report-center.service';
 
 // The Manage Pulse worker logic (spec section 26). Runs only in the separate `pulse` process,
@@ -49,6 +50,9 @@ export class PulseStop extends Error {
     this.name = 'PulseStop';
   }
 }
+
+/** The worker never reads card images; matching admissions to cards needs no extractor. */
+const NO_CARD_EXTRACTOR: CardTextExtractor = { provider: 'none', extract: async () => null };
 
 /** The cursor without a pending special-aid request. */
 function withoutPending(cursor: PulseCursor | null | undefined): PulseCursor {
@@ -304,22 +308,6 @@ export class PulseEngine {
     }
   }
 
-  /** The person who configured Pulse acts for its automatic previews (their own permissions apply). */
-  private async actorFor(conn: Connection): Promise<Actor> {
-    const [row] = await this.db.select({ u: users, t: tenants }).from(users).innerJoin(tenants, eq(tenants.id, users.tenantId))
-      .where(and(eq(users.id, conn.updatedBy!), eq(users.tenantId, conn.tenantId)));
-    if (!row || !row.u.isActive) throw new PulseStop('PULSE_NOT_CONFIGURED');
-    const roles = normalizeRoles(row.u.roles as Role[]);
-    return {
-      user: {
-        id: row.u.id, tenantId: conn.tenantId, tenantCode: row.t.code, tenantName: row.t.name, isTestTenant: row.t.isTest,
-        username: row.u.username, displayName: row.u.displayName, roles, isOwner: row.u.isOwner,
-        permissions: permissionsFor(roles, row.t.permissionTemplates, row.u.permissionOverrides, row.u.isOwner), sessionId: 'pulse',
-      },
-      requestId: 'manage-pulse',
-    };
-  }
-
   /**
    * «لیست نوبت پذیرش»: read once a day for the report-center period and prepared as a preview of
    * the appointments import with the column layout the dealership confirmed once. A person still
@@ -337,7 +325,8 @@ export class PulseEngine {
       const from = this.shiftDay(-period.past), to = this.shiftDay(period.future);
       const file = await this.withSession(conn, (c) => c.appointmentsFile(conn.dealerCode, from, to));
       stats.read = 1;
-      const actor = await this.actorFor(conn);
+      const actor = await pulseActor(this.db, conn.tenantId, conn.updatedBy);
+      if (!actor) throw new PulseStop('PULSE_NOT_CONFIGURED');
       const fileName = `pulse-appointments-${this.shiftDay(0).replace(/\//g, '-')}.xlsx`;
       const fileBase64 = file.toString('base64');
       const found = await new ReportCenterService(this.handle, this.audit).detect(actor, { fileName, fileBase64 });
@@ -350,16 +339,29 @@ export class PulseEngine {
       const [same] = await this.db.select({ id: referenceImports.id, status: referenceImports.status }).from(referenceImports)
         .where(and(eq(referenceImports.tenantId, conn.tenantId), eq(referenceImports.kind, 'appointments'), eq(referenceImports.fileSha256, sha)))
         .orderBy(desc(referenceImports.createdAt)).limit(1);
-      let outcome: string, previewId: string;
-      if (same) { outcome = same.status === 'applied' ? 'unchanged' : 'waiting'; previewId = same.id; }
-      else {
-        // preview() never uses the special-aid records service (only apply() does).
-        const refs = new ReferenceDataService(this.handle, this.audit, null as unknown as SpecialAidRecordsService, new StockService(this.handle, this.audit));
+      const refs = new ReferenceDataService(this.handle, this.audit, new SpecialAidRecordsService(this.handle, this.audit, NO_CARD_EXTRACTOR), new StockService(this.handle, this.audit));
+      let outcome: string, previewId: string, counts: Record<string, number>;
+      if (same) {
+        outcome = same.status === 'applied' ? 'unchanged' : 'waiting'; previewId = same.id;
+        const [held] = await this.db.select({ rows: referenceImports.rows }).from(referenceImports).where(eq(referenceImports.id, same.id));
+        counts = {};
+        for (const r of (held?.rows ?? []) as { outcome?: string }[]) if (r.outcome) counts[r.outcome] = (counts[r.outcome] ?? 0) + 1;
+      } else {
         const preview = await refs.preview(actor, { kind: 'appointments', fileName, fileBase64, sheetIndex: found.sheetIndex, headerRow: found.headerRow, offset: 0, mapping: found.mapping });
-        outcome = 'staged'; previewId = preview.id; stats.created = preview.counts.new; stats.changed = preview.counts.update;
+        outcome = 'staged'; previewId = preview.id; counts = preview.counts; stats.created = preview.counts.new; stats.changed = preview.counts.update;
+      }
+      // «ثبت خودکار» (owner, 2026-11-24): confirmed as the person who configured Pulse, unless many
+      // rows were rejected or conflict (then a person decides) or that person may not confirm it.
+      let autoHold: string | null = null;
+      if (outcome !== 'unchanged' && (await pulseAutoApply(this.db, conn.tenantId))) {
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
+        const bad = (counts.error ?? 0) + (counts.conflict ?? 0);
+        if (bad > Math.max(5, 0.1 * total)) autoHold = 'rows';
+        else if (!actor.user.permissions.has('reference.appointments.manage')) autoHold = 'permission';
+        else { await refs.apply(actor, previewId); outcome = 'applied'; }
       }
       await this.patch(conn, { cursor: { ...(conn.cursor ?? {}), appointmentsDay: tehranDateKey(now) } });
-      await this.finishRun(run, 'ok', stats, null, { from, to, outcome, previewId, bytes: file.length });
+      await this.finishRun(run, 'ok', stats, null, { from, to, outcome, previewId, autoHold, bytes: file.length });
       return true;
     } catch (e) {
       await this.fail(conn, run, e, stats, { step: 'appointments' });
@@ -380,6 +382,8 @@ export class PulseEngine {
   private async fail(conn: Connection, run: string, e: unknown, stats: Stats, details: Record<string, unknown>) {
     const code = errorCode(e);
     this.logger.warn(`dealership ${conn.tenantId}: ${safe(e)}`);
+    // The site's own code and short message make a refused read diagnosable from «جزئیات فنی».
+    if (e instanceof KasbError && (e.messageCode || e.messageText)) details = { ...details, messageCode: e.messageCode ?? null, messageText: e.messageText ?? null };
     await this.finishRun(run, 'error', stats, code, Object.keys(details).length ? details : null);
     if (e instanceof PulseStop) {
       // Login stops already set their state; a missing key or configuration is shown as the last error.

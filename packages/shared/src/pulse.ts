@@ -98,6 +98,12 @@ export interface PulseSettings {
   appointmentsAuto?: boolean;
   /** Earliest Tehran time of the daily appointment read (default 10:10). */
   appointmentsAfter?: string;
+  /**
+   * Confirm what Pulse read without a person (default on, owner 2026-11-24): stock and special-aid
+   * files and the appointment list are applied as soon as their preview is ready, unless the
+   * preview needs a decision (changed columns, many missing items, many rejected rows).
+   */
+  autoApply?: boolean;
 }
 export const DEFAULT_PULSE_SETTINGS: PulseSettings = { intervalMinutes: 3, hoursMode: 'calendar', hoursFrom: '07:00', hoursTo: '19:00', openWindowDays: 60 };
 
@@ -138,6 +144,7 @@ export const pulseSettingsSchema = z.object({
   emdadAfter: hhmm.optional(),
   appointmentsAuto: z.boolean().optional(),
   appointmentsAfter: hhmm.optional(),
+  autoApply: z.boolean().optional(),
 }).strict().refine((v) => v.hoursFrom < v.hoursTo, { message: 'ساعت پایان باید بعد از ساعت شروع باشد', path: ['hoursTo'] });
 export type PulseSettingsInput = z.infer<typeof pulseSettingsSchema>;
 

@@ -139,7 +139,14 @@ function SettingsForm({ s, busy, onSave }: { s: PulseStatus; busy: boolean; onSa
 
 /** «بارگذاری اولیه از تاریخ …»: day by day, with a progress bar in the run list. */
 function BackfillForm({ s, busy, onStart }: { s: PulseStatus; busy: boolean; onStart: (from: string) => Promise<boolean> }) {
-  const [from, setFrom] = useState('');
+  // Filled in (not only a grey hint): the first day of the month two months ago, Tehran time.
+  const [from, setFrom] = useState(() => {
+    const parts = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', { timeZone: 'Asia/Tehran', year: 'numeric', month: 'numeric' }).formatToParts(new Date());
+    const y = Number(parts.find((p) => p.type === 'year')?.value), m = Number(parts.find((p) => p.type === 'month')?.value);
+    if (!y || !m) return '';
+    const back = m - 2 > 0 ? { y, m: m - 2 } : { y: y - 1, m: m + 10 };
+    return `${back.y}/${String(back.m).padStart(2, '0')}/01`;
+  });
   const last = s.commands.find((c) => c.kind === 'backfill');
   return (
     <section className="panel" aria-labelledby="pulse-backfill">

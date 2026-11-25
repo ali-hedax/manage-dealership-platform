@@ -43,5 +43,7 @@ describe('kasb-keys', () => {
 
   it('reports allowlisted service paths that the bundle no longer contains', () => {
     expect(missingServicePaths(bundle(publicKey, privateKey), ['Srv/rcpt/RepairCard/Drcds/q', 'Sec/Login/v2', 'Srv/rcpt/RepairCard/Dreps/q'])).toEqual(['Srv/rcpt/RepairCard/Dreps/q']);
+    // The real bundle: Path: n + "RepairCard/Dreps/q" (prefix in a variable) is not missing.
+    expect(missingServicePaths('var n="Srv/rcpt/";x={4:{Path:n+"RepairCard/Dreps/q"}}', ['Srv/rcpt/RepairCard/Dreps/q', 'Srv/rcpt/RepairCard/Drers/q'])).toEqual(['Srv/rcpt/RepairCard/Drers/q']);
   });
 });

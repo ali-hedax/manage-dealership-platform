@@ -43,9 +43,9 @@ export default function NexusPage() {
   const auto = (m: Mode): Mode => (pulseLive ? m : 'manual');
   const entry = (k: ReportCenterEntry['kind']) => center?.find((e) => e.kind === k);
   async function readNow(kind: 'stock_now' | 'emdad_now' | 'appointments_now') {
-    const done = { stock_now: 'درخواست خواندن موجودی به پالس داده شد؛ تا یک دقیقه دیگر پیش‌نمایش آماده می‌شود',
-      emdad_now: 'گزارش امداد ویژه از کسب‌وکار درخواست شد؛ ساختنش چند دقیقه طول می‌کشد و پالس خودش آن را می‌گیرد',
-      appointments_now: 'درخواست خواندن لیست نوبت به پالس داده شد؛ تا یک دقیقه دیگر پیش‌نمایش در «اطلاعات پایه» آماده می‌شود' }[kind];
+    const done = { stock_now: 'درخواست خواندن موجودی به پالس داده شد؛ تا یک دقیقه دیگر خوانده و ثبت می‌شود',
+      emdad_now: 'گزارش امداد ویژه از کسب‌وکار درخواست شد؛ ساختنش چند دقیقه طول می‌کشد و پالس خودش آن را می‌گیرد و ثبت می‌کند',
+      appointments_now: 'درخواست خواندن لیست نوبت به پالس داده شد؛ تا یک دقیقه دیگر خوانده و ثبت می‌شود' }[kind];
     try { await api('/pulse/commands', { method: 'POST', body: { kind } }); toast(done); void refreshPulse(); }
     catch (e) { toast(errorMessage(e), 'error'); }
   }
@@ -55,8 +55,8 @@ export default function NexusPage() {
     if (!r || r.outcome !== 'error') return null;
     return `آخرین تلاش پالس: ${pulseErrorText(r.errorCode) ?? 'ناموفق'}`;
   };
-  const AUTO_DETAIL = { emdad: 'پالس روزی یک بار (از ساعت ۱۰:۰۵، نه ۱۶ تا ۱۸) گزارش را درخواست می‌کند و وقتی کسب‌وکار ساخت، می‌گیرد؛ شما فقط پیش‌نمایش را تأیید می‌کنید.',
-    appointments: 'پالس روزی یک بار (از ساعت ۱۰:۱۰) لیست را می‌گیرد و پیش‌نمایشش را در «اطلاعات پایه ← نوبت‌های پذیرش» آماده می‌کند؛ بار اول ستون‌ها باید یک بار دستی تأیید شده باشند.' } as const;
+  const AUTO_DETAIL = { emdad: 'پالس روزی یک بار (از ساعت ۱۰:۰۵، نه ۱۶ تا ۱۸) گزارش را درخواست می‌کند و وقتی کسب‌وکار ساخت، می‌گیرد و خودکار ثبت می‌کند؛ اگر ستون‌های فایل عوض شده باشد، برای تأیید شما می‌ماند.',
+    appointments: 'پالس روزی یک بار (از ساعت ۱۰:۱۰) لیست را می‌گیرد و خودکار ثبت می‌کند؛ شرط: ستون‌هایش یک بار دستی تأیید شده باشد. اگر ردیف‌های ناجور زیاد باشد، برای تأیید شما می‌ماند.' } as const;
 
   return (
     <div className="stack nexus">
@@ -72,14 +72,14 @@ export default function NexusPage() {
       </section>}
 
       <section className="panel" aria-labelledby="nx-reports">
-        <div className="panel-head"><div><h2 id="nx-reports">گزارش‌ها</h2><p className="small muted">هر گزارش یا خودکار با پالس می‌رسد یا دستی. هر دو راه به یک مسیر می‌روند: پیش‌نمایش، تأیید، بدون ثبت تکراری.</p></div></div>
+        <div className="panel-head"><div><h2 id="nx-reports">گزارش‌ها</h2><p className="small muted">هر گزارش یا خودکار با پالس می‌رسد یا دستی. هر دو راه به یک مسیر می‌روند و هیچ فایلی دو بار ثبت نمی‌شود. آنچه پالس می‌خواند خودکار ثبت می‌شود، مگر فایلی که تصمیم شما را لازم دارد.</p></div></div>
         <div className="panel-body nexus-list">
           {error && <p className="callout callout-red small" role="alert">{errorMessage(error)}</p>}
           <ReportRow title="پذیرش‌ها و قطعه‌های هر کارت" mode={auto('auto_manual')} last={pulse?.lastReadAt ?? entry('reception')?.lastImport?.appliedAt ?? null}
             detail={pulseLive ? `امروز ${faNum(pulse?.todayReceptions ?? 0)} پذیرش` : null} open={{ href: '/reception', label: 'پذیرش‌ها' }}
             guide={entry('reception') ? `${RECEPTION_NOTE}\n\n${entry('reception')!.guide}` : RECEPTION_NOTE} isacoPath={entry('reception')?.isacoPath} manualHref={entry('reception')?.uploadHref ?? null} />
           <ReportRow title="موجودی انبار" mode={auto('auto_manual')} last={daily?.stock?.appliedAt ?? null} stale={daily?.stock ? !daily.stock.fresh : undefined}
-            detail={pulseLive ? 'پالس روزی یک بار (از ساعت ۱۰) فایل را می‌گیرد؛ شما فقط پیش‌نمایش را تأیید می‌کنید.' : null}
+            detail={pulseLive ? 'پالس روزی یک بار (از ساعت ۱۰) فایل را می‌گیرد و خودکار ثبت می‌کند؛ اگر ستون‌ها عوض شده یا کالاهای زیادی از فایل غایب باشد، برای تأیید شما می‌ماند.' : null}
             guide={STOCK_GUIDE} isacoPath="کسب‌وکار ← گزارش موجودی انبار (جست‌وجو: «موجودی انبار»)" manualHref="/daily-reports?kind=stock"
             extra={pulseLive && <button type="button" className="btn btn-sm" onClick={() => void readNow('stock_now')}><AppIcon name="download" />همین الان بخوان</button>} />
           {(['emdad', 'appointments'] as const).map((k) => { const e = entry(k); return e ? (

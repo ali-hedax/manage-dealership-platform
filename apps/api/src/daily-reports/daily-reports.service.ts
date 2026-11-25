@@ -40,6 +40,8 @@ import { safeCell } from './safe-cell';
 import { detectFormat, FORMAT_ERRORS, readHtmlTable, readSpreadsheetML, SpreadsheetError } from './spreadsheet-formats';
 import { StockService } from './stock.service';
 import { SpecialAidService } from '../special-aid/special-aid.service';
+import { pulseActor, pulseAutoApply } from '../pulse/pulse-actor';
+import { jalaliDay } from '../pulse/pulse-map';
 
 type ImportRow = typeof dailyReportImports.$inferSelect;
 type Profile = typeof dailyReportProfiles.$inferSelect;
@@ -97,6 +99,37 @@ export class DailyReportsService implements OnApplicationBootstrap {
     const staged = await this.db.select({ id: dailyReportImports.id }).from(dailyReportImports)
       .where(and(eq(dailyReportImports.status, 'uploaded'), sql`${dailyReportImports.diagnostics}->>'source' = 'pulse'`));
     for (const p of staged) await this.process(p.id);
+    await this.applyPulseReports();
+  }
+
+  /**
+   * Files Pulse read are confirmed without a person when the dealership left «ثبت خودکار» on
+   * (owner, 2026-11-24), as the person who configured Pulse and with their permissions. A preview
+   * that needs a decision is held for a person instead: changed columns, or a stock file missing
+   * many items that are in stock now (a partial export). The reason is kept in diagnostics.autoHold.
+   */
+  async applyPulseReports(): Promise<void> {
+    const ready = await this.db.select().from(dailyReportImports)
+      .where(and(eq(dailyReportImports.status, 'preview'), sql`${dailyReportImports.diagnostics}->>'source' = 'pulse'`, sql`${dailyReportImports.diagnostics}->>'autoHold' is null`));
+    for (const job of ready) {
+      const hold = async (reason: string) => {
+        await this.db.update(dailyReportImports).set({ diagnostics: { ...(job.diagnostics as object), autoHold: reason } }).where(eq(dailyReportImports.id, job.id));
+      };
+      if (!(await pulseAutoApply(this.db, job.tenantId))) { await hold('off'); continue; }
+      const diag = job.diagnostics as { templateChanged?: boolean };
+      const counts = (job.counts ?? {}) as Record<string, number>;
+      if (diag.templateChanged) { await hold('template'); continue; }
+      if (job.kind === 'stock' && (counts.missing ?? 0) > Math.max(50, 0.2 * (counts.total ?? 0))) { await hold('missing'); continue; }
+      const actor = job.uploadedBy ? await pulseActor(this.db, job.tenantId, job.uploadedBy) : null;
+      if (!actor || !actor.user.permissions.has('daily_reports.apply')) { await hold('permission'); continue; }
+      const at = job.createdAt;
+      try {
+        // Pulse read this file from کسب‌وکار at `at`: that is the report's own date and time.
+        await this.apply(actor, job.id, { reportDate: jalaliDay(at), reportTime: tehranHhmm(at), declaration: true, declaredToday: true });
+      } catch (e) {
+        await hold(e instanceof Error ? e.message.slice(0, 60) : 'error');
+      }
+    }
   }
 
   async recover(now: Date) {
@@ -828,4 +861,9 @@ export class DailyReportsService implements OnApplicationBootstrap {
       .set({ status: 'discarded' })
       .where(and(inArray(dailyReportImports.status, ['preview', 'failed']), lt(dailyReportImports.createdAt, new Date(now.getTime() - FILE_TTL_MS))));
   }
+}
+
+/** HH:MM in Tehran. */
+function tehranHhmm(at: Date): string {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }).format(at);
 }
