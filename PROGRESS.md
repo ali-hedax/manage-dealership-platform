@@ -1,3 +1,27 @@
+## 2026-11-25 — بازسازی منیج، فاز ۱ — شاخهٔ `feature/reconstruction-phase1`، منتشر نشده
+
+- از main در `c506796`. fork `nadiafallah/manage-dealership-platform` با upstream همگام شد. CI روی PR داخلی fork (#10) اجرا می‌شود، چون این محیط اجازهٔ ساخت PR در ریپوی اصلی را نداشت.
+- **ساخته شد:**
+  - MGR و GST
+  - پوشاندن سمت سرور برای مهمان و منع فایل
+  - آمار روزانهٔ پذیرش و کدهای اجرت سرویس
+  - صافی ماندگاری و بازهٔ تاریخ
+  - لیست شب (migration افزایشی 0037 با down، دو مجوز تازه)
+  - چهار صف امداد ویژه
+  - نتیجه‌های «خاموش» و «شماره اشتباه»
+  - Excel بازرسی امداد ویژه
+- **اسناد:**
+  - یادداشت انتشار، migration و بازگشت: [phase1-release](docs/manage-reconstruction/phase1-release.md)
+  - وضعیت سه فاز و موارد مسدود: [phase-status](docs/manage-reconstruction/phase-status.md)
+- **آزمون:**
+  - در این محیط npm نصب نمی‌شد. آزمون‌های shared تازه با Node (type stripping) محلی اجرا و پاس شدند.
+  - lint، typecheck، unit، integration، PostgreSQL و Playwright در CI fork اجرا می‌شوند و نتیجه در [TEST_REPORT](docs/TEST_REPORT.md) ثبت می‌شود.
+- **قدم دقیق بعد:**
+  - علی PR را از همین شاخه به ali-hedax/main باز کند.
+  - تصمیم‌های بخش ۴ و ۵ [تحلیل](docs/manage-reconstruction/as-is-gap-analysis.md) گرفته شود و نمونه‌های بخش ۶ برسد.
+  - سپس بقیهٔ فاز ۱: علت با جایگاه درخواست‌دهنده، و پس از تصمیم، منو، سمت‌ها و مهلت‌های امداد ویژه.
+  - بعد از آن فاز ۲: دیدبان و حالت تلویزیون.
+
 ## 2026-11-25 — بازسازی منیج: گام شناخت فاز ۱ (As-Is / Gap) — فقط سند، منتشر نشده
 
 - شاخهٔ `docs/manage-reconstruction-gap-20261125` از main در `c506796`. سناریوی هدف علی در [Manage-Scenario](docs/manage-reconstruction/Manage-Scenario.md) و تحلیل نیازمندی‌به‌نیازمندی با شواهد کد در [as-is-gap-analysis](docs/manage-reconstruction/as-is-gap-analysis.md).
