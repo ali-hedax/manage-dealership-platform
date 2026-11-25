@@ -118,8 +118,16 @@ suite('daily reports on real PostgreSQL', () => {
     const next = await preview(['01', '02', '03'].map((s) => sku(s, '5')));
     const body = ahead(2);
     const results = await Promise.all([manager.post(`/daily-reports/imports/${next.id}/apply`, body), manager.post(`/daily-reports/imports/${next.id}/apply`, body)]);
-    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    // Since 2026-11-25 a second confirmation of a file being published follows the same job (201,
+    // accepted) instead of 409; if the first one already finished it is still refused as applied.
+    for (const r of results) {
+      expect([201, 409]).toContain(r.status);
+      if (r.status === 409) expect(r.body.code).toBe('DAILY_ALREADY_APPLIED');
+    }
+    for (let i = 0; i < 200 && (await manager.get(`/daily-reports/imports/${next.id}`)).body.status === 'applying'; i++) await new Promise((res) => setTimeout(res, 50));
+    expect((await manager.get(`/daily-reports/imports/${next.id}`)).body.status).toBe('applied');
     expect(await h.db.db.select().from(stockSnapshots).where(eq(stockSnapshots.importId, next.id))).toHaveLength(1);
+    expect(await h.db.db.select().from(stockSnapshots).where(eq(stockSnapshots.status, 'active'))).toHaveLength(1);
   });
 
   it('sends each reminder once when several API workers tick together', async () => {
