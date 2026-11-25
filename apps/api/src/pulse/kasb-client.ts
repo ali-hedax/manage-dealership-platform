@@ -9,7 +9,8 @@ import { parseTable, type KasbTable } from './kasb-table';
 // HTTP client of کسب‌وکار: the same JSON API the browser calls, over plain HTTPS (no browser
 // automation). Read-only by construction: every request is checked against the allowlist in
 // kasb-protocol.ts before it is sent. At most two requests run at once and request starts are
-// at least 300 ms apart; each request times out after 30 seconds. The session token lives only
+// at least 300 ms apart; each request times out after 30 seconds, a report FILE (stock, Special Aid,
+// appointment list) after reportTimeoutMs (HEAVY_REPORT_TIMEOUT_MS, 5 minutes). The session token lives only
 // in this object (worker memory), never in the database.
 
 export interface KasbCredentials {
@@ -31,6 +32,8 @@ export interface KasbClientOptions {
   minGapMs?: number;
   concurrency?: number;
   timeoutMs?: number;
+  /** Report files can take minutes to build and download (default 300 s). */
+  reportTimeoutMs?: number;
   /** Observes every request that passed the allowlist (tests). Never receives a body. */
   onRequest?: (method: string, path: string) => void;
 }
@@ -52,6 +55,10 @@ function jalaliYear(at: Date): string {
 
 const FALLBACK_CLIENT_VERSION = '3.3.1\n';
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Paths whose answer is a whole report file rather than a small JSON answer. */
+const REPORT_FILE_PATHS = new Set([`/api/${KASB_PATHS.emdadReport}`, `/api/${KASB_PATHS.stock}`]);
+export const isReportFile = (pathname: string) => REPORT_FILE_PATHS.has(pathname);
 
 /** Throws KASB_NOT_ALLOWED unless the request is on the read-only allowlist of the origin. */
 export function assertAllowed(origin: string, method: string, url: URL): void {
@@ -85,6 +92,7 @@ export class KasbClient {
   private readonly minGapMs: number;
   private readonly concurrency: number;
   private readonly timeoutMs: number;
+  private readonly reportTimeoutMs: number;
   private readonly onRequest?: (method: string, path: string) => void;
   private keys: { serverPublic: KeyObject; clientPrivate: KeyObject; version: string; clientVersion: string } | null = null;
   private token: { value: string; expiresAt: number } | null = null;
@@ -106,6 +114,7 @@ export class KasbClient {
     this.minGapMs = opts.minGapMs ?? 300;
     this.concurrency = Math.max(1, opts.concurrency ?? 2);
     this.timeoutMs = opts.timeoutMs ?? 30_000;
+    this.reportTimeoutMs = Math.max(this.timeoutMs, opts.reportTimeoutMs ?? 300_000);
     this.onRequest = opts.onRequest;
   }
 
@@ -150,8 +159,9 @@ export class KasbClient {
         method,
         body: init.body,
         redirect: 'manual',
-        // Report files are large (the special-aid file of five months is ~20 MB): up to three minutes.
-        signal: AbortSignal.timeout(report || url.pathname === `/api/${KASB_PATHS.emdadReport}` ? Math.max(this.timeoutMs, 180_000) : this.timeoutMs),
+        // Report files are large and slow (the special-aid file of five months is ~20 MB). Until
+        // 2026-11-25 the stock report kept the ordinary 30 s and large warehouses failed with KASB_TIMEOUT.
+        signal: AbortSignal.timeout(report || isReportFile(url.pathname) ? this.reportTimeoutMs : this.timeoutMs),
         headers: { 'User-Agent': KASB_USER_AGENT, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'fa-IR,fa;q=0.9,en;q=0.8', Referer: `${this.origin}/home`, ...(report ? {} : this.cookieHeader()), ...init.headers },
       });
       if (!report) this.keepCookies(res);

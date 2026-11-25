@@ -39,7 +39,17 @@ it('uploads, parses and applies a ~23.6 MB SpreadsheetML file within time and me
   expect(imp.diagnostics).toMatchObject({ leadingWhitespace: 1, unescapedAmpersands: 5183 });
   const applied = await manager.post(`/daily-reports/imports/${imp.id}/apply`, { reportDate: '1405/08/01', declaration: true });
   expect(applied.status).toBe(201);
-  expect(applied.body.counts).toMatchObject({ inserted: 5183 });
+  // A slow runner may outlast the request's wait: the publish then continues in the background.
+  let counts = applied.body.counts as Record<string, number> | undefined;
+  if (applied.body.accepted) {
+    for (let i = 0; i < 1800 && imp.status !== 'applied'; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      imp = (await manager.get(`/daily-reports/imports/${imp.id}`)).body;
+    }
+    expect(imp.status).toBe('applied');
+    counts = imp.counts as Record<string, number>;
+  }
+  expect(counts).toMatchObject({ inserted: 5183 });
   expect(Date.now() - started).toBeLessThan(180_000);
   // Reported, not hidden: growth of the whole test process (file, staging and PGlite).
   const growthMb = Math.round((process.memoryUsage().rss - before) / 1024 / 1024);

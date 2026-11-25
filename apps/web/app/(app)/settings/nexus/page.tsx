@@ -1,11 +1,13 @@
 'use client';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { pulseErrorText, pulseSentence, type DailyReportsStatus, type PulseStatus, type ReportCenterEntry } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali } from '@/lib/format';
 import { useToast } from '@/lib/toast';
+import { HEAVY_DONE, HEAVY_WORKING } from '@/lib/heavy-report';
 import { AppIcon } from '@/components/AppIcon';
 import { EmptyState } from '@/components/EmptyState';
 import { ReportUpload } from '@/components/ReportUpload';
@@ -34,7 +36,16 @@ export default function NexusPage() {
   const toast = useToast();
   const pulseOk = can('integration.manage');
   const centerOk = can('report_center.manage') || can('daily_reports.upload') || can('reference.customers.manage');
-  const { data: pulse, mutate: refreshPulse } = useSWR<PulseStatus>(pulseOk ? '/pulse/status' : null, fetcher, { refreshInterval: 30_000 });
+  // The stock read requested by hand: followed (every 3 s) until Pulse reports how it ended.
+  const [stockCommand, setStockCommand] = useState<string | null>(null);
+  const { data: pulse, mutate: refreshPulse } = useSWR<PulseStatus>(pulseOk ? '/pulse/status' : null, fetcher, { refreshInterval: stockCommand ? 3_000 : 30_000 });
+  const followed = stockCommand ? pulse?.commands.find((c) => c.id === stockCommand) : undefined;
+  useEffect(() => {
+    if (!followed || followed.status === 'pending' || followed.status === 'running') return;
+    setStockCommand(null);
+    if (followed.status === 'done') toast(HEAVY_DONE);
+    else toast(`خواندن موجودی انجام نشد: ${pulseErrorText(followed.resultCode) ?? 'دوباره تلاش کنید'}`, 'error');
+  }, [followed, toast]);
   const { data: center, error, mutate: refreshCenter } = useSWR<ReportCenterEntry[]>(centerOk ? '/report-center' : null, fetcher);
   const { data: daily } = useSWR<DailyReportsStatus>(can('daily_reports.upload') || can('daily_reports.apply') ? '/daily-reports/status' : null, fetcher);
   if (!pulseOk && !centerOk) return <EmptyState icon="lock" title="Manage Nexus" heading="h1">این بخش برای مالک، مدیر سیستم و مسئول بارگذاری گزارش‌هاست.</EmptyState>;
@@ -46,7 +57,15 @@ export default function NexusPage() {
     const done = { stock_now: 'درخواست خواندن موجودی به پالس داده شد؛ تا یک دقیقه دیگر خوانده و ثبت می‌شود',
       emdad_now: 'گزارش امداد ویژه از کسب‌وکار درخواست شد؛ ساختنش چند دقیقه طول می‌کشد و پالس خودش آن را می‌گیرد و ثبت می‌کند',
       appointments_now: 'درخواست خواندن لیست نوبت به پالس داده شد؛ تا یک دقیقه دیگر خوانده و ثبت می‌شود' }[kind];
-    try { await api('/pulse/commands', { method: 'POST', body: { kind } }); toast(done); void refreshPulse(); }
+    try {
+      const status = await api<PulseStatus>('/pulse/commands', { method: 'POST', body: { kind } });
+      if (kind === 'stock_now') {
+        // The same request already queued is followed, not repeated (the API never queues it twice).
+        const cmd = status.commands.find((c) => c.kind === 'stock_now' && (c.status === 'pending' || c.status === 'running'));
+        if (cmd) setStockCommand(cmd.id);
+      } else toast(done);
+      void refreshPulse(status, { revalidate: false });
+    }
     catch (e) { toast(errorMessage(e), 'error'); }
   }
   /** Last run of a report kind, as one short phrase (why the last automatic read did not work). */
@@ -81,7 +100,8 @@ export default function NexusPage() {
           <ReportRow title="موجودی انبار" mode={auto('auto_manual')} last={daily?.stock?.appliedAt ?? null} stale={daily?.stock ? !daily.stock.fresh : undefined}
             detail={pulseLive ? 'پالس روزی یک بار (از ساعت ۱۰) فایل را می‌گیرد و خودکار ثبت می‌کند؛ اگر ستون‌ها عوض شده یا کالاهای زیادی از فایل غایب باشد، برای تأیید شما می‌ماند.' : null}
             guide={STOCK_GUIDE} isacoPath="کسب‌وکار ← گزارش موجودی انبار (جست‌وجو: «موجودی انبار»)" manualHref="/daily-reports?kind=stock"
-            extra={pulseLive && <button type="button" className="btn btn-sm" onClick={() => void readNow('stock_now')}><AppIcon name="download" />همین الان بخوان</button>} />
+            note={stockCommand ? HEAVY_WORKING : undefined}
+            extra={pulseLive && <button type="button" className="btn btn-sm" disabled={!!stockCommand} aria-busy={!!stockCommand} onClick={() => void readNow('stock_now')}><AppIcon name="download" />{stockCommand ? 'در حال خواندن…' : 'همین الان بخوان'}</button>} />
           {(['emdad', 'appointments'] as const).map((k) => { const e = entry(k); return e ? (
             <ReportRow key={k} title={e.title} mode={auto('auto_manual')} last={e.lastImport?.appliedAt ?? null} stale={e.lastImport ? e.stale : undefined}
               detail={[pulseLive ? AUTO_DETAIL[k] : null, e.missingDays.length ? `${faNum(e.missingDays.length)} روز کاری بدون گزارش در دو هفتهٔ اخیر` : null].filter(Boolean).join(' · ') || null}

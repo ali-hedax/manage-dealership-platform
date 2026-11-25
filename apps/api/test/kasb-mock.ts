@@ -82,6 +82,8 @@ export class KasbMock {
   requireBearer = false;
   /** Delay of every answer (timeouts and concurrency tests). */
   delayMs = 0;
+  /** Extra time the stock report file takes to build (a large warehouse; heavy-report tests). */
+  stockDelayMs = 0;
   cards: MockCard[] = [];
   /** Synthetic stock report: the same HTML-table-as-.xls file staff download (leading whitespace included). */
   stockHtml = `\n    <html><head><meta charset="UTF-8"></head><body><table><tr><th>کد کالا</th><th>شرح کالا</th><th>واحد شمارش</th><th>مدل خودرو</th><th>موجودي</th><th>قيمت ميانگين</th><th>قيمت فروش</th><th>آدرس</th><th>شرح لوکيشن</th><th>وضعيت مبنا</th></tr><tr><td>1720104599</td><td>قطعهٔ ساختگی</td><td>عدد</td><td>ساختگی</td><td>3</td><td>1000</td><td>1200</td><td>A1</td><td>قفسه</td><td>فعال</td></tr></table></body></html>`;
@@ -235,6 +237,7 @@ export class KasbMock {
       if (!this.authorized(req)) return this.send(res, 401, '');
       if (api === 'War/Reports/StkStock') {
         this.stockRequests.push(payload);
+        if (this.stockDelayMs) await new Promise((r) => setTimeout(r, this.stockDelayMs));
         res.writeHead(200, { 'content-type': 'application/vnd.ms-excel', 'content-disposition': 'attachment;filename=IsacoDownload.xls' });
         return res.end(this.stockHtml);
       }

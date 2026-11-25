@@ -7,8 +7,17 @@ import { pathToFileURL } from 'node:url';
 
 const scrypt = promisify(scryptCallback);
 const COOKIE = '__Host-manage_preview';
-const UPLOAD_PATH = '/api/v1/daily-reports/uploads';
 const TTL = 12 * 60 * 60;
+/**
+ * Heavy operations (owner, 2026-11-25): report files, imports, Excel/PDF exports. They may take
+ * minutes, so their upstream wait is GATE_HEAVY_TIMEOUT_MS (default 300 s, bounded to 15 min);
+ * every other request keeps the ordinary 30 s. Work that can take longer runs as a background
+ * job in the API and the page polls its status, so no request has to stay open that long.
+ */
+export const HEAVY_PATH = /^\/api\/v1\/(?:daily-reports|reference-imports|vehicle-imports|reports)(?:\/|$)|^\/api\/v1\/.+(?:\/(?:export|import|report)|\.pdf)$/;
+export const isHeavyPath = pathname => HEAVY_PATH.test(pathname);
+const bounded = (value, fallback, max) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? Math.min(max, n) : fallback; };
+const TIMEOUT_BODY = JSON.stringify({statusCode:504,code:'GATEWAY_TIMEOUT',message:'پاسخ سرور بیش از حد مجاز طول کشید. اگر عملیات آغاز شده باشد در پس‌زمینه ادامه دارد؛ چند لحظه بعد وضعیت را دوباره ببینید.'});
 const equal = (a, b) => a.length === b.length && timingSafeEqual(a, b);
 export function createGate(config) {
   const [salt, digest] = config.passwordHash.split(':');
@@ -37,24 +46,39 @@ export function createGate(config) {
     const actual = await scrypt(password, salt, 64);
     return equal(actual, Buffer.from(digest, 'hex')) && username === 'preview';
   }
+  const ordinaryTimeout = bounded(config.timeoutMs, 30_000, 120_000);
+  const heavyTimeout = bounded(config.heavyTimeoutMs, 300_000, 900_000);
+  // Slow-sender guard: idle time while the REQUEST is still arriving, never while its answer is prepared.
+  const bodyIdleTimeout = bounded(config.bodyIdleTimeoutMs, 15_000, 120_000);
   const html = readFileSync(new URL('./gate.html', import.meta.url));
   const css = readFileSync(new URL('./gate.css', import.meta.url));
-  function proxy(req,res,send) {
+  function proxy(req,res,send,heavy) {
     const headers={...req.headers};delete headers.authorization;
     headers.cookie=String(req.headers.cookie??'').split(';').filter(x=>!x.trim().startsWith(`${COOKIE}=`)).join(';');
     const upstream=http.request(new URL(config.upstream),{path:req.url,method:req.method,headers},response=>{
       res.writeHead(response.statusCode,{...response.headers,'X-Robots-Tag':'noindex, nofollow'});response.pipe(res);
     });
-    upstream.setTimeout(req.url.startsWith(UPLOAD_PATH)?120000:30000,()=>upstream.destroy());
-    upstream.on('error',()=>{if(!res.headersSent)send(502,'سرویس در حال آماده شدن است. دوباره تلاش کنید.');else res.destroy();});
+    // Idle limit on the answer: minutes for heavy work, 30 s otherwise. A late answer gets a clear
+    // 504; work the API already accepted (a background job) keeps running.
+    let timedOut=false;
+    upstream.setTimeout(heavy?heavyTimeout:ordinaryTimeout,()=>{timedOut=true;upstream.destroy();});
+    upstream.on('error',()=>{
+      if(res.headersSent)return res.destroy();
+      if(timedOut)return send(504,TIMEOUT_BODY,{'Content-Type':'application/json; charset=utf-8'});
+      send(502,'سرویس در حال آماده شدن است. دوباره تلاش کنید.');
+    });
     req.on('aborted',()=>upstream.destroy());req.pipe(upstream);
   }
   const server = http.createServer(async (req, res) => {
     const send = (status, body, headers={}) => { res.writeHead(status, {'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow',...headers}); res.end(body); };
     try {
       const url = new URL(req.url, origin);
-      // Only the daily report upload may take minutes on a slow office connection.
-      if (!url.pathname.startsWith(UPLOAD_PATH)) req.setTimeout(15000,()=>req.destroy());
+      const heavy = isHeavyPath(url.pathname);
+      // Until 2026-11-25 this idle timer also cut every complete request whose answer took over 15 s:
+      // Node destroys a timed-out socket unless someone handles the timeout (ECONNRESET, 502 at Caddy).
+      // Node emits the request's timeout only while the request is still arriving; once it has
+      // arrived, the response handler below keeps the socket and the upstream limit applies.
+      if (!heavy) { req.setTimeout(bodyIdleTimeout,()=>req.destroy()); res.on('timeout',()=>{}); }
       if (url.pathname === '/__preview/health') return send(200, 'ok');
       if (config.totpAuth) {
         const publicPath=['/login','/activate','/reset-password','/manifest.webmanifest','/favicon.ico'].includes(url.pathname)||url.pathname.startsWith('/_next/')||url.pathname.startsWith('/brand/')||url.pathname.startsWith('/api/v1/auth/');
@@ -65,7 +89,7 @@ export function createGate(config) {
           try { const result=await fetch(config.authApi??'http://api:4000/api/v1/auth/me',{headers:{Cookie:String(req.headers.cookie??'')},redirect:'manual',signal:AbortSignal.timeout(5000)});ok=result.status===200&&['totp','pin'].includes((await result.json()).authentication); } catch { return send(503,'سرویس ورود در دسترس نیست. دوباره تلاش کنید.'); }
           if(!ok)return url.pathname.startsWith('/api/')?send(401,'{"error":"LOGIN_REQUIRED"}',{'Content-Type':'application/json'}):send(302,'',{Location:'/login'});
         }
-        return proxy(req,res,send);
+        return proxy(req,res,send,heavy);
       }
       if (url.pathname === '/__preview/gate.css' && req.method === 'GET') return send(200, css, {'Content-Type':'text/css; charset=utf-8'});
       if (url.pathname === '/__preview/login' && req.method === 'GET') return send(200, html.toString().replace('<!-- error -->', url.searchParams.has('error') ? '<p role="alert">نام کاربری یا رمز درست نیست. دوباره بررسی کنید.</p>' : ''), {
@@ -98,7 +122,7 @@ export function createGate(config) {
       if (!authenticated) return url.pathname.startsWith('/api/')
         ? send(401, '{"error":"PREVIEW_LOGIN_REQUIRED"}', {'Content-Type':'application/json'})
         : send(302, '', {Location:'/__preview/login'});
-      return proxy(req,res,send);
+      return proxy(req,res,send,heavy);
     } catch { if (!res.headersSent) send(400, 'درخواست معتبر نیست.'); else res.destroy(); }
   });
   server.on('close', ()=>clearInterval(cleanup));
@@ -109,6 +133,7 @@ export function createGate(config) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   createGate({host:process.env.PREVIEW_HOST,passwordHash:process.env.PREVIEW_GATE_HASH ?? '',
     totpAuth:process.env.TOTP_AUTH_ENABLED==='true',
+    timeoutMs:process.env.GATE_TIMEOUT_MS,heavyTimeoutMs:process.env.GATE_HEAVY_TIMEOUT_MS,
     sessionKey:process.env.PREVIEW_GATE_KEY ?? '',upstream:process.env.PREVIEW_UPSTREAM ?? 'http://web:3000'})
     .listen(8080,'0.0.0.0');
 }

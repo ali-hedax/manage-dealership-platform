@@ -46,6 +46,12 @@ const envSchema = z.object({
   PULSE_SECRET_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
   PULSE_KASB_ORIGIN: z.url().default('https://b2b.isaco.ir'),
   PULSE_TICK_MS: z.coerce.number().int().min(1000).max(600_000).default(30_000),
+  // Heavy reports (owner, 2026-11-25): how long a report file from کسب‌وکار (stock, Special Aid,
+  // appointment list) may take to arrive, and the gate's wait for heavy pages. Never unlimited.
+  HEAVY_REPORT_TIMEOUT_MS: z.coerce.number().int().min(30_000).max(900_000).default(300_000),
+  // Confirming a daily report runs as a background job; the request waits this long for a quick
+  // result, otherwise it answers «در حال ثبت» and the page follows the job (below the gate's 30 s).
+  DAILY_APPLY_WAIT_MS: z.coerce.number().int().min(0).max(25_000).default(10_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

@@ -10,10 +10,13 @@ import {ApiError,api,errorMessage,fetcher} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 import {faNum,formatJalali} from '@/lib/format';
 import {useToast} from '@/lib/toast';
+import {HEAVY_DONE,HEAVY_WORKING} from '@/lib/heavy-report';
 import {DailyStatusPanel} from '@/components/DailyStatusPanel';
 
 const MAX_BYTES=32*1024*1024;
 const WORKING:DailyImport['status'][]=['uploaded','parsing','applying'];
+/** No answer (lost connection, gateway timeout): the work may have been accepted, so check before reporting failure. */
+const unsure=(e:unknown)=>e instanceof ApiError&&(e.status===0||e.status===502||e.status===503||e.status===504);
 type Rows={items:{rowNo:number;outcome:DailyRowOutcome;rowKey:string|null;data:Record<string,unknown>;messages:string[]}[];total:number;page:number;pageSize:number};
 type Profile={kind:DailyReportKind;settings:{currency?:string|null;taxIncluded?:boolean|null;completeness?:string|null;scope?:string|null;quantityMeaning?:string|null;receivedQuantityField?:string|null;confirmedAt?:string};reminderTime:string;reminderUserId:string|null;headerConfirmed:boolean;version:number};
 
@@ -37,7 +40,7 @@ function Report({kind,canUpload,canApply}:{kind:DailyReportKind;canUpload:boolea
  const [activeId,setActiveId]=useState<string|null>(null),[upload,setUpload]=useState<number|null>(null),[error,setError]=useState('');
  const {data:history,mutate:refreshHistory}=useSWR<DailyImport[]>(`/daily-reports/imports?kind=${kind}`,fetcher);
  // A file waiting for confirmation is found again after a refresh or a lost connection.
- useEffect(()=>{if(activeId||!history)return;const open=history.find(i=>['uploaded','parsing','preview','failed'].includes(i.status));if(open)setActiveId(open.id);},[history,activeId]);
+ useEffect(()=>{if(activeId||!history)return;const open=history.find(i=>['uploaded','parsing','preview','applying','failed'].includes(i.status));if(open)setActiveId(open.id);},[history,activeId]);
  const {data:job,mutate:refreshJob}=useSWR<DailyImport>(activeId?`/daily-reports/imports/${activeId}`:null,fetcher,{refreshInterval:i=>i&&WORKING.includes(i.status)?1500:0});
  async function choose(file:File|undefined){
   setError('');if(!file)return;
@@ -55,7 +58,7 @@ function Report({kind,canUpload,canApply}:{kind:DailyReportKind;canUpload:boolea
   {canUpload&&<section className="panel"><div className="panel-head"><h2>بارگذاری فایل {DAILY_REPORT_KIND_LABELS[kind]}</h2></div><div className="panel-body stack">
    <p className="small muted">{kind==='emdad'?'خروجی «گزارش امداد ویژه» را همان‌طور که از سامانه گرفته‌اید انتخاب کنید (پسوند xls). تغییر فونت یا ویرایش دستی لازم نیست. این گزارش معمولاً از ساعت ۱۰ آماده است.':'خروجی XLSX گزارش موجودی انبار را همان‌طور که از سامانه گرفته‌اید انتخاب کنید.'} حداکثر حجم ۳۲ مگابایت.</p>
    <label className="field"><span>انتخاب فایل</span><input ref={input} className="input" type="file" accept=".xls,.xlsx,.xml" disabled={upload!==null} onChange={e=>void choose(e.target.files?.[0])}/></label>
-   {upload!==null&&<div role="status"><progress max={100} value={upload} aria-label="پیشرفت بارگذاری"/> <span className="small">در حال بارگذاری: {faNum(upload)}٪</span></div>}
+   {upload!==null&&<div role="status" className="stack"><p className="small">{HEAVY_WORKING}</p><div><progress max={100} value={upload} aria-label="پیشرفت بارگذاری"/> <span className="small">در حال بارگذاری: {faNum(upload)}٪</span></div></div>}
    {error&&<p className="callout callout-red small" role="alert">{error}</p>}
   </div></section>}
   {job&&<Job job={job} canApply={canApply} canUpload={canUpload} refresh={()=>void refreshJob()} closed={closed}/>}
@@ -68,6 +71,24 @@ function Job({job,canApply,canUpload,refresh,closed}:{job:DailyImport;canApply:b
  const now=new Date();
  const [date,setDate]=useState(toPersianDigits(formatJalaliDateInput(now))),[time,setTime]=useState(''),[declared,setDeclared]=useState(false),[accept,setAccept]=useState(false),[today,setToday]=useState(false);
  const [outcome,setOutcome]=useState<DailyRowOutcome|''>(''),[page,setPage]=useState(1),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ // A confirmation accepted as a background job: its result arrives through the polled status.
+ const [following,setFollowing]=useState(false);
+ const applyError=job.diagnostics.applyError as {code?:string;message?:string}|undefined;
+ useEffect(()=>{
+  if(!following)return;
+  if(job.status==='applied'){setFollowing(false);toast(HEAVY_DONE);void closed();}
+  else if(job.status==='preview'){setFollowing(false);setError(applyError?.message??'ثبت گزارش ناموفق بود؛ دوباره تلاش کنید.');}
+ },[following,job.status,applyError?.message,closed,toast]);
+ async function confirm(body:object){
+  setBusy(true);setError('');
+  try{
+   const r=await api<{accepted?:boolean}>(`/daily-reports/imports/${job.id}/apply`,{method:'POST',body});
+   if(r?.accepted){setFollowing(true);refresh();}else{toast(HEAVY_DONE);await closed();}
+  }catch(e){
+   // The request may have been accepted before the answer was lost: follow the job instead of declaring failure.
+   if(unsure(e)){setFollowing(true);refresh();}else setError(errorMessage(e));
+  }finally{setBusy(false);}
+ }
  const q=new URLSearchParams({page:String(page),pageSize:'25'});if(outcome)q.set('outcome',outcome);
  const showRows=['preview','applied'].includes(job.status);
  const {data:rows}=useSWR<Rows>(showRows?`/daily-reports/imports/${job.id}/rows?${q}`:null,fetcher);
@@ -80,7 +101,10 @@ function Job({job,canApply,canUpload,refresh,closed}:{job:DailyImport;canApply:b
  const ready=declared&&!!date.trim()&&(!job.templateChanged||accept);
  return <section className="panel" data-testid="daily-job"><div className="panel-head"><div><h2><bdi>{job.fileName}</bdi></h2><p className="xs muted">{faNum(Math.round(job.fileSize/1024))} کیلوبایت · {job.sheetName?<>برگه <bdi>{job.sheetName}</bdi> · </>:''}نسخه خواننده <bdi>{job.parserVersion}</bdi></p></div><span className={`chip ${job.status==='failed'?'chip-red':job.status==='applied'?'chip-green':'chip-blue'}`} role="status">{DAILY_IMPORT_STATUS_LABELS[job.status]}</span></div>
  <div className="panel-body stack">
-  {WORKING.includes(job.status)&&<div role="status"><progress max={100} value={job.progress} aria-label="پیشرفت پردازش"/> <span className="small">در حال پردازش: {faNum(job.progress)}٪ — می‌توانید این صفحه را ببندید و بعد برگردید.</span></div>}
+  {WORKING.includes(job.status)&&<div role="status" className="stack" data-testid="daily-working"><p className="small">{HEAVY_WORKING}</p>
+   {/* Real progress exists only while reading the file; publishing is one transaction, so it has none. */}
+   <div>{job.status==='applying'?<progress aria-label="در حال ثبت"/>:<progress max={100} value={job.progress} aria-label="پیشرفت پردازش"/>} <span className="small">{job.status==='applying'?'در حال ثبت در منیج':`در حال خواندن فایل: ${faNum(job.progress)}٪`} — می‌توانید این صفحه را ببندید و بعد برگردید.</span></div></div>}
+  {job.status==='preview'&&applyError?.message&&!error&&<p className="callout callout-red small" role="alert" data-testid="daily-apply-error">{applyError.message} اطلاعات قبلی بدون تغییر ماند.</p>}
   {job.status==='failed'&&<div className="callout callout-red small" role="alert">{job.error??'پردازش ناموفق بود'}{canUpload&&<div className="row"><button className="btn btn-sm" disabled={busy} onClick={()=>void act('retry',undefined,'پردازش دوباره آغاز شد')}>تلاش دوباره</button></div>}</div>}
   {!!mappingIssues.length&&<div className="callout callout-amber small" role="alert" data-testid="mapping-issues"><strong>ستون‌های لازم امداد ویژه پیدا نشد</strong><ul>{mappingIssues.map(m=><li key={m.field}>{m.message}</li>)}</ul></div>}
   {showRows&&<><div className="chips-row" data-testid="daily-counts"><span className="chip">کل ردیف: {faNum(counts.total??0)}</span>{DAILY_ROW_OUTCOMES.filter(o=>counts[o]).map(o=><span key={o} className={`chip${['invalid','duplicate','ambiguous','needs_mapping'].includes(o)?' chip-amber':''}`}>{DAILY_ROW_OUTCOME_LABELS[o]}: {faNum(counts[o]!)}</span>)}{counts.missing?<span className="chip chip-amber">در فایل نیست: {faNum(counts.missing)}</span>:null}{counts.matched!==undefined&&<span className="chip chip-green">متصل به پرونده: {faNum(counts.matched)}</span>}{counts.unmatched!==undefined&&<span className="chip">بدون اتصال قطعی: {faNum(counts.unmatched)}</span>}</div>
@@ -88,14 +112,14 @@ function Job({job,canApply,canUpload,refresh,closed}:{job:DailyImport;canApply:b
    {counts.missing?<p className="callout callout-blue small">{faNum(counts.missing)} ردیف فعال در این فایل نیست. تا مالک گزارش را «کامل» تأیید نکرده باشد، این یعنی صفرشدن موجودی نیست و آخرین مقدار با زمان خودش می‌ماند.</p>:null}
    <div className="workspace-search"><label className="field">نمایش ردیف‌ها<select className="input" value={outcome} onChange={e=>setOutcome(e.target.value as DailyRowOutcome|'')}><option value="">همه</option>{DAILY_ROW_OUTCOMES.map(o=><option key={o} value={o}>{DAILY_ROW_OUTCOME_LABELS[o]}</option>)}</select></label><a className="btn" href={`/api/v1/daily-reports/imports/${job.id}/report`}>دانلود نتیجه همه ردیف‌ها</a></div>
    {rows&&<RowsTable kind={job.kind} rows={rows} setPage={setPage}/>}</>}
-  {job.status==='preview'&&canApply&&<form className="stack" onSubmit={e=>{e.preventDefault();void act('apply',body,'گزارش ثبت شد',closed);}}>
+  {job.status==='preview'&&canApply&&<form className="stack" onSubmit={e=>{e.preventDefault();if(!busy&&!following)void confirm(body);}}>
    <h3>تأیید و ثبت</h3><p className="small muted">فایل تاریخ تهیه ندارد؛ زمانی که این خروجی واقعاً مربوط به آن است را خودتان اعلام می‌کنید و همین اظهار ثبت می‌شود. اگر ساعت را نمی‌دانید خالی بگذارید؛ فقط تاریخ ثبت می‌شود.</p>
    <div className="grid-2"><label className="field"><span>تاریخ خود گزارش *</span><input className="input ltr-input" value={date} onChange={e=>setDate(e.target.value)} placeholder="۱۴۰۵/۰۸/۱۲" required/></label><label className="field"><span>ساعت گزارش (اختیاری)</span><input className="input ltr-input" value={time} onChange={e=>setTime(e.target.value)} placeholder={toPersianDigits(formatTimeInput(now))}/></label></div>
    {job.templateChanged&&<div className="callout callout-amber small"><p>ستون‌های این فایل با قالب تأییدشده فرق دارد{missing.length?` و ${faNum(missing.length)} ستون مورد انتظار پیدا نشد`:''}. پیش‌نمایش را با دقت ببینید.</p><label className="check"><input type="checkbox" checked={accept} onChange={e=>setAccept(e.target.checked)}/> نگاشت ستون‌ها را در پیش‌نمایش بررسی کردم و این قالب را می‌پذیرم</label></div>}
    {job.sameContent&&<div className="callout callout-amber small"><p>محتوای این فایل با گزارش ثبت‌شده یکسان است. فقط اگر واقعاً خروجی امروز است و تغییری نکرده، کار امروز با این فایل کامل می‌شود.</p><label className="check"><input type="checkbox" checked={today} onChange={e=>setToday(e.target.checked)}/> این خروجی امروز است و نسبت به قبل تغییری نکرده است</label></div>}
    <label className="check"><input type="checkbox" checked={declared} onChange={e=>setDeclared(e.target.checked)}/> تاریخ گزارش را خودم بررسی کردم و این خروجی مربوط به همین زمان است</label>
    {error&&<p className="callout callout-red small" role="alert">{error}</p>}
-   <div className="row"><button type="submit" className="btn btn-primary" disabled={busy||!ready}>{busy?'در حال ثبت…':'ثبت گزارش'}</button>{canUpload&&<button type="button" className="btn" disabled={busy} onClick={()=>void act('discard',undefined,'فایل کنار گذاشته شد',closed)}>کنار گذاشتن</button>}</div>
+   <div className="row"><button type="submit" className="btn btn-primary" disabled={busy||following||!ready}>{busy||following?'در حال ثبت…':'ثبت گزارش'}</button>{canUpload&&<button type="button" className="btn" disabled={busy} onClick={()=>void act('discard',undefined,'فایل کنار گذاشته شد',closed)}>کنار گذاشتن</button>}</div>
   </form>}
   {job.status==='preview'&&!canApply&&<p className="callout callout-blue small">پیش‌نمایش آماده است؛ ثبت نهایی با همکار دارای مجوز ثبت گزارش انجام می‌شود.</p>}
   {job.status==='applied'&&<p className="callout callout-blue small">ثبت شد: {formatJalali(job.appliedAt,{time:true})}. زمان خود گزارش: {formatJalali(job.reportAt,{time:job.reportAtPrecision!=='day'})}{job.reportAtPrecision==='day'?' (بدون ساعت)':''}. فایل اصلی پاک شد و فقط اثر انگشت آن نگه داشته شده است.</p>}

@@ -52,7 +52,7 @@ export type PulseCommandStatus = 'pending' | 'running' | 'done' | 'failed';
 /** Stable error codes of the connection; never carry a password, token or response body. */
 export const PULSE_ERROR_LABELS: Record<string, string> = {
   KASB_UNREACHABLE: 'کسب‌وکار پاسخ نداد (شبکه یا سرور در دسترس نیست).',
-  KASB_TIMEOUT: 'پاسخ کسب‌وکار بیش از ۳۰ ثانیه طول کشید.',
+  KASB_TIMEOUT: 'پاسخ کسب‌وکار در زمان مجاز نرسید (۳۰ ثانیه برای درخواست عادی، تا ۵ دقیقه برای فایل گزارش).',
   KASB_KEYS: 'کلید رمزنگاری کسب‌وکار در فایل سایت پیدا نشد؛ احتمالاً نسخهٔ سایت عوض شده است.',
   KASB_DECRYPT: 'پاسخ کسب‌وکار رمزگشایی نشد؛ احتمالاً نسخهٔ سایت عوض شده است.',
   KASB_PROTOCOL: 'پاسخ کسب‌وکار قالب غیرمنتظره داشت.',

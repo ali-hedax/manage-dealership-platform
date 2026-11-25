@@ -11,6 +11,9 @@ services:
     environment:
       PREVIEW_HOST: ${PREVIEW_HOST:?set PREVIEW_HOST}
       TOTP_AUTH_ENABLED: ${TOTP_AUTH_ENABLED:-false}
+      # Upstream wait: ordinary requests 30 s; report files, imports and exports 300 s (bounded in gate.mjs).
+      GATE_TIMEOUT_MS: ${GATE_TIMEOUT_MS:-30000}
+      GATE_HEAVY_TIMEOUT_MS: ${HEAVY_REPORT_TIMEOUT_MS:-300000}
       PREVIEW_GATE_HASH: ${PREVIEW_GATE_HASH:?set PREVIEW_GATE_HASH}
       PREVIEW_GATE_KEY: ${PREVIEW_GATE_KEY:?set PREVIEW_GATE_KEY}
     volumes:
