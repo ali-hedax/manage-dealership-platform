@@ -267,6 +267,13 @@
       "when": 1795516400000,
       "tag": "0037_night_list",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795602800000,
+      "tag": "0038_special_aid_requesting_station",
+      "breakpoints": true
     }
   ]
 }

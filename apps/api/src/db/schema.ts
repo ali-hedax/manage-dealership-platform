@@ -1588,6 +1588,8 @@ export const specialAidItems = pgTable('special_aid_items', {
   nonConsumptionNote: text('non_consumption_note'),
   nonConsumptionBy: uuid('non_consumption_by').references(() => users.id),
   nonConsumptionAt: ts('non_consumption_at'),
+  /** Station that asked for the part (migration 0038, scenario 2026-11-25). */
+  requestingStation: text('requesting_station'),
   /** Why the automatic hold was not (fully) placed, shown to the operator. */
   holdNote: text('hold_note'),
   /** Earlier request of the same vehicle this one replaces (wrong part number); both stay in history. */

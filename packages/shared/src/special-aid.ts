@@ -59,7 +59,8 @@ export function allowedItemActions(state: SpecialAidItemState): SpecialAidAction
 }
 
 /** Why a part was not used; kept distinguishable in management reports. */
-export const NON_CONSUMPTION_REASONS = ['wrong_part_number', 'wrong_diagnosis', 'not_required', 'customer_no_show', 'customer_declined', 'waiting_related_parts', 'delivered_mismatch', 'other'] as const;
+// The scenario of 2026-11-25 adds a defective part, a technician's diagnosis, a replacement from stock and a sold vehicle.
+export const NON_CONSUMPTION_REASONS = ['wrong_part_number', 'wrong_diagnosis', 'not_required', 'customer_no_show', 'customer_declined', 'waiting_related_parts', 'delivered_mismatch', 'defective_part', 'technician_diagnosis', 'replaced_from_stock', 'vehicle_transferred', 'other'] as const;
 export type NonConsumptionReason = (typeof NON_CONSUMPTION_REASONS)[number];
 export const NON_CONSUMPTION_LABELS: Record<NonConsumptionReason, string> = {
   wrong_part_number: 'شمارهٔ فنی اشتباه',
@@ -69,10 +70,14 @@ export const NON_CONSUMPTION_LABELS: Record<NonConsumptionReason, string> = {
   customer_declined: 'مشتری انصراف داد',
   waiting_related_parts: 'منتظر قطعات مرتبط',
   delivered_mismatch: 'قطعهٔ رسیده مغایر بود',
+  defective_part: 'قطعهٔ معیوب رسید',
+  technician_diagnosis: 'عیب‌یابی اشتباه تکنسین',
+  replaced_from_stock: 'تعویض از موجودی',
+  vehicle_transferred: 'فروش یا انتقال خودرو',
   other: 'سایر (با توضیح)',
 };
 /** Reasons that point at a technical decision (shown to the service manager as technical issues). */
-export const TECHNICAL_REASONS: readonly NonConsumptionReason[] = ['wrong_part_number', 'wrong_diagnosis', 'not_required', 'delivered_mismatch'];
+export const TECHNICAL_REASONS: readonly NonConsumptionReason[] = ['wrong_part_number', 'wrong_diagnosis', 'not_required', 'delivered_mismatch', 'technician_diagnosis'];
 
 export const CONTACT_OUTCOMES = ['answered', 'no_answer', 'appointment_coordinated', 'declined', 'promised_visit', 'switched_off', 'wrong_number'] as const;
 export type ContactOutcome = (typeof CONTACT_OUTCOMES)[number];
@@ -318,6 +323,8 @@ export type ItemActionInput = z.infer<typeof itemActionSchema>;
 export const nonConsumptionSchema = z.object({
   reason: z.enum(NON_CONSUMPTION_REASONS).nullable(),
   note: z.string().trim().max(500).optional(),
+  /** Code of the station that asked for the part (scenario 2026-11-25), e.g. «مکانیکی 99». */
+  requestingStation: z.string().trim().max(60).optional(),
   expectedVersion: z.number().int().min(1),
 }).refine((v) => v.reason !== 'other' || (v.note?.length ?? 0) >= 3, { message: 'برای «سایر» توضیح لازم است', path: ['note'] });
 export type NonConsumptionInput = z.infer<typeof nonConsumptionSchema>;
@@ -398,6 +405,8 @@ export interface SpecialAidItem {
   groupId: string | null;
   nonConsumptionReason: NonConsumptionReason | null;
   nonConsumptionNote: string | null;
+  /** Station that asked for the part, recorded with the non-consumption reason. */
+  requestingStation: string | null;
   holdId: string | null;
   holdNote: string | null;
   /** Linked accident part line: its reservation and delivery stay with the parts desk. */

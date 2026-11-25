@@ -234,7 +234,7 @@ export class SpecialAidService {
           officialStatus: o.emdadStatus ?? '', officialCategory: r.statusCategory, officialRegisteredAt: iso(parseReportDate(o.emdadRegisteredAt)),
           receivedAt: iso(parseReportDate(o.receivedInWarehouseAt)), arrivalObservedAt: iso(i.arrivalObservedAt), statusObservedAt: iso(i.statusObservedAt),
           state: i.state as SpecialAidItemState, allowedActions: accident ? [] : allowedItemActions(i.state as SpecialAidItemState),
-          informedAt: iso(i.informedAt), groupId: i.groupId, nonConsumptionReason: i.nonConsumptionReason as NonConsumptionReason | null, nonConsumptionNote: i.nonConsumptionNote,
+          informedAt: iso(i.informedAt), groupId: i.groupId, nonConsumptionReason: i.nonConsumptionReason as NonConsumptionReason | null, nonConsumptionNote: i.nonConsumptionNote, requestingStation: i.requestingStation,
           holdId: holdOf.get(i.id) ?? null, holdNote: i.holdNote, accidentCaseId: accident, accidentCaseNumber: accident ? caseNumber : null,
           replacesItemId: i.replacesItemId, replacedByItemId: replacedBy.get(i.id) ?? null, version: i.version,
         };
@@ -459,10 +459,10 @@ export class SpecialAidService {
       if (i.version !== input.expectedVersion) throw versionConflict(i.version);
       if (i.state === 'installed' && input.reason) throw badRequest('SPECIAL_AID_INSTALLED', 'قطعهٔ نصب‌شده علت مصرف‌نشدن ندارد');
       const now = new Date();
-      const [saved] = await tx.update(specialAidItems).set({ nonConsumptionReason: input.reason, nonConsumptionNote: input.note || null, nonConsumptionBy: input.reason ? actor.user.id : null, nonConsumptionAt: input.reason ? now : null, updatedAt: now, version: i.version + 1 })
+      const [saved] = await tx.update(specialAidItems).set({ nonConsumptionReason: input.reason, nonConsumptionNote: input.note || null, requestingStation: input.reason ? input.requestingStation?.trim() || null : null, nonConsumptionBy: input.reason ? actor.user.id : null, nonConsumptionAt: input.reason ? now : null, updatedAt: now, version: i.version + 1 })
         .where(and(eq(specialAidItems.id, i.id), eq(specialAidItems.version, i.version))).returning();
       if (!saved) throw versionConflict();
-      await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: i.id, action: 'special_aid.non_consumption', before: { reason: i.nonConsumptionReason, note: i.nonConsumptionNote }, after: { reason: input.reason, note: input.note ?? null }, snapshot: { version: saved.version, row: saved } });
+      await this.audit.record(tx, actor, { entityType: 'special_aid', entityId: i.id, action: 'special_aid.non_consumption', before: { reason: i.nonConsumptionReason, note: i.nonConsumptionNote, requestingStation: i.requestingStation }, after: { reason: input.reason, note: input.note ?? null, requestingStation: input.reason ? input.requestingStation?.trim() || null : null }, snapshot: { version: saved.version, row: saved } });
       return i.dossierId;
     });
     return this.get(actor, dossierId);
@@ -571,9 +571,9 @@ export class SpecialAidService {
     const partName = new Map(d.items.map((i) => [i.id, [i.description, i.assessmentCode].filter(Boolean).join(' · ')]));
     const bytes = writeWorkbook([
       { name: 'قطعات', rows: [
-        ['شاسی (VIN)', 'شمارهٔ امداد ویژه', 'پذیرش', 'کد اختصاصی', 'کد تدارکاتی', 'شرح', 'تعداد', 'وضعیت رسمی', 'ثبت رسمی', 'رسید انبار (رسمی)', 'نخستین مشاهدهٔ رسیدن', 'اطلاع به مشتری', 'وضعیت داخلی', 'علت مصرف‌نشدن', 'توضیح', 'پروندهٔ تصادفی'],
+        ['شاسی (VIN)', 'شمارهٔ امداد ویژه', 'پذیرش', 'کد اختصاصی', 'کد تدارکاتی', 'شرح', 'تعداد', 'وضعیت رسمی', 'ثبت رسمی', 'رسید انبار (رسمی)', 'نخستین مشاهدهٔ رسیدن', 'اطلاع به مشتری', 'وضعیت داخلی', 'علت مصرف‌نشدن', 'توضیح', 'جایگاه درخواست‌دهنده', 'پروندهٔ تصادفی'],
         ...d.items.map((i) => [cell(d.vin), cell(i.emdadNo), cell(i.admissionNo), cell(i.assessmentCode), cell(i.procurementCode), cell(i.description), cell(i.quantity), cell(i.officialStatus), day(i.officialRegisteredAt), day(i.receivedAt), day(i.arrivalObservedAt), day(i.informedAt),
-          SPECIAL_AID_ITEM_STATE_LABELS[i.state] ?? i.state, i.nonConsumptionReason ? NON_CONSUMPTION_LABELS[i.nonConsumptionReason] : '', cell(i.nonConsumptionNote), cell(i.accidentCaseNumber)]),
+          SPECIAL_AID_ITEM_STATE_LABELS[i.state] ?? i.state, i.nonConsumptionReason ? NON_CONSUMPTION_LABELS[i.nonConsumptionReason] : '', cell(i.nonConsumptionNote), cell(i.requestingStation), cell(i.accidentCaseNumber)]),
       ] },
       { name: 'تماس‌ها', rows: [
         ['زمان', 'کاربر', 'نتیجه', 'قطعه‌ها', 'زمان قول مراجعه', 'یادداشت'],

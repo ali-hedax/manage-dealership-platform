@@ -1,5 +1,9 @@
 # Database
 
+## 0038: Requesting station of a special-aid part (owner, 2026-11-25; reconstruction scenario)
+
+Additive migration `0038_special_aid_requesting_station` (down: `apps/api/src/db/down/0038_special_aid_requesting_station.sql`): nullable `special_aid_items.requesting_station`, written with the non-consumption reason. Existing rows keep `null`.
+
 ## 0037: Nightly list of the reception module (owner, 2026-11-25; reconstruction scenario)
 
 Additive migration `0037_night_list` (down: `apps/api/src/db/down/0037_night_list.sql`, drops only these two tables). No existing table or row changes; receptions stay read only.

@@ -296,6 +296,10 @@ it('reconstruction: one queue per vehicle, «خاموش» counts as not reached,
   expect(file.status).toBe(200);
   expect(String(file.headers['content-type'])).toContain('spreadsheetml');
   expect((file.body as Buffer).subarray(0, 2).toString()).toBe('PK');
+  const item = (r.body as SpecialAidDossier).items.find((i) => i.state !== 'installed')!;
+  const saved = await operator.post(`/special-aid/items/${item.id}/non-consumption`, { reason: 'technician_diagnosis', requestingStation: 'مکانیکی 99', expectedVersion: item.version });
+  expect(saved.status).toBe(201);
+  expect((await detail(operator, d.id)).items.find((i) => i.id === item.id)).toMatchObject({ nonConsumptionReason: 'technician_diagnosis', requestingStation: 'مکانیکی 99' });
   const guest = await h.loginAs('sa-recon-guest', ['guest']);
   expect((await guest.get(`/special-aid/dossiers/${d.id}/inspection`)).status).toBe(403);
 });
