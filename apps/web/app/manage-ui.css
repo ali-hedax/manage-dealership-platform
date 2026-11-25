@@ -964,6 +964,11 @@ dialog.dialog::backdrop { background: rgba(21, 24, 29, .38); backdrop-filter: bl
 .rcp-stat-total strong { font-size: 1.25rem; margin-inline-end: 4px; }
 .rcp-people summary, .rcp-codes summary { cursor: pointer; font-size: .875rem; }
 .rcp-codes textarea { inline-size: 100%; }
+.night-table td { vertical-align: top; }
+.night-table tr.is-closed { background: var(--m-paper-2); }
+.night-car { display: grid; gap: 2px; justify-items: start; color: inherit; text-decoration: none; }
+.night-reason { min-inline-size: 180px; gap: 4px; }
+@media print { .night-table input, .night-table select { border: 0; padding: 0; background: none; appearance: none; } }
 .rcp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .rcp-row { display: grid; grid-template-columns: minmax(150px, auto) minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; padding: 10px 16px; border-radius: var(--m-radius-s); background: var(--m-paper); border: 1px solid var(--m-line); color: var(--m-ink); text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
 .rcp-row:hover { transform: translateY(-1px); box-shadow: var(--m-shadow); }

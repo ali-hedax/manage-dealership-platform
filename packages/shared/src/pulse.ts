@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { formatJalali } from './jalali';
+import { NIGHT_LIST_REASONS } from './night-list';
 import { toLatinDigits, toPersianDigits } from './text';
 import type { Paged } from './types';
 
@@ -285,6 +286,18 @@ export const receptionSettingsSchema = z.object({
 }).strict();
 export type ReceptionSettingsInput = z.infer<typeof receptionSettingsSchema>;
 export interface ReceptionSettings { serviceLaborCodes: string[] }
+
+/** «لیست شب» (scenario 2026-11-25): the list of one Tehran day (today when omitted). */
+export const nightListQuerySchema = z.object({ day: receptionDay.optional() }).strict();
+export const nightListItemSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  reason: z.enum(NIGHT_LIST_REASONS).nullable(),
+  reasonNote: z.string().trim().max(300).optional(),
+  currentStation: z.string().trim().max(60).optional(),
+  nextStations: z.string().trim().max(120).optional(),
+}).strict().refine((v) => v.reason !== 'other' || !!v.reasonNote?.trim(), { message: 'برای «سایر» توضیح کوتاه بنویسید', path: ['reasonNote'] });
+export type NightListItemInput = z.infer<typeof nightListItemSchema>;
+export const nightListSendSchema = z.object({ expectedVersion: z.number().int().min(1) }).strict();
 
 export interface ReceptionRow {
   id: string;
