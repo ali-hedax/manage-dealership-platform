@@ -107,9 +107,11 @@ export function TasksPanel({ kase: fullCase, onChange, mode = 'execution' }: { k
       await onChange();
     } catch (err) {
       const list = err instanceof ApiError ? blockersOf(err.details) : [];
+      // Finish revalidation before opening the guidance dialog. Otherwise Esc can
+      // close it while its opener is still disabled and focus cannot return.
+      try { await onChange(); } catch { /* Keep the original action error actionable. */ }
       if (list.length && retry) setBlocked({ blockers: list, retry: () => void retry(), opener });
       else toast(errorMessage(err), 'error');
-      await onChange();
     } finally {
       submitting.current = false;
       setBusy(false);
