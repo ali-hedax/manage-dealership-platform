@@ -1,10 +1,12 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import { formatJalaliDateInput, formatJalaliDay, formatTimeInput, parseJalali } from '@manage/shared';
 import { login } from './helpers';
 test.use({ actionTimeout: 15000 });
 
 // Owner instructions of 2026-11-17, synthetic data only (TESTVIN…, invented numbers).
 const headers = { 'x-manage-client': 'e2e' };
+const syntheticVin = () => `TESTVIN${randomUUID().replaceAll('-','').slice(0,10)}`;
 const FIELDS = ['شماره کارت پذيرش', 'شماره شاسی', 'شماره امداد ویژه', 'کد اختصاصی اولیه', 'کد قطعه', 'كد تداركاتي كالا', 'وضعیت امداد ویژه', 'تاريخ رسيد شدن امداد ويژه در انبار', 'تعداد اختصاصي'];
 
 async function publish(api: APIRequestContext, rows: string[][], minutesAgo: number) {
@@ -22,7 +24,7 @@ async function publish(api: APIRequestContext, rows: string[][], minutesAgo: num
 test('part row: current special-aid stage before arrival, newer stage after import, arrival with only the warehouse receipt date', async ({ page, browser }) => {
   test.setTimeout(150000);
   await login(page, 'expert');
-  const vin = 'TESTVIN99900E2E31';
+  const vin = syntheticVin();
   const created = await page.request.post('/api/v1/cases', { headers, data: { vehicle: { model: 'خودرو امداد ساختگی', vin }, coverageType: 'golden_card', admittedAt: new Date().toISOString(), admissionNo: '9931' } });
   expect(created.status()).toBe(201);
   const c = await created.json();
@@ -76,10 +78,11 @@ test('part row: current special-aid stage before arrival, newer stage after impo
   await ctx.close();
 });
 
-test('missing repair route: Persian dialog for the expert (with the fix) and the technician (with the role), then the original start succeeds', async ({ page, browser }) => {
+test('missing repair route: Persian dialog for the expert (with the fix) and the technician (with the role), then the original start succeeds', async ({ page, browser }, info) => {
   test.setTimeout(150000);
+  const taskTitle = `نقاشی بدون مسیر ساختگی ${info.repeatEachIndex}-${info.retry}`;
   await login(page, 'expert');
-  const created = await page.request.post('/api/v1/cases', { headers, data: { vehicle: { model: 'خودرو مسیر ساختگی', vin: 'TESTVIN99900E2E32' }, customer: { fullName: 'مشتری ساختگی مسیر', phone: '09000000932' }, coverageType: 'personal', admittedAt: new Date().toISOString(), damageDescription: 'نقاشی؛ ساختگی' } });
+  const created = await page.request.post('/api/v1/cases', { headers, data: { vehicle: { model: 'خودرو مسیر ساختگی', vin: syntheticVin() }, customer: { fullName: 'مشتری ساختگی مسیر', phone: '09000000932' }, coverageType: 'personal', admittedAt: new Date().toISOString(), damageDescription: 'نقاشی؛ ساختگی' } });
   expect(created.status()).toBe(201);
   const c = await created.json();
   const departments = await (await page.request.get('/api/v1/departments')).json() as { id: string; code: string }[];
@@ -91,11 +94,14 @@ test('missing repair route: Persian dialog for the expert (with the fix) and the
   const staff = await (await page.request.get('/api/v1/workshop/staff')).json() as { id: string; displayName: string }[];
   const tech = staff.find((s) => s.displayName === 'تکنسین نمونه')!;
   // A job card without station or duration: the route of this vehicle is not configured.
-  const task = await (await page.request.post(`/api/v1/cases/${c.id}/tasks`, { headers, data: { departmentId: paint.id, assignedUserId: tech.id, title: 'نقاشی بدون مسیر ساختگی' } })).json();
+  const task = await (await page.request.post(`/api/v1/cases/${c.id}/tasks`, { headers, data: { departmentId: paint.id, assignedUserId: tech.id, title: taskTitle } })).json();
 
   // Authorized: the expert's start shows the blocker and the button to the plan of the same case.
   await page.goto(`/cases/${c.id}#case-tasks`);
-  const start = page.getByTestId('task').filter({ hasText: 'نقاشی بدون مسیر ساختگی' }).getByRole('button', { name: 'شروع', exact: true });
+  // Reproduce a slow revalidation: Esc must still return to the enabled opener.
+  const caseEndpoint = `**/api/v1/cases/${c.id}`;
+  await page.route(caseEndpoint,async route=>{await new Promise(resolve=>setTimeout(resolve,400));await route.continue();});
+  const start = page.getByTestId('task').filter({ hasText: taskTitle }).getByRole('button', { name: 'شروع', exact: true });
   await start.click();
   const dialog = page.getByRole('dialog', { name: 'شروع کار هنوز ممکن نیست' });
   await expect(dialog).toBeVisible();
@@ -105,6 +111,7 @@ test('missing repair route: Persian dialog for the expert (with the fix) and the
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(start).toBeFocused();
+  await page.unroute(caseEndpoint);
 
   // Unauthorized: the technician sees the reason and the role that can resolve it, no fix button.
   const ctx = await browser.newContext();
@@ -112,7 +119,7 @@ test('missing repair route: Persian dialog for the expert (with the fix) and the
   await login(techPage, 'technician');
   await techPage.goto('/workshop/technician');
   // Other suites may have given this technician work: find this assignment (current card or next list).
-  const mineCard = techPage.locator('article, li').filter({ hasText: 'نقاشی بدون مسیر ساختگی' }).last();
+  const mineCard = techPage.locator('article, li').filter({ hasText: taskTitle }).last();
   await expect(mineCard).toContainText('برای شروع کار، مسیر تعمیر این خودرو باید مشخص شود');
   if (await mineCard.getByRole('button', { name: 'شروع کار' }).count()) await expect(mineCard.getByRole('button', { name: 'شروع کار' })).toBeDisabled();
   await mineCard.getByRole('button', { name: 'چرا و چه باید کرد؟' }).click();
@@ -126,11 +133,12 @@ test('missing repair route: Persian dialog for the expert (with the fix) and the
   await start.click();
   await dialog.getByRole('link', { name: 'تنظیم مسیر تعمیر' }).click();
   await expect(page).toHaveURL(new RegExp(`/cases/${c.id}#case-plan$`));
-  const stations = await (await page.request.get('/api/v1/workshop/stations')).json() as { id: string; departmentId: string }[];
-  let station = stations.find((s) => s.departmentId === paint.id);
+  const stationCode = `E2E-P32-${info.repeatEachIndex}-${info.retry}`;
+  const stations = await (await page.request.get('/api/v1/workshop/stations')).json() as { id: string; code:string; departmentId: string }[];
+  let station = stations.find((s) => s.code === stationCode);
   if (!station) {
     const admin = await browser.newContext(); const adminPage = await admin.newPage(); await login(adminPage, 'admin');
-    station = (await (await adminPage.request.post('/api/v1/workshop/stations', { headers, data: { code: 'E2E-P32', name: 'نقاشی ساختگی', trade: 'paint', departmentId: paint.id, responsibleUserId: null } })).json() as { id: string; code: string }[]).find((s) => s.code === 'E2E-P32')!;
+    station = (await (await adminPage.request.post('/api/v1/workshop/stations', { headers, data: { code: stationCode, name: 'نقاشی ساختگی', trade: 'paint', departmentId: paint.id, responsibleUserId: null } })).json() as { id: string; code: string; departmentId:string }[]).find((s) => s.code === stationCode)!;
     await admin.close();
   }
   const fixed = await page.request.patch(`/api/v1/tasks/${task.id}`, { headers, data: { expectedVersion: task.version, stationId: station!.id, durationDays: 1, scheduleReason: 'تنظیم مسیر ساختگی' } });
@@ -152,7 +160,7 @@ test('missing repair route: Persian dialog for the expert (with the fix) and the
 
 test('parts clerk selects one of two units and can hand over the remainder separately', async ({ page, browser }) => {
   await login(page, 'expert');
-  const created = await page.request.post('/api/v1/cases', { headers, data: { vehicle: { model: 'خودرو تعداد ساختگی', vin: 'TESTVIN99900E2E33' }, coverageType: 'personal', admittedAt: new Date().toISOString() } });
+  const created = await page.request.post('/api/v1/cases', { headers, data: { vehicle: { model: 'خودرو تعداد ساختگی', vin: syntheticVin() }, coverageType: 'personal', admittedAt: new Date().toISOString() } });
   expect(created.status()).toBe(201);
   const c = await created.json();
   const need = await page.request.post(`/api/v1/cases/${c.id}/parts`, { headers, data: { description: 'قطعه تحویل تعدادی ساختگی', partNumber: 'TEST-DELIVERY-33', quantity: 2, source: 'external' } });

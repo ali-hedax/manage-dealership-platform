@@ -1,20 +1,22 @@
 import { expect, test } from '@playwright/test';
+import {randomUUID} from 'node:crypto';
 import { login } from './helpers';
 const headers={'x-manage-client':'test'};
 test('coded station, schedule, technician mobile start/end and coordinator handover through the real API',async({page},info)=>{
+ const stationCode=`TEST-MOBILE-${info.repeatEachIndex}-${info.retry}`;
  await login(page,'admin');
  const staff=await (await page.request.get('/api/v1/workshop/staff')).json();
  const technician=staff.find((s:{displayName:string})=>s.displayName==='تکنسین نمونه');expect(technician).toBeTruthy();
  const departments=await (await page.request.get('/api/v1/departments')).json();
  const body=departments.find((d:{code:string})=>d.code==='body');
- const stationResponse=await page.request.post('/api/v1/workshop/stations',{headers,data:{code:'TEST-MOBILE-01',name:'صافکاری آزمایشی',trade:'body',departmentId:body.id,responsibleUserId:technician.id}});expect(stationResponse.ok()).toBe(true);
- const stations=await stationResponse.json();const station=stations.find((s:{code:string})=>s.code==='TEST-MOBILE-01');
- await page.goto('/workshop/settings');await expect(page.getByRole('heading',{name:'تقویم و جایگاه‌ها',exact:true})).toBeVisible();await expect(page.getByText('TEST-MOBILE-01',{exact:true})).toBeVisible();
+ const stationResponse=await page.request.post('/api/v1/workshop/stations',{headers,data:{code:stationCode,name:'صافکاری آزمایشی',trade:'body',departmentId:body.id,responsibleUserId:technician.id}});expect(stationResponse.ok()).toBe(true);
+ const stations=await stationResponse.json();const station=stations.find((s:{code:string})=>s.code===stationCode);
+ await page.goto('/workshop/settings');await expect(page.getByRole('heading',{name:'تقویم و جایگاه‌ها',exact:true})).toBeVisible();await expect(page.getByText(stationCode,{exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('calendar-desktop.png'),fullPage:true});
  await login(page,'expert');
- const created=await page.request.post('/api/v1/cases',{headers,data:{isLegacyEntry:true,customer:{fullName:'مشتری ساختگی موبایل',phone:'09000007777'},vehicle:{model:'دنا آزمون',plate:'۱۲ ب ۳۴۵ - ۶۷',vin:'TESTVIN000MOBILE1'},admittedAt:new Date().toISOString(),coverageType:'golden_card'}});expect(created.ok()).toBe(true);const kase=await created.json();
+ const created=await page.request.post('/api/v1/cases',{headers,data:{isLegacyEntry:true,customer:{fullName:'مشتری ساختگی موبایل',phone:'09000007777'},vehicle:{model:'دنا آزمون',plate:'۱۲ ب ۳۴۵ - ۶۷',vin:`TESTVIN${randomUUID().replaceAll('-','').slice(0,10)}`},admittedAt:new Date().toISOString(),coverageType:'golden_card'}});expect(created.ok()).toBe(true);const kase=await created.json();
  const taskRes=await page.request.post(`/api/v1/cases/${kase.id}/tasks`,{headers,data:{departmentId:body.id,stationId:station.id,assignedUserId:technician.id,title:'صافکاری درب آزمون',plannedStartAt:new Date().toISOString(),durationMinutes:180}});expect(taskRes.ok()).toBe(true);const task=await taskRes.json();
- await page.goto('/workshop');await expect(page.getByRole('heading',{name:'برنامه و پیگیری تعمیرات'})).toBeVisible();await expect(page.getByRole('cell',{name:/TEST-MOBILE-01/})).toBeVisible();
+ await page.goto('/workshop');await expect(page.getByRole('heading',{name:'برنامه و پیگیری تعمیرات'})).toBeVisible();await expect(page.getByRole('cell',{name:new RegExp(stationCode)})).toBeVisible();
  await page.screenshot({path:info.outputPath('coordinator-desktop.png'),fullPage:true});
  await login(page,'technician');await page.setViewportSize({width:390,height:844});await page.goto('/workshop/technician');
  await expect(page.getByRole('heading',{level:1,name:/^سلام/})).toBeVisible();await expect(page.getByRole('button',{name:'شروع کار',exact:true})).toBeVisible();
@@ -28,8 +30,8 @@ test('coded station, schedule, technician mobile start/end and coordinator hando
  await page.screenshot({path:info.outputPath('technician-mobile-after.png'),fullPage:true});
  await login(page,'expert');const detail=await (await page.request.get(`/api/v1/cases/${kase.id}`)).json();const done=detail.tasks.find((t:{id:string})=>t.id===task.id);expect(done.status).toBe('done');
  const approved=await page.request.post(`/api/v1/tasks/${task.id}/actions`,{headers,data:{action:'approve',expectedVersion:done.version}});expect(approved.ok()).toBe(true);
- await page.goto('/workshop');await page.getByRole('button',{name:'همه کارها',exact:true}).click();await expect(page.getByRole('cell',{name:/TEST-MOBILE-01/})).toBeVisible();
- await page.goto('/reports?view=workshop');await page.getByLabel('کد جایگاه ارجاع',{exact:true}).fill('TEST-MOBILE-01');await page.getByRole('button',{name:'اعمال کد جایگاه',exact:true}).click();await expect(page).toHaveURL(/stationCode=TEST-MOBILE-01/);await expect(page.getByRole('link',{name:/خروجی Excel/})).toHaveAttribute('href',/stationCode=TEST-MOBILE-01/);
+ await page.goto('/workshop');await page.getByRole('button',{name:'همه کارها',exact:true}).click();await expect(page.getByRole('cell',{name:new RegExp(stationCode)})).toBeVisible();
+ await page.goto('/reports?view=workshop');await page.getByLabel('کد جایگاه ارجاع',{exact:true}).fill(stationCode);await page.getByRole('button',{name:'اعمال کد جایگاه',exact:true}).click();await expect(page).toHaveURL(new RegExp('stationCode='+stationCode));await expect(page.getByRole('link',{name:/خروجی Excel/})).toHaveAttribute('href',new RegExp('stationCode='+stationCode));
 });
 test('reporting desk is read-only and calendar and station settings fit a phone',async({page},info)=>{
  await login(page,'manager');await page.goto('/workshop');await expect(page.getByRole('heading',{name:'نبض تعمیرگاه'})).toBeVisible();

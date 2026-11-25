@@ -32,6 +32,13 @@ export const RELEASE_LINE = { major: 1, minor: 0 } as const;
 /** Newest first. Add one note per user-visible change set in the PR that ships it. */
 export const CHANGE_NOTES: readonly ChangeNote[] = [
   {
+    key: 'workflow-error-focus-20261125', date: '2026-11-25',
+    summary: 'در راهنمای خطای شروع تعمیر، بستن پنجره با Escape دوباره فوکوس را به دکمهٔ شروع برمی‌گرداند.',
+    sections: [{title:'راهنمای گردش‌کار',items:[
+      'حتی با پاسخ کند سرور، راهنمای پیش‌نیازهای تعمیر پس از آماده‌شدن دکمه باز می‌شود؛ بستن پنجره و تلاش دوباره با صفحه‌کلید قابل استفاده است.',
+    ]}],
+  },
+  {
     key: 'workflow-stock-vin-20261124', date: '2026-11-24',
     summary: 'کنترل کیفیت قابل بازگشت، جست‌وجوی یکپارچهٔ قطعه و موجودی، جلوگیری از پذیرش فعال تکراری و نمایش روشن کد محصول.',
     sections: [{title:'گردش‌کار و پذیرش',items:[
