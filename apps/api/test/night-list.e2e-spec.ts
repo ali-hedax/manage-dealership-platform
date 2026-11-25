@@ -111,7 +111,7 @@ describe('Nightly list of the reception module', () => {
 
   it('builds a draft on request for today only', async () => {
     await clerk.post('/reception/night-list/generate', {}).expect(403);
-    await admin.post('/reception/night-list/generate', { day: '2999-01-01' }).expect(400);
+    await admin.post('/reception/night-list/generate', { day: '2999-01-01' }).expect(422);
     const today = (await admin.post('/reception/night-list/generate', {}).expect(201)).body as NightListView;
     expect(today.status).toBe('draft');
   });

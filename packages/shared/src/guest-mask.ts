@@ -5,6 +5,8 @@
 
 const NAME_KEYS = new Set(['customername', 'ownername', 'fullname', 'deliverername', 'recipientname']);
 const ID_KEYS = new Set(['vin', 'chassis', 'chassisno', 'vinkey']);
+/** Objects whose plain `name` is a person: `{ customer: { name } }`. */
+const PERSON_PARENTS = new Set(['customer', 'owner', 'deliverer']);
 const HIDDEN_KEYS = new Set(['phone', 'mobile', 'customerphone', 'customermobile', 'deliverermobile', 'nationalid', 'customernationalid', 'address', 'customeraddress']);
 
 /** «علی هدایت» → «ع… ه…». */
@@ -23,20 +25,20 @@ const isAmountKey = (key: string) => /rial$/i.test(key) || /^(amount|price|unitp
 
 /** A deep copy of a JSON-like answer with guest-hidden fields masked. Dates and non-plain objects are kept. */
 export function maskForGuest<T>(value: T): T {
-  return walk(value, '') as T;
+  return walk(value, '', '') as T;
 }
 
-function walk(value: unknown, key: string): unknown {
-  if (Array.isArray(value)) return value.map((v) => walk(v, key));
+function walk(value: unknown, key: string, parent: string): unknown {
+  if (Array.isArray(value)) return value.map((v) => walk(v, key, parent));
   if (value && typeof value === 'object') {
     if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return value;
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = walk(v, k);
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = walk(v, k, key);
     return out;
   }
   const k = key.toLowerCase();
   if (typeof value === 'string' && value) {
-    if (NAME_KEYS.has(k)) return maskPersonName(value);
+    if (NAME_KEYS.has(k) || (k === 'name' && PERSON_PARENTS.has(parent.toLowerCase()))) return maskPersonName(value);
     if (ID_KEYS.has(k)) return maskVehicleId(value);
     if (HIDDEN_KEYS.has(k)) return null;
   }
