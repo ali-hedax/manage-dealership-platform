@@ -21,11 +21,12 @@ test('a guest answer hides contact data, names, identifiers and amounts deep ins
   assert.equal(masked.items[0]!.vehicle.customerName, 'م… س…');
   assert.equal(masked.items[0]!.vehicle.phone, null);
   assert.equal(masked.items[0]!.vehicle.plate, '11 ب 111 - 11');
-  assert.deepEqual(masked.items[0]!.parts[0], { name: 'سپر جلو', unitPriceRial: null, qty: 2 });
+  const part = masked.items[0]!.parts[0] as Record<string, unknown>;
+  assert.equal(part.name, 'سپر جلو', 'a part name is not a person');
+  assert.deepEqual(part, { name: 'سپر جلو', unitPriceRial: null, qty: 2 });
   assert.equal(masked.items[0]!.at, at);
   assert.equal(masked.total, 7);
   assert.deepEqual(masked.admission, { chassis: '••••2345', receptionist: 'پذیرشگر', finalCostRial: null, amount: null });
   assert.deepEqual(masked.customer, { name: 'م… س…', mobile: null });
-  assert.equal(masked.items[0]!.parts[0]!.name, 'سپر جلو', 'a part name is not a person');
   assert.equal(answer.items[0]!.vehicle.customerName, 'مشتری ساختگی', 'the original is not changed');
 });
