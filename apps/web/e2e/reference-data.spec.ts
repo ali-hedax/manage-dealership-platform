@@ -11,8 +11,17 @@ test('imports a parts catalog, then selects a technical code while adding a case
  page.once('dialog',d=>void d.accept());await preview.getByRole('button',{name:'ثبت ۱ ردیف اطلاعات پایه'}).click();await expect(preview.getByRole('heading',{name:'نتیجه ورود'})).toBeVisible();
  const cases=await page.request.get('/api/v1/cases');const first=(await cases.json()).items[0];await page.goto(`/cases/${first.id}`);await openCaseSections(page,'parts');
  await page.getByRole('button',{name:'افزودن قطعه',exact:true}).click();
- await page.getByRole('form',{name:'افزودن قطعه',exact:true}).getByText('انتخاب از کاتالوگ قطعات',{exact:true}).click();await page.getByLabel('کد فنی یا نام قطعه',{exact:true}).fill('00042');await page.getByRole('button',{name:'جست‌وجو در اطلاعات پایه',exact:true}).click();await page.getByRole('button',{name:'انتخاب این قطعه',exact:true}).click();
- await expect(page.getByLabel('نام قطعه *',{exact:true})).toHaveValue('چراغ آزمون مرجع');await expect(page.getByLabel('کد فنی قطعه *',{exact:true})).toHaveValue('00042');
+ // Since 2026-11-25 «افزودن قطعه» opens the intelligent catalog search. A part without a vehicle label is
+ // not offered as compatible with the case vehicle: it is found under «همه خودروها» and needs an explicit check.
+ const entry=page.getByTestId('smart-part-entry');await entry.getByTestId('smart-part-search').fill('00042');
+ await entry.getByRole('button',{name:'همه خودروها',exact:true}).click();
+ await entry.getByTestId('smart-part-option').filter({hasText:'چراغ آزمون مرجع'}).first().click();
+ const pick=entry.getByTestId('smart-part-preview');await expect(pick).toContainText('چراغ آزمون مرجع');await expect(pick).toContainText('۰۰۰۴۲');
+ const add=entry.getByTestId('smart-part-add');await expect(add).toBeDisabled();
+ await entry.getByTestId('smart-part-fit').getByRole('checkbox').check();await expect(add).toBeEnabled();
+ await add.click();await expect(entry.getByTestId('smart-part-recent')).toContainText('چراغ آزمون مرجع');
+ const saved=(await (await page.request.get(`/api/v1/cases/${first.id}/parts`)).json()) as {partNumber:string;notes:string|null}[];
+ expect(saved.find(x=>x.partNumber==='00042')?.notes).toContain('سازگاری تأییدنشده');
 });
 
 test('historical customer lookup fills only empty fields and works on a phone width',async({page})=>{

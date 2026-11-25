@@ -151,6 +151,25 @@ describe('KasbClient against the synthetic کسب‌وکار', () => {
     for (let i = 1; i < starts.length; i++) expect(starts[i]! - starts[i - 1]!).toBeGreaterThanOrEqual(50);
   });
 
+  // Scaled: 2 ms here stand for 1 s (ordinary limit 30 s → 60 ms). The report limit is 800 ms:
+  // 300 s (600 ms) plus headroom for the mock's encryption.
+  it('waits up to the heavy-report limit for the stock file; ordinary requests keep 30 s (owner, 2026-11-25)', async () => {
+    const c = client({ minGapMs: 1, timeoutMs: 60, reportTimeoutMs: 800 });
+    await c.login(creds());
+    for (const seconds of [30, 60, 120, 180, 300]) {
+      mock.stockDelayMs = seconds * 2;
+      expect((await c.stockFile('14553', 1405)).toString('utf8')).toBe(mock.stockHtml);
+    }
+    // Beyond the report limit the read fails with a stable code; Pulse records it and retries later.
+    mock.stockDelayMs = 1_100;
+    await expect(c.stockFile('14553', 1405)).rejects.toMatchObject({ code: 'KASB_TIMEOUT' });
+    // An ordinary JSON call slower than its own limit still times out.
+    mock.stockDelayMs = 0;
+    mock.delayMs = 120;
+    await expect(c.warehouses()).rejects.toMatchObject({ code: 'KASB_TIMEOUT' });
+    mock.delayMs = 0;
+  }, 20_000);
+
   it('maps network failures and timeouts to stable codes', async () => {
     mock.delayMs = 300;
     await expect(client({ timeoutMs: 50 }).loadKeys()).rejects.toThrow('KASB_TIMEOUT');

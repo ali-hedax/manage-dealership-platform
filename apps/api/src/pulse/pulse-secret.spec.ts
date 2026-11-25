@@ -18,7 +18,10 @@ describe('pulse-secret (AES-256-GCM)', () => {
     const stored = encryptSecret('synthetic-password', KEY);
     expect(() => decryptSecret(stored, `${KEY}-other`)).toThrow(PulseSecretError);
     const [v, iv, tag, data] = stored.split('.');
-    const flipped = `${v}.${iv}.${tag}.${data!.slice(0, -2)}${data!.endsWith('A') ? 'B' : 'A'}${data!.slice(-1)}`;
+    // Change the second-to-last character itself (the old check looked at the last one, so 1 run in ~64 changed nothing).
+    const at = data!.length - 2;
+    const flipped = `${v}.${iv}.${tag}.${data!.slice(0, at)}${data![at] === 'A' ? 'B' : 'A'}${data!.slice(at + 1)}`;
+    expect(flipped).not.toBe(stored);
     expect(() => decryptSecret(flipped, KEY)).toThrow(PulseSecretError);
     expect(() => decryptSecret('plain', KEY)).toThrow(PulseSecretError);
   });

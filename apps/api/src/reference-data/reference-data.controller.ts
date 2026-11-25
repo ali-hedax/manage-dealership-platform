@@ -31,6 +31,15 @@ export class ReferenceDataController{
  suggestAssessmentParts(@CurrentActor()a:Actor,@IdParam()id:string,@Body(new ZodPipe(assessmentCatalogSearchSchema))b:AssessmentCatalogSearchInput){
   return this.service.suggestAssessmentParts(a,id,b);
  }
+ /**
+  * The same intelligent search for the manual «افزودن قطعه» of a vehicle case (owner, 2026-11-25):
+  * one engine, one catalog. Read-only; adding the part stays POST /cases/:id/parts with its rules.
+  */
+ @Post('cases/:id/parts-catalog/search')
+ @RequirePermissions('part.request','reference.parts.read')
+ searchPartsCatalog(@CurrentActor()a:Actor,@IdParam()id:string,@Body(new ZodPipe(assessmentCatalogSearchSchema))b:AssessmentCatalogSearchInput){
+  return this.service.suggestAssessmentParts(a,id,b);
+ }
  /** Catalog vehicle families for the «انتخاب خودرو» picker; read-only, case-scoped. */
  @Get('cases/:id/assessment-catalog/vehicles')
  @RequirePermissions('assessment.manage')

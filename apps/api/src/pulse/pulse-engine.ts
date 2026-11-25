@@ -96,7 +96,7 @@ export class PulseEngine {
     const key = createHash('sha256').update(`${conn.dealerCode}\n${conn.username}\n${conn.passwordEnc ?? ''}`).digest('hex');
     const cached = this.clients.get(conn.tenantId);
     if (cached?.key === key) return cached.client;
-    const client = this.opts.clientFactory?.(this.cfg.PULSE_KASB_ORIGIN) ?? new KasbClient({ origin: this.cfg.PULSE_KASB_ORIGIN });
+    const client = this.opts.clientFactory?.(this.cfg.PULSE_KASB_ORIGIN) ?? new KasbClient({ origin: this.cfg.PULSE_KASB_ORIGIN, reportTimeoutMs: this.cfg.HEAVY_REPORT_TIMEOUT_MS });
     this.clients.set(conn.tenantId, { key, client });
     return client;
   }

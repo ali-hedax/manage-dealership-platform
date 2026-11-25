@@ -16,7 +16,7 @@ import {
 import type { Actor } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { APP_CONFIG, type AppConfig } from '../config';
-import { badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
+import { AppError, badRequest, conflict, forbidden, notFound, versionConflict } from '../common/errors';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx, type Tx } from '../db/database';
 import {
@@ -70,6 +70,8 @@ const changedFields = (before: Record<string, unknown>, after: Record<string, un
 @Injectable()
 export class DailyReportsService implements OnApplicationBootstrap {
   private readonly logger = new Logger('DailyReports');
+  /** Publish jobs older than this process were interrupted by a restart (their transaction rolled back). */
+  private readonly bootedAt = new Date();
   constructor(
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
     @Inject(APP_CONFIG) private readonly cfg: AppConfig,
@@ -125,7 +127,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
       const at = job.createdAt;
       try {
         // Pulse read this file from کسب‌وکار at `at`: that is the report's own date and time.
-        await this.apply(actor, job.id, { reportDate: jalaliDay(at), reportTime: tehranHhmm(at), declaration: true, declaredToday: true });
+        await this.apply(actor, job.id, { reportDate: jalaliDay(at), reportTime: tehranHhmm(at), declaration: true, declaredToday: true }, { wait: Infinity });
       } catch (e) {
         await hold(e instanceof Error ? e.message.slice(0, 60) : 'error');
       }
@@ -134,6 +136,12 @@ export class DailyReportsService implements OnApplicationBootstrap {
 
   async recover(now: Date) {
     await this.expireStale(now);
+    // A publish interrupted by a restart changed nothing (one transaction): back to its preview, to confirm again.
+    const startedAt = sql`(${dailyReportImports.diagnostics}->>'applyStartedAt')::timestamptz`;
+    const applyError = { code: 'DAILY_APPLY_INTERRUPTED', message: 'ثبت این گزارش نیمه‌تمام ماند و هیچ تغییری اعمال نشد؛ دوباره «ثبت گزارش» را بزنید', at: now.toISOString() };
+    await this.db.update(dailyReportImports)
+      .set({ status: 'preview', diagnostics: sql`coalesce(${dailyReportImports.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ applyError })}::jsonb` })
+      .where(and(eq(dailyReportImports.status, 'applying'), sql`(${dailyReportImports.diagnostics}->>'applyStartedAt' is null or ${startedAt} < ${this.bootedAt.toISOString()}::timestamptz or ${startedAt} < ${new Date(now.getTime() - 30 * 60_000).toISOString()}::timestamptz)`));
     const interrupted = and(eq(dailyReportImports.status, 'parsing'), lt(dailyReportImports.createdAt, new Date(now.getTime() - 10 * 60_000)));
     await this.db.update(dailyReportImports).set({ status: 'uploaded' }).where(and(interrupted, lt(dailyReportImports.attempts, 3)));
     // Repeated interruption must not leave a job "reading" forever; the uploader can retry it.
@@ -469,7 +477,16 @@ export class DailyReportsService implements OnApplicationBootstrap {
 
   // ---------------------------------------------------------------- apply
 
-  async apply(actor: Actor, id: string, input: DailyApplyInput) {
+  /**
+   * Confirms a preview. A large file can take minutes to publish, so the work runs as a background
+   * job (owner, 2026-11-25): the import is claimed `preview → applying` in one conditional update,
+   * so a second click, a second tab or a retried request never starts it twice. The request waits
+   * up to DAILY_APPLY_WAIT_MS for the result (small files answer as before) and otherwise returns
+   * the import in `applying`; the page follows it. A failure returns the import to `preview` with
+   * the reason in diagnostics.applyError; the publish is one transaction, so the previous stock
+   * snapshot and Special Aid rows stay exactly as they were. Pulse passes `wait: Infinity`.
+   */
+  async apply(actor: Actor, id: string, input: DailyApplyInput, opts: { wait?: number } = {}) {
     this.need(actor, 'daily_reports.apply');
     const tenantId = actor.user.tenantId;
     const now = new Date();
@@ -477,6 +494,64 @@ export class DailyReportsService implements OnApplicationBootstrap {
     if (!reportAt) throw badRequest('DAILY_REPORT_DATE', 'تاریخ یا ساعت گزارش معتبر نیست');
     const precision = input.reportTime ? 'minute' : 'day';
     if (reportAt.getTime() > now.getTime() + 5 * 60_000) throw badRequest('DAILY_REPORT_FUTURE', 'تاریخ گزارش نمی‌تواند در آینده باشد');
+    const started = { applyStartedAt: now.toISOString(), applyStartedBy: actor.user.id };
+    const [claimed] = await this.db
+      .update(dailyReportImports)
+      .set({ status: 'applying', diagnostics: sql`(coalesce(${dailyReportImports.diagnostics}, '{}'::jsonb) - 'applyError') || ${JSON.stringify(started)}::jsonb` })
+      .where(and(eq(dailyReportImports.id, id), eq(dailyReportImports.tenantId, tenantId), eq(dailyReportImports.status, 'preview')))
+      .returning({ id: dailyReportImports.id });
+    if (!claimed) {
+      const [job] = await this.db.select({ status: dailyReportImports.status }).from(dailyReportImports)
+        .where(and(eq(dailyReportImports.id, id), eq(dailyReportImports.tenantId, tenantId)));
+      if (!job) throw notFound('بارگذاری گزارش');
+      // Already being published (double click, second tab, retry after a lost answer): follow it.
+      if (job.status === 'applying') return { import: await this.get(actor, id), accepted: true as const };
+      if (job.status === 'applied') throw conflict('DAILY_ALREADY_APPLIED', 'این فایل قبلاً ثبت شده است');
+      throw conflict('DAILY_NOT_READY', 'فایل هنوز آماده تأیید نیست');
+    }
+    const work = this.runApply(actor, id, input, reportAt, precision, now);
+    const wait = opts.wait ?? this.cfg.DAILY_APPLY_WAIT_MS;
+    if (wait === Infinity) return work;
+    if (wait <= 0) {
+      work.catch(() => undefined);
+      return { import: await this.get(actor, id), accepted: true as const };
+    }
+    let timer: NodeJS.Timeout | undefined;
+    const outcome = await Promise.race([
+      work.then((r) => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e })),
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), wait); }),
+    ]);
+    clearTimeout(timer);
+    if (outcome?.ok === false) throw outcome.e;
+    if (outcome) return outcome.r;
+    // Still publishing: the job continues even if this connection is lost.
+    work.catch(() => undefined);
+    return { import: await this.get(actor, id), accepted: true as const };
+  }
+
+  /** The publish job of a claimed import; on failure the import returns to its preview. */
+  private async runApply(actor: Actor, id: string, input: DailyApplyInput, reportAt: Date, precision: string, now: Date) {
+    try {
+      return await this.applyClaimed(actor, id, input, reportAt, precision, now);
+    } catch (e) {
+      const known = e instanceof AppError;
+      const applyError = {
+        code: known ? e.code : 'DAILY_APPLY_FAILED',
+        message: known ? e.message : 'ثبت گزارش ناموفق بود و هیچ تغییری اعمال نشد؛ دوباره «ثبت گزارش» را بزنید',
+        at: new Date().toISOString(),
+      };
+      if (!known) this.logger.error(`daily report apply failed: ${e instanceof Error ? e.message : 'unknown'}`);
+      await this.db
+        .update(dailyReportImports)
+        .set({ status: 'preview', diagnostics: sql`coalesce(${dailyReportImports.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ applyError })}::jsonb` })
+        .where(and(eq(dailyReportImports.id, id), eq(dailyReportImports.status, 'applying')))
+        .catch(() => undefined);
+      throw e;
+    }
+  }
+
+  private async applyClaimed(actor: Actor, id: string, input: DailyApplyInput, reportAt: Date, precision: string, now: Date) {
+    const tenantId = actor.user.tenantId;
     let result: Record<string, unknown> = {};
     let published: DailyReportKind | null = null;
     await this.db.transaction(async (tx) => {
@@ -487,7 +562,7 @@ export class DailyReportsService implements OnApplicationBootstrap {
         .for('update');
       if (!job) throw notFound('بارگذاری گزارش');
       if (job.status === 'applied') throw conflict('DAILY_ALREADY_APPLIED', 'این فایل قبلاً ثبت شده است');
-      if (job.status !== 'preview') throw conflict('DAILY_NOT_READY', 'فایل هنوز آماده تأیید نیست');
+      if (job.status !== 'applying') throw conflict('DAILY_NOT_READY', 'فایل هنوز آماده تأیید نیست');
       const kind = job.kind as DailyReportKind;
       const diag = job.diagnostics as Record<string, unknown>;
       if (diag.templateChanged && !input.acceptTemplate) {

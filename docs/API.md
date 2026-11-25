@@ -207,6 +207,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/cases/:id/finance/approvals` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/cases/:id/finance/payments` | [source](../apps/api/src/finance/finance.controller.ts) |
 | POST | `/api/v1/cases/:id/financial-close` | [source](../apps/api/src/completion/completion.controller.ts) |
+| POST | `/api/v1/cases/:id/parts-catalog/search` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/cases/:id/parts-statement/:partId/consume` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/cases/:id/parts-statement/deductible` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
 | POST | `/api/v1/cases/:id/parts-statement` | [source](../apps/api/src/parts/parts-operations.controller.ts) |

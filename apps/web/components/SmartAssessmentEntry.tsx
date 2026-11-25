@@ -1,32 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { assessmentReference, normalizedPartCode, normalizeAssessmentSearch, type Assessment, type AssessmentItem, type AssessmentSearchScope, type CaseDetail, type PartCompatibility } from '@manage/shared';
+import { assessmentReference, normalizedPartCode, normalizeAssessmentSearch, type Assessment, type AssessmentItem, type AssessmentSearchScope, type CaseDetail } from '@manage/shared';
 import { api, errorMessage } from '@/lib/api';
+import { useCatalogSearch, type CatalogSuggestion } from '@/lib/catalog-search';
 import { toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 
-type Suggestion = {
-  id: string;
-  name: string;
-  partNumber: string;
-  reference: string | null;
-  vehicleUse: string;
-  common: boolean;
-  /** Catalog family of the part itself (its source vehicle); null for common or unlabelled parts. */
-  vehicleFamily?: string | null;
-  /** Judged against the CASE vehicle, whatever scope found the part. */
-  compatibility?: PartCompatibility;
-  /** Trim check, other vehicle or unknown applicability; null when verified. */
-  fitmentNote?: string | null;
-  available?: string | null;
-  availability?: 'available' | 'unavailable' | 'unknown';
-  source?: 'catalog' | 'warehouse' | 'both';
-};
-type Response = {
-  results: Suggestion[]; limited: boolean; fitmentVerified: boolean; family?: string; caseVehicle?: string | null; trimReview?: boolean; message?: string;
-  scope?: AssessmentSearchScope; scopeFamily?: { key: string; name: string } | null; offset?: number; total?: number; hasMore?: boolean;
-};
+type Suggestion = CatalogSuggestion;
 type Family = { key: string; name: string; labels: string[]; parts: number; caseFamily: boolean };
 type Vehicles = { caseVehicle: string | null; caseFamily: { key: string; name: string } | null; families: Family[] };
 
@@ -61,10 +42,8 @@ export function SmartAssessmentEntry({
 }) {
   const toast = useToast();
   const [query, setQuery] = useState('');
-  const [data, setData] = useState<Response | null>(null);
-  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [actionError, setError] = useState('');
   const [active, setActive] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [open, setOpen] = useState(false);
@@ -75,10 +54,12 @@ export function SmartAssessmentEntry({
   const [family, setFamily] = useState('');
   const [familyFilter, setFamilyFilter] = useState('');
   const [vehicles, setVehicles] = useState<Vehicles | null>(null);
-  const [more, setMore] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const saving = useRef(false);
-  const searchGeneration = useRef(0);
+  // Shared with the manual «افزودن قطعه» of the case (one engine, lib/catalog-search.ts).
+  const search = useCatalogSearch(`/cases/${kase.id}/assessment-catalog/search`, query, scope, family, () => { setActive(0); setOpen(true); });
+  const { data, loading, more, loadMore } = search;
+  const error = actionError || search.error;
   useEffect(() => { setVersion(assessment.version); }, [assessment.id, assessment.version]);
   const results = data?.results ?? [];
   const picked = assessment.items.filter((i) => i.action === 'replace');
@@ -93,39 +74,6 @@ export function SmartAssessmentEntry({
       .catch((e) => { if (!cancelled) setError(errorMessage(e)); });
     return () => { cancelled = true; };
   }, [kase.id, scope, vehicles]);
-
-  const body = (value: string, offset: number) => ({ query: value, scope, ...(scope === 'vehicle' ? { family } : {}), offset });
-
-  useEffect(() => {
-    searchGeneration.current += 1;
-    const value = query.trim();
-    if (value.length < 2 || (scope === 'vehicle' && !family)) {
-      setData(null); setLoading(false); setOpen(false); return;
-    }
-    let cancelled = false;
-    const handle = window.setTimeout(async () => {
-      setLoading(true); setError('');
-      try {
-        const response = await api<Response>(`/cases/${kase.id}/assessment-catalog/search`, { body: body(value, 0) });
-        if (!cancelled) { setData(response); setActive(0); setOpen(true); }
-      } catch (e) {
-        if (!cancelled) { setData(null); setError(errorMessage(e)); setOpen(true); }
-      } finally { if (!cancelled) setLoading(false); }
-    }, 200);
-    return () => { cancelled = true; searchGeneration.current += 1; window.clearTimeout(handle); };
-  }, [kase.id, query, scope, family]);
-
-  /** The next page of a large result set, appended below the current one. */
-  async function loadMore() {
-    if (!data || more) return;
-    const generation = searchGeneration.current;
-    setMore(true); setError('');
-    try {
-      const next = await api<Response>(`/cases/${kase.id}/assessment-catalog/search`, { body: body(query.trim(), data.results.length) });
-      if (generation !== searchGeneration.current) return;
-      setData({ ...next, results: [...data.results, ...next.results.filter((r) => !data.results.some((x) => x.id === r.id))] });
-    } catch (e) { setError(errorMessage(e)); } finally { setMore(false); }
-  }
 
   const caseFamilyName = data?.fitmentVerified ? data.family : vehicles?.caseFamily?.name;
   const familyKey = normalizeAssessmentSearch(familyFilter);
@@ -173,7 +121,7 @@ export function SmartAssessmentEntry({
       });
       await refresh();
       setJustAdded(suggestionRef(s));
-      setQuery(''); setData(null); setOpen(false); setQuantity(1);
+      setQuery(''); search.clear(); setOpen(false); setQuantity(1);
       inputRef.current?.focus();
     } catch (e) {
       setError(errorMessage(e));
@@ -210,7 +158,7 @@ export function SmartAssessmentEntry({
     <div className="smart-scope" data-testid="smart-scope">
       <div className="segmented" role="group" aria-label="دامنهٔ جست‌وجوی خودرو">
         {SCOPES.map((s) => <button key={s.key} type="button" aria-pressed={scope === s.key} disabled={busy}
-          onClick={() => { setScope(s.key); setData(null); setOpen(false); }}>{s.label}</button>)}
+          onClick={() => { setScope(s.key); setOpen(false); }}>{s.label}</button>)}
       </div>
       <dl className="smart-family xs" data-testid="smart-family">
         <div><dt>خودروی پرونده:</dt><dd>{data?.caseVehicle ?? vehicles?.caseVehicle ?? kase.vehicle?.model ?? '—'}</dd></div>
@@ -226,7 +174,7 @@ export function SmartAssessmentEntry({
         <label className="field">
           <span>خودروی کاتالوگ</span>
           <select className="input" value={family} disabled={busy || !vehicles} data-testid="smart-vehicle-select"
-            onChange={(e) => { setFamily(e.target.value); setData(null); setOpen(false); }}>
+            onChange={(e) => { setFamily(e.target.value); setOpen(false); }}>
             <option value="">{vehicles ? 'انتخاب خودرو…' : 'در حال خواندن فهرست…'}</option>
             {shownFamilies.map((f) => <option key={f.key} value={f.key}>
               {f.name}{f.caseFamily ? ' — خودروی پرونده' : ''} ({toPersianDigits(String(f.parts))} قطعه)
@@ -251,7 +199,7 @@ export function SmartAssessmentEntry({
           autoComplete="off"
           placeholder="مثلاً سپر جلو، گلگیر، کاپوت، شماره فنی…"
           disabled={busy}
-          onChange={(e) => { setQuery(e.target.value); setData(null); setOpen(false); }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(false); }}
           onFocus={() => { if (results.length) setOpen(true); }}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing) return;

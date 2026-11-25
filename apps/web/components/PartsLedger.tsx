@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { SmartPartEntry } from './SmartPartEntry';
 import useSWR from 'swr';
 import {
   PART_FLOW_FILTER_LABELS,
@@ -29,7 +30,6 @@ import { AppIcon } from './AppIcon';
 import { faNum, parseAmount, toPersianDigits } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import { QuotePanel, QuoteProposal } from './WorkshopQuotes';
-import { ReferenceLookup } from './ReferenceLookup';
 
 const STATE_TONE: Record<PartFlowState, string> = {
   needed: 'wait',
@@ -182,7 +182,7 @@ export function PartsLedger({ kase, onChange, title = 'فهرست قطعات', o
             <AppIcon name="search" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجوی قطعه، کد فنی یا شمارهٔ امداد ویژه…" aria-label="جست‌وجو در قطعات" />
           </label>
-          {editable && can('part.request') && <AddPart caseId={kase.id} onDone={refresh} />}
+          {editable && can('part.request') && <AddPart caseId={kase.id} parts={parts ?? []} onDone={refresh} />}
           {can('stock.read') && <PickingPrint caseId={kase.id} />}
         </div>
         {error && <p className="m-error" role="alert">دریافت فهرست قطعات ناموفق بود؛ صفحه را تازه کنید.</p>}
@@ -628,10 +628,13 @@ function PriceNoticeBox({ part, canAnswer, onDone }: { part: Part; canAnswer: bo
 }
 
 /** The expert adds a need (single) or a sheet with preview; the same code never makes a second row. */
-function AddPart({ caseId, onDone }: { caseId: string; onDone: () => Promise<void> }) {
+function AddPart({ caseId, parts, onDone }: { caseId: string; parts: Part[]; onDone: () => Promise<void> }) {
   const toast = useToast();
   const { can } = useAuth();
   const [open, setOpen] = useState<'one' | 'sheet' | null>(null);
+  // Intelligent search first (owner, 2026-11-25); typing name and code by hand stays for parts not in the catalog.
+  const smart = can('reference.parts.read');
+  const [manual, setManual] = useState(false);
   const [desc, setDesc] = useState(''), [code, setCode] = useState(''), [qty, setQty] = useState('1');
   const [file, setFile] = useState<string | null>(null), [preview, setPreview] = useState<PartImportResult | null>(null);
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
@@ -693,9 +696,13 @@ function AddPart({ caseId, onDone }: { caseId: string; onDone: () => Promise<voi
     <div className="m-actions">
       <button type="button" className="m-btn2-s" aria-pressed={open === 'one'} onClick={() => setOpen(open === 'one' ? null : 'one')}>افزودن قطعه</button>
       <button type="button" className="m-btn2-s" aria-pressed={open === 'sheet'} onClick={() => setOpen(open === 'sheet' ? null : 'sheet')}>ورود از اکسل</button>
-      {open === 'one' && (
+      {open === 'one' && smart && !manual && <>
+        <SmartPartEntry caseId={caseId} parts={parts} onAdded={onDone} />
+        <button type="button" className="m-btn2-s" onClick={() => setManual(true)} data-testid="manual-part-toggle">قطعه در کاتالوگ نیست؟ ثبت دستی</button>
+      </>}
+      {open === 'one' && (!smart || manual) && (
         <form className="m-form" onSubmit={addOne} style={{ flexBasis: '100%' }} aria-label="افزودن قطعه">
-          {can('reference.parts.read') && <details className="compact-disclosure" style={{ flexBasis: '100%' }}><summary>انتخاب از کاتالوگ قطعات</summary><ReferenceLookup kind="parts" onSelect={r => { setCode(r.data.partNumber || ''); setDesc(r.data.description || ''); toast('کد و نام قطعه انتخاب شد؛ تعداد را مشخص کنید'); }} /></details>}
+          {smart && <button type="button" className="m-btn2-s" style={{ flexBasis: '100%' }} onClick={() => setManual(false)}>بازگشت به جست‌وجوی هوشمند</button>}
           <label className="m-field">نام قطعه *<input required value={desc} onChange={(e) => setDesc(e.target.value)} /></label>
           <label className="m-field">کد فنی قطعه *<input required dir="ltr" maxLength={80} value={code} onChange={(e) => setCode(e.target.value)} /></label>
           <label className="m-field" style={{ flex: '0 1 90px' }}>تعداد<input inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} /></label>

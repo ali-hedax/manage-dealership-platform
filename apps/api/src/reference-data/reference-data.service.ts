@@ -19,7 +19,7 @@ type Entry = typeof referenceEntries.$inferSelect;
 type UnifiedPart = {
  id:string;name:string;partNumber:string;aliases:string[];vehicleUse:string;
  fitment:ReturnType<typeof partFitment>;compatibility:PartCompatibility;vehicleMatch:'verified'|'unknown';
- source:'catalog'|'warehouse'|'both';available:string|null;reference:string|null;
+ source:'catalog'|'warehouse'|'both';available:string|null;reference:string|null;price?:string|null;
 };
 /** Catalog rows read per assessment search; when a query matches more, the response says so (`limited`). */
 const SEARCH_READ_LIMIT=2000;
@@ -218,7 +218,10 @@ export class ReferenceDataService {
 
  /** The case vehicle and its resolved catalog family (shared by the search and the vehicle picker). */
  private async caseFitment(actor:Actor,caseId:string){
-  if(!actor.user.permissions.has('assessment.manage')||!actor.user.permissions.has('case.read'))throw forbidden();
+  // The accident expert's assessment, or the manual «افزودن قطعه» of whoever may register part needs and
+  // read the parts catalog (owner, 2026-11-25). Read-only either way; no new access is granted.
+  const perms=actor.user.permissions;
+  if(!perms.has('case.read')||!(perms.has('assessment.manage')||(perms.has('part.request')&&perms.has('reference.parts.read'))))throw forbidden();
   const tenantId=actor.user.tenantId;
   const [context]=await this.db.select({model:vehicles.model,trim:vehicles.trim,brand:vehicles.brand,vin:vehicles.vin,chassis:vehicles.chassisRef})
    .from(cases).innerJoin(vehicles,and(eq(vehicles.id,cases.vehicleId),eq(vehicles.tenantId,tenantId)))
@@ -363,7 +366,7 @@ export class ReferenceDataService {
    merged.set(item.partNumber,{id:entry?.id??existing?.id??`stock-${item.partNumber}`,name,partNumber:item.partNumber,aliases,
     vehicleUse:common&&!use?'عمومی':use,fitment:common&&!incompatible?'common':partFitment(use,fit,catalog),compatibility,
     vehicleMatch:compatibility==='verified'?'verified':'unknown',source:entry||existing?'both':'warehouse',available:item.available,
-    reference:item.basePartNumber??assessmentReference(item.partNumber)});
+    reference:item.basePartNumber??assessmentReference(item.partNumber),price:item.salePrice??null});
   }
   const unified=[...merged.values()];
   const byId=new Map(unified.map(row=>[row.id,row]));
@@ -379,7 +382,9 @@ export class ReferenceDataService {
     vehicleFamily:isCommonFitment(row.vehicleUse)?null:catalog.familyOf(row.vehicleUse)?.name??null,
     fitment:row.fitment,compatibility:row.compatibility,common:row.fitment==='common',
     fitmentNote:COMPATIBILITY_NOTES[row.compatibility],reference:row.reference,
-    available:row.available,availability:row.available===null?'unknown':Number(row.available)>0?'available':'unavailable',source:row.source};
+    available:row.available,availability:row.available===null?'unknown':Number(row.available)>0?'available':'unavailable',source:row.source,
+    // Sale price of the active stock report when it has one; never estimated. Currency as the owner confirmed it (or null).
+    price:row.price??null,priceCurrency:row.price?inventory.snapshot?.currency??null:null};
   });
   return {...base,scopeFamily,results,offset,total:ranked.length,hasMore:offset+ASSESSMENT_SEARCH_PAGE<ranked.length,limited,
    message:!verified&&scope==='case'?'خانوادهٔ این خودرو قابل تشخیص نیست یا با سابقه اختلاف دارد؛ فقط اقلام عمومی معتبر پیشنهاد می‌شوند.':undefined,
