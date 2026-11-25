@@ -121,6 +121,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reception/:id` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/contractors` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/invoices/:documentId` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/reception/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reference-data/:kind/sample` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-data/:kind` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id/report` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
@@ -258,6 +259,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reception/external-work/:id/invoices` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/external-work/:id` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/search` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/stats` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reference-data/:kind/search` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/:id/apply` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | POST | `/api/v1/reference-imports/inspect` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
@@ -309,6 +311,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
 | PUT | `/api/v1/pulse/credentials` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | PUT | `/api/v1/pulse/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| PUT | `/api/v1/reception/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | PUT | `/api/v1/report-center` | [source](../apps/api/src/special-aid/report-center.controller.ts) |
 | PUT | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | PUT | `/api/v1/staff/technicians/:id/active` | [source](../apps/api/src/auth/technicians.controller.ts) |

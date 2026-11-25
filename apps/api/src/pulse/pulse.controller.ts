@@ -2,8 +2,8 @@ import { Body, Controller, Get, Post, Put, StreamableFile } from '@nestjs/common
 import { z } from 'zod';
 import {
   pulseCaptchaSchema, pulseCommandSchema, pulseCredentialsSchema, pulseSettingsSchema, pulseToggleSchema,
-  receptionExternalCancelSchema, receptionExternalUpdateSchema, receptionExternalWorkSchema, receptionInvoiceSchema, receptionNoteSchema, receptionSearchSchema,
-  type PulseCommandInput, type PulseCredentialsInput, type PulseSettingsInput, type ReceptionExternalUpdateInput, type ReceptionExternalWorkInput, type ReceptionSearchInput,
+  receptionExternalCancelSchema, receptionExternalUpdateSchema, receptionExternalWorkSchema, receptionInvoiceSchema, receptionNoteSchema, receptionSearchSchema, receptionSettingsSchema, receptionStatsQuerySchema,
+  type PulseCommandInput, type PulseCredentialsInput, type PulseSettingsInput, type ReceptionExternalUpdateInput, type ReceptionExternalWorkInput, type ReceptionSearchInput, type ReceptionSettingsInput,
 } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
@@ -56,6 +56,17 @@ export class ReceptionController {
   // Declared before ':id' so the word is never read as an id.
   @RequirePermissions('reception.read', 'reception.external_work') @Get('contractors')
   contractors(@CurrentActor() actor: Actor) { return this.reception.contractors(actor); }
+
+  /** Daily statistics: repair / periodic service / no labour yet, per receptionist (scenario 2026-11-25). */
+  @RequirePermissions('reception.read') @Post('stats')
+  stats(@CurrentActor() actor: Actor, @Body(new ZodPipe(receptionStatsQuerySchema)) body: { date?: string }) { return this.reception.stats(actor, body.date); }
+
+  /** Labour codes that count as periodic service and oil change; edited by the owner or system administrator. */
+  @RequirePermissions('reception.read') @Get('settings')
+  settings(@CurrentActor() actor: Actor) { return this.reception.settings(actor); }
+
+  @RequirePermissions('settings.manage') @Put('settings')
+  saveSettings(@CurrentActor() actor: Actor, @Body(new ZodPipe(receptionSettingsSchema)) body: ReceptionSettingsInput) { return this.reception.saveSettings(actor, body); }
 
   @RequirePermissions('reception.read') @Get('invoices/:documentId')
   async invoice(@CurrentActor() actor: Actor, @IdParam('documentId') documentId: string) {
