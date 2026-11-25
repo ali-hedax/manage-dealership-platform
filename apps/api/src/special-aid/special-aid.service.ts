@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   EMDAD_ARRIVED_CATEGORIES, NON_CONSUMPTION_REASONS, SPECIAL_AID_FINAL_STATES, SPECIAL_AID_RULES,
-  SPECIAL_AID_QUEUES, dossierQueue, isUnreached, TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isWorkingDay, maskPhone, nextItemState,
+  CONTACT_OUTCOME_LABELS, NON_CONSUMPTION_LABELS, SPECIAL_AID_ITEM_STATE_LABELS, SPECIAL_AID_QUEUES, dossierQueue, isUnreached, TECHNICAL_REASONS, allowedItemActions, arrivalAge, daysBetween, dossierTasks, endOfNextWorkingDay, failedAttemptDays, isWorkingDay, maskPhone, nextItemState,
   parseProcurementCode, assessmentCodeOf, shortVehicleName, vehicleHeadName, tehranDay,
   type AidContactFacts, type AidItemFacts, type ContactInput, type DossierSearchInput, type ItemActionInput, type NonConsumptionInput,
   type NonConsumptionReason, type Paged, type Permission, type PostponeInput, type SpecialAidContact, type SpecialAidDossier, type SpecialAidDossierRow,
@@ -17,7 +17,7 @@ import { badRequest, conflict, forbidden, notFound, versionConflict } from '../c
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import {
-  cases, customers, emdadRequestEvents, emdadRequests, referenceEntries, specialAidAdmissions, specialAidContacts, specialAidDossiers,
+  auditEvents, cases, customers, emdadRequestEvents, emdadRequests, referenceEntries, specialAidAdmissions, specialAidContacts, specialAidDossiers,
   specialAidGroups, specialAidItems, stockReservations, stockSnapshotItems, stockSnapshots, users, vehicles,
 } from '../db/schema';
 import { parseReportDate, reportQuantity } from '../daily-reports/emdad-parts';
@@ -25,7 +25,7 @@ import type { EmdadOfficial } from '../daily-reports/report-rows';
 import { safeCell } from '../daily-reports/safe-cell';
 import { snapshotInfo } from '../daily-reports/stock.service';
 import { notifyUsers, usersWithRole } from '../parts/part-notify';
-import { writeSheet } from '../parts/xlsx';
+import { writeSheet, writeWorkbook } from '../parts/xlsx';
 import { idKey, isAidVehicleKey, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 
 type ItemRow = typeof specialAidItems.$inferSelect;
@@ -552,6 +552,39 @@ export class SpecialAidService {
       ['شمارهٔ امداد ویژه', 'شاسی (VIN)', 'پذیرش', 'کد اختصاصی', 'کد تدارکاتی', 'شرح', 'وضعیت رسمی (متن گزارش)', 'تاریخ ثبت امداد (رسمی)', 'نخستین مشاهدهٔ این وضعیت در منیج', 'روز بدون تغییر مشاهده‌شده'],
       ...items.map((x) => [safeCell(x.emdadNo ?? ''), safeCell(x.vin), safeCell(x.admissionNo ?? ''), safeCell(x.assessmentCode ?? ''), safeCell(x.procurementCode ?? ''), safeCell(x.description ?? ''), safeCell(x.officialStatus), day(x.registeredAt), day(x.statusObservedAt), x.idleDays ?? '']),
     ]);
+  }
+
+  /**
+   * Inspection file of one vehicle (reconstruction scenario, owner 2026-11-25) for Iran Khodro
+   * inspectors: every part with its official and internal dates and state, every contact, and the
+   * audit trail of the dossier and its parts with time and user. No phone number is written.
+   */
+  async inspectionExport(actor: Actor, id: string): Promise<{ vin: string; bytes: Uint8Array }> {
+    const d = await this.get(actor, id);
+    const day = (v: string | null | undefined) => (v ? tehranDay(v) : '');
+    const at = (v: Date | string | null | undefined) => (v ? new Date(v).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '');
+    const cell = (v: string | null | undefined) => safeCell(v ?? '');
+    const history = await this.db.select({ at: auditEvents.occurredAt, action: auditEvents.action, entityId: auditEvents.entityId, reason: auditEvents.reason, by: users.displayName }).from(auditEvents)
+      .leftJoin(users, eq(users.id, auditEvents.actorUserId))
+      .where(and(eq(auditEvents.tenantId, actor.user.tenantId), eq(auditEvents.entityType, 'special_aid'), inArray(auditEvents.entityId, [d.id, ...d.items.map((i) => i.id)])))
+      .orderBy(asc(auditEvents.occurredAt));
+    const partName = new Map(d.items.map((i) => [i.id, [i.description, i.assessmentCode].filter(Boolean).join(' · ')]));
+    const bytes = writeWorkbook([
+      { name: 'قطعات', rows: [
+        ['شاسی (VIN)', 'شمارهٔ امداد ویژه', 'پذیرش', 'کد اختصاصی', 'کد تدارکاتی', 'شرح', 'تعداد', 'وضعیت رسمی', 'ثبت رسمی', 'رسید انبار (رسمی)', 'نخستین مشاهدهٔ رسیدن', 'اطلاع به مشتری', 'وضعیت داخلی', 'علت مصرف‌نشدن', 'توضیح', 'پروندهٔ تصادفی'],
+        ...d.items.map((i) => [cell(d.vin), cell(i.emdadNo), cell(i.admissionNo), cell(i.assessmentCode), cell(i.procurementCode), cell(i.description), cell(i.quantity), cell(i.officialStatus), day(i.officialRegisteredAt), day(i.receivedAt), day(i.arrivalObservedAt), day(i.informedAt),
+          SPECIAL_AID_ITEM_STATE_LABELS[i.state] ?? i.state, i.nonConsumptionReason ? NON_CONSUMPTION_LABELS[i.nonConsumptionReason] : '', cell(i.nonConsumptionNote), cell(i.accidentCaseNumber)]),
+      ] },
+      { name: 'تماس‌ها', rows: [
+        ['زمان', 'کاربر', 'نتیجه', 'قطعه‌ها', 'زمان قول مراجعه', 'یادداشت'],
+        ...[...d.contacts].reverse().map((c) => [at(c.at), cell(c.byName), CONTACT_OUTCOME_LABELS[c.outcome] ?? c.outcome, cell(c.itemIds.map((x) => partName.get(x) ?? '').filter(Boolean).join('، ')), at(c.promisedAt), cell(c.note)]),
+      ] },
+      { name: 'سابقه', rows: [
+        ['زمان', 'کاربر', 'اقدام', 'قطعه', 'علت'],
+        ...history.map((h) => [at(h.at), cell(h.by ?? 'سامانه'), h.action, cell(partName.get(h.entityId) ?? ''), cell(h.reason)]),
+      ] },
+    ]);
+    return { vin: d.vin, bytes };
   }
 
   async summary(actor: Actor, period: { from?: string; to?: string } = {}): Promise<SpecialAidSummary> {

@@ -20,7 +20,7 @@ import { AppointmentStateTag, AppointmentsPanel, CardList, CardUpload, FeedbackF
 /** One vehicle: every admission and special-aid part together, filterable; one call covers several parts. */
 export default function SpecialAidDossierPage() {
   const { id } = useParams<{ id: string }>();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const toast = useToast();
   const { data: d, error, mutate } = useSWR<SpecialAidDossier>(can('special_aid.read') ? `/special-aid/dossiers/${id}` : null, fetcher);
   const [admission, setAdmission] = useState(''), [state, setState] = useState<SpecialAidItemState | ''>('');
@@ -65,6 +65,7 @@ export default function SpecialAidDossierPage() {
 
       <section className="panel" aria-labelledby="aid-parts"><div className="panel-head"><div><h2 id="aid-parts">قطعه‌های امداد ویژه</h2><p className="muted small">{faNum(items.length)} از {faNum(d.items.length)} قطعه</p></div>
         <div className="row no-print">
+          {!me.roles.every((r) => r === 'guest') && <a className="btn btn-sm" href={`/api/v1/special-aid/dossiers/${d.id}/inspection`} title="قطعه‌ها، تماس‌ها و سابقه برای بازرس">Excel بازرسی</a>}
           <label className="field">پذیرش<select className="input" value={admission} onChange={(e) => setAdmission(e.target.value)}><option value="">همهٔ پذیرش‌ها</option>{d.admissions.map((a) => <option key={a.id} value={a.id}>{toPersianDigits(a.admissionNo)} ({faNum(a.itemCount)})</option>)}</select></label>
           <label className="field">وضعیت<select className="input" value={state} onChange={(e) => setState(e.target.value as SpecialAidItemState | '')}><option value="">همه</option>{SPECIAL_AID_ITEM_STATES.map((s) => <option key={s} value={s}>{SPECIAL_AID_ITEM_STATE_LABELS[s]}</option>)}</select></label>
         </div></div>

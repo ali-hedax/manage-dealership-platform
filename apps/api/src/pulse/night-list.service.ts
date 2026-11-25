@@ -10,6 +10,7 @@ import { badRequest, conflict, notFound, versionConflict } from '../common/error
 import { newId } from '../common/ids';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { tehranAt, tehranDate } from '../daily-reports/daily-time';
+import { safeCell } from '../daily-reports/safe-cell';
 import { DATABASE, type DatabaseHandle } from '../db/database';
 import { nightListItems, nightLists, notifications, receptionRepairs, receptions, tenants, users } from '../db/schema';
 import { writeWorkbook } from '../parts/xlsx';
@@ -250,6 +251,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
   async excel(actor: Actor, listId: string): Promise<{ day: string; bytes: Uint8Array }> {
     this.ensureActive();
     const view = await this.byId(actor, listId);
-    return { day: view.day, bytes: writeWorkbook([{ name: 'لیست شب', rows: nightListSheet(view.rows) }]) };
+    // Texts come from کسب‌وکار and people: neutralise spreadsheet formulas.
+    const rows = nightListSheet(view.rows).map((r) => r.map((c) => (typeof c === 'string' ? safeCell(c) : c)));
+    return { day: view.day, bytes: writeWorkbook([{ name: 'لیست شب', rows }]) };
   }
 }

@@ -144,6 +144,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/settings/alerts` | [source](../apps/api/src/alerts/alerts.controller.ts) |
 | GET | `/api/v1/special-aid/cards/:id/file` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
 | GET | `/api/v1/special-aid/cards` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
+| GET | `/api/v1/special-aid/dossiers/:id/inspection` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
 | GET | `/api/v1/special-aid/dossiers/:id` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
 | GET | `/api/v1/special-aid/feedback` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
 | GET | `/api/v1/special-aid/review-queue` | [source](../apps/api/src/special-aid/special-aid.controller.ts) |
