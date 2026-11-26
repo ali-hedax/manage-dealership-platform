@@ -1,3 +1,12 @@
+## 2026-11-27 — C4، تطبیق کد اجرت در لیست شب
+
+- [`PulseEngine.linesCycle` و `applyLines`](../apps/api/src/pulse/pulse-engine.ts) ردیف خام کارت را با [`KasbClient.lines`](../apps/api/src/pulse/kasb-client.ts) از مسیر تعمیرات کارت می‌خوانند. [`mapRepair`](../apps/api/src/pulse/pulse-map.ts) فیلد `DrerGrprRpr` را با [`idText` و `cleanText`](../apps/api/src/pulse/kasb-table.ts) تبدیل و در `reception_repairs.code` از نوع `text` ذخیره می‌کند. ارقام به ASCII و ي/ك به ی/ک تبدیل می‌شوند. فاصله‌های درونی و نیم‌فاصله در مقدار ذخیره‌شده ممکن است باقی بمانند. متن صفر ابتدایی را نگه می‌دارد، ولی JSON عددی صفر از‌دست‌رفته را بازنمی‌گرداند. payload اصلی در `official` باقی می‌ماند.
+- [`NightListService.render`](../apps/api/src/pulse/night-list.service.ts) پیش از اصلاح فقط `DrerDesc` ذخیره‌شده را با [`officialLabourName`](../packages/shared/src/night-list.ts) بررسی می‌کرد؛ هیچ lookup برای کد وجود نداشت. مرجع‌های موجود قطعات، مشتریان و نوبت‌اند. `receptionServiceLaborCodes` تنها فهرست دسته‌بندی سرویس است و نام ندارد. وضعیت دادهٔ محیط زنده بررسی نشد.
+- آزمون قبل از اصلاح ۸ پاس و ۲ شکست داشت. پس از اصلاح، ۴۴ آزمون هدفمند در چهار مجموعهٔ night-list، accident، repair-plan و case-sorting پاس شدند. داده‌های ساختگی شامل کد با صفر ابتدایی، ورودی عددی و متنی، ارقام فارسی و عربی، فاصله، نیم‌فاصله و کد حرف‌دار بود. کنترل مجوز، کد تکراری، نسخهٔ قدیمی و ثبات لیست تأییدشده نیز آزموده شدند.
+- `pnpm test`: پکیج shared با ۱۳۸ پاس و صفر شکست؛ API با ۴۹۲ پاس، ۱۳ اجرا‌نشده و یک timeout در `beforeAll` مجموعهٔ `demo-fleet.e2e-spec.ts`. اجرای جداگانهٔ همان آزمون با مهلت پیش‌فرض پاس شد (۱ پاس، صفر شکست، ۱۵٫۸ ثانیه).
+- `pnpm test:e2e` با Edge و پایگاه PGlite ساختگی پاس شد: ۸۶ آزمون اصلی، ۶ آزمون گزارش روزانه و مدیر سیستم، و ۳ آزمون Pulse (شامل بارگذاری CSV)؛ ۴ آزمون اختصاصی تصویربرداری طبق تنظیمات اجرا نشدند. ساخت API، lint آن و بررسی مستندات پاس شدند. ساخت وب پس از کامپایل، بررسی TypeScript و تولید صفحات، با پیام امنیتی Next.js کد خروج ناموفق داد؛ همان خروجی در Playwright قابل اجرا بود.
+- کاتالوگ پذیرش فایل CSV UTF-8 با ستون‌های `code,name` را می‌پذیرد. کلیدها از نوع متن، یکتا در نمایندگی و مستقل از مدل خودرو هستند. اگر یک کد در مدل‌های مختلف به نام‌های متفاوت اشاره کند، CSV فعلی آن ابهام را نمی‌پذیرد.
+
 ## 2026-11-25 — بازسازی منیج، فاز ۱ (شاخهٔ `feature/reconstruction-phase1`)
 
 - **CI روی `5e218b6`:** [اجرای 45674982953](https://github.com/nadiafallah/manage-dealership-platform/actions/runs/45674982953) در fork، PR داخلی #10. هر شش job سبز:
