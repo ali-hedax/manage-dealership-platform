@@ -1,0 +1,1 @@
+ALTER TABLE "night_list_items" ADD COLUMN "correction" jsonb;

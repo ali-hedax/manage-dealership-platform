@@ -565,7 +565,7 @@ export class PulseEngine {
         return { id: old.id, outcome: 'same' as const };
       }
       const link = old.caseId ? null : await findCaseLink(tx, conn.tenantId, v.admissionNoKey, v.vin);
-      const releasedAt = closed ? old.releasedAt ?? v.exitAt ?? now : null;
+      const releasedAt = closed ? v.exitAt ?? old.releasedAt ?? now : null;
       await tx.update(receptions).set({
         ...fields, releasedAt, lastSeenAt: now, updatedAt: now, version: old.version + 1,
         ...(link ? { caseId: link.state === 'linked' ? link.caseIds[0]! : null, linkState: link.state } : {}),

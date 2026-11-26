@@ -81,6 +81,7 @@ export interface NightListRow {
   carried: boolean;
   setByName: string | null;
   setAt: string | null;
+  correction?: { present: boolean; reason: string } | null;
 }
 
 export interface NightListView {
@@ -96,10 +97,36 @@ export interface NightListView {
   deadline: string;
   late: boolean;
   missingReasons: number;
+  historicalIncomplete: boolean;
+  excluded: NightListRow[];
+  physicalVehicleCount: number | null;
   rows: NightListRow[];
   /** The nearest earlier / later day that has a list, for «لیست قبل» and «لیست بعد». */
   previousDay: string | null;
   nextDay: string | null;
+}
+
+export interface StoppageRecord {
+  reference: string;
+  reason?: string;
+  part?: string;
+  openedAt?: string;
+  resolvedAt?: string;
+}
+
+export type StoppageResult = { state: 'active' | 'resolved'; record: StoppageRecord }
+  | { state: 'no_record' | 'error' }
+  | { state: 'stale'; lastKnown: Exclude<StoppageResult, { state: 'stale' | 'error' }> };
+
+export const UNKNOWN_LABOUR_NAME = 'نام اجرت در منبع مشخص نیست';
+export const LABOUR_LETTER_PATTERN = '[ء-غف-يٮ-ٯٱ-ۓە]';
+const labourLetter = new RegExp(LABOUR_LETTER_PATTERN, 'u');
+
+export function officialLabourName(description: string | null, code: string | null): string {
+  const name = description?.trim();
+  return name && name !== code?.trim() && labourLetter.test(name)
+    ? name
+    : UNKNOWN_LABOUR_NAME;
 }
 
 /** No list yet for the day (before its build time, or not a working day). */
@@ -125,7 +152,7 @@ export function compareNightRows(a: Pick<NightListRow, 'daysIn' | 'admissionNo'>
   return (b.daysIn ?? -1) - (a.daysIn ?? -1) || (a.admissionNo ?? '').localeCompare(b.admissionNo ?? '', 'en', { numeric: true });
 }
 
-export const NIGHT_LIST_COLUMNS = ['نوع خودرو', 'پلاک', 'نام مالک', 'شماره پذیرش', 'روزهای ماندن', 'جایگاه فعلی', 'اجرت‌های کارت', 'جایگاه‌های بعدی', 'علت ماندن', 'توضیح', 'تصادفی', 'وضعیت فعلی'] as const;
+export const NIGHT_LIST_COLUMNS = ['نوع خودرو', 'پلاک', 'نام مالک', 'شماره پذیرش', 'روزهای ماندن', 'جایگاه فعلی', 'نام اجرت', 'جایگاه‌های بعدی', 'علت ماندن', 'توضیح', 'تصادفی', 'وضعیت فعلی'] as const;
 
 /** Header and rows of the Excel export, in the column order of the scenario. */
 export function nightListSheet(rows: readonly NightListRow[]): (string | number)[][] {

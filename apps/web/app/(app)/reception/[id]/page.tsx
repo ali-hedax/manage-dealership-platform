@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import {
-  RECEPTION_EVENT_LABELS, RECEPTION_EXTERNAL_STATE_LABELS, formatJalali, toPersianDigits,
+  RECEPTION_EVENT_LABELS, RECEPTION_EXTERNAL_STATE_LABELS, formatJalali, officialLabourName, toPersianDigits,
   type ReceptionDetail, type ReceptionExternalWork,
 } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
@@ -99,8 +99,8 @@ export default function ReceptionFolderPage() {
         <div className="panel-body stack">
           {!r.defects.length && !r.repairs.length && <p className="m-empty">ایراد یا اجرتی روی کارت ثبت نشده است.</p>}
           {r.defects.length > 0 && <ul className="rcp-lines">{r.defects.map((d) => <li key={d.id} className={d.removedAt ? 'is-removed' : ''}><strong>{d.customerText ?? 'ایراد'}</strong>{d.expertText && <span className="small"> · کارشناس: {d.expertText}</span>}<span className="row xs">{d.state && <span className="m-tag mute">{d.state}</span>}{d.removedAt && <span className="m-tag stop">حذف‌شده در کسب‌وکار</span>}</span></li>)}</ul>}
-          {r.repairs.length > 0 && <div className="table-scroll"><table className="table static"><thead><tr><th>کد اجرت</th><th>شرح</th><th>وضعیت</th><th>مبلغ نهایی</th><th>گارانتی</th></tr></thead><tbody>
-            {r.repairs.map((x) => <tr key={x.id} className={x.removedAt ? 'is-removed' : ''}><td><bdi>{t(x.code)}</bdi></td><td>{x.description ?? '—'}{x.removedAt && <span className="m-tag stop"> حذف‌شده در کسب‌وکار</span>}</td><td>{x.state ?? '—'}</td><td>{x.finalPriceRial == null ? '—' : rial(x.finalPriceRial)}</td><td>{t(x.warranty)}</td></tr>)}
+          {r.repairs.length > 0 && <div className="table-scroll"><table className="table static"><thead><tr><th scope="col">نام اجرت</th><th scope="col">وضعیت</th><th scope="col">مبلغ نهایی</th><th scope="col">گارانتی</th></tr></thead><tbody>
+            {r.repairs.map((x) => <tr key={x.id} className={x.removedAt ? 'is-removed' : ''}><td>{officialLabourName(x.description, x.code)}{x.removedAt && <span className="m-tag stop"> حذف‌شده در کسب‌وکار</span>}</td><td>{x.state ?? '—'}</td><td>{x.finalPriceRial == null ? '—' : rial(x.finalPriceRial)}</td><td>{t(x.warranty)}</td></tr>)}
           </tbody></table></div>}
         </div>
       </section>

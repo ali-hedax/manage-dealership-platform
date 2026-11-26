@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import {
-  daysInShop, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
+  daysInShop, LABOUR_LETTER_PATTERN, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
   type ReceptionDayStats, type ReceptionSettings, type ReceptionSettingsInput,
   type ReceptionDetail, type ReceptionEvent, type ReceptionEventKind, type ReceptionExternalState, type ReceptionExternalUpdateInput, type ReceptionExternalWork as ExternalWorkView, type ReceptionExternalWorkInput, type ReceptionList, type ReceptionSearchInput,
 } from '@manage/shared';
@@ -32,6 +32,19 @@ const tehranDayKey = (at: Date) => new Date(at.getTime() + TEHRAN_OFFSET_MINUTES
  */
 @Injectable()
 export class ReceptionService {
+  async labourReview(actor: Actor) {
+    this.ensureActive();
+    const tenantId = actor.user.tenantId;
+    const rows = await this.db.select({
+      id: receptionRepairs.id, receptionId: receptions.id, admissionNo: receptions.admissionNo, lineId: receptionRepairs.kasbLineId,
+    }).from(receptionRepairs).innerJoin(receptions, eq(receptionRepairs.receptionId, receptions.id))
+      .where(and(eq(receptionRepairs.tenantId, tenantId), eq(receptions.tenantId, tenantId), isNull(receptionRepairs.removedAt),
+        sql`(coalesce(${receptionRepairs.description}, '') COLLATE "C" !~ ${LABOUR_LETTER_PATTERN}
+          OR btrim(${receptionRepairs.description}) = btrim(${receptionRepairs.code}))`))
+      .orderBy(desc(receptions.admittedAt), asc(receptionRepairs.id)).limit(201);
+    return { rows: rows.slice(0, 200), more: rows.length > 200 };
+  }
+
   constructor(
     @Inject(DATABASE) private readonly handle: DatabaseHandle,
     @Inject(APP_CONFIG) private readonly cfg: AppConfig,

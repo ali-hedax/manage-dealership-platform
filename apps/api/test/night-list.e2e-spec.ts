@@ -2,9 +2,10 @@ import { and, eq } from 'drizzle-orm';
 import type { NightListPending, NightListView } from '@manage/shared';
 import { newId } from '../src/common/ids';
 import { tehranAt } from '../src/daily-reports/daily-time';
-import { auditEvents, notifications, receptionRepairs, receptions, tenants, users } from '../src/db/schema';
+import { auditEvents, nightLists, notifications, receptionRepairs, receptions, tenants, users } from '../src/db/schema';
 import { DEMO_TENANT_CODE } from '../src/demo/demo-seed.service';
 import { NightListService } from '../src/pulse/night-list.service';
+import { admissionKey } from '../src/pulse/pulse-map';
 import { createHarness, type Client, type Harness } from './harness';
 
 // «لیست شب» (reconstruction scenario, owner 2026-11-25). Fixed past working days on the Tehran
@@ -27,7 +28,7 @@ describe('Nightly list of the reception module', () => {
 
   const reception = async (n: number, admittedAt: Date, isOpen = true) => {
     const id = newId();
-    await db().insert(receptions).values({ id, tenantId, kasbRcd: `77${n}`, admissionNo: `NL${n}`, admissionNoKey: `nl${n}`, vin: `TESTVIN${String(n).padStart(10, '7')}`, plate: `${n}${n} ب ${n}${n}${n} - ${n}${n}`, productName: 'خودروی ساختگی', customerName: `مشتری ساختگی ${n}`, admittedAt, isOpen, official: {}, rowHash: `n${n}`, isTest: true });
+    await db().insert(receptions).values({ id, tenantId, kasbRcd: `77${n}`, admissionNo: `NL${n}`, admissionNoKey: admissionKey(`NL${n}`), vin: `TESTVIN${String(n).padStart(10, '7')}`, plate: `${n}${n} ب ${n}${n}${n} - ${n}${n}`, productName: 'خودروی ساختگی', customerName: `مشتری ساختگی ${n}`, admittedAt, isOpen, official: {}, rowHash: `n${n}`, isTest: true });
     await db().insert(receptionRepairs).values({ id: newId(), tenantId, receptionId: id, kasbLineId: `nl${n}`, code: '7777', description: 'صافکاری ساختگی', state: 'باز', official: {}, rowHash: `nr${n}`, isTest: true });
     return id;
   };
@@ -140,5 +141,54 @@ describe('Nightly list of the reception module', () => {
     await admin.post('/reception/night-list/generate', { day: '2999-01-01' }).expect(422);
     const today = (await admin.post('/reception/night-list/generate', {}).expect(201)).body as NightListView;
     expect(today.status).toBe('draft');
+  });
+
+  it('reconciles at the cut-off, audits manual presence and freezes the approved rows', async () => {
+    const day = '2025-04-26';
+    const arriving = await reception(5, tehranAt(day, '09:00'));
+    const afterCutoff = await reception(6, tehranAt(day, '18:01'));
+    const sameVehicle = await reception(7, tehranAt(day, '10:00'));
+    await db().update(receptions).set({ vin: 'TESTVIN7777777775' }).where(eq(receptions.id, sameVehicle));
+    await db().update(receptionRepairs).set({ description: '۷۷۷۷' }).where(eq(receptionRepairs.receptionId, arriving));
+    await reader.get('/reception/labour-review').expect(403);
+    expect((await admin.get('/reception/labour-review').expect(200)).body.rows)
+      .toContainEqual(expect.objectContaining({ receptionId: arriving }));
+    await service.tick(tehranAt(day, '18:00'));
+    let draft = await view(admin, day);
+    expect(draft.rows.find((r) => r.receptionId === arriving)?.labour).toEqual(['نام اجرت در منبع مشخص نیست (باز)']);
+    expect(draft.rows.some((r) => r.receptionId === afterCutoff)).toBe(false);
+    expect(draft.physicalVehicleCount).toBe(draft.rows.length - 1);
+    const row = draft.rows.find((r) => r.receptionId === arriving)!;
+    await clerk.post(`/reception/night-list/items/${row.id}`, { expectedVersion: row.version, reason: 'waiting_parts' }).expect(201);
+    await db().update(receptions).set({ isOpen: false, releasedAt: tehranAt(day, '17:59') }).where(eq(receptions.id, arriving));
+    await service.tick(tehranAt(day, '18:10'));
+    draft = await view(admin, day);
+    expect(draft.excluded).toContainEqual(expect.objectContaining({ id: row.id, reason: 'waiting_parts' }));
+    const url = `/reception/night-list/${draft.id}/presence`;
+    const correction = { expectedVersion: draft.version, admissionNo: 'NL5', present: true, reason: 'خودرو در محوطه دیده شد' };
+    await clerk.post(url, correction).expect(403);
+    await admin.post(url, { ...correction, reason: '' }).expect(400);
+    draft = (await admin.post(url, correction).expect(201)).body as NightListView;
+    expect(draft.rows).toContainEqual(expect.objectContaining({ id: row.id, reason: 'waiting_parts', correction: { present: true, reason: correction.reason } }));
+    await admin.post(url, correction).expect(409);
+    expect((await db().select().from(auditEvents).where(eq(auditEvents.action, 'reception.night_list_presence_corrected')))).toHaveLength(1);
+    draft = (await admin.post(url, { expectedVersion: draft.version, admissionNo: 'NL7', present: false, reason: 'کارت باز، خودرو خارج شده' }).expect(201)).body as NightListView;
+    expect(draft.excluded).toContainEqual(expect.objectContaining({ receptionId: sameVehicle, correction: { present: false, reason: 'کارت باز، خودرو خارج شده' } }));
+    await db().update(receptions).set({ isOpen: false, releasedAt: tehranAt('2025-04-27', '09:00') }).where(eq(receptions.id, arriving));
+    const approved = (await admin.post(`/reception/night-list/${draft.id}/send`, { expectedVersion: draft.version }).expect(201)).body as NightListView;
+    await db().update(receptions).set({ customerName: 'نام جدید', isOpen: true }).where(eq(receptions.id, arriving));
+    await db().update(receptionRepairs).set({ description: 'اجرت تازه', state: 'انجام شد' }).where(eq(receptionRepairs.receptionId, arriving));
+    expect((await view(reader, day)).rows).toEqual(approved.rows);
+    await admin.post(url, { ...correction, expectedVersion: approved.version }).expect(409);
+    await clerk.post(`/reception/night-list/items/${row.id}`, { expectedVersion: row.version, reason: 'station_load' }).expect(409);
+    await db().update(nightLists).set({ approvedSnapshot: null }).where(eq(nightLists.id, approved.id));
+    expect(await view(reader, day)).toMatchObject({ historicalIncomplete: true, rows: [], physicalVehicleCount: null });
+  });
+
+  it('serves the five stoppage states as synthetic validation examples', async () => {
+    const report = (await reader.get('/reception/stoppage').expect(200)).body;
+    expect(report.mode).toBe('validation');
+    expect(new Set(report.samples.map((sample: { result: { state: string } }) => sample.result.state)))
+      .toEqual(new Set(['active', 'resolved', 'error', 'no_record', 'stale']));
   });
 });

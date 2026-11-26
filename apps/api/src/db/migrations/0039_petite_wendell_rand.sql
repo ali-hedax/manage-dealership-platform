@@ -1,0 +1,1 @@
+ALTER TABLE "night_lists" ADD COLUMN "approved_snapshot" jsonb;

@@ -12,6 +12,7 @@ import { ZodPipe } from '../common/zod.pipe';
 import { NightListService } from './night-list.service';
 import { PulseService } from './pulse.service';
 import { ReceptionService } from './reception.service';
+import { stoppageValidationReport } from './stoppage-report';
 
 /** «منیج پالس · اتصال کسب‌وکار» (spec section 26): owner and system administrator only. The password is never returned. */
 @Controller('pulse')
@@ -51,6 +52,12 @@ const invoiceSchema = receptionInvoiceSchema;
 export class ReceptionController {
   constructor(private readonly reception: ReceptionService, private readonly night: NightListService) {}
 
+  @RequirePermissions('reception.read') @Get('stoppage')
+  stoppage() { return stoppageValidationReport(); }
+
+  @RequirePermissions('reception.read', 'integration.manage') @Get('labour-review')
+  labourReview(@CurrentActor() actor: Actor) { return this.reception.labourReview(actor); }
+
   /** «لیست شب» of a Tehran day (scenario 2026-11-25). Declared before ':id'. */
   @RequirePermissions('reception.read') @Post('night-list')
   nightList(@CurrentActor() actor: Actor, @Body(new ZodPipe(nightListQuerySchema)) body: { day?: string }) { return this.night.view(actor, body.day); }
@@ -63,6 +70,13 @@ export class ReceptionController {
 
   @RequirePermissions('reception.read', 'reception.night_list_send') @Post('night-list/:id/send')
   nightListSend(@CurrentActor() actor: Actor, @IdParam('id') id: string, @Body(new ZodPipe(nightListSendSchema)) body: { expectedVersion: number }) { return this.night.send(actor, id, body.expectedVersion); }
+
+  @RequirePermissions('reception.read', 'reception.night_list_send') @Post('night-list/:id/presence')
+  nightListPresence(
+    @CurrentActor() actor: Actor, @IdParam('id') id: string,
+    @Body(new ZodPipe(z.object({ expectedVersion: z.number().int().min(1), admissionNo: z.string().trim().min(1).max(80), present: z.boolean(), reason: z.string().trim().min(1).max(300) }).strict()))
+    body: { expectedVersion: number; admissionNo: string; present: boolean; reason: string },
+  ) { return this.night.correctPresence(actor, id, body); }
 
   @RequirePermissions('reception.read') @Get('night-list/:id/excel')
   async nightListExcel(@CurrentActor() actor: Actor, @IdParam('id') id: string) {

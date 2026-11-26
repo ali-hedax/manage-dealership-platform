@@ -274,6 +274,20 @@
       "when": 1795602800000,
       "tag": "0038_special_aid_requesting_station",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795701960904,
+      "tag": "0039_petite_wendell_rand",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795702323869,
+      "tag": "0040_magenta_captain_midlands",
+      "breakpoints": true
     }
   ]
 }
