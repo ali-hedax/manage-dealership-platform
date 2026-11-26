@@ -73,11 +73,14 @@ if ! grep -q '^staging\.managebyhedax\.ir {' "$CADDY"; then
   cat "$CADDY" > "$new"
   sed "s#__STAGING_BASIC_AUTH_HASH__#$hash#" "$SRC/Caddyfile.staging-block" >> "$new"
   docker exec -i manage-caddy-1 sh -c 'cat > /tmp/Caddyfile.staging-check && caddy validate --config /tmp/Caddyfile.staging-check --adapter caddyfile' < "$new"
-  cat "$new" > "$CADDY"   # in place: the container sees the bind-mounted file, not a new inode
+  cat "$new" > "$CADDY"
   rm -f "$new"
-  if ! docker exec manage-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || ! prod_ok; then
+  # The running Caddy may hold an older inode of the bind-mounted Caddyfile (found 2026-11-27), so
+  # the new config is loaded from a copy inside the container; the host file is what a restart uses.
+  live() { docker exec -i manage-caddy-1 sh -c "cat > /tmp/Caddyfile.live && caddy reload --config /tmp/Caddyfile.live --adapter caddyfile" < "$1"; }
+  if ! live "$CADDY" || ! prod_ok; then
     cat "$BK/Caddyfile" > "$CADDY"
-    docker exec manage-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+    live "$CADDY" || true
     echo "site block failed; the previous Caddyfile is back (backup: $BK)" >&2
     exit 1
   fi

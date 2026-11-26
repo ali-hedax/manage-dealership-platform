@@ -42,6 +42,12 @@ services:
     environment:
       GIT_COMMIT: ${STAGING_SHA:?}
       NODE_ID: staging-pulse
+    # The worker serves no HTTP, so the API image's HTTP probe does not apply; healthy = the worker
+    # process (PID 1) is alive. `compose up --wait` needs a health check on every service.
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      start_period: 10s
     depends_on:
       staging-db: { condition: service_healthy }
     networks: [staging]
