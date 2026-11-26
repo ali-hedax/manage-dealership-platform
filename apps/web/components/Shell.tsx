@@ -67,9 +67,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const groups: NavGroupDef[] = technicianOnly ? [] : [
     { key: 'reception', label: 'پذیرش و ترخیص', icon: 'file', items: [
       { href: '/reception', label: 'پذیرش‌های امروز', icon: 'calendar', show: receptionActive && can('reception.read'), match: (p) => p === '/reception' },
-      { href: '/reception/open', label: 'پذیرش‌های باز', icon: 'folder', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/open' || (/^\/reception\/[^/]+$/.test(p) && p !== '/reception/released') },
+      { href: '/reception/open', label: 'پذیرش‌های باز', icon: 'folder', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/open' || (/^\/reception\/[^/]+$/.test(p) && p !== '/reception/released' && p !== '/reception/stoppage') },
       { href: '/reception/released', label: 'ترخیص‌شده‌ها', icon: 'check', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/released' },
       { href: '/reception/night', label: 'لیست شب', icon: 'clock', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/night' },
+      // Official stoppage report (owner, 2026-11-26): an uploaded file, so it does not wait for Pulse.
+      { href: '/reception/stoppage', label: 'خودروهای متوقف', icon: 'alert', show: can('stoppage.read'), match: (p) => p.startsWith('/reception/stoppage') },
     ] },
     { key: 'accident', label: 'مدیریت تصادفات', icon: 'nav-car', items: [
       { href: '/accidents/expert', label: 'خودروهای تصادفی', icon: 'car', show: desks.some((w) => w.key === 'expert') && home !== '/accidents/expert', match: (p) => p === '/accidents/expert' },
@@ -95,6 +97,7 @@ export function Shell({ children }: { children: ReactNode }) {
     ] },
     { key: 'manager', label: 'مدیر خدمات', icon: 'nav-chart', items: [
       { ...byHref('/control-room'), label: 'داشبورد مدیر خدمات', show: manager && home !== '/accidents/manager' && home !== '/accidents/owner' },
+      { href: '/control-room/stoppages', label: 'گزارش خودروهای متوقف', icon: 'chart', show: manager && can('stoppage.read'), match: (p) => p === '/control-room/stoppages' },
       { ...reports, label: 'گزارش‌های مدیریتی', show: reports.show && manager },
       { ...byHref('/'), label: 'آمار پرونده‌ها' },
     ] },
@@ -214,7 +217,9 @@ export function backTarget(pathname: string, home: string, canChooseDesk = false
   if (/^\/special-aid\/vehicles\/[^/]+$/.test(pathname)) return { href: '/special-aid/vehicles', label: 'بازگشت به پرونده خودروها' };
   if (pathname.startsWith('/special-aid')) return null;
   // Reception lists carry their own tabs; a reception folder goes back to the open admissions.
-  if (/^\/reception\/(?!open$|released$|night$)[^/]+$/.test(pathname)) return { href: '/reception/open', label: 'بازگشت به پذیرش‌ها' };
+  if (/^\/reception\/stoppage\/[^/]+$/.test(pathname)) return { href: '/reception/stoppage', label: 'بازگشت به خودروهای متوقف' };
+  if (pathname === '/control-room/stoppages') return { href: '/control-room', label: 'بازگشت به اتاق کنترل' };
+  if (/^\/reception\/(?!open$|released$|night$|stoppage$)[^/]+$/.test(pathname)) return { href: '/reception/open', label: 'بازگشت به پذیرش‌ها' };
   if (pathname.startsWith('/reception')) return null;
   if (/^\/cases\/(?!new$|import$)[^/]+$/.test(pathname)) return null;
   const edit = /^\/cases\/([^/]+)\/edit$/.exec(pathname);
@@ -223,7 +228,7 @@ export function backTarget(pathname: string, home: string, canChooseDesk = false
   return { href: home, label: 'بازگشت به میز کار' };
 }
 
-const PAGE_TITLES: [RegExp, string][] = [[/^\/reception\/open$/, 'پذیرش‌های باز'], [/^\/reception\/released$/, 'ترخیص‌شده‌ها'], [/^\/reception\/[^/]+$/, 'پروندهٔ پذیرش'], [/^\/reception$/, 'پذیرش‌های امروز'], [/^\/settings\/pulse/, 'منیج پالس'], [/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid\/feedback/, 'بازخورد فنی و تذکر'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
+const PAGE_TITLES: [RegExp, string][] = [[/^\/reception\/stoppage\/[^/]+$/, 'خودروی متوقف'], [/^\/reception\/stoppage$/, 'خودروهای متوقف'], [/^\/control-room\/stoppages$/, 'گزارش خودروهای متوقف'],[/^\/reception\/open$/, 'پذیرش‌های باز'], [/^\/reception\/released$/, 'ترخیص‌شده‌ها'], [/^\/reception\/[^/]+$/, 'پروندهٔ پذیرش'], [/^\/reception$/, 'پذیرش‌های امروز'], [/^\/settings\/pulse/, 'منیج پالس'], [/^\/special-aid\/vehicles\/[^/]+/, 'پروندهٔ امداد ویژه'], [/^\/special-aid\/vehicles/, 'پرونده خودروها'], [/^\/special-aid\/supply/, 'پیگیری تأمین قطعات'], [/^\/special-aid\/reports/, 'گزارش‌های امداد ویژه'], [/^\/special-aid\/feedback/, 'بازخورد فنی و تذکر'], [/^\/special-aid/, 'کارهای امروز امداد ویژه'], [/^\/launch$/, 'انتخاب میز کار'], [/^\/control-room/, 'اتاق کنترل'], [/^\/parts/, 'میز قطعات'], [/^\/settings\/reports/, 'مرکز گزارش‌های کسب‌وکار'], [/^\/settings/, 'تنظیمات'], [/^\/$/, 'داشبورد'], [/^\/workshop\/settings/, 'تقویم و جایگاه‌ها'], [/^\/workshop\/technician/, 'کارهای من'], [/^\/workshop/, 'برنامه و گزارش تعمیر'], [/^\/accidents/, 'میز کار'], [/^\/cases\/new/, 'پذیرش خودرو'], [/^\/cases\/import/, 'ورود خودروها از اکسل'], [/^\/cases\/[^/]+/, 'پوشهٔ پرونده'], [/^\/cases/, 'پرونده‌ها'], [/^\/reports/, 'گزارش‌ها'], [/^\/daily-reports/, 'گزارش‌های روزانه'], [/^\/stock/, 'موجودی روزانه و رزرو'], [/^\/emdad/, 'پیگیری امداد ویژه'], [/^\/users/, 'کارکنان'], [/^\/reference-data/, 'اطلاعات پایه'], [/^\/reminders/, 'فیدبک‌ها']];
 /** Browser tab title for each area, so several open tabs can be told apart. */
 export function pageTitle(pathname: string): string {
   const module = /^\/modules\/([^/]+)/.exec(pathname)?.[1];

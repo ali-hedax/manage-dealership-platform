@@ -106,18 +106,6 @@ export interface NightListView {
   nextDay: string | null;
 }
 
-export interface StoppageRecord {
-  reference: string;
-  reason?: string;
-  part?: string;
-  openedAt?: string;
-  resolvedAt?: string;
-}
-
-export type StoppageResult = { state: 'active' | 'resolved'; record: StoppageRecord }
-  | { state: 'no_record' | 'error' }
-  | { state: 'stale'; lastKnown: Exclude<StoppageResult, { state: 'stale' | 'error' }> };
-
 export const UNKNOWN_LABOUR_NAME = 'نام اجرت در منبع مشخص نیست';
 export const LABOUR_LETTER_PATTERN = '[ء-غف-يٮ-ٯٱ-ۓە]';
 const labourLetter = new RegExp(LABOUR_LETTER_PATTERN, 'u');

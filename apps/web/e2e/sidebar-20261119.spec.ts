@@ -9,10 +9,12 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'بخش‌ها�
 const groupNames = async (page: Page) => nav(page).locator('.nav-group-head').allInnerTexts();
 const hrefs = async (page: Page) => nav(page).locator('a').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
 
-const ROLES: { user: string; home: RegExp; groups: string[] }[] = [
-  { user: 'expert', home: /\/accidents\/expert$/, groups: ['مدیریت تصادفات', 'انبار قطعات یدکی', 'مدیریت تعمیرگاه'] },
-  { user: 'parts', home: /\/accidents\/parts$/, groups: ['انبار قطعات یدکی'] },
-  { user: 'manager', home: /\/accidents\/manager$/, groups: ['مدیر خدمات'] },
+// «پذیرش و ترخیص» appears for roles with `stoppage.read` («خودروهای متوقف», owner 2026-11-26);
+// its reception pages themselves still need reception.read and the Pulse module.
+const ROLES: { user: string; home: RegExp; groups: string[]; hidden: string[] }[] = [
+  { user: 'expert', home: /\/accidents\/expert$/, groups: ['مدیریت تصادفات', 'انبار قطعات یدکی', 'مدیریت تعمیرگاه'], hidden: ['پذیرش و ترخیص'] },
+  { user: 'parts', home: /\/accidents\/parts$/, groups: ['انبار قطعات یدکی', 'پذیرش و ترخیص'], hidden: [] },
+  { user: 'manager', home: /\/accidents\/manager$/, groups: ['مدیر خدمات', 'پذیرش و ترخیص'], hidden: [] },
 ];
 
 for (const r of ROLES) {
@@ -27,7 +29,7 @@ for (const r of ROLES) {
     await expect(nav(page).locator(':scope > a').first()).toHaveAttribute('aria-current', 'page');
     const groups = (await groupNames(page)).map((g) => g.trim());
     for (const g of r.groups) expect(groups).toContain(g);
-    expect(groups).not.toContain('پذیرش و ترخیص');
+    for (const g of r.hidden) expect(groups).not.toContain(g);
     expect(groups).not.toContain('رضایت مشتری');
     expect(groups.length).toBeLessThanOrEqual(7);
     await expect(nav(page).getByText('در دست توسعه')).toHaveCount(0);

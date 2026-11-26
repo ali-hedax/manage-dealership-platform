@@ -189,11 +189,4 @@ describe('Nightly list of the reception module', () => {
     expect(historical.rows.some((r) => r.receptionId === sameVehicle)).toBe(false);
     expect(historical.rows.flatMap((r) => r.labour).every((l) => l === 'نامشخص')).toBe(true);
   });
-
-  it('serves the five stoppage states as synthetic validation examples', async () => {
-    const report = (await reader.get('/reception/stoppage').expect(200)).body;
-    expect(report.mode).toBe('validation');
-    expect(new Set(report.samples.map((sample: { result: { state: string } }) => sample.result.state)))
-      .toEqual(new Set(['active', 'resolved', 'error', 'no_record', 'stale']));
-  });
 });

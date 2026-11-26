@@ -12,7 +12,6 @@ import { ZodPipe } from '../common/zod.pipe';
 import { NightListService } from './night-list.service';
 import { PulseService } from './pulse.service';
 import { ReceptionService } from './reception.service';
-import { stoppageValidationReport } from './stoppage-report';
 
 /** «منیج پالس · اتصال کسب‌وکار» (spec section 26): owner and system administrator only. The password is never returned. */
 @Controller('pulse')
@@ -51,9 +50,6 @@ const invoiceSchema = receptionInvoiceSchema;
 @Controller('reception')
 export class ReceptionController {
   constructor(private readonly reception: ReceptionService, private readonly night: NightListService) {}
-
-  @RequirePermissions('reception.read') @Get('stoppage')
-  stoppage() { return stoppageValidationReport(); }
 
   @RequirePermissions('reception.read', 'integration.manage') @Get('labour-review')
   labourReview(@CurrentActor() actor: Actor) { return this.reception.labourReview(actor); }

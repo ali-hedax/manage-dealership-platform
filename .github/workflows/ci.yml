@@ -169,6 +169,13 @@ jobs:
           path: apps/web/test-results/special-aid-screenshots
           if-no-files-found: ignore
           retention-days: 14
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stoppage-screenshots
+          path: apps/web/test-results/stoppage-screenshots
+          if-no-files-found: ignore
+          retention-days: 14
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

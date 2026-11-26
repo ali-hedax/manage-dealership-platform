@@ -1,0 +1,38 @@
+# Addendum — Manage Blueprint (apply after Step 1A is deployed)
+
+The owner approved a full product blueprint (attached as Manage-Blueprint-FA.md, Persian). Copy it to docs/manage-reconstruction/ and treat it as part of the instruction set, together with Manage-VSCode-Prompt-EN.md. Where they differ, the blueprint wins. All reports to the owner in Persian.
+
+## Changes to the plan
+
+1. **New Step 1B0 — data core and vehicle file** (before 1B):
+   - Ingest the full Kasb-o-Kar repair card: «سالن تعمیرات», شماره هرم, warranty status; per issue: name, status, customer/expert notes, issue type, parts with names; per labour line: شرح تعمیر, نام تعمیرکار, زمان استاندارد, cost, cost bearer, تعداد سابقه, تاریخ آخرین تعمیر, status.
+   - Source registry with schedule, last success, staleness alarm, manual fallback. Cadence: receptions/cards every 10 min in working hours; stoppage and waiting-for-invite every 30 min; Special Assist, bookings, stock, sales, warranty returns daily; bill of lading every 2 h; stock turnover monthly (plus one-time 12 months).
+   - Find and fix why Pulse stopped updating (no read from 14:01 to 18:48 on a working day).
+   - Service vs repair split from «سالن تعمیرات» (سرویس سریع / سالن تعمیرات), not from labour codes.
+   - Every coded field gets a Persian label; no bare codes in the UI (codes only in a collapsible «جزئیات فنی»). Short car name only; full spec collapsible.
+   - Vehicle file per VIN with event timeline; every desk card links to it.
+   - Rule-driven queues (accident intake approval by «سرپرست تصادفات» with card lines copied into the assessment; arrived Special Assist → invite; active stoppage → follow-up; open at cut-off → night list with technician and station from labour lines; official statuses «ترخیص شده با قطعه تامین نشده» / «در انتظار مراجعه مشتری» → follow-up queues).
+   - Backfill last 12 months; idempotent, resumable; link existing Collision cases. Gradual migration; Collision logic unchanged.
+
+2. **Additions to existing steps:**
+   - 1D: on-time delivery (promised vs actual release); **comeback detection** (same labour on same VIN within a configurable window, default 30 days → linked to previous technician); stopped-vehicles module (blueprint §4.4) including red alert on «تاخیر نمایندگی = بله».
+   - 1E: «امداد ویژه‌های منتظر دعوت مشتری» as official invite source; cancelled Special Assist report; booking-balance suggestion (suggest quiet days from the booking list).
+   - 1F warranty returns (داغی) — owner priority is a simple guided desk: the cycle is monthly (1st–end of month), the company sets the day the previous month's parts go to its warehouse. Build «منیج می‌گوید، کاربر تیک می‌زند»: the month's collection list from the official reports, ordered for collecting/packing, each line with name, code, qty, barcode, reception and warranty card number, and pack / under-3-months badges (pack items grouped and separated); confirm each part by barcode scan or tick; Manage tells which bundle it goes in; totals per bundle and month (labour count, total qty, physical count); bundle states collecting → packed → ready → handed over; countdown to the delivery date the user enters; shortages alerted before that date. Then, later in the same module:  tag printing at handover from technician, 10-bin storage by last digit of reception number, daily reconciliation with «تحویل داغی یک روزه» / «بارکد قطعه داغی» / «قطعات پک», handover with barcode scan, discrepancy queue from «استعلام مغایرت بارکد قطعه داغی», financial impact from «اعلام به مالی کسورات/اضافات» and «وضعیت اسناد».
+
+3. **Phase 2 additions:** warehouse KPIs (fill rate, dead stock 12 months, months' supply), ABC cycle counting, «قطعات زیانده» and «تعیین زمان نگهداشت کالا» with a suggested action per dead item; workshop planning (station capacity vs standard-time load, technician productivity = standard time of finished work ÷ attended hours); CRM (NO day-3 call by Manage by default — the company's follow-up/inspection system already calls customers and gives the dealership a list of comebacks/complaints; build one CRM queue «رسیدگی به برگشتی و نارضایتی» fed by (1) that external list via manual upload until a sample/source is available and (2) Manage's own comeback detection, merged and de-duplicated, call outcome and invite recorded, each comeback linked to the previous technician; periodic-service reminders by automatic SMS — new capability: due = 5000 km or 6 months whichever first (configurable), daily km estimated from the vehicle's last two receptions, SMS a few days before due with booking info, no booking within N days → CRM call list; SMS behind a provider-agnostic adapter (Iranian SMS provider, e.g. Kavenegar / Melipayamak, chosen later), editable templates, opt-out, sending only in daytime hours, funnel KPI sent → booked → received; reuse the SMS layer for «قطعه‌ی امداد ویژه رسید» notices, Kasb-o-Kar «رضایت مشتریان», owner change does not carry call history).
+
+3b. **Workshop capacity board and Special Assist booking assistant (blueprint §7)** — owner answers: bookings have day + time but NO capacity cap (cause of very busy vs quiet days); most vehicles come booked; each technician has one fixed station and one skill; work hours two shifts 08:00–13:00 and 15:30–18:30 (8 h), Thursday 08:00–13:00 (5 h), Ramadan/holidays configurable.
+   - Capacity per station per day = technicians × hours × efficiency factor (start 0.85, learn later). Walk-in reserve default 25%, auto-tuned from the real walk-in share.
+   - Load = standard time of booked jobs (Kasb-o-Kar booking list) + Manage Special Assist bookings + remaining labour of night-list vehicles.
+   - Standard-time unit is unknown (minutes vs hundredths of an hour): infer it by comparing standard time with actual durations (planned-repair start/finish, single-labour cards); label values «تخمینی» until confirmed.
+   - Replacement time for a Special Assist part = median standard time of labour lines that replaced the same part code in the last 12 months.
+   - Capacity board: day × station (morning/afternoon) heatmap, green <70%, yellow 70–100%, red >100%; visible to everyone who books; warn when booking a red slot.
+   - Booking assistant: on «دعوت», suggest 3 slots (day + shift + station): before the 20-working-day deadline (prefer before day 11), matching station skill, most free capacity, all arrived parts of the same VIN in one visit, customer's past morning/afternoon preference. Officer picks, books in Kasb-o-Kar; Manage holds a tentative reservation until Pulse sees the booking and links it.
+   - KPIs: technician productivity, booking balance (deviation of daily load from the weekly mean). Plan and actual always stored separately.
+   - Build in Phase 1 as part of 1E (Special Assist), with the board reused by reception.
+
+4. **Vision KPI dictionary:** implement the table in blueprint §5 with source, formula and an owner-editable target per KPI; card colour = distance to target.
+
+5. New Kasb-o-Kar sources (add to registry as «نیازمند نمونه» until samples arrive): گزارش امداد ویژه های باطل شده، ثبت کارکرد تعمیرکار، شروع و پایان تعمیرات برنامه ریزی شده، برنامه ریزی تعمیرات (PL)، عملکرد ریالی تعمیرکاران و جایگاههای تعمیراتی، تحویل داغی، استعلام مغایرت بارکد قطعه داغی، وضعیت کارتهای گارانتی، کارنامه گارانتی، اعلام به مالی کسورات/اضافات، رضایت مشتریان، گزارش فروش طی دوره، گزارش سود و زیان فروش قطعات، گزارش قطعات زیانده، سرجمع گردش انبار به تفکیک کالا، گزارش بارنامه، گزارش مربوط به موجودی و لوکیشن، تعیین زمان نگهداشت کالا، BackOrder، کسری قطعات فاکتورها.
+
+Working mode unchanged. Finish the current step first, then start 1B0. Report in Persian.
