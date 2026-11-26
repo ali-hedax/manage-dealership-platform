@@ -1,0 +1,18 @@
+
+# --- STAGING (owner decision 2026-11-26): isolated stack «manage-staging», separate password layer.
+# Arvan's edge certificate is a wildcard; the origin uses Caddy's internal certificate for this name.
+staging.managebyhedax.ir {
+	tls internal
+	encode zstd gzip
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+	basic_auth {
+		staging __STAGING_BASIC_AUTH_HASH__
+	}
+	reverse_proxy manage-staging-web:3000 {
+		header_up X-Forwarded-For {client_ip}
+	}
+}

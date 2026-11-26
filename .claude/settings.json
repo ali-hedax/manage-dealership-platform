@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr create *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh run *)",
+      "Bash(bash scripts/claude/merge-into-rebuild.sh *)",
+      "Bash(bash scripts/claude/staging.sh *)"
+    ],
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(gh api *merge*)",
+      "Bash(git push * main)",
+      "Bash(git push * main:*)",
+      "Bash(git push * HEAD:main*)",
+      "Bash(git push * +main*)",
+      "Bash(*hedax_manage_deploy*)",
+      "PowerShell(*85.198.52.255*)",
+      "PowerShell(*manage_preview_ed25519*)",
+      "PowerShell(gh pr merge *)"
+    ],
+    "ask": [
+      "Bash(*85.198.52.255*)",
+      "Bash(*manage_preview_ed25519*)",
+      "Bash(*//managebyhedax.ir*)",
+      "Bash(*//www.managebyhedax.ir*)"
+    ]
+  }
+}

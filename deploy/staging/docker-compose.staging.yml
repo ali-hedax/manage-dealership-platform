@@ -1,0 +1,79 @@
+# Manage by HEDAX — STAGING stack (owner decision 2026-11-26: same machine as production, isolated).
+# Installed once at /home/manage/manage-staging/bin/ by setup.sh and run only by deploy.sh with project
+# name «manage-staging». Own database volume, own network, own env file; no host mounts. Only the
+# staging-web container also joins production's «manage_default» network, under the unique alias
+# «manage-staging-web», so the production Caddy can reach it; it holds no database credentials.
+# Every service name starts with «staging-»: Docker adds the service name as a DNS alias on each
+# network, so a service called «web» on manage_default would share production's «web» name.
+name: manage-staging
+
+services:
+  staging-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: /home/manage/manage-staging/secrets/db.env
+    volumes:
+      - staging_db:/var/lib/postgresql/data
+    networks: [staging]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manage_staging -d manage_staging"]
+      interval: 10s
+      retries: 10
+
+  staging-api:
+    image: manage-api:staging
+    restart: unless-stopped
+    env_file: /home/manage/manage-staging/secrets/api.env
+    environment:
+      GIT_COMMIT: ${STAGING_SHA:?}
+      NODE_ID: staging-api
+    depends_on:
+      staging-db: { condition: service_healthy }
+    networks:
+      staging: {}
+    mem_limit: 448m
+
+  staging-pulse:
+    image: manage-api:staging
+    command: ["node", "dist/pulse/main.js"]
+    restart: unless-stopped
+    env_file: /home/manage/manage-staging/secrets/api.env
+    environment:
+      GIT_COMMIT: ${STAGING_SHA:?}
+      NODE_ID: staging-pulse
+    # The worker serves no HTTP, so the API image's HTTP probe does not apply; healthy = the worker
+    # process (PID 1) is alive. `compose up --wait` needs a health check on every service.
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      start_period: 10s
+    depends_on:
+      staging-db: { condition: service_healthy }
+    networks: [staging]
+    mem_limit: 320m
+
+  staging-web:
+    image: manage-web:staging
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: "3000"
+      TRUST_PROXY_HEADERS: "true"
+      API_INTERNAL_URL: http://staging-api:4000
+    depends_on: [staging-api]
+    networks:
+      staging: {}
+      edge:
+        aliases: [manage-staging-web]
+    mem_limit: 320m
+
+volumes:
+  staging_db: {}
+
+networks:
+  staging: {}
+  edge:
+    external: true
+    name: manage_default
