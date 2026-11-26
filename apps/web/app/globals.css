@@ -207,6 +207,7 @@ dialog.dialog:has([data-testid="assessment-import"]) { width:min(980px, calc(100
 .access-person>summary,.access-template>summary { cursor:pointer; padding:16px; min-block-size:52px; font-weight:600; }
 .access-person>summary .small { display:block; margin-inline-start:20px; }
 .access-editor { padding:0 18px 18px; }
+.job-title-presets { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
 .access-editor .row { margin-block-start:14px; gap:12px; }
 .owner-access { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:16px; background:var(--blue-soft); border-radius:8px; }
 .access-template { padding:0 16px 16px; background:var(--paper); }

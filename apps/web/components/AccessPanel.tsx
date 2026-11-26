@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import {JalaliInput} from '@/components/JalaliInput';
 import useSWR,{useSWRConfig} from 'swr';
-import {PERMISSIONS,ROLE_LABELS,ROLES,ROLE_PERMISSIONS,permissionsFor,type AccessCatalog,type Permission,type Role,type StaffAccess} from '@manage/shared';
+import {JOB_TITLE_PRESETS,PERMISSIONS,ROLE_LABELS,ROLES,ROLE_PERMISSIONS,permissionsFor,type AccessCatalog,type Permission,type Role,type StaffAccess} from '@manage/shared';
 import {api,fetcher,errorMessage} from '@/lib/api';
 import {useAuth} from '@/lib/auth';
 import {PermissionPicker} from './PermissionPicker';
@@ -17,7 +17,9 @@ function StaffEditor({person,catalog,onSaved}:{person:StaffAccess;catalog:Access
  return <div className="access-editor">
   <p className="small">با تغییر سمت‌ها، الگوی پیشنهادی آن‌ها انتخاب می‌شود. سپس تیک هر دسترسی را برای همین فرد تغییر دهید. تغییر روی درخواست‌های بعدی او اعمال می‌شود.</p>
   <fieldset disabled={busy}><legend>سمت‌های {person.displayName}</legend><div className="role-options">{ROLES.map(role=><label className="permission-option" key={role}><input type="checkbox" checked={roles.includes(role)} onChange={e=>changeRoles(e.target.checked?[...roles,role]:roles.filter(r=>r!==role))}/>{ROLE_LABELS[role]}</label>)}</div></fieldset>
-  <div className="grid-2"><label className="field"><span>عنوان‌های شغلی (با ویرگول جدا کنید)</span><input className="input" maxLength={400} value={titles} onChange={e=>setTitles(e.target.value)} placeholder="مثلاً: اپراتور امداد ویژه، مسئول تماس"/></label>
+  <div className="grid-2"><label className="field"><span>عنوان‌های شغلی (با ویرگول جدا کنید)</span><input className="input" maxLength={400} value={titles} onChange={e=>setTitles(e.target.value)} placeholder="مثلاً: پذیرشگر، کارشناس امداد ویژه"/>
+   <span className="job-title-presets">{JOB_TITLE_PRESETS.map(t=>{const list=titles.split(/[،,]/).map(x=>x.trim()).filter(Boolean);const on=list.includes(t);return <button key={t} type="button" className={`btn btn-sm${on?' btn-primary':''}`} aria-pressed={on} disabled={busy||(!on&&list.length>=6)} onClick={()=>setTitles((on?list.filter(x=>x!==t):[...list,t]).join('، '))}>{t}</button>;})}</span>
+   <span className="small muted">عنوان شغلی فقط برچسب است؛ دسترسی از سمت (نقش) می‌آید.</span></label>
   <JalaliInput label={roles.includes('guest')?'پایان دسترسی (برای مهمان لازم است)':'پایان دسترسی (اختیاری)'} value={expires} onChange={setExpires}/></div>
   <div className="row"><button className="btn" type="button" disabled={busy} onClick={()=>{setSelected([...permissionsFor(roles,catalog.templates)]);setReview(false);}}>بازگشت به الگوی سمت</button><span>{selected.length.toLocaleString('fa-IR')} دسترسی انتخاب شده</span></div>
   <PermissionPicker value={selected} disabled={busy} onChange={v=>{setSelected(v);setReview(false);}}/>
