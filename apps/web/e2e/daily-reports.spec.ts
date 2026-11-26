@@ -47,7 +47,11 @@ test('owner can switch between all five desks, with planned modules in the roadm
     await page.getByRole('navigation', { name: 'میزهای کار مجاز من' }).getByRole('link', { name: new RegExp('^' + desk.label) }).click();
     await expect(page).toHaveURL(new RegExp('/accidents/' + desk.path + '$'));
   }
-  await expect(nav.getByRole('button', { name: 'پذیرش و ترخیص' })).toHaveCount(0);
+  // Pulse is off here: the reception pages stay out of the menu. The group remains only for
+  // «خودروهای متوقف» (an uploaded official report, owner 2026-11-26), which needs no Pulse.
+  await nav.getByRole('button', { name: 'پذیرش و ترخیص' }).click();
+  await expect(nav.getByRole('link', { name: 'خودروهای متوقف' })).toBeVisible();
+  for (const name of ['پذیرش‌های امروز', 'پذیرش‌های باز', 'ترخیص‌شده‌ها', 'لیست شب']) await expect(nav.getByRole('link', { name, exact: true })).toHaveCount(0);
   await nav.getByRole('button', { name: 'نقشهٔ راه' }).click();
   await expect(nav.getByRole('link', { name: /پذیرش و خدمات عمومی/ })).toBeVisible();
 });
