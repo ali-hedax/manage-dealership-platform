@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import {
-  compareNightRows, daysInShop, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, nightListLate, nightListTimes, nightListMissing, nightListSheet, normalizeRoles, officialLabourName, shortVehicleName, toPersianDigits,
+  compareNightRows, daysInShop, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, nightListLate, nightListTimes, nightListMissing, nightListSheet, normalizeRoles, shortVehicleName, toPersianDigits,
   type NightListItemInput, type NightListPending, type NightListReason, type NightListRow, type NightListStatus, type NightListView,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
@@ -15,6 +15,8 @@ import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { nightListItems, nightLists, notifications, receptionRepairs, receptions, tenants, users } from '../db/schema';
 import { writeWorkbook } from '../parts/xlsx';
 import { calendarAt } from '../workshop/work-calendar';
+import { REPAIR } from './kasb-protocol';
+import { labourCatalog, resolveNightLabour } from './labour-catalog';
 import { admissionKey } from './pulse-map';
 
 function qualified(r: typeof receptions.$inferSelect, cutoff: Date): boolean {
@@ -182,14 +184,24 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       .where(and(eq(nightListItems.tenantId, tenantId), eq(nightListItems.listId, l.id), eq(receptions.tenantId, tenantId)));
     const ids = items.map((x) => x.r.id);
     const labour = ids.length && !historical
-      ? await db.select({ receptionId: receptionRepairs.receptionId, description: receptionRepairs.description, code: receptionRepairs.code, state: receptionRepairs.state }).from(receptionRepairs)
+      ? await db.select({
+        receptionId: receptionRepairs.receptionId, description: receptionRepairs.description,
+        code: receptionRepairs.code, state: receptionRepairs.state,
+        rawCode: sql<string | null>`${receptionRepairs.official} ->> ${REPAIR.code}::text`,
+      }).from(receptionRepairs)
         .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, ids), isNull(receptionRepairs.removedAt)))
       : [];
-    const labourOf = new Map<string, string[]>();
+    const [tenant] = labour.length
+      ? await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantId))
+      : [];
+    const { names } = labourCatalog(tenant?.settings);
+    const labourOf = new Map<string, { labels: string[]; unmatched: number }>();
     for (const x of labour) {
-      const name = officialLabourName(x.description, x.code);
-      const text = [name, x.state && `(${x.state})`].filter(Boolean).join(' ');
-      labourOf.set(x.receptionId, [...(labourOf.get(x.receptionId) ?? []), text]);
+      const { name, unmatched } = resolveNightLabour(x.description, x.code, x.rawCode, names);
+      const group = labourOf.get(x.receptionId) ?? { labels: [], unmatched: 0 };
+      group.labels.push([name, x.state && `(${x.state})`].filter(Boolean).join(' '));
+      if (unmatched) group.unmatched += 1;
+      labourOf.set(x.receptionId, group);
     }
     const at = s.generateAt;
     const included = new Set(items.filter(({ i, r }) => (historical ? i.correction?.present !== false : i.correction?.present ?? qualified(r, cutoff))).map(({ i }) => i.id));
@@ -204,7 +216,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       daysIn: r.admittedAt ? daysInShop(r.admittedAt.toISOString(), at.getTime()) : null,
       isOpen: historical ? true : r.isOpen,
       accident: !!r.caseId,
-      labour: historical ? ['نامشخص'] : labourOf.get(r.id) ?? [],
+      labour: historical ? ['نامشخص'] : labourOf.get(r.id)?.labels ?? [],
+      unmatchedLabourCount: historical ? undefined : labourOf.get(r.id)?.unmatched ?? 0,
       currentStation: i.currentStation,
       nextStations: i.nextStations,
       reason: (i.reason as NightListReason | null) ?? null,
@@ -217,6 +230,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
     const rows = l.approvedSnapshot?.rows ?? draftRows.filter((r) => included.has(r.id));
     const physicalVehicleCount = l.status === 'sent' ? l.approvedSnapshot?.physicalVehicleCount ?? null
       : new Set(items.filter(({ i }) => included.has(i.id)).map(({ r }) => r.vin || r.plate || r.id)).size;
+    const unmatchedLabourCount = historical || rows.some((r) => r.unmatchedLabourCount === undefined)
+      ? null : rows.reduce((sum, r) => sum + (r.unmatchedLabourCount ?? 0), 0);
     const deadline = l.approvedSnapshot ? new Date(l.approvedSnapshot.deadline) : s.deadline;
     const status = l.status as NightListStatus;
     return {
@@ -225,6 +240,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       historicalIncomplete: status === 'sent' && !l.approvedSnapshot,
       excluded: status === 'sent' ? [] : draftRows.filter((r) => !included.has(r.id)),
       physicalVehicleCount,
+      unmatchedLabourCount,
       deadline: deadline.toISOString(), late: nightListLate(status, deadline, now), missingReasons: nightListMissing(rows), rows,
       ...(await this.neighbours(tenantId, l.day, db)),
     };

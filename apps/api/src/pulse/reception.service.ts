@@ -16,6 +16,7 @@ import { cases, externalContractors, pulseConnections, tenants, receptionDefects
 import { CARD } from './kasb-protocol';
 import { cleanText, kasbInstant } from './kasb-table';
 import { cardDescription, tehranMidnight } from './pulse-map';
+import { labourCatalog, parseLabourCatalog } from './labour-catalog';
 
 const iso = (d: Date | null | undefined) => d?.toISOString() ?? null;
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -32,6 +33,33 @@ const tehranDayKey = (at: Date) => new Date(at.getTime() + TEHRAN_OFFSET_MINUTES
  */
 @Injectable()
 export class ReceptionService {
+  async labourCatalogInfo(actor: Actor) {
+    this.ensureActive();
+    const [tenant] = await this.db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, actor.user.tenantId));
+    const catalog = labourCatalog(tenant?.settings);
+    return { version: catalog.version, count: Object.keys(catalog.names).length };
+  }
+
+  async importLabourCatalog(actor: Actor, input: { csv: string; expectedVersion: number }) {
+    this.ensureActive();
+    const names = parseLabourCatalog(input.csv);
+    const count = Object.keys(names).length;
+    const tenantId = actor.user.tenantId;
+    return this.db.transaction(async (tx) => {
+      const [tenant] = await tx.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantId)).for('update');
+      if (!tenant) throw notFound('نمایندگی');
+      const previous = labourCatalog(tenant.settings);
+      if (previous.version !== input.expectedVersion) throw versionConflict(previous.version);
+      const version = previous.version + 1;
+      await tx.update(tenants).set({ settings: { ...tenant.settings, receptionLabourCatalog: { version, names } } }).where(eq(tenants.id, tenantId));
+      await this.audit.record(tx, actor, {
+        entityType: 'tenant', entityId: tenantId, action: 'reception.labour_catalog_imported',
+        before: { version: previous.version, count: Object.keys(previous.names).length }, after: { version, count },
+      });
+      return { version, count };
+    });
+  }
+
   async labourReview(actor: Actor) {
     this.ensureActive();
     const tenantId = actor.user.tenantId;
