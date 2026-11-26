@@ -182,7 +182,12 @@ describe('Nightly list of the reception module', () => {
     await admin.post(url, { ...correction, expectedVersion: approved.version }).expect(409);
     await clerk.post(`/reception/night-list/items/${row.id}`, { expectedVersion: row.version, reason: 'station_load' }).expect(409);
     await db().update(nightLists).set({ approvedSnapshot: null }).where(eq(nightLists.id, approved.id));
-    expect(await view(reader, day)).toMatchObject({ historicalIncomplete: true, rows: [], physicalVehicleCount: null });
+    // An approved list without a snapshot stays visible with what staff recorded, but no live labour status.
+    const historical = await view(reader, day);
+    expect(historical).toMatchObject({ historicalIncomplete: true, physicalVehicleCount: null, excluded: [] });
+    expect(historical.rows).toContainEqual(expect.objectContaining({ id: row.id, reason: 'waiting_parts', labour: ['نامشخص'] }));
+    expect(historical.rows.some((r) => r.receptionId === sameVehicle)).toBe(false);
+    expect(historical.rows.flatMap((r) => r.labour).every((l) => l === 'نامشخص')).toBe(true);
   });
 
   it('serves the five stoppage states as synthetic validation examples', async () => {

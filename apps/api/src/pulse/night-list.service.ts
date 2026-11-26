@@ -173,12 +173,15 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
   private async render(tenantId: string, l: typeof nightLists.$inferSelect, sentByName: string | null, now: Date, db: DbOrTx = this.db): Promise<NightListView> {
     const s = await this.schedule(tenantId, l.day, db);
     const cutoff = now < s.generateAt ? now : s.generateAt;
-    const items = l.status === 'sent' ? [] : await db.select({ i: nightListItems, r: receptions, setByName: users.displayName }).from(nightListItems)
+    // A list approved before snapshots existed: show what staff recorded on it, but never today's
+    // live labour statuses, and label it «داده‌ی تاریخی ناقص».
+    const historical = l.status === 'sent' && !l.approvedSnapshot;
+    const items = l.approvedSnapshot ? [] : await db.select({ i: nightListItems, r: receptions, setByName: users.displayName }).from(nightListItems)
       .innerJoin(receptions, eq(receptions.id, nightListItems.receptionId))
       .leftJoin(users, eq(users.id, nightListItems.setBy))
       .where(and(eq(nightListItems.tenantId, tenantId), eq(nightListItems.listId, l.id), eq(receptions.tenantId, tenantId)));
     const ids = items.map((x) => x.r.id);
-    const labour = ids.length
+    const labour = ids.length && !historical
       ? await db.select({ receptionId: receptionRepairs.receptionId, description: receptionRepairs.description, code: receptionRepairs.code, state: receptionRepairs.state }).from(receptionRepairs)
         .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, ids), isNull(receptionRepairs.removedAt)))
       : [];
@@ -189,7 +192,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       labourOf.set(x.receptionId, [...(labourOf.get(x.receptionId) ?? []), text]);
     }
     const at = s.generateAt;
-    const included = new Set(items.filter(({ i, r }) => i.correction?.present ?? qualified(r, cutoff)).map(({ i }) => i.id));
+    const included = new Set(items.filter(({ i, r }) => (historical ? i.correction?.present !== false : i.correction?.present ?? qualified(r, cutoff))).map(({ i }) => i.id));
     const draftRows: NightListRow[] = items.map(({ i, r, setByName }) => ({
       id: i.id,
       version: i.version,
@@ -199,9 +202,9 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       vehicleName: r.productName || r.modelName ? shortVehicleName(r.productName, r.productName ?? r.modelName) : null,
       ownerName: r.customerName,
       daysIn: r.admittedAt ? daysInShop(r.admittedAt.toISOString(), at.getTime()) : null,
-      isOpen: r.isOpen,
+      isOpen: historical ? true : r.isOpen,
       accident: !!r.caseId,
-      labour: labourOf.get(r.id) ?? [],
+      labour: historical ? ['نامشخص'] : labourOf.get(r.id) ?? [],
       currentStation: i.currentStation,
       nextStations: i.nextStations,
       reason: (i.reason as NightListReason | null) ?? null,
@@ -220,7 +223,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       id: l.id, day: l.day, status, version: l.version, generatedAt: l.generatedAt.toISOString(), sentAt: l.sentAt?.toISOString() ?? null,
       sentByName: l.approvedSnapshot?.sentByName ?? sentByName,
       historicalIncomplete: status === 'sent' && !l.approvedSnapshot,
-      excluded: draftRows.filter((r) => !included.has(r.id)),
+      excluded: status === 'sent' ? [] : draftRows.filter((r) => !included.has(r.id)),
       physicalVehicleCount,
       deadline: deadline.toISOString(), late: nightListLate(status, deadline, now), missingReasons: nightListMissing(rows), rows,
       ...(await this.neighbours(tenantId, l.day, db)),
