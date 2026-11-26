@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
-import { pulseErrorText, pulseSentence, type DailyReportsStatus, type PulseStatus, type ReportCenterEntry } from '@manage/shared';
+import { pulseErrorText, pulseSentence, type DailyReportsStatus, type PulseStatus, type ReportCenterEntry, type StoppageListView } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali } from '@/lib/format';
@@ -22,7 +22,24 @@ const STOCK_GUIDE =
   '۳. دکمهٔ دریافت فایل را بزنید؛ فایلی با پسوند xls ذخیره می‌شود. آن را باز یا ویرایش نکنید.\n' +
   '۴. در همین صفحه، فایل را در «بارگذاری دستی» بیندازید، پیش‌نمایش را ببینید و تأیید کنید.';
 
-const RECEPTION_NOTE = 'منیج پالس همهٔ پذیرش‌ها و قطعه‌های هر کارت را هر چند دقیقه خودش می‌خواند. فقط اگر پالس قطع بود، سوابق پذیرش را با این راهنما دستی وارد کنید.';
+const STOPPAGE_GUIDE =
+  '۱. در کسب‌وکار مسیر «بازرگانی ← گزارش ← گزارشات انبار ← گزارش توقف خودرو» را باز کنید.\n' +
+  '۲. بازهٔ تاریخ را از یک ماه گذشته تا امروز بگذارید و خروجی Excel بگیرید؛ فایل را باز یا ویرایش نکنید.\n' +
+  '۳. در منیج «خودروهای متوقف» را باز کنید، فایل را در «بارگذاری گزارش توقف خودرو» بیندازید، پیش‌نمایش را ببینید و تأیید کنید.\n' +
+  'بارگذاری دوبارهٔ همان فایل چیزی را تغییر نمی‌دهد. ردیفی که در فایل تازه نیست با آخرین وضعیتش می‌ماند.';
+
+/** Sources found live in کسب‌وکار that wait for an anonymised sample before Manage reads them (owner, 2026-11-26). */
+const NEEDS_SAMPLE: { title: string; path: string; use: string }[] = [
+  { title: 'امداد ویژه‌های منتظر دعوت مشتری', path: 'بازرگانی ← مشاهده ← امداد ویژه های منتظر دعوت مشتری', use: 'پروندهٔ امداد ویژه برای هر خودرو (گام ۱E)؛ جدول صفحه‌ای است و Excel ندارد' },
+  { title: 'گزارش امداد ویژه‌های باطل‌شده', path: 'بازرگانی ← گزارش ← گزارشات انبار ← گزارش امداد ویژه های باطل شده', use: 'دلیل و تاریخ ابطال برای بازرسی امداد ویژه' },
+  { title: 'ثبت کارکرد تعمیرکار', path: 'خدمات ← عملیات ← ثبت کارکرد تعمیرکار', use: 'کد تعمیرکار و زمان واقعی کار برای لیست شب و برنامه‌ریزی' },
+  { title: 'شروع و پایان تعمیرات برنامه‌ریزی‌شده', path: 'خدمات ← عملیات ← شروع و پایان تعمیرات برنامه ریزی شده', use: 'زمان شروع و پایان واقعی هر کار' },
+  { title: 'عملکرد ریالی تعمیرکاران و جایگاه‌های تعمیراتی', path: 'خدمات ← گزارش ← عملکرد ریالی تعمیرکاران و جایگاههای تعمیراتی', use: 'ارزیابی کارکنان' },
+  { title: 'مدیریت لوکیشن قطعه در انبار', path: 'مدیریت لوکیشن قطعه در انبار', use: 'آدرس فیزیکی قطعه (قفسه)' },
+  { title: 'گزارش موجودی و لوکیشن', path: 'گزارش مربوط به موجودی و لوکیشن', use: 'موجودی همراه با آدرس فیزیکی' },
+];
+
+const RECEPTION_NOTE ='منیج پالس همهٔ پذیرش‌ها و قطعه‌های هر کارت را هر چند دقیقه خودش می‌خواند. فقط اگر پالس قطع بود، سوابق پذیرش را با این راهنما دستی وارد کنید.';
 
 /**
  * «Manage Nexus · مرکز دادهٔ کسب‌وکار» (owner, 2026-11-23): the one place for every piece of data that
@@ -47,6 +64,8 @@ export default function NexusPage() {
     else toast(`خواندن موجودی انجام نشد: ${pulseErrorText(followed.resultCode) ?? 'دوباره تلاش کنید'}`, 'error');
   }, [followed, toast]);
   const { data: center, error, mutate: refreshCenter } = useSWR<ReportCenterEntry[]>(centerOk ? '/report-center' : null, fetcher);
+  const stoppageOk = can('stoppage.read');
+  const { data: stoppage } = useSWR<StoppageListView>(stoppageOk ? '/stoppages?view=active' : null, fetcher);
   const { data: daily } = useSWR<DailyReportsStatus>(can('daily_reports.upload') || can('daily_reports.apply') ? '/daily-reports/status' : null, fetcher);
   if (!pulseOk && !centerOk) return <EmptyState icon="lock" title="Manage Nexus" heading="h1">این بخش برای مالک، مدیر سیستم و مسئول بارگذاری گزارش‌هاست.</EmptyState>;
 
@@ -108,9 +127,20 @@ export default function NexusPage() {
               guide={e.guide} isacoPath={e.isacoPath} manualHref={e.uploadHref} note={pulseLive ? lastRun(k) ?? undefined : undefined}
               extra={pulseLive && <button type="button" className="btn btn-sm" onClick={() => void readNow(k === 'emdad' ? 'emdad_now' : 'appointments_now')}><AppIcon name="download" />همین الان بخوان</button>} />
           ) : null; })}
-          {centerOk && <p className="xs muted">راهنماها و بازهٔ پیش‌فرض گزارش‌ها در <Link href="/settings/reports">جزئیات مرکز گزارش‌ها</Link> قابل ویرایش است.</p>}
+          {stoppageOk && <ReportRow title="گزارش توقف خودرو (توقف رسمی)" mode="manual" last={stoppage?.lastImport?.at ?? null} stale={stoppage?.lastImport ? stoppage.stale : undefined}
+            detail="منبع رسمی «خودروهای متوقف» · در حال اعتبارسنجی با گزارش واقعی" guide={STOPPAGE_GUIDE} isacoPath="بازرگانی ← گزارش ← گزارشات انبار ← گزارش توقف خودرو"
+            manualHref={can('stoppage.import') ? '/reception/stoppage' : null} open={{ href: '/reception/stoppage', label: 'خودروهای متوقف' }} />}
+          {centerOk &&<p className="xs muted">راهنماها و بازهٔ پیش‌فرض گزارش‌ها در <Link href="/settings/reports">جزئیات مرکز گزارش‌ها</Link> قابل ویرایش است.</p>}
         </div>
       </section>
+
+      {pulseOk && <section className="panel" aria-labelledby="nx-needs">
+        <div className="panel-head"><div><h2 id="nx-needs">منابع در انتظار نمونه</h2><p className="small muted">این گزارش‌ها در کسب‌وکار پیدا شده‌اند. منیج تا رسیدن یک نمونهٔ بی‌نام از هرکدام، ستون یا مسیری را حدس نمی‌زند.</p></div></div>
+        <ul className="panel-body nexus-list">
+          {NEEDS_SAMPLE.map((s) => <li key={s.title} className="nexus-row"><div className="nexus-row-top"><div className="nexus-row-name"><strong>{s.title}</strong><span className="m-tag wait">نیازمند نمونه</span></div></div>
+            <p className="small muted"><b>مسیر:</b> {s.path} · {s.use}</p></li>)}
+        </ul>
+      </section>}
 
       {(can('daily_reports.upload') || can('reference.customers.manage') || can('reference.appointments.manage')) && <section className="panel" aria-labelledby="nx-upload">
         <div className="panel-head"><div><h2 id="nx-upload">بارگذاری دستی</h2><p className="small muted">هر فایل گرفته‌شده از کسب‌وکار را اینجا بیندازید؛ منیج نوعش را از محتوا می‌شناسد و به همان پیش‌نمایش همیشگی می‌برد.</p></div></div>

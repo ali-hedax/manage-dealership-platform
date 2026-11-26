@@ -124,7 +124,6 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reception/labour-review` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/night-list/:id/excel` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
-| GET | `/api/v1/reception/stoppage` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reference-data/:kind/sample` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-data/:kind` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
 | GET | `/api/v1/reference-imports/:id/report` | [source](../apps/api/src/reference-data/reference-data.controller.ts) |
@@ -156,6 +155,10 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/stock/options` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/stock/reservations/export` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | GET | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
+| GET | `/api/v1/stoppages/:id` | [source](../apps/api/src/stoppages/stoppages.controller.ts) |
+| GET | `/api/v1/stoppages/followers` | [source](../apps/api/src/stoppages/stoppages.controller.ts) |
+| GET | `/api/v1/stoppages/report` | [source](../apps/api/src/stoppages/stoppages.controller.ts) |
+| GET | `/api/v1/stoppages` | [source](../apps/api/src/stoppages/stoppages.controller.ts) |
 | GET | `/api/v1/tasks/:id/wage-history` | [source](../apps/api/src/people/people.controllers.ts) |
 | GET | `/api/v1/users/assignable` | [source](../apps/api/src/reference/reference.controller.ts) |
 | GET | `/api/v1/vehicle-imports/:id/report` | [source](../apps/api/src/vehicle-import/vehicle-import.controller.ts) |
@@ -177,6 +180,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PATCH | `/api/v1/daily-reports/profiles/:kind` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | PATCH | `/api/v1/emdad/requests/:id/follow-up` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | PATCH | `/api/v1/parts/contractors/:id` | [source](../apps/api/src/parts/parts-operations.controller.ts) |
+| PATCH | `/api/v1/stoppages/:id/follow-up` | [source](../apps/api/src/stoppages/stoppages.controller.ts) |
 | PATCH | `/api/v1/tasks/:id` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | PATCH | `/api/v1/workshop/stations/:id` | [source](../apps/api/src/workshop/workshop.controller.ts) |
 | POST | `/api/v1/assessment-items/:id/remove` | [source](../apps/api/src/assessments/assessments.controller.ts) |
@@ -300,6 +304,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/stock/aliases` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations/:id/actions` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
 | POST | `/api/v1/stock/reservations` | [source](../apps/api/src/daily-reports/daily-reports.controller.ts) |
+| POST | `/api/v1/stoppages/:id/reception` | [source](../apps/api/src/stoppages/stoppages.controller.ts) |
+| POST | `/api/v1/stoppages/import` | [source](../apps/api/src/stoppages/stoppages.controller.ts) |
 | POST | `/api/v1/tasks/:id/actions` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/tasks/:id/cancel` | [source](../apps/api/src/accident/accident.controllers.ts) |
 | POST | `/api/v1/tasks/:id/part-pickup` | [source](../apps/api/src/parts/parts.controller.ts) |

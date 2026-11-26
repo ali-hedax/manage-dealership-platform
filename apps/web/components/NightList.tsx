@@ -56,7 +56,7 @@ export function NightList() {
         <div className="desk-hello">
           <h1 id="night-title">لیست شب</h1>
           <p className="desk-sub">{data ? `${formatJalali(data.day + 'T12:00:00Z')}${isList(data) ? ` · ${NIGHT_LIST_STATUS_LABELS[data.status]}` : ''}` : 'در حال خواندن…'}</p>
-          <Link className="no-print" href="/reception/stoppage">گزارش توقف رسمی</Link>
+          <Link className="no-print" href="/reception/stoppage">خودروهای متوقف (گزارش توقف رسمی)</Link>
         </div>
         {data && (
           <nav className="row no-print night-nav" aria-label="لیست شب روزهای دیگر">

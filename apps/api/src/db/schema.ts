@@ -1949,3 +1949,87 @@ export const nightListItems = pgTable('night_list_items', {
   version: integer('version').notNull().default(1),
   isTest: boolean('is_test').notNull().default(false),
 }, (t) => [uniqueIndex('night_list_items_list_reception_uq').on(t.listId, t.receptionId), index('night_list_items_tenant_reception_idx').on(t.tenantId, t.receptionId)]);
+
+// ---------------------------------------------------------------------------
+// «گزارش توقف خودرو» — official stoppage report of کسب‌وکار (owner, 2026-11-26; reconstruction 1A).
+// One import per applied file (SHA-256 unique per tenant), one stoppage per notice number, one item
+// per official row key, and an append-only version per change of an item. Nothing is deleted:
+// an ended stoppage goes to the archive, and a row missing from a later file keeps its last state.
+
+export const stoppageImports = pgTable('stoppage_imports', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  fileName: text('file_name').notNull(),
+  fileHash: text('file_hash').notNull(),
+  /** manual | pulse */
+  source: text('source').notNull().default('manual'),
+  parserVersion: integer('parser_version').notNull(),
+  rowCount: integer('row_count').notNull(),
+  stoppageCount: integer('stoppage_count').notNull(),
+  summary: jsonb('summary').$type<Record<string, unknown>>().notNull(),
+  importedBy: uuid('imported_by').notNull().references(() => users.id),
+  importedAt: ts('imported_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [uniqueIndex('stoppage_imports_tenant_hash_uq').on(t.tenantId, t.fileHash), index('stoppage_imports_tenant_at_idx').on(t.tenantId, t.importedAt)]);
+
+export const stoppages = pgTable('stoppages', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  noticeNo: text('notice_no').notNull(),
+  chassis: text('chassis').notNull(),
+  /** Latest official header values of the notice (owner, phone, km, vehicle type, card status). */
+  official: jsonb('official').$type<Record<string, string>>().notNull(),
+  active: boolean('active').notNull(),
+  stage: text('stage').notNull(),
+  stoppedAt: ts('stopped_at'),
+  endedAt: ts('ended_at'),
+  firstImportId: uuid('first_import_id').notNull().references(() => stoppageImports.id),
+  lastImportId: uuid('last_import_id').notNull().references(() => stoppageImports.id),
+  /** Follow-up owner in Manage (never overwritten by an import). */
+  followUpUserId: uuid('follow_up_user_id').references(() => users.id),
+  receptionId: uuid('reception_id').references(() => receptions.id),
+  /** none | linked | ambiguous | manual (a manual decision is never redone by an import) */
+  linkState: text('link_state').notNull().default('none'),
+  linkNote: text('link_note'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [
+  uniqueIndex('stoppages_tenant_notice_uq').on(t.tenantId, t.noticeNo),
+  index('stoppages_tenant_active_idx').on(t.tenantId, t.active),
+  index('stoppages_tenant_chassis_idx').on(t.tenantId, t.chassis),
+]);
+
+export const stoppageItems = pgTable('stoppage_items', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  stoppageId: uuid('stoppage_id').notNull().references(() => stoppages.id),
+  rowKey: text('row_key').notNull(),
+  official: jsonb('official').$type<Record<string, string>>().notNull(),
+  notes: jsonb('notes').$type<string[]>().notNull(),
+  rowHash: text('row_hash').notNull(),
+  active: boolean('active').notNull(),
+  stage: text('stage').notNull(),
+  /** Linked special aid line (reason «امدادویژه», reference number = special aid number). */
+  emdadRequestId: uuid('emdad_request_id').references(() => emdadRequests.id),
+  /** linked | ambiguous | not_found, or null when the reason is not special aid */
+  aidLink: text('aid_link'),
+  firstImportId: uuid('first_import_id').notNull().references(() => stoppageImports.id),
+  lastImportId: uuid('last_import_id').notNull().references(() => stoppageImports.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  version: integer('version').notNull().default(1),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [uniqueIndex('stoppage_items_tenant_key_uq').on(t.tenantId, t.rowKey), index('stoppage_items_stoppage_idx').on(t.tenantId, t.stoppageId)]);
+
+export const stoppageItemVersions = pgTable('stoppage_item_versions', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  itemId: uuid('item_id').notNull().references(() => stoppageItems.id),
+  importId: uuid('import_id').notNull().references(() => stoppageImports.id),
+  official: jsonb('official').$type<Record<string, string>>().notNull(),
+  rowHash: text('row_hash').notNull(),
+  observedAt: ts('observed_at').notNull().defaultNow(),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [index('stoppage_item_versions_item_idx').on(t.tenantId, t.itemId)]);

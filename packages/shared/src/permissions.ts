@@ -62,6 +62,10 @@ export const PERMISSIONS = [
   // «لیست شب» of the reconstruction scenario (owner, 2026-11-25).
   'reception.night_list', // stay reason and stations of each vehicle on the nightly list
   'reception.night_list_send', // approve and send the nightly list (reception supervisor)
+  // Official stoppage report «گزارش توقف خودرو» and stopped-vehicle cases (owner, 2026-11-26).
+  'stoppage.read', // stopped vehicles, their parts and the manager report
+  'stoppage.import', // upload the official stoppage Excel from کسب‌وکار
+  'stoppage.manage', // follow-up owner and reception link of a stopped vehicle
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -70,13 +74,13 @@ export type Permission = (typeof PERMISSIONS)[number];
 // supervisor, QC and cashier roles. Supply state (reserve, Emdad, market, cancel)
 // stays with the parts clerk; the expert adds needs and only reads supply.
 const ACCIDENT_EXPERT: readonly Permission[] = ['case.read','case.create','case.update','customer.pii.read','case.import','task.manage','task.approve','blocker.report','blocker.manage','assessment.manage','assessment.authorize','part.request','part.price_authorize','finance.propose','finance.payment','finance.close','case.release_authorize','qc.inspect','case.technical_close','case.deliver','dashboard.read','audit.read','reference.parts.read','reference.customers.read','stock.read','emdad.read','workshop.read','wage.manage'];
-const PARTS_CLERK: readonly Permission[] = ['special_aid.read','case.read','blocker.report','part.manage','part.quote','dashboard.read','reference.parts.read','reference.parts.manage','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage','workshop.read','daily_reports.upload','daily_reports.apply'];
+const PARTS_CLERK: readonly Permission[] = ['special_aid.read','case.read','blocker.report','part.manage','part.quote','dashboard.read','reference.parts.read','reference.parts.manage','stock.read','stock.reserve','stock.release','stock.issue','emdad.read','emdad.manage','workshop.read','daily_reports.upload','daily_reports.apply','stoppage.read','stoppage.import','stoppage.manage'];
 // The service manager only views, analyses and sends reminders (reminders need no permission).
-const SERVICE_MANAGER: readonly Permission[] = ['case.read','report.manager','dashboard.read','audit.read','workshop.read','stock.read','emdad.read','wage.report','special_aid.read','special_aid.report','special_aid.warn'];
+const SERVICE_MANAGER: readonly Permission[] = ['case.read','report.manager','dashboard.read','audit.read','workshop.read','stock.read','emdad.read','wage.report','special_aid.read','special_aid.report','special_aid.warn','stoppage.read'];
 // Special Aid operator: most of the module's daily work, including the customer's phone number.
-const SPECIAL_AID_OPERATOR: readonly Permission[] = ['special_aid.read','special_aid.operate','customer.pii.read','emdad.read','stock.read','reference.customers.read','reference.appointments.read'];
+const SPECIAL_AID_OPERATOR: readonly Permission[] = ['special_aid.read','special_aid.operate','customer.pii.read','emdad.read','stock.read','reference.customers.read','reference.appointments.read','stoppage.read','stoppage.manage'];
 // Supply follow-up expert: official statuses, idle requests and the export for the company.
-const SPECIAL_AID_SUPPLY: readonly Permission[] = ['special_aid.read','special_aid.supply','emdad.read','stock.read'];
+const SPECIAL_AID_SUPPLY: readonly Permission[] = ['special_aid.read','special_aid.supply','emdad.read','stock.read','stoppage.read','stoppage.import','stoppage.manage'];
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   accident_expert: ACCIDENT_EXPERT,
   parts_clerk: PARTS_CLERK,
