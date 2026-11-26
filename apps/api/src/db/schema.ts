@@ -1923,6 +1923,7 @@ export const nightLists = pgTable('night_lists', {
   generatedAt: ts('generated_at').notNull().defaultNow(),
   sentAt: ts('sent_at'),
   sentBy: uuid('sent_by').references(() => users.id),
+  approvedSnapshot: jsonb('approved_snapshot').$type<Pick<import('@manage/shared').NightListView, 'rows' | 'deadline' | 'sentByName' | 'physicalVehicleCount'>>(),
   /** The 18:45 alert to the service manager went out (once). */
   lateNotifiedAt: ts('late_notified_at'),
   version: integer('version').notNull().default(1),
@@ -1939,6 +1940,7 @@ export const nightListItems = pgTable('night_list_items', {
   reasonNote: text('reason_note'),
   currentStation: text('current_station'),
   nextStations: text('next_stations'),
+  correction: jsonb('correction').$type<{ present: boolean; reason: string }>(),
   /** Reason copied from the previous list for the same reception, not yet changed or confirmed. */
   carried: boolean('carried').notNull().default(false),
   setBy: uuid('set_by').references(() => users.id),

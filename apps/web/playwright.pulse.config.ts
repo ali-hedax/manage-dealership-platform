@@ -9,7 +9,7 @@ const channel = process.env.PW_CHANNEL || (process.platform === 'win32' ? 'msedg
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: /pulse\.spec\.ts/,
+  testMatch: process.env.CAPTURE_RECONSTRUCTION === 'true' ? /reconstruction-1a-capture\.ts/ : /pulse\.spec\.ts/,
   timeout: 180_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
