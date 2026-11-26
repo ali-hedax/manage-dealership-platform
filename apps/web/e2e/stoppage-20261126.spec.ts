@@ -9,6 +9,9 @@ import { login } from './helpers';
 // sees the cards, one case with its locked stepper, and the manager report. Screenshots at 1440,
 // 1366 and 390 are attached for the PR.
 
+/** Uploaded by CI as the «stoppage-screenshots» artifact (synthetic data only). */
+const shot = (name: string) => join('test-results', 'stoppage-screenshots', name);
+
 const csv = (text: string) => text.replace(/^\uFEFF/u, '').split(/\r?\n/).filter(Boolean).map((line) => {
   const out: string[] = []; let cell = '', quoted = false;
   for (let i = 0; i < line.length; i++) {
@@ -44,7 +47,7 @@ test('stopped vehicles: upload, cards, case stepper and manager report', async (
     await page.goto('/reception/stoppage');
     await expect(page.locator('a.stp-card').first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
-    const file = info.outputPath(`stoppage-list-${width}.png`);
+    const file = shot(`stoppage-list-${width}.png`);
     await page.screenshot({ path: file, fullPage: true, animations: 'disabled' });
     await info.attach(`stoppage-list-${width}`, { path: file, contentType: 'image/png' });
   }
@@ -61,7 +64,7 @@ test('stopped vehicles: upload, cards, case stepper and manager report', async (
     await page.reload();
     await expect(page.getByRole('list', { name: 'مراحل توقف' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
-    const file = info.outputPath(`stoppage-case-${width}.png`);
+    const file = shot(`stoppage-case-${width}.png`);
     await page.screenshot({ path: file, fullPage: true, animations: 'disabled' });
     await info.attach(`stoppage-case-${width}`, { path: file, contentType: 'image/png' });
   }
@@ -69,7 +72,7 @@ test('stopped vehicles: upload, cards, case stepper and manager report', async (
   await page.goto('/control-room/stoppages');
   await expect(page.getByRole('heading', { name: 'خودروهای متوقف · گزارش مدیریتی' })).toBeVisible();
   await expect(page.getByText('مقایسه با لیست شب')).toBeVisible();
-  const file = info.outputPath('stoppage-report-1440.png');
+  const file = shot('stoppage-report-1440.png');
   await page.screenshot({ path: file, fullPage: true, animations: 'disabled' });
   await info.attach('stoppage-report-1440', { path: file, contentType: 'image/png' });
 });
