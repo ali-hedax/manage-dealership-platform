@@ -112,6 +112,7 @@ export function StoppageUpload({ onDone }: { onDone: () => void }) {
     } catch (e) { setMessage(errorMessage(e)); } finally { setBusy(false); }
   };
   return (
+    <>
     <details className="panel stp-upload no-print" open={!!preview}>
       <summary><AppIcon name="upload" /> بارگذاری گزارش توقف خودرو (Excel)</summary>
       <div className="panel-body stack">
@@ -133,9 +134,11 @@ export function StoppageUpload({ onDone }: { onDone: () => void }) {
             )}
           </div>
         )}
-        {message && <p className="small" role="status">{message}</p>}
       </div>
     </details>
+    {/* Outside the panel: the panel folds after a successful import and the result must stay visible. */}
+    {message && <p className="small no-print" role="status">{message}</p>}
+    </>
   );
 }
 
