@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { compareNightRows, NIGHT_LIST_COLUMNS, NIGHT_LIST_REASONS, NIGHT_LIST_REASON_LABELS, nightListLate, nightListMissing, nightListSheet, type NightListRow } from '../index';
+import { compareNightRows, DEFAULT_WORK_CALENDAR, nightListTimes, NIGHT_LIST_COLUMNS, NIGHT_LIST_REASONS, NIGHT_LIST_REASON_LABELS, nightListLate, nightListMissing, nightListSheet, type NightListRow } from '../index';
 
 const row = (over: Partial<NightListRow>): NightListRow => ({
   id: 'i', version: 1, receptionId: 'r', admissionNo: '100', plate: '11 ب 111 - 11', vehicleName: 'دنا پلاس', ownerName: 'مشتری ساختگی', daysIn: 2, isOpen: true, accident: false,
@@ -28,4 +28,12 @@ test('the Excel sheet keeps the scenario column order and marks carried reasons'
   assert.deepEqual(sheet[0], [...NIGHT_LIST_COLUMNS]);
   assert.deepEqual(sheet[1], ['دنا پلاس', '11 ب 111 - 11', 'مشتری ساختگی', '100', 2, 'باتری‌سازی 36', 'صافکاری (باز)', 'مکانیکی 99', 'منتظر قطعه از انبار (از دیروز)', '', 'بله', 'ترخیص شد']);
   assert.equal(nightListSheet([row({})])[1]![8], 'ثبت نشده');
+});
+
+test('build and send-by times follow the work calendar: full day 18:00/18:45, half-day Thursday 12:30/13:15, Friday none', () => {
+  assert.deepEqual(nightListTimes('2025-04-20', DEFAULT_WORK_CALENDAR), { generateAt: '18:00', deadline: '18:45' }); // Sunday, ends 18:30
+  assert.deepEqual(nightListTimes('2025-04-24', DEFAULT_WORK_CALENDAR), { generateAt: '12:30', deadline: '13:15' }); // Thursday, ends 13:00
+  assert.equal(nightListTimes('2025-04-25', DEFAULT_WORK_CALENDAR), null); // Friday
+  const custom = { ...DEFAULT_WORK_CALENDAR, week: DEFAULT_WORK_CALENDAR.week.map((d, i) => (i === 4 ? [{ start: 480, end: 750 }] : d)) };
+  assert.deepEqual(nightListTimes('2025-04-24', custom), { generateAt: '12:00', deadline: '12:45' }); // Thursday ending 12:30
 });

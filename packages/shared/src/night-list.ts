@@ -1,11 +1,32 @@
 // «لیست شب» — vehicles staying overnight (reconstruction scenario, owner 2026-11-25).
-// At 18:00 Tehran on a working day Manage builds the list from the open receptions Pulse reads;
-// the receptionist only picks the stay reason (and the stations while کسب‌وکار has no technician
-// data); the reception supervisor sends it by 18:45, otherwise the service manager is told.
-// Warnings never block (spec section 2): the list can be sent with reasons missing.
+// Half an hour before the end of the working day (work calendar: 18:00 on a full day that ends at
+// 18:30, 12:30 on a Thursday that ends at 13:00) Manage builds the list from the open receptions
+// Pulse reads; the receptionist only picks the stay reason (and the stations while کسب‌وکار has no
+// technician data); the reception supervisor sends it within 15 minutes after closing (18:45 /
+// 13:15), otherwise the service manager is told. Warnings never block (spec section 2).
+import type { WorkCalendar } from './workshop';
 
+/** Defaults of a full working day (ends 18:30); a day's real times come from `nightListTimes`. */
 export const NIGHT_LIST_GENERATE_AT = '18:00';
 export const NIGHT_LIST_DEADLINE = '18:45';
+/** The list is built this many minutes before the end of the working day… */
+export const NIGHT_LIST_LEAD_MINUTES = 30;
+/** …and is due this many minutes after it. */
+export const NIGHT_LIST_GRACE_MINUTES = 15;
+
+const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/**
+ * Build and send-by times of a Tehran day (YYYY-MM-DD) from the work calendar: the end of the day's
+ * last working interval minus 30 minutes, and plus 15 minutes. Null when the weekday has no working
+ * hours (Friday). Thursday with 08:00–13:00 → 12:30 and 13:15.
+ */
+export function nightListTimes(dateKey: string, calendar: WorkCalendar): { generateAt: string; deadline: string } | null {
+  const weekday = new Date(dateKey + 'T12:00:00Z').getUTCDay();
+  const end = Math.max(0, ...(calendar.week[weekday] ?? []).map((i) => i.end));
+  if (!end) return null;
+  return { generateAt: hhmm(Math.max(0, end - NIGHT_LIST_LEAD_MINUTES)), deadline: hhmm(Math.min(24 * 60 - 1, end + NIGHT_LIST_GRACE_MINUTES)) };
+}
 
 export const NIGHT_LIST_REASONS = [
   'waiting_parts',
@@ -71,19 +92,24 @@ export interface NightListView {
   generatedAt: string;
   sentAt: string | null;
   sentByName: string | null;
-  /** 18:45 Tehran of the day. */
+  /** Send-by time of the day (18:45 on a full day, 13:15 on a half-day Thursday). */
   deadline: string;
   late: boolean;
   missingReasons: number;
   rows: NightListRow[];
+  /** The nearest earlier / later day that has a list, for «لیست قبل» and «لیست بعد». */
+  previousDay: string | null;
+  nextDay: string | null;
 }
 
-/** No list yet for the day (before 18:00, or not a working day). */
+/** No list yet for the day (before its build time, or not a working day). */
 export interface NightListPending {
   day: string;
   status: 'not_generated';
   generatesAt: string;
   workingDay: boolean;
+  previousDay: string | null;
+  nextDay: string | null;
 }
 
 /** Rows without a reason. A reason carried from the previous list counts as given (one click less per vehicle). */
