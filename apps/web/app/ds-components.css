@@ -1,0 +1,130 @@
+/* Manage design system — base components (S03). Every value comes from ds-tokens.css. */
+.ds *, .ds *::before, .ds *::after { box-sizing: border-box; }
+.ds .ds-num, .ds table, .ds .ds-kpi-value { font-variant-numeric: tabular-nums; }
+.ds svg.app-icon { inline-size: var(--ds-icon); block-size: var(--ds-icon); stroke-width: var(--ds-icon-stroke); flex: none; }
+.ds h1, .ds h2, .ds h3 { margin: 0; font-weight: var(--ds-fw-bold); }
+.ds h1 { font-size: var(--ds-fs-title); }
+.ds h2 { font-size: var(--ds-fs-card); }
+.ds h3 { font-size: var(--ds-fs-base); }
+.ds p { margin: 0; }
+.ds .ds-muted { color: var(--ds-muted); }
+.ds .ds-small { font-size: var(--ds-fs-sm); }
+
+/* Controls */
+.ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--ds-2); block-size: var(--ds-ctl-h); padding: 0 var(--ds-4); border-radius: var(--ds-radius-ctl); border: 1px solid var(--ds-line); background: var(--ds-surface); color: var(--ds-text); font: inherit; font-weight: var(--ds-fw-medium); cursor: pointer; text-decoration: none; transition: background var(--ds-dur) var(--ds-ease), border-color var(--ds-dur) var(--ds-ease); }
+.ds-btn:hover { border-color: var(--ds-accent); }
+.ds-btn:focus-visible, .ds-input:focus-visible, .ds-card:focus-visible, .ds-kpi:focus-visible { outline: none; box-shadow: var(--ds-focus); }
+.ds-btn.primary { background: var(--ds-text); color: var(--ds-surface); border-color: var(--ds-text); }
+.ds-btn.accent { background: var(--ds-accent); color: var(--ds-on-accent); border-color: var(--ds-accent); }
+.ds-btn.ghost { background: transparent; border-color: transparent; color: var(--ds-muted); }
+.ds-btn.big { block-size: 64px; font-size: var(--ds-fs-title); border-radius: var(--ds-radius-card); }
+.ds-input { block-size: var(--ds-ctl-h); padding: 0 var(--ds-3); border-radius: var(--ds-radius-ctl); border: 1px solid var(--ds-line); background: var(--ds-surface); color: var(--ds-text); font: inherit; min-inline-size: 0; }
+
+/* Tags and badges */
+.ds-tag { display: inline-flex; align-items: center; gap: var(--ds-1); padding: 1px var(--ds-2); border-radius: var(--ds-radius-pill); font-size: var(--ds-fs-xs); font-weight: var(--ds-fw-medium); white-space: nowrap; background: var(--ds-surface-2); color: var(--ds-muted); }
+.ds-tag.good { background: var(--ds-good-soft); color: var(--ds-good); }
+.ds-tag.warn { background: var(--ds-warn-soft); color: var(--ds-warn); }
+.ds-tag.crit { background: var(--ds-crit-soft); color: var(--ds-crit); }
+.ds-tag.info { background: var(--ds-info-soft); color: var(--ds-info); }
+.ds-tag.gold { background: var(--ds-cov-gold-soft); color: var(--ds-cov-gold); }
+.ds-tag.ins { background: var(--ds-cov-ins-soft); color: var(--ds-cov-ins); }
+.ds-tag.own { background: var(--ds-cov-own-soft); color: var(--ds-cov-own); }
+.ds[data-theme='vision'] .ds-tag.gold, .ds[data-theme='vision'] .ds-tag.ins, .ds[data-theme='vision'] .ds-tag.own { background: var(--ds-surface-2); }
+.ds-day { font-size: var(--ds-fs-xs); font-weight: var(--ds-fw-bold); padding: 1px var(--ds-2); border-radius: var(--ds-radius-pill); border: 1px solid var(--ds-line); color: var(--ds-text); }
+
+/* Panels and cards */
+.ds-panel { background: var(--ds-surface); border-radius: var(--ds-radius-card); box-shadow: var(--ds-shadow-1); padding: var(--ds-4); }
+.ds-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-3); margin-block-end: var(--ds-3); }
+
+/* Iranian licence plate (three sizes). */
+.ds-plate { --h: 26px; display: inline-flex; align-items: stretch; direction: ltr; block-size: var(--h); border: 1.5px solid var(--ds-plate-ink); border-radius: calc(var(--h) * .16); background: #FFF; color: var(--ds-plate-ink); font-family: var(--ds-font); font-weight: var(--ds-fw-bold); font-size: calc(var(--h) * .58); line-height: 1; overflow: hidden; white-space: nowrap; }
+.ds-plate.sm { --h: 20px; }
+.ds-plate.lg { --h: 40px; }
+.ds-plate-flag { inline-size: calc(var(--h) * .5); background: var(--ds-plate-blue); display: grid; place-items: end center; padding-block-end: 2px; }
+.ds-plate-flag i { display: block; inline-size: 62%; aspect-ratio: 3 / 2; background: linear-gradient(#239F40 33%, #FFF 33% 66%, #DA0000 66%); }
+.ds-plate-main { display: flex; align-items: center; gap: calc(var(--h) * .22); padding: 0 calc(var(--h) * .3); }
+.ds-plate-region { display: grid; place-items: center; border-inline-start: 1.5px solid var(--ds-plate-ink); padding: 0 calc(var(--h) * .22); font-size: calc(var(--h) * .5); }
+.ds-plate.masked .ds-plate-main span:nth-child(3) { letter-spacing: .1em; }
+
+/* Vehicle card: status only as a thin strip on the edge. */
+.ds-card { position: relative; display: grid; gap: var(--ds-1); padding: var(--ds-3) var(--ds-4) var(--ds-3) var(--ds-3); background: var(--ds-surface); border-radius: var(--ds-radius-card); box-shadow: var(--ds-shadow-1); color: inherit; text-decoration: none; transition: box-shadow var(--ds-dur) var(--ds-ease), transform var(--ds-dur) var(--ds-ease); }
+a.ds-card:hover { box-shadow: var(--ds-shadow-2); transform: translateY(-1px); }
+.ds-card::before { content: ''; position: absolute; inset-block: var(--ds-3); inset-inline-start: 0; inline-size: 3px; border-radius: 0 3px 3px 0; background: var(--ds-line); }
+.ds-card.s-good::before { background: var(--ds-good); }
+.ds-card.s-warn::before { background: var(--ds-warn); }
+.ds-card.s-crit::before { background: var(--ds-crit); }
+.ds-card.s-info::before { background: var(--ds-info); }
+.ds-card-top { display: flex; align-items: center; gap: var(--ds-2); flex-wrap: wrap; }
+.ds-card-name { font-size: var(--ds-fs-card); font-weight: var(--ds-fw-bold); }
+.ds-card-push { margin-inline-start: auto; }
+.ds-card-who { display: flex; gap: var(--ds-2); align-items: center; color: var(--ds-text); }
+.ds-card-ids { font-size: var(--ds-fs-xs); color: var(--ds-muted); }
+
+/* Locked stepper */
+.ds-steps { display: flex; gap: var(--ds-1); margin: 0; padding: 0; list-style: none; flex-wrap: wrap; }
+.ds-step { display: inline-flex; align-items: center; gap: var(--ds-2); padding: var(--ds-1) var(--ds-3) var(--ds-1) var(--ds-1); border-radius: var(--ds-radius-pill); font-size: var(--ds-fs-sm); color: var(--ds-muted); background: transparent; border: 1px solid var(--ds-line-soft); }
+.ds-step i { display: grid; place-items: center; inline-size: 20px; block-size: 20px; border-radius: 50%; font-style: normal; font-size: var(--ds-fs-xs); background: var(--ds-surface-2); }
+.ds-step.done { color: var(--ds-good); border-color: transparent; background: var(--ds-good-soft); }
+.ds-step.done i { background: var(--ds-good); color: var(--ds-surface); }
+.ds-step.now { color: var(--ds-text); border-color: var(--ds-accent); font-weight: var(--ds-fw-bold); }
+.ds-step.now i { background: var(--ds-accent); color: var(--ds-on-accent); }
+.ds-step.locked { opacity: .5; }
+
+/* Data table: sticky header, compact; cards on mobile. */
+.ds-table-wrap { overflow: auto; max-block-size: 420px; border-radius: var(--ds-radius-card); box-shadow: var(--ds-shadow-1); background: var(--ds-surface); }
+.ds-table { inline-size: 100%; border-collapse: collapse; font-size: var(--ds-fs-sm); }
+.ds-table th { position: sticky; inset-block-start: 0; z-index: 1; background: var(--ds-surface-2); color: var(--ds-muted); font-weight: var(--ds-fw-medium); text-align: start; padding: var(--ds-2) var(--ds-3); white-space: nowrap; }
+.ds-table th button { all: unset; cursor: pointer; display: inline-flex; gap: var(--ds-1); align-items: center; }
+.ds-table td { padding: var(--ds-2) var(--ds-3); border-block-start: 1px solid var(--ds-line-soft); }
+.ds-table tbody tr:hover { background: var(--ds-surface-2); }
+.ds-table-tools { display: flex; gap: var(--ds-2); align-items: center; justify-content: space-between; margin-block-end: var(--ds-2); flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .ds-table-wrap { max-block-size: none; box-shadow: none; background: transparent; overflow: visible; }
+  .ds-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ds-table, .ds-table tbody { display: grid; gap: var(--ds-2); }
+  .ds-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: var(--ds-1) var(--ds-3); padding: var(--ds-3); border-radius: var(--ds-radius-card); background: var(--ds-surface); box-shadow: var(--ds-shadow-1); }
+  .ds-table td { border: 0; padding: 0; }
+  .ds-table td::before { content: attr(data-label); display: block; color: var(--ds-muted); font-size: var(--ds-fs-xs); }
+}
+
+/* KPI card */
+.ds-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--ds-3); }
+.ds-kpi { display: grid; gap: var(--ds-1); padding: var(--ds-4); background: var(--ds-surface); border-radius: var(--ds-radius-card); box-shadow: var(--ds-shadow-1); color: inherit; text-decoration: none; transition: box-shadow var(--ds-dur) var(--ds-ease); }
+a.ds-kpi:hover { box-shadow: var(--ds-shadow-2); }
+.ds-kpi-label { font-size: var(--ds-fs-sm); color: var(--ds-muted); }
+.ds-kpi-value { font-size: var(--ds-fs-kpi); font-weight: var(--ds-fw-light); line-height: 1.15; letter-spacing: -.01em; }
+.ds-kpi.xl .ds-kpi-value { font-size: var(--ds-fs-kpi-xl); }
+.ds-kpi-delta { font-size: var(--ds-fs-xs); font-weight: var(--ds-fw-medium); }
+.ds-kpi-delta.up { color: var(--ds-good); }
+.ds-kpi-delta.down { color: var(--ds-crit); }
+.ds-kpi-note { font-size: var(--ds-fs-xs); color: var(--ds-muted); }
+
+/* Freshness badge */
+.ds-fresh { display: inline-flex; align-items: center; gap: var(--ds-2); font-size: var(--ds-fs-xs); color: var(--ds-muted); }
+.ds-fresh::before { content: ''; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--ds-good); box-shadow: 0 0 0 3px var(--ds-good-soft); }
+.ds-fresh.stale { color: var(--ds-warn); }
+.ds-fresh.stale::before { background: var(--ds-warn); box-shadow: 0 0 0 3px var(--ds-warn-soft); }
+
+/* Reminder (تذکر) */
+.ds-reminder { display: grid; grid-template-columns: auto 1fr; gap: var(--ds-1) var(--ds-3); padding: var(--ds-3); border-radius: var(--ds-radius-card); background: var(--ds-surface); box-shadow: var(--ds-shadow-1); border-inline-start: 3px solid var(--ds-accent); }
+.ds-reminder-icon { grid-row: span 2; color: var(--ds-accent-ink); padding-block-start: 2px; }
+.ds-reminder-meta { font-size: var(--ds-fs-xs); color: var(--ds-muted); }
+
+/* Empty, loading, error */
+.ds-state { display: grid; justify-items: center; gap: var(--ds-2); padding: var(--ds-8) var(--ds-4); text-align: center; color: var(--ds-muted); border: 1px dashed var(--ds-line); border-radius: var(--ds-radius-card); }
+.ds-state strong { color: var(--ds-text); font-weight: var(--ds-fw-medium); }
+.ds-state.error { border-color: var(--ds-crit); color: var(--ds-crit); background: var(--ds-crit-soft); }
+.ds-skel { display: grid; gap: var(--ds-2); inline-size: 100%; }
+.ds-skel i { display: block; block-size: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--ds-surface-2), var(--ds-line-soft), var(--ds-surface-2)); background-size: 200% 100%; animation: ds-shimmer 1.4s linear infinite; }
+@keyframes ds-shimmer { to { background-position: -200% 0; } }
+
+/* Page templates */
+.ds-page { min-block-size: 100vh; padding: var(--ds-6); display: grid; gap: var(--ds-5); align-content: start; }
+.ds-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--ds-4); flex-wrap: wrap; }
+.ds-summary { font-size: var(--ds-fs-card); color: var(--ds-muted); font-weight: var(--ds-fw-light); }
+.ds-summary b { color: var(--ds-text); font-weight: var(--ds-fw-bold); }
+.ds-grid { display: grid; gap: var(--ds-3); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--ds-2); }
+.ds-swatch { display: grid; gap: var(--ds-1); font-size: var(--ds-fs-xs); }
+.ds-swatch i { display: block; block-size: 44px; border-radius: var(--ds-radius-ctl); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
+@media (max-width: 640px) { .ds-page { padding: var(--ds-4); } }
