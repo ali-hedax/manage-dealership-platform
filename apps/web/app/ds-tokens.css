@@ -1,0 +1,123 @@
+/* ============================================================================================
+   Manage design system — locked tokens (slice S03, CORE-12 part 1; prompt Part B).
+   One source for every colour, size, radius, shadow and duration of the rebuilt interface.
+   Scoped to `.ds` so the live pages (Collision included) are untouched until S05 adopts it.
+   Light = desks (warm ivory). Dark = Vision and TV boards (graphite), via [data-theme="vision"].
+   ============================================================================================ */
+.ds {
+  /* Type: one variable Persian font, Persian digits, tabular figures for numbers. */
+  --ds-font: 'Vazirmatn', system-ui, sans-serif;
+  --ds-fs-xs: 11px;
+  --ds-fs-sm: 12px;
+  --ds-fs-base: 13px;
+  --ds-fs-card: 15px;
+  --ds-fs-title: 18px;
+  --ds-fs-kpi: 28px;
+  --ds-fs-kpi-xl: 40px;
+  --ds-fw-light: 300;
+  --ds-fw-regular: 400;
+  --ds-fw-medium: 500;
+  --ds-fw-bold: 600;
+  --ds-lh: 1.65;
+
+  /* Space (4/8 grid), radius, control sizes, icons. */
+  --ds-1: 4px;
+  --ds-2: 8px;
+  --ds-3: 12px;
+  --ds-4: 16px;
+  --ds-5: 20px;
+  --ds-6: 24px;
+  --ds-8: 32px;
+  --ds-10: 40px;
+  --ds-radius-card: 10px;
+  --ds-radius-ctl: 8px;
+  --ds-radius-pill: 999px;
+  --ds-ctl-h: 34px;
+  --ds-icon: 16px;
+  --ds-icon-stroke: 1.25;
+
+  /* Desk palette (light). */
+  --ds-bg: #FAFAF7;
+  --ds-surface: #FFFFFF;
+  --ds-surface-2: #F5F4EF;
+  --ds-line: #E7E5DF;
+  --ds-line-soft: #EFEDE8;
+  --ds-text: #1B1D22;
+  --ds-muted: #6B6F76;
+  --ds-faint: #8A8E95;
+  --ds-accent: #A8844F;
+  --ds-accent-ink: #7A5E33;
+  --ds-accent-soft: #F4EDE1;
+  --ds-on-accent: #FFFFFF;
+
+  /* Status: meaning only, never decoration. */
+  --ds-good: #2E7D5B;
+  --ds-good-soft: #E6F2EC;
+  --ds-warn: #B7791F;
+  --ds-warn-soft: #FAF0DD;
+  --ds-crit: #B3261E;
+  --ds-crit-soft: #FAE6E4;
+  --ds-info: #3B6E8F;
+  --ds-info-soft: #E5EEF4;
+  /* Coverage tags: one small fixed tag each. */
+  --ds-cov-gold: #8A6A1F;
+  --ds-cov-gold-soft: #F6EED8;
+  --ds-cov-ins: #2D5B86;
+  --ds-cov-ins-soft: #E4EDF6;
+  --ds-cov-own: #4E535B;
+  --ds-cov-own-soft: #EDECE8;
+
+  /* Depth and motion: soft two-layer shadows instead of heavy borders. */
+  --ds-shadow-1: 0 1px 1px rgba(27, 29, 34, .04), 0 2px 6px rgba(27, 29, 34, .05);
+  --ds-shadow-2: 0 1px 2px rgba(27, 29, 34, .05), 0 12px 32px -14px rgba(27, 29, 34, .22);
+  --ds-focus: 0 0 0 2px var(--ds-surface), 0 0 0 4px var(--ds-accent);
+  --ds-dur: 220ms;
+  --ds-ease: cubic-bezier(.2, .7, .2, 1);
+
+  /* Plate (Iranian licence plate proportions 520×110 mm ≈ 4.7:1). */
+  --ds-plate-blue: #1F4FA3;
+  --ds-plate-ink: #111317;
+
+  font-family: var(--ds-font);
+  font-size: var(--ds-fs-base);
+  line-height: var(--ds-lh);
+  color: var(--ds-text);
+  background: var(--ds-bg);
+  font-feature-settings: 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+@media (max-width: 640px) {
+  .ds { --ds-fs-base: 14px; --ds-ctl-h: 40px; }
+}
+
+.ds[data-theme='vision'], .ds [data-theme='vision'] {
+  --ds-bg: #0F1115;
+  --ds-surface: #171A21;
+  --ds-surface-2: #1F232B;
+  --ds-line: #2A2F38;
+  --ds-line-soft: #222731;
+  --ds-text: #ECEDEF;
+  --ds-muted: #9BA1AB;
+  --ds-faint: #737A85;
+  --ds-accent: #C9A46A;
+  --ds-accent-ink: #E3C590;
+  --ds-accent-soft: rgba(201, 164, 106, .12);
+  --ds-on-accent: #14161B;
+  --ds-good: #4FB78A;
+  --ds-good-soft: rgba(79, 183, 138, .13);
+  --ds-warn: #E0A84A;
+  --ds-warn-soft: rgba(224, 168, 74, .13);
+  --ds-crit: #EF6A5F;
+  --ds-crit-soft: rgba(239, 106, 95, .13);
+  --ds-info: #74A7CB;
+  --ds-info-soft: rgba(116, 167, 203, .13);
+  --ds-shadow-1: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 2px 8px rgba(0, 0, 0, .35);
+  --ds-shadow-2: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 18px 40px -16px rgba(0, 0, 0, .7);
+  --ds-focus: 0 0 0 2px var(--ds-bg), 0 0 0 4px var(--ds-accent);
+  color: var(--ds-text);
+  background: var(--ds-bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds *, .ds *::before, .ds *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}
