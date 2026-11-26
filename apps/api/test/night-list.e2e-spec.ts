@@ -13,6 +13,7 @@ import { createHarness, type Client, type Harness } from './harness';
 const SECRET = `test-only-pulse-${'k'.repeat(28)}`;
 const DAY1 = '2025-04-20';
 const DAY2 = '2025-04-21';
+const THURSDAY = '2025-04-24'; // half day in the default work calendar: 08:00–13:00
 
 describe('Nightly list of the reception module', () => {
   let h: Harness;
@@ -107,6 +108,31 @@ describe('Nightly list of the reception module', () => {
     expect(next.rows[0]).toMatchObject({ reason: 'waiting_parts', carried: true, currentStation: 'باتری‌سازی 36', daysIn: 5 });
     expect(next.rows[1]).toMatchObject({ reason: null, carried: false });
     expect(next.missingReasons).toBe(1);
+  });
+
+  it('on a half-day Thursday builds the list at 12:30 and is due at 13:15 (work calendar), not at 18:00', async () => {
+    const before = (await reader.post('/reception/night-list', { day: THURSDAY }).expect(201)).body as NightListPending;
+    expect(before).toMatchObject({ status: 'not_generated', workingDay: true, generatesAt: tehranAt(THURSDAY, '12:30').toISOString(), previousDay: DAY2 });
+    expect((await service.tick(tehranAt(THURSDAY, '12:29'))).generated).toBe(0);
+    expect((await service.tick(tehranAt(THURSDAY, '12:30'))).generated).toBeGreaterThanOrEqual(1);
+    const list = await view(reader, THURSDAY);
+    expect(list).toMatchObject({ status: 'draft', deadline: tehranAt(THURSDAY, '13:15').toISOString(), late: true, previousDay: DAY2, nextDay: null });
+    const [manager] = await db().select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.username, 'night-manager')));
+    expect((await service.tick(tehranAt(THURSDAY, '13:14'))).alerted).toBe(0);
+    expect((await service.tick(tehranAt(THURSDAY, '13:16'))).alerted).toBeGreaterThanOrEqual(1);
+    const late = await db().select().from(notifications).where(and(eq(notifications.userId, manager!.id), eq(notifications.kind, 'night_list_late'), eq(notifications.dedupeKey, `night_list_late:${THURSDAY}`)));
+    expect(late).toHaveLength(1);
+    expect(late[0]!.body).toContain('۱۳:۱۵');
+  });
+
+  it('keeps past lists: each list links to the previous and next day that has one', async () => {
+    expect(await view(reader, DAY1)).toMatchObject({ previousDay: null, nextDay: DAY2 });
+    expect(await view(reader, DAY2)).toMatchObject({ previousDay: DAY1, nextDay: THURSDAY });
+    // A full day keeps 18:00 and 18:45.
+    expect((await view(reader, DAY2)).deadline).toBe(tehranAt(DAY2, '18:45').toISOString());
+    // Friday has no working hours: nothing is built, and the way back to Thursday's list is offered.
+    const friday = (await reader.post('/reception/night-list', { day: '2025-04-25' }).expect(201)).body as NightListPending;
+    expect(friday).toMatchObject({ status: 'not_generated', workingDay: false, previousDay: THURSDAY });
   });
 
   it('builds a draft on request for today only', async () => {

@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import useSWR from 'swr';
 import {
-  NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, NIGHT_LIST_REASONS, NIGHT_LIST_REASON_LABELS, NIGHT_LIST_STATUS_LABELS, formatJalali, toPersianDigits,
+  NIGHT_LIST_REASONS, NIGHT_LIST_REASON_LABELS, NIGHT_LIST_STATUS_LABELS, formatJalali, toPersianDigits,
   type NightListPending, type NightListReason, type NightListRow, type NightListView,
 } from '@manage/shared';
 import { api, errorMessage } from '@/lib/api';
@@ -14,9 +14,13 @@ import { AppIcon } from './AppIcon';
 import { EmptyState } from './EmptyState';
 import { Plate } from './Plate';
 
-// «لیست شب» (reconstruction scenario, owner 2026-11-25): Manage builds it at 18:00 from the open
-// receptions; the receptionist only picks the stay reason (and stations while کسب‌وکار has no
-// technician data); the supervisor sends it by 18:45. Print gives the PDF; Excel comes from the API.
+// «لیست شب» (reconstruction scenario, owner 2026-11-25): Manage builds it half an hour before the end
+// of the working day (18:00, or 12:30 on a half-day Thursday) from the open receptions; the
+// receptionist only picks the stay reason (and stations while کسب‌وکار has no technician data); the
+// supervisor sends it within 15 minutes after closing. Past lists stay and are browsed with
+// «لیست قبل / بعد». Print gives the PDF; Excel comes from the API.
+/** «۱۸:۴۵» from an ISO time, on the Tehran clock. */
+const clock = (iso: string) => new Date(iso).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Tehran' });
 
 type Data = NightListView | NightListPending;
 const isList = (d: Data | undefined): d is NightListView => !!d && d.status !== 'not_generated';
@@ -50,6 +54,13 @@ export function NightList() {
           <h1 id="night-title">لیست شب</h1>
           <p className="desk-sub">{data ? `${formatJalali(data.day + 'T12:00:00Z')}${isList(data) ? ` · ${NIGHT_LIST_STATUS_LABELS[data.status]} · ${faNum(data.rows.length)} خودرو` : ''}` : 'در حال خواندن…'}</p>
         </div>
+        {data && (
+          <nav className="row no-print night-nav" aria-label="لیست شب روزهای دیگر">
+            {data.previousDay ? <Link className="btn btn-sm" href={`/reception/night?day=${data.previousDay}`}>→ لیست قبل ({formatJalali(data.previousDay + 'T12:00:00Z')})</Link> : <span className="btn btn-sm" aria-disabled="true">لیست قبلی نیست</span>}
+            {day && <Link className="btn btn-sm" href="/reception/night">امروز</Link>}
+            {data.nextDay && <Link className="btn btn-sm" href={`/reception/night?day=${data.nextDay}`}>لیست بعد ({formatJalali(data.nextDay + 'T12:00:00Z')}) ←</Link>}
+          </nav>
+        )}
         {isList(data) && (
           <div className="row no-print">
             <button type="button" className="btn btn-sm" onClick={() => window.print()}><AppIcon name="file" /> چاپ / PDF</button>
@@ -60,7 +71,7 @@ export function NightList() {
       {error && <p role="alert" className="m-error">{errorMessage(error)}</p>}
       {data && !isList(data) && (
         <div className="callout">
-          <p>{data.workingDay ? `لیست امروز ساعت ${toPersianDigits(NIGHT_LIST_GENERATE_AT)} از پذیرش‌های باز ساخته می‌شود.` : 'امروز روز کاری نیست و لیست شب ساخته نمی‌شود.'}</p>
+          <p>{data.workingDay ? `لیست ${day ? 'این روز' : 'امروز'} ساعت ${clock(data.generatesAt)} از پذیرش‌های باز ساخته می‌شود.` : `${day ? 'این روز' : 'امروز'} روز کاری نیست و لیست شب ساخته نمی‌شود.`}</p>
           {can('reception.night_list_send') && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => run(() => api<Data>('/reception/night-list/generate', { body: day ? { day } : {} }), 'پیش‌نویس ساخته شد.')}>ساخت پیش‌نویس همین حالا</button>}
         </div>
       )}
@@ -69,7 +80,7 @@ export function NightList() {
           <div className={`callout${data.late ? ' warn' : ''}`} role="status">
             {data.status === 'sent'
               ? <span>ارسال‌شده {data.sentAt ? formatJalali(data.sentAt, { time: true }) : ''}{data.sentByName ? ` توسط ${data.sentByName}` : ''}</span>
-              : <span>{data.late ? `مهلت ارسال (ساعت ${toPersianDigits(NIGHT_LIST_DEADLINE)}) گذشته است.` : `مهلت ارسال: ساعت ${toPersianDigits(NIGHT_LIST_DEADLINE)}.`}</span>}
+              : <span>{data.late ? `مهلت ارسال (ساعت ${clock(data.deadline)}) گذشته است.` : `مهلت ارسال: ساعت ${clock(data.deadline)}.`}</span>}
             {data.missingReasons > 0 && <span> {faNum(data.missingReasons)} خودرو هنوز علت ماندن ندارد.</span>}
             {data.status === 'draft' && can('reception.night_list_send') && (
               <button type="button" className="btn btn-sm btn-primary no-print" disabled={busy} onClick={() => run(() => api<Data>(`/reception/night-list/${data.id}/send`, { body: { expectedVersion: data.version } }), 'لیست شب ارسال شد.')}>تأیید و ارسال لیست</button>

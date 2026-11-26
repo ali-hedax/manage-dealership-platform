@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt } from 'drizzle-orm';
 import {
-  compareNightRows, daysInShop, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, nightListLate, nightListMissing, nightListSheet, normalizeRoles, shortVehicleName, toPersianDigits,
+  compareNightRows, daysInShop, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, nightListLate, nightListTimes, nightListMissing, nightListSheet, normalizeRoles, shortVehicleName, toPersianDigits,
   type NightListItemInput, type NightListPending, type NightListReason, type NightListRow, type NightListStatus, type NightListView,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
@@ -17,10 +17,11 @@ import { writeWorkbook } from '../parts/xlsx';
 import { calendarAt } from '../workshop/work-calendar';
 
 /**
- * «لیست شب» (reconstruction scenario, owner 2026-11-25). At 18:00 Tehran on a working day the open
- * receptions become a draft list; the receptionist picks one stay reason per vehicle (the reason of
- * the previous list is copied in), and the reception supervisor sends it. Still a draft at 18:45:
- * the service manager is told once. Nothing here writes to کسب‌وکار; receptions stay read only.
+ * «لیست شب» (reconstruction scenario, owner 2026-11-25). Half an hour before the end of the working
+ * day in the work calendar (18:00 on a full day, 12:30 on a half-day Thursday) the open receptions
+ * become a draft list; the receptionist picks one stay reason per vehicle (the reason of the previous
+ * list is copied in), and the reception supervisor sends it. Still a draft 15 minutes after closing
+ * (18:45 / 13:15): the service manager is told once. Nothing here writes to کسب‌وکار; receptions stay read only.
  */
 @Injectable()
 export class NightListService implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -53,21 +54,36 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
     if (!this.cfg.PULSE_ENABLED) throw badRequest('RECEPTION_DISABLED', 'بخش پذیرش و ترخیص هنوز روی این سرور فعال نشده است.');
   }
 
-  private async workingDay(tenantId: string, day: string) {
+  /**
+   * Working day or not, and the day's build and send-by times from the work calendar in force that
+   * day (a half-day Thursday closes earlier, so its list is built earlier).
+   */
+  private async schedule(tenantId: string, day: string): Promise<{ working: boolean; generateAt: Date; deadline: Date; deadlineText: string }> {
     const revision = await calendarAt(this.db, tenantId, tehranAt(day, '12:00').toISOString());
-    return isWorkingDay(day, revision.calendar);
+    const times = nightListTimes(day, revision.calendar);
+    const working = isWorkingDay(day, revision.calendar) && !!times;
+    const generateAt = times?.generateAt ?? NIGHT_LIST_GENERATE_AT;
+    const deadlineText = times?.deadline ?? NIGHT_LIST_DEADLINE;
+    return { working, generateAt: tehranAt(day, generateAt), deadline: tehranAt(day, deadlineText), deadlineText };
   }
 
-  /** Every minute: today's draft after 18:00 on a working day, and the 18:45 alert once. Idempotent. */
+  /** The nearest earlier and later days that have a list, for browsing past lists. */
+  private async neighbours(tenantId: string, day: string): Promise<{ previousDay: string | null; nextDay: string | null }> {
+    const [prev] = await this.db.select({ day: nightLists.day }).from(nightLists).where(and(eq(nightLists.tenantId, tenantId), lt(nightLists.day, day))).orderBy(desc(nightLists.day)).limit(1);
+    const [next] = await this.db.select({ day: nightLists.day }).from(nightLists).where(and(eq(nightLists.tenantId, tenantId), gt(nightLists.day, day))).orderBy(asc(nightLists.day)).limit(1);
+    return { previousDay: prev?.day ?? null, nextDay: next?.day ?? null };
+  }
+
+  /** Every minute: today's draft from the day's build time on a working day, and the late alert once. Idempotent. */
   async tick(now = new Date()): Promise<{ generated: number; alerted: number }> {
     const day = tehranDate(now);
     let generated = 0;
     let alerted = 0;
-    if (now < tehranAt(day, NIGHT_LIST_GENERATE_AT)) return { generated, alerted };
     for (const t of await this.db.select({ id: tenants.id, isTest: tenants.isTest }).from(tenants)) {
-      if (!(await this.workingDay(t.id, day))) continue;
+      const s = await this.schedule(t.id, day);
+      if (!s.working || now < s.generateAt) continue;
       if (await this.generate(t.id, day, null, t.isTest, now)) generated += 1;
-      alerted += await this.alertLate(t.id, day, now);
+      alerted += await this.alertLate(t.id, day, now, s.deadline, s.deadlineText);
     }
     return { generated, alerted };
   }
@@ -107,9 +123,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
     });
   }
 
-  /** Still a draft at 18:45: one notification to each active service manager (the owner when there is none). */
-  private async alertLate(tenantId: string, day: string, now: Date): Promise<number> {
-    const deadline = tehranAt(day, NIGHT_LIST_DEADLINE);
+  /** Still a draft at the send-by time: one notification to each active service manager (the owner when there is none). */
+  private async alertLate(tenantId: string, day: string, now: Date, deadline: Date, deadlineText: string): Promise<number> {
     if (now < deadline) return 0;
     const staff = await this.db.select({ id: users.id, roles: users.roles, isOwner: users.isOwner }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.isActive, true)));
     const managers = staff.filter((u) => normalizeRoles(u.roles).includes('service_manager')).map((u) => u.id);
@@ -122,7 +137,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       if (!claimed) return 0;
       const rows = await tx.insert(notifications).values(recipients.map((userId) => ({
         id: newId(), tenantId, userId, kind: 'night_list_late', title: 'لیست شب هنوز ارسال نشده است',
-        body: `مهلت ارسال لیست شب (ساعت ${toPersianDigits(NIGHT_LIST_DEADLINE)}) گذشت.`, link: '/reception/night', dedupeKey: `night_list_late:${day}`, urgent: true,
+        body: `مهلت ارسال لیست شب (ساعت ${toPersianDigits(deadlineText)}) گذشت.`, link: '/reception/night', dedupeKey: `night_list_late:${day}`, urgent: true,
       }))).onConflictDoNothing().returning({ id: notifications.id });
       return rows.length;
     });
@@ -135,7 +150,10 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
     const d = day ?? tehranDate(now);
     const [list] = await this.db.select({ l: nightLists, sentByName: users.displayName }).from(nightLists).leftJoin(users, eq(users.id, nightLists.sentBy))
       .where(and(eq(nightLists.tenantId, tenantId), eq(nightLists.day, d)));
-    if (!list) return { day: d, status: 'not_generated', generatesAt: tehranAt(d, NIGHT_LIST_GENERATE_AT).toISOString(), workingDay: await this.workingDay(tenantId, d) };
+    if (!list) {
+      const s = await this.schedule(tenantId, d);
+      return { day: d, status: 'not_generated', generatesAt: s.generateAt.toISOString(), workingDay: s.working, ...(await this.neighbours(tenantId, d)) };
+    }
     return this.render(tenantId, list.l, list.sentByName ?? null, now);
   }
 
@@ -154,7 +172,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       const text = [x.description || x.code || 'اجرت', x.state && `(${x.state})`].filter(Boolean).join(' ');
       labourOf.set(x.receptionId, [...(labourOf.get(x.receptionId) ?? []), text]);
     }
-    const at = tehranAt(l.day, NIGHT_LIST_GENERATE_AT);
+    const s = await this.schedule(tenantId, l.day);
+    const at = s.generateAt;
     const rows: NightListRow[] = items.map(({ i, r, setByName }) => ({
       id: i.id,
       version: i.version,
@@ -175,15 +194,16 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       setByName: setByName ?? null,
       setAt: i.setAt?.toISOString() ?? null,
     })).sort(compareNightRows);
-    const deadline = tehranAt(l.day, NIGHT_LIST_DEADLINE);
+    const deadline = s.deadline;
     const status = l.status as NightListStatus;
     return {
       id: l.id, day: l.day, status, version: l.version, generatedAt: l.generatedAt.toISOString(), sentAt: l.sentAt?.toISOString() ?? null, sentByName,
       deadline: deadline.toISOString(), late: nightListLate(status, deadline, now), missingReasons: nightListMissing(rows), rows,
+      ...(await this.neighbours(tenantId, l.day)),
     };
   }
 
-  /** Draft now (before 18:00 or after a missed minute) by the person who sends the list. */
+  /** Draft now (before the build time or after a missed minute) by the person who sends the list. */
   async generateNow(actor: Actor, day?: string): Promise<NightListView | NightListPending> {
     this.ensureActive();
     const d = day ?? tehranDate(new Date());
