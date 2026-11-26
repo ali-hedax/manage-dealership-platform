@@ -21,3 +21,22 @@ test('S03 design system: components in both themes', async ({ page }) => {
   await expect(page.getByRole('img', { name: /پلاک/ }).first()).toBeVisible();
   await expect(page.getByRole('list', { name: 'مراحل پرونده' }).first()).toBeVisible();
 });
+
+// S04: the seven key screens. Desk screens at 1440 and 390; TV boards also at 1920×1080.
+const DESK: [number, number][] = [[1440, 900], [390, 844]];
+const TV: [number, number][] = [[1920, 1080], [1440, 900], [390, 844]];
+const SCREENS: [string, [number, number][]][] = [
+  ['vision', DESK], ['vision-tv', TV], ['special-aid', DESK], ['dispatch', [[1440, 900], [1024, 768], [390, 844]]],
+  ['technician', [[390, 844], [1440, 900]]], ['waiting-tv', TV], ['vehicle', DESK], ['shop-floor', TV],
+];
+for (const [name, sizes] of SCREENS) {
+  test(`S04 design preview: ${name}`, async ({ page }) => {
+    await shoot(page, `/design-preview/${name}`, name, sizes);
+  });
+}
+
+test('S04 design preview: index lists the seven screens', async ({ page }) => {
+  await page.goto('/design-preview');
+  await expect(page.getByRole('link')).toHaveCount(9);
+  await page.screenshot({ path: `${DIR}/index-1440.png`, fullPage: true });
+});
