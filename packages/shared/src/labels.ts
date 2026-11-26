@@ -405,3 +405,15 @@ export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
   resolved: 'رفع شد',
   dismissed: 'اختلاف واقعی نبود',
 };
+
+/**
+ * Positions of the reconstruction scenario (spec 29.1). They are job titles — labels beside the
+ * name, not permissions; access still follows the six roles. Offered as quick picks.
+ */
+export const JOB_TITLE_PRESETS = [
+  'مدیر عامل', 'مدیر نمایندگی', 'مدیر خدمات', 'مدیر مالی',
+  'سرپرست پذیرش', 'پذیرشگر', 'مسئول ترخیص',
+  'سرپرست تصادفات', 'کارشناس تصادفات', 'مسئول تأمین قطعه', 'کارشناس امداد ویژه',
+  'سرپرست انبار', 'انباردار', 'سرپرست فنی', 'کارشناس فنی',
+  'کارشناس برنامه‌ریزی', 'کارشناس CRM',
+] as const;

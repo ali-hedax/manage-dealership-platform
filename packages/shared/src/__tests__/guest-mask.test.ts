@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { maskForGuest, maskPersonName, maskVehicleId } from '../index';
+import { isGuestOnlyViewer, maskForGuest, maskPersonName, maskVehicleId, redactText } from '../index';
 
 test('names keep only initials; VIN and chassis keep the last four characters', () => {
   assert.equal(maskPersonName(' مشتری  ساختگی '), 'م… س…');
@@ -29,4 +29,20 @@ test('a guest answer hides contact data, names, identifiers and amounts deep ins
   assert.deepEqual(masked.admission, { chassis: '••••2345', receptionist: 'پذیرشگر', finalCostRial: null, amount: null });
   assert.deepEqual(masked.customer, { name: 'م… س…', mobile: null });
   assert.equal(answer.items[0]!.vehicle.customerName, 'مشتری ساختگی', 'the original is not changed');
+});
+
+test('a chassis or mobile written inside free text is masked; ids, codes and plates stay (spec 29.7)', () => {
+  assert.equal(redactText('کارت پذیرش TESTVIN0000000001 — تماس با 09000000001'), 'کارت پذیرش •••••••••••••0001 — تماس با 0900***0001');
+  assert.equal(redactText('card-AAA12345.png'), 'card-••••2345.png');
+  assert.equal(redactText('قطعهٔ 00717171، امداد 0077001، پلاک 11 ب 111 - 11'), 'قطعهٔ 00717171، امداد 0077001، پلاک 11 ب 111 - 11');
+  assert.equal(redactText('0f8c6a2e-1b3d-4c5e-9f00-a1b2c3d4e5f6'), '0f8c6a2e-1b3d-4c5e-9f00-a1b2c3d4e5f6', 'a lower-case UUID is not a chassis');
+  const m = maskForGuest({ note: 'شاسی TESTVIN0000000001', wage: 100, totalPrice: 5, prices: '7', count: 3 });
+  assert.deepEqual(m, { note: 'شاسی •••••••••••••0001', wage: null, totalPrice: null, prices: null, count: 3 });
+});
+
+test('only a guest-only session is masked', () => {
+  assert.equal(isGuestOnlyViewer(['guest']), true);
+  assert.equal(isGuestOnlyViewer(['guest'], true), false);
+  assert.equal(isGuestOnlyViewer(['guest', 'accident_expert']), false);
+  assert.equal(isGuestOnlyViewer([]), false);
 });

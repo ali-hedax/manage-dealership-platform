@@ -122,6 +122,7 @@ export class TechniciansService {
         pinHash: await hashPassword(input.pin),
         devicePasswordHash: input.devicePassword ? await hashPassword(input.devicePassword) : null,
         roles: [input.role],
+        accessExpiresAt: input.accessExpiresAt ? new Date(input.accessExpiresAt) : null,
         isActive: true,
         activatedAt: new Date(),
         isTest: actor.user.isTestTenant,

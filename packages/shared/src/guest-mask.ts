@@ -2,6 +2,14 @@
 // read only, and the customer's mobile, the owner's full name, the full chassis/VIN and amounts
 // are hidden. The API applies this to every JSON answer of a guest-only session, so a screen added
 // later cannot leak them by forgetting a check. Plates and part names stay visible.
+// Owner decision: spec section 29.7. A chassis or mobile written inside free text (notes, titles,
+// file names) is masked too.
+import { maskPhone } from './text';
+
+/** A guest-only session (an owner or a staff member who also holds an operational role is not masked). */
+export function isGuestOnlyViewer(roles: readonly string[], isOwner = false): boolean {
+  return !isOwner && roles.length > 0 && roles.every((r) => r === 'guest');
+}
 
 const NAME_KEYS = new Set(['customername', 'ownername', 'fullname', 'deliverername', 'recipientname']);
 const ID_KEYS = new Set(['vin', 'chassis', 'chassisno', 'vinkey']);
@@ -20,8 +28,19 @@ export function maskVehicleId(value: string): string {
   return v.length <= 4 ? '••••' : `${'•'.repeat(Math.min(v.length - 4, 13))}${v.slice(-4)}`;
 }
 
-/** Rial amounts by naming convention (…Rial), and the few plain amount fields; counts such as `total` stay. */
-const isAmountKey = (key: string) => /rial$/i.test(key) || /^(amount|price|unitprice|cost)$/i.test(key);
+/** Rial amounts by naming convention (…Rial, …Price, …Cost), and the few plain amount fields; counts such as `total` stay. */
+const isAmountKey = (key: string) => /rial$/i.test(key) || /^(amount|price|unitprice|cost|wage|prices)$/i.test(key) || /[a-z](Price|Cost)$/.test(key);
+
+// 17-character VIN or ISACO 8-character chassis (letters and digits, upper case). Upper case only
+// keeps lower-case UUIDs untouched; digit-only part and request codes never match.
+const VIN_TOKEN = /\b(?=[A-Z0-9]{17}\b)(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)[A-Z0-9]{17}\b|\b(?=[A-Z0-9]{8}\b)(?=[A-Z0-9]*[A-Z])(?=(?:[A-Z]*\d){4})[A-Z0-9]{8}\b/g;
+// Iranian mobile numbers in Latin or Persian digits, with or without +98.
+const MOBILE_TOKEN = /(?<![0-9۰-۹])(?:\+98|0098|[0۰])[9۹][0-9۰-۹]{9}(?![0-9۰-۹])/g;
+
+/** Masks a chassis/VIN or mobile number written inside free text (notes, titles, file names). */
+export function redactText(value: string): string {
+  return value.replace(VIN_TOKEN, (m) => maskVehicleId(m)).replace(MOBILE_TOKEN, (m) => maskPhone(m) ?? '');
+}
 
 /** A deep copy of a JSON-like answer with guest-hidden fields masked. Dates and non-plain objects are kept. */
 export function maskForGuest<T>(value: T): T {
@@ -42,6 +61,7 @@ function walk(value: unknown, key: string, parent: string): unknown {
     if (ID_KEYS.has(k)) return maskVehicleId(value);
     if (HIDDEN_KEYS.has(k)) return null;
   }
-  if (typeof value === 'number' && isAmountKey(key)) return null;
+  if ((typeof value === 'number' || (typeof value === 'string' && /^-?[0-9]+$/.test(value))) && isAmountKey(key)) return null;
+  if (typeof value === 'string' && value) return redactText(value);
   return value;
 }

@@ -1,5 +1,5 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor, StreamableFile } from '@nestjs/common';
-import { maskForGuest } from '@manage/shared';
+import { isGuestOnlyViewer, maskForGuest } from '@manage/shared';
 import { map, type Observable } from 'rxjs';
 import type { AuthedRequest } from '../auth/auth.types';
 import { forbidden } from './errors';
@@ -15,7 +15,7 @@ import { forbidden } from './errors';
 export class GuestMaskInterceptor implements NestInterceptor {
   intercept(ctx: ExecutionContext, next: CallHandler): Observable<unknown> {
     const user = ctx.switchToHttp().getRequest<AuthedRequest>().user;
-    const guestOnly = !!user && !user.isOwner && user.roles.length > 0 && user.roles.every((r) => r === 'guest');
+    const guestOnly = !!user && isGuestOnlyViewer(user.roles, user.isOwner);
     if (!guestOnly) return next.handle();
     return next.handle().pipe(map((body: unknown) => {
       if (body instanceof StreamableFile || Buffer.isBuffer(body) || body instanceof Uint8Array) throw forbidden('دسترسی مهمان فایل خروجی ندارد');
