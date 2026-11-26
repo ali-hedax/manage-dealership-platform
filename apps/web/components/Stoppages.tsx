@@ -75,7 +75,7 @@ export function StoppageList() {
           </button>
         ))}
       </nav>
-      <label className="m-search stp-search"><AppIcon name="search" /><input className="input" type="search" placeholder="شاسی، شمارهٔ اعلام، نام مالک یا شمارهٔ پذیرش" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+      <label className="m-search stp-search"><AppIcon name="search" /><input type="search" aria-label="جست‌وجوی خودروی متوقف" placeholder="شاسی، شمارهٔ اعلام، نام مالک یا شمارهٔ پذیرش" value={q} onChange={(e) => setQ(e.target.value)} /></label>
       {error && <p className="m-error" role="alert">{errorMessage(error)}</p>}
       {!data && !error && <div className="stp-grid" aria-busy="true">{[1, 2, 3].map((i) => <div key={i} className="stp-card stp-skel" />)}</div>}
       {data && !data.items.length && <p className="m-empty">{q ? 'موردی با این جست‌وجو پیدا نشد.' : view === 'review' ? 'موردی برای بررسی نیست.' : view === 'archive' ? 'هنوز توقفی خاتمه نیافته است.' : data.lastImport ? 'هیچ خودرویی توقف فعال ندارد.' : 'برای شروع، گزارش توقف خودرو را از کسب‌وکار بگیرید و همین‌جا بارگذاری کنید.'}</p>}
