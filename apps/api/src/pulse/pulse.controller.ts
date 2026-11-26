@@ -45,6 +45,7 @@ export class PulseController {
 
 const versionReason = receptionExternalCancelSchema;
 const invoiceSchema = receptionInvoiceSchema;
+const labourCatalogInput = z.object({ csv: z.string().min(1).max(1_000_000), expectedVersion: z.number().int().nonnegative() }).strict();
 
 /** «پذیرش و ترخیص»: read-only folders from کسب‌وکار plus outside work and notes recorded in Manage. Search is POSTed to keep VINs out of URLs. */
 @Controller('reception')
@@ -53,6 +54,14 @@ export class ReceptionController {
 
   @RequirePermissions('reception.read', 'integration.manage') @Get('labour-review')
   labourReview(@CurrentActor() actor: Actor) { return this.reception.labourReview(actor); }
+
+  @RequirePermissions('settings.manage') @Get('labour-catalog')
+  labourCatalog(@CurrentActor() actor: Actor) { return this.reception.labourCatalogInfo(actor); }
+
+  @RequirePermissions('settings.manage') @Post('labour-catalog')
+  importLabourCatalog(@CurrentActor() actor: Actor, @Body(new ZodPipe(labourCatalogInput)) body: z.infer<typeof labourCatalogInput>) {
+    return this.reception.importLabourCatalog(actor, body);
+  }
 
   /** «لیست شب» of a Tehran day (scenario 2026-11-25). Declared before ':id'. */
   @RequirePermissions('reception.read') @Post('night-list')

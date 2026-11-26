@@ -5,7 +5,7 @@ import { tehranAt } from '../src/daily-reports/daily-time';
 import { auditEvents, nightLists, notifications, receptionRepairs, receptions, tenants, users } from '../src/db/schema';
 import { DEMO_TENANT_CODE } from '../src/demo/demo-seed.service';
 import { NightListService } from '../src/pulse/night-list.service';
-import { admissionKey } from '../src/pulse/pulse-map';
+import { admissionKey, mapRepair } from '../src/pulse/pulse-map';
 import { createHarness, type Client, type Harness } from './harness';
 
 // «لیست شب» (reconstruction scenario, owner 2026-11-25). Fixed past working days on the Tehran
@@ -157,7 +157,7 @@ describe('Nightly list of the reception module', () => {
       .toContainEqual(expect.objectContaining({ receptionId: arriving }));
     await service.tick(tehranAt(day, '18:00'));
     let draft = await view(admin, day);
-    expect(draft.rows.find((r) => r.receptionId === arriving)?.labour).toEqual(['نام اجرت در منبع مشخص نیست (باز)']);
+    expect(draft.rows.find((r) => r.receptionId === arriving)?.labour).toEqual(['کد اجرت ناشناخته (7777) (باز)']);
     expect(draft.rows.some((r) => r.receptionId === afterCutoff)).toBe(false);
     expect(draft.physicalVehicleCount).toBe(draft.rows.length - 1);
     const row = draft.rows.find((r) => r.receptionId === arriving)!;
@@ -190,5 +190,34 @@ describe('Nightly list of the reception module', () => {
     expect(historical.rows).toContainEqual(expect.objectContaining({ id: row.id, reason: 'waiting_parts', labour: ['نامشخص'] }));
     expect(historical.rows.some((r) => r.receptionId === sameVehicle)).toBe(false);
     expect(historical.rows.flatMap((r) => r.labour).every((l) => l === 'نامشخص')).toBe(true);
+  });
+
+  it('resolves exact text catalog keys for synthetic Pulse lines and flags unmatched codes', async () => {
+    const day = '2025-04-29';
+    const id = await reception(8, tehranAt(day, '09:00'));
+    for (const [index, code] of ['۰۰ ۷۲', '72', 72, '٠١ aي‌ك', '۰۷۲', '۰۲ z'].entries()) {
+      const line = mapRepair({ DrerRer: `fixture-${index}`, DrerGrprRpr: code, DrerDesc: code });
+      await db().insert(receptionRepairs).values({
+        id: newId(), tenantId, receptionId: id, kasbLineId: line.lineId, code: line.code,
+        description: line.description, official: line.official, rowHash: line.rowHash, isTest: true,
+      });
+    }
+    await service.tick(tehranAt(day, '18:00'));
+    const before = await view(reader, day);
+    expect(before.rows.find((r) => r.receptionId === id)?.labour).toContain('کد اجرت ناشناخته (۰۰ ۷۲)');
+    expect(before).toMatchObject({ unmatchedLabourCount: 6 });
+    const csv = 'code,name\n" ۰۰۷۲ ",تنظیم ساختگی\n72,تعویض ساختگی\n01Aیک,بازدید ساختگی';
+    await reader.post('/reception/labour-catalog', { csv, expectedVersion: 0 }).expect(403);
+    await admin.post('/reception/labour-catalog', { csv: csv + '\n۰۰ ۷۲,نام متعارض', expectedVersion: 0 }).expect(422);
+    await admin.post('/reception/labour-catalog', { csv, expectedVersion: 0 }).expect(201);
+    await admin.post('/reception/labour-catalog', { csv, expectedVersion: 0 }).expect(409);
+    const after = await view(reader, day);
+    expect(after).toMatchObject({ unmatchedLabourCount: 2 });
+    const labour = after.rows.find((r) => r.receptionId === id)!.labour;
+    expect(labour).toEqual(expect.arrayContaining(['تنظیم ساختگی', 'بازدید ساختگی', 'کد اجرت ناشناخته (۰۷۲)', 'کد اجرت ناشناخته (۰۲ z)']));
+    expect(labour.filter((name) => name === 'تعویض ساختگی')).toHaveLength(2);
+    const sent = (await admin.post(`/reception/night-list/${after.id}/send`, { expectedVersion: after.version }).expect(201)).body as NightListView;
+    await admin.post('/reception/labour-catalog', { csv: 'code,name\n۰۷۲,نام جدید ساختگی', expectedVersion: 1 }).expect(201);
+    expect(await view(reader, day)).toMatchObject({ rows: sent.rows, unmatchedLabourCount: 2 });
   });
 });

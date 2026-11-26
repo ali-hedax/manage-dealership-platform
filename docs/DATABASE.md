@@ -15,6 +15,8 @@ Additive migration `0037_night_list` (down: `apps/api/src/db/down/0037_night_lis
 
 Tenant settings (no migration): `settings.receptionServiceLaborCodes` — labour codes that make a reception «سرویس ادواری و روغن» in the daily statistics.
 
+`settings.receptionLabourCatalog` stores a versioned, tenant-wide map of exact normalized text code to approved name. The admin CSV import replaces this map atomically and records the before/after version and row count in the audit log. There is no schema migration. New approved night-list snapshots freeze each row's unresolved-code count alongside its display labels.
+
 ## 0036: Manage Pulse and the reception module (owner, 2026-11-23; spec section 26)
 
 Additive migration `0036_manage_pulse` (down: `apps/api/src/db/down/0036_manage_pulse.sql`, drops only these tables). No existing table or row changes.

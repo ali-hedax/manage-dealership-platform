@@ -5,6 +5,7 @@
 // technician data); the reception supervisor sends it within 15 minutes after closing (18:45 /
 // 13:15), otherwise the service manager is told. Warnings never block (spec section 2).
 import type { WorkCalendar } from './workshop';
+import { normalizeLaborCode } from './reception-stats';
 
 /** Defaults of a full working day (ends 18:30); a day's real times come from `nightListTimes`. */
 export const NIGHT_LIST_GENERATE_AT = '18:00';
@@ -71,8 +72,10 @@ export interface NightListRow {
   isOpen: boolean;
   /** Linked to an accident case (the accident module keeps its own plan). */
   accident: boolean;
-  /** Labour lines of the card as written in کسب‌وکار (description and state). */
+  /** Labour labels and states at the time the list is rendered or approved. */
   labour: string[];
+  /** Missing on snapshots written before code matching was introduced. */
+  unmatchedLabourCount?: number;
   currentStation: string | null;
   nextStations: string | null;
   reason: NightListReason | null;
@@ -97,6 +100,7 @@ export interface NightListView {
   deadline: string;
   late: boolean;
   missingReasons: number;
+  unmatchedLabourCount: number | null;
   historicalIncomplete: boolean;
   excluded: NightListRow[];
   physicalVehicleCount: number | null;
@@ -112,7 +116,7 @@ const labourLetter = new RegExp(LABOUR_LETTER_PATTERN, 'u');
 
 export function officialLabourName(description: string | null, code: string | null): string {
   const name = description?.trim();
-  return name && name !== code?.trim() && labourLetter.test(name)
+  return name && normalizeLaborCode(name) !== normalizeLaborCode(code ?? '') && labourLetter.test(name)
     ? name
     : UNKNOWN_LABOUR_NAME;
 }

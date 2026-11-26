@@ -121,6 +121,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/reception/:id` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/contractors` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/invoices/:documentId` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/reception/labour-catalog` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/labour-review` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/night-list/:id/excel` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
@@ -266,6 +267,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/reception/external-work/:id/cancel` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/external-work/:id/invoices` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/external-work/:id` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/reception/labour-catalog` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/night-list/:id/presence` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/night-list/:id/send` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/night-list/generate` | [source](../apps/api/src/pulse/pulse.controller.ts) |

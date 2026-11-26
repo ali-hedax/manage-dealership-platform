@@ -80,6 +80,7 @@ export function NightList() {
         <button className="btn btn-sm" type="submit" disabled={!lookup}>یافتن لیست</button>
       </form>
       {can('integration.manage') && <LabourReview />}
+      {can('settings.manage') && <LabourCatalogUpload onImported={() => { void mutate(); }} />}
       {error && <p role="alert" className="m-error">{errorMessage(error)}</p>}
       {data && !isList(data) && (
         <div className="callout">
@@ -96,6 +97,7 @@ export function NightList() {
               ? <span>ارسال‌شده {data.sentAt ? formatJalali(data.sentAt, { time: true }) : ''}{data.sentByName ? ` توسط ${data.sentByName}` : ''}</span>
               : <span>{data.late ? `مهلت ارسال (ساعت ${clock(data.deadline)}) گذشته است.` : `مهلت ارسال: ساعت ${clock(data.deadline)}.`}</span>}
             {data.missingReasons > 0 && <span> {faNum(data.missingReasons)} خودرو هنوز علت ماندن ندارد.</span>}
+            {data.unmatchedLabourCount != null && <span> · {faNum(data.unmatchedLabourCount)} ردیف با کد اجرت ناشناخته</span>}
             {data.status === 'draft' && can('reception.night_list_send') && (
               <div className="row no-print">
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => run(() => api<Data>('/reception/night-list/generate', { body: { day: data.day } }), 'پیش‌نویس بازتطبیق شد.')}>بازتطبیق پیش‌نویس</button>
@@ -131,6 +133,61 @@ export function NightList() {
   );
 }
 
+function LabourCatalogUpload({ onImported }: { onImported: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [failure, setFailure] = useState('');
+  const { data, error, mutate } = useSWR<{ count: number; version: number }>(open ? '/reception/labour-catalog' : null, fetcher);
+  return <details className="callout no-print" onToggle={(e) => setOpen(e.currentTarget.open)}>
+    <summary id="labour-catalog-title">مرجع کد و نام اجرت</summary>
+    <p id="labour-catalog-help">فایل CSV با کدگذاری UTF-8 و ستون‌های <bdi>code,name</bdi> را انتخاب کنید. ستون کد را متنی نگه دارید تا صفرهای ابتدایی حفظ شوند. بارگذاری، تمام فهرست فعلی را جایگزین می‌کند.</p>
+    {error && <p role="alert" className="m-error">{errorMessage(error)}</p>}
+    {data && <p>{faNum(data.count)} کد در مرجع نمایندگی ثبت شده است.</p>}
+    <form className="row" aria-labelledby="labour-catalog-title" onSubmit={async (e) => {
+      e.preventDefault();
+      if (!data || busy) return;
+      const form = e.currentTarget;
+      const file = new FormData(form).get('catalog');
+      if (!(file instanceof File) || !file.size) return;
+      setFailure('');
+      setMessage('');
+      if (file.size > 3_000_000) {
+        setFailure('حجم فایل CSV باید حداکثر سه مگابایت باشد.');
+        return;
+      }
+      setBusy(true);
+      try {
+        const csv = await file.text();
+        if (csv.length > 1_000_000) {
+          setFailure('فایل CSV بیش از یک میلیون نویسه دارد.');
+          return;
+        }
+        const result = await api<{ count: number; version: number }>('/reception/labour-catalog', {
+          body: { csv, expectedVersion: data.version },
+        });
+        await mutate(result, { revalidate: false });
+        form.reset();
+        setMessage(`${faNum(result.count)} کد اجرت ثبت شد.`);
+        onImported();
+      } catch (e) {
+        setFailure(errorMessage(e));
+        void mutate();
+      } finally {
+        setBusy(false);
+      }
+    }}>
+      <label htmlFor="labour-catalog-file">فایل کد و نام اجرت</label>
+      <input id="labour-catalog-file" name="catalog" type="file" accept=".csv,text/csv" required
+        aria-describedby={failure ? 'labour-catalog-help labour-catalog-error' : 'labour-catalog-help'}
+        aria-invalid={!!failure} disabled={busy} onChange={() => { setFailure(''); setMessage(''); }} />
+      <button type="submit" className="btn btn-sm" disabled={busy || !data}>{busy ? 'در حال بارگذاری…' : 'جایگزینی مرجع اجرت'}</button>
+    </form>
+    {failure && <p id="labour-catalog-error" role="alert" className="m-error">{failure}</p>}
+    {message && <p role="status">{message}</p>}
+  </details>;
+}
+
 function LabourReview() {
   const [open, setOpen] = useState(false);
   const { data, error } = useSWR<{ rows: { id: string; receptionId: string; admissionNo: string | null; lineId: string }[]; more: boolean }>(
@@ -138,7 +195,7 @@ function LabourReview() {
     fetcher,
   );
   return <details className="callout no-print" onToggle={(e) => setOpen(e.currentTarget.open)}>
-    <summary>صف بررسی نام اجرت</summary>
+    <summary>صف بررسی توضیح اجرت در کسب‌وکار</summary>
     {error && <p role="alert" className="m-error">{errorMessage(error)}</p>}
     {!data && !error && <p role="status">در حال خواندن…</p>}
     {data && (data.rows.length ? <ul>{data.rows.map((r) => <li key={r.id}>

@@ -1,4 +1,4 @@
-import { toLatinDigits } from './text';
+import { normalizePersian } from './text';
 
 // Daily reception statistics of «پذیرش تا ترخیص» (reconstruction scenario, owner 2026-11-25).
 // A reception whose labour lines are all periodic-service/oil codes counts as «سرویس»; any other
@@ -15,7 +15,7 @@ export const RECEPTION_KIND_LABELS: Record<ReceptionKind, string> = {
 
 /** Canonical labour code: ASCII digits, no spaces, upper case (codes are compared as text; leading zeros stay). */
 export function normalizeLaborCode(code: string): string {
-  return toLatinDigits(code).replace(/\s+/g, '').toUpperCase();
+  return normalizePersian(code).replace(/[\s\p{Bidi_Control}\u200B\u200D\u2060]+/gu, '').toUpperCase();
 }
 
 /** Codes typed or pasted by a person: comma, Persian comma, semicolon, space or new line separated; duplicates dropped. */

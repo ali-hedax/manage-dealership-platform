@@ -127,3 +127,15 @@ test('the reception API refuses a colleague without reception.read', async ({ pa
   expect(res.status()).toBe(403);
   expect((await page.request.get('/api/v1/pulse/status')).status()).toBe(403);
 });
+
+test('the owner can upload a synthetic labour catalog from the night list', async ({ page }) => {
+  await login(page, 'manager');
+  await page.goto('/reception/night');
+  await page.getByText('مرجع کد و نام اجرت', { exact: true }).click();
+  const file = page.getByLabel('فایل کد و نام اجرت');
+  const submit = page.getByRole('button', { name: 'جایگزینی مرجع اجرت' });
+  await file.setInputFiles({ name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from('code,name\n۰۰۷۲,اجرت ساختگی') });
+  await submit.click();
+  await expect(page.getByText('۱ کد اجرت ثبت شد.')).toBeVisible();
+  await expect(page.getByText('۱ کد در مرجع نمایندگی ثبت شده است.')).toBeVisible();
+});
