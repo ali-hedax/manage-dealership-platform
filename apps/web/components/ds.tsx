@@ -15,7 +15,7 @@ export const COVERAGE_LABEL: Record<Coverage, string> = { gold: 'کارت طلا
 export function DsPlate({ a, letter, b, region, size = 'md', masked }: { a: string; letter: string; b: string; region: string; size?: 'sm' | 'md' | 'lg'; masked?: boolean }) {
   const mid = masked ? '•••' : fa(b);
   return (
-    <span className={`ds-plate ${size === 'md' ? '' : size}${masked ? ' masked' : ''}`} role="img" aria-label={`پلاک ${fa(a)} ${letter} ${masked ? 'پوشیده' : fa(b)} ایران ${fa(region)}`}>
+    <span className={`ds-plate ${size === 'md' ? '' : size}${masked ? ' masked' : ''}`} dir="ltr" style={{ direction: 'ltr', unicodeBidi: 'isolate' }} role="img" aria-label={`پلاک ${fa(a)} ${letter} ${masked ? 'پوشیده' : fa(b)} ایران ${fa(region)}`}>
       <span className="ds-plate-flag" aria-hidden><i /></span>
       <span className="ds-plate-main" aria-hidden><span>{fa(a)}</span><span>{letter}</span><span>{mid}</span></span>
       <span className="ds-plate-region" aria-hidden>{fa(region)}</span>

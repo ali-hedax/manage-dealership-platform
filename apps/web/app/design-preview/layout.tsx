@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import '@fontsource/vazirmatn/300.css';
 import '../ds-tokens.css';
 import '../ds-components.css';
+import './screens.css';
 
 // Design preview (slices S03/S04): the locked design system and the seven key screens with
 // synthetic data only. No API calls, no real customer data; staging sits behind its own password.
