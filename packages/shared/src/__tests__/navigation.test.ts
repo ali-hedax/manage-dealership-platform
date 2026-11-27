@@ -80,3 +80,15 @@ test('the active item follows nested pages (case folder, reception folder, stopp
   assert.ok(menuItemActive(find('/reception/stoppage'), '/reception/stoppage/xyz'));
   assert.ok(menuItemActive(find('/settings'), '/settings/nexus'));
 });
+
+test('H2 hides only the closed items, never a parent section that still has a visible item', () => {
+  // System administrator (not owner): «۱ پذیرش و جست‌وجو» keeps its four reception pages, only the stoppage list goes.
+  const admin = buildMenu(ctx(['system_admin'], { home: '/accidents/admin' }));
+  assert.deepEqual(admin.find((s) => s.num === 1)?.items.map((i) => i.href), ['/reception', '/reception/open', '/reception/released', '/reception/night']);
+  assert.ok(admin.find((s) => s.num === 8)?.items.some((i) => i.href === '/control-room'));
+  // An accident expert who is granted reception.read sees the reception section; H2 does not touch it.
+  const expert = buildMenu({ ...ctx(['accident_expert'], { home: '/accidents/expert', desks: ['expert'] }), permissions: [...permissionsFor(['accident_expert']), 'reception.read', 'stoppage.read'] });
+  assert.deepEqual(expert.find((s) => s.num === 1)?.items.map((i) => i.href), ['/reception', '/reception/open', '/reception/released', '/reception/night']);
+  // A section whose only item was the stoppage list (parts clerk, service manager defaults) has nothing left to show.
+  assert.ok(!nums(ctx(['parts_clerk'], { home: '/accidents/parts', desks: ['parts'] })).includes(1));
+});
