@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MODULE_LABELS, ROLE_LABELS, buildMenu, isTechnicianOnly, menuItemActive, menuNumber, type MenuItem, type ModuleKey } from '@manage/shared';
+import { EXPERIMENTAL_LABEL, FEATURES, MODULE_LABELS, ROLE_LABELS, buildMenu, featureOfPath, featureOpen, featureTagged, isTechnicianOnly, menuItemActive, menuNumber, type MenuItem, type ModuleKey } from '@manage/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { visibleWorkspaces, workspaceHome } from '@/lib/workspaces';
@@ -33,6 +33,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const sections = buildMenu({
     roles: me.roles, permissions: me.permissions, isOwner: !!me.isOwner, home, desks: desks.map((w) => w.key),
     receptionActive: me.modules.some((m) => m.key === 'reception' && m.status === 'active'),
+    openFeatures: me.openFeatures,
   });
   const [desk, ...groups] = sections[0]?.num === 0 ? sections : [{ num: 0, key: 'desk', label: '', icon: '', items: [] }, ...sections];
   const isActive = (i: MenuItem) => menuItemActive(i, pathname);
@@ -46,10 +47,14 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const link = (i: MenuItem, num?: number) => {
     const active = isActive(i);
-    return <Link key={i.href + i.label} href={i.href} aria-current={active ? 'page' : undefined} title={compact ? i.label : undefined}>{num !== undefined ? <span className="nav-num" aria-hidden="true">{menuNumber(num)}</span> : <AppIcon name={i.icon as IconName} />}<span>{i.label}</span></Link>;
+    return <Link key={i.href + i.label} href={i.href} aria-current={active ? 'page' : undefined} title={compact ? i.label : undefined}>{num !== undefined ? <span className="nav-num" aria-hidden="true">{menuNumber(num)}</span> : <AppIcon name={i.icon as IconName} />}<span>{i.label}</span>{i.experimental && <ExperimentalTag />}</Link>;
   };
   async function logout() { await api('/auth/logout', { method: 'POST' }).catch(() => {}); router.replace('/login'); }
   const back = backTarget(pathname, home, desks.length > 1);
+  // Central switch (H2): a module closed for non-owners shows «به‌زودی»; the owner sees a small note.
+  const feature = featureOfPath(pathname);
+  const closed = !!feature && !featureOpen(feature, me.isOwner, me.openFeatures);
+  const tagged = !!feature && featureTagged(feature, me.isOwner);
 
   return (
     <div className={`shell app-shell${compact ? ' side-compact' : ''}`}>
@@ -100,10 +105,29 @@ export function Shell({ children }: { children: ReactNode }) {
         <main className="page" id="page-content" tabIndex={-1}>
           {back && <BackLink href={back.href} label={back.label} />}
           <PageActions />
-          {children}
+          {tagged && <p className="exp-page-note" role="note"><ExperimentalTag /> {FEATURES[feature!].label}: هنوز کامل نیست{FEATURES[feature!].ownerOnly ? ' و جز مالک کسی آن را نمی‌بیند.' : '؛ کارکنان آن را بدون این برچسب می‌بینند.'}</p>}
+          {closed ? <ComingSoon /> : children}
         </main>
       </div>
     </div>
+  );
+}
+
+/** Small «آزمایشی» tag of an unfinished module; rendered only for the owner (features.ts). */
+export function ExperimentalTag() {
+  // Visual only: the link keeps its own name; the meaning is in the title and in the page note.
+  return <span className="tag-exp" aria-hidden="true" title="این بخش هنوز کامل نیست">{EXPERIMENTAL_LABEL}</span>;
+}
+
+/** What a non-owner sees on the direct link of a module closed by the central switch. */
+function ComingSoon() {
+  return (
+    <section className="panel coming-soon" aria-labelledby="coming-soon-h">
+      <div className="panel-body">
+        <h1 id="coming-soon-h">به‌زودی</h1>
+        <p className="muted">این بخش هنوز آماده نیست. وقتی آماده شد، در منو می‌آید.</p>
+      </div>
+    </section>
   );
 }
 

@@ -141,6 +141,8 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
     // «گزارش شب»: total, oil change and technical repair (not exclusive), per receptionist.
     const summary = page.getByRole('region', { name: /گزارش شب/ });
     for (const label of ['کل پذیرش', 'تعویض روغن', 'تعمیر فنی']) await expect(summary.getByText(label, { exact: true }).first()).toBeVisible();
+    // H2: the owner sees the C5 counts marked «آزمایشی».
+    await expect(summary.locator('.tag-exp')).toHaveText('آزمایشی');
     if (kind === 'repair') {
       const table = page.getByTestId('night-list');
       await expect(table.getByRole('columnheader', { name: 'نام اجرت' })).toHaveCount(0);
@@ -163,7 +165,8 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
 });
 
 test('the reception API refuses a colleague without reception.read', async ({ page }) => {
-  await login(page, 'expert');
+  // The accident expert reads receptions since 2026-11-27; the parts clerk still does not.
+  await login(page, 'parts');
   await expect(nav(page).getByRole('button', { name: 'پذیرش و جست‌وجو', exact: true })).toHaveCount(0);
   const res = await page.request.post('/api/v1/reception/search', { headers: { 'x-manage-client': 'e2e' }, data: { view: 'open' } });
   expect(res.status()).toBe(403);

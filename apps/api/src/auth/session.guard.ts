@@ -1,10 +1,11 @@
-import { CanActivate, ExecutionContext, HttpStatus, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../config';
 import { Reflector } from '@nestjs/core';
-import type { Permission } from '@manage/shared';
-import { AppError, forbidden } from '../common/errors';
+import { featureOpen, type FeatureKey, type Permission } from '@manage/shared';
+import { AppError, forbidden, notFound } from '../common/errors';
 import { AuthService } from './auth.service';
 import { SESSION_COOKIE, type AuthedRequest } from './auth.types';
-import { IS_PUBLIC, REQUIRED_PERMISSIONS } from './decorators';
+import { IS_PUBLIC, REQUIRED_FEATURE, REQUIRED_PERMISSIONS } from './decorators';
 
 // Global guard: every route requires a valid session unless marked @Public(),
 // and the permissions listed with @RequirePermissions(). This is the
@@ -14,6 +15,7 @@ export class SessionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly auth: AuthService,
+    @Inject(APP_CONFIG) private readonly cfg: AppConfig,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -28,6 +30,9 @@ export class SessionGuard implements CanActivate {
     }
     req.user = user;
 
+    // A module closed by the central switch does not exist for non-owners (404, before any permission check).
+    const feature = this.reflector.getAllAndOverride<FeatureKey | undefined>(REQUIRED_FEATURE, targets);
+    if (feature && !featureOpen(feature, user.isOwner, this.cfg.OPEN_FEATURES)) throw notFound('صفحه');
     const required = this.reflector.getAllAndOverride<Permission[]>(REQUIRED_PERMISSIONS, targets) ?? [];
     if (required.some((p) => !user.permissions.has(p))) throw forbidden();
     return true;

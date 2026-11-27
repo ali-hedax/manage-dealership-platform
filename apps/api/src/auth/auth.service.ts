@@ -264,6 +264,7 @@ export class AuthService {
       tenant: { id: user.tenantId, code: user.tenantCode, name: user.tenantName },
       environment: this.cfg.APP_ENV,
       modules: moduleStatuses({ PULSE_ENABLED: this.cfg.PULSE_ENABLED }),
+      openFeatures: this.cfg.OPEN_FEATURES,
     };
   }
 

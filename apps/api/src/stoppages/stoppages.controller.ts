@@ -6,7 +6,7 @@ import {
 } from '@manage/shared';
 import type { z } from 'zod';
 import type { Actor } from '../auth/auth.types';
-import { CurrentActor, RequirePermissions } from '../auth/decorators';
+import { CurrentActor, RequireFeature, RequirePermissions } from '../auth/decorators';
 import { IdParam } from '../common/params';
 import { ZodPipe } from '../common/zod.pipe';
 import { StoppagesService } from './stoppages.service';
@@ -16,6 +16,8 @@ import { StoppagesService } from './stoppages.service';
  * bytes (application/octet-stream): without `confirm` the call only previews, with the previewed
  * SHA-256 it applies.
  */
+// «خودروهای متوقف» is closed for non-owners until it is validated with a real report (features.ts).
+@RequireFeature('stoppages')
 @Controller('stoppages')
 export class StoppagesController {
   constructor(private readonly stoppages: StoppagesService) {}

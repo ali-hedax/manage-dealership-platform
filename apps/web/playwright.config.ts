@@ -12,7 +12,7 @@ const channel = process.env.PW_CHANNEL || (process.platform === 'win32' ? 'msedg
 export default defineConfig({
   testDir: './e2e',
   // Needs an owner in the seed, which changes staff rules: playwright.daily.config.ts.
-  testIgnore: /(daily-reports|system-admin|pulse)\.spec\.ts/,
+  testIgnore: /(daily-reports|system-admin|pulse|h2-features)\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -30,7 +30,7 @@ export default defineConfig({
     {
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], channel, viewport: { width: 1366, height: 860 } },
-      testIgnore: /mobile\.spec\.ts|(daily-reports|system-admin|pulse)\.spec\.ts/,
+      testIgnore: /mobile\.spec\.ts|(daily-reports|system-admin|pulse|h2-features)\.spec\.ts/,
     },
     { name: 'mobile', use: { ...devices['Pixel 7'], channel }, testMatch: /(mobile|screenshots)\.spec\.ts/ },
   ],
@@ -47,6 +47,9 @@ export default defineConfig({
         SEED_DEMO_PASSWORD: E2E_PASSWORD,
         API_PORT: String(API_PORT),
         NODE_ID: 'e2e',
+        // H2 central switch: this suite has no owner, so the stoppage module it tests is opened here;
+        // the switch itself is tested in h2-features.spec.ts (daily config, owner present).
+        OPEN_FEATURES: 'stoppages',
         // The suite logs in as several roles from one address within a minute.
         LOGIN_RATE_LIMIT: '200',
         // Reminders depend on the time of day; their browser test mocks the inbox.

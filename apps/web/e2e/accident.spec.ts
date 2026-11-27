@@ -125,12 +125,13 @@ test('parts clerk: read-only view with masked customer phone and no create actio
   await expect(page.getByRole('link', { name: 'ویرایش پرونده' })).toHaveCount(0);
 });
 
-test('planned modules are visible as roadmap and expose no actions', async ({ page }) => {
+test('planned modules are closed for staff and expose no actions', async ({ page }) => {
   await login(page, 'manager');
-  // Unfinished modules are not in ordinary staff menus (owner, 2026-11-19); the page itself stays read-only.
+  // Unfinished modules are not in staff menus (owner, 2026-11-19); since H2 (2026-11-27) their direct
+  // link shows «به‌زودی» to everyone except the owner, still without any action.
   const nav = page.getByRole('navigation', { name: 'بخش‌های منیج' });
   await expect(nav.getByText('در دست توسعه')).toHaveCount(0);
   await page.goto('/modules/parts_inventory');
-  await expect(page.getByText('این بخش در دست توسعه است و هنوز قابل استفاده نیست.')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'به‌زودی' })).toBeVisible();
   await expect(page.locator('main').getByRole('button')).toHaveCount(0);
 });

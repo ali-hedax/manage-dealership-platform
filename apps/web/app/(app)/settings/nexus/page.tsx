@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
-import { pulseErrorText, pulseSentence, type DailyReportsStatus, type PulseStatus, type ReportCenterEntry, type StoppageListView } from '@manage/shared';
+import { featureOpen, pulseErrorText, pulseSentence, type DailyReportsStatus, type PulseStatus, type ReportCenterEntry, type StoppageListView } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, formatJalali } from '@/lib/format';
@@ -49,7 +49,7 @@ const RECEPTION_NOTE ='منیج پالس همهٔ پذیرش‌ها و قطعه�
  * their pages remain and are opened from here.
  */
 export default function NexusPage() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const toast = useToast();
   const pulseOk = can('integration.manage');
   const centerOk = can('report_center.manage') || can('daily_reports.upload') || can('reference.customers.manage');
@@ -64,7 +64,8 @@ export default function NexusPage() {
     else toast(`خواندن موجودی انجام نشد: ${pulseErrorText(followed.resultCode) ?? 'دوباره تلاش کنید'}`, 'error');
   }, [followed, toast]);
   const { data: center, error, mutate: refreshCenter } = useSWR<ReportCenterEntry[]>(centerOk ? '/report-center' : null, fetcher);
-  const stoppageOk = can('stoppage.read');
+  // «خودروهای متوقف» follows the central switch (features.ts): closed for non-owners for now.
+  const stoppageOk = can('stoppage.read') && featureOpen('stoppages', me.isOwner, me.openFeatures);
   const { data: stoppage } = useSWR<StoppageListView>(stoppageOk ? '/stoppages?view=active' : null, fetcher);
   const { data: daily } = useSWR<DailyReportsStatus>(can('daily_reports.upload') || can('daily_reports.apply') ? '/daily-reports/status' : null, fetcher);
   if (!pulseOk && !centerOk) return <EmptyState icon="lock" title="Manage Nexus" heading="h1">این بخش برای مالک، مدیر سیستم و مسئول بارگذاری گزارش‌هاست.</EmptyState>;

@@ -66,7 +66,8 @@ describe('Official stoppage report «گزارش توقف خودرو»', () => {
   };
 
   beforeAll(async () => {
-    h = await createHarness();
+    // «خودروهای متوقف» is closed for non-owners (H2); this suite tests the module itself with it opened.
+    h = await createHarness({ config: { OPEN_FEATURES: 'stoppages' } });
     admin = await h.login('admin');
     clerk = await h.loginAs('stop-clerk', ['parts_clerk']);
     manager = await h.loginAs('stop-manager', ['service_manager']);

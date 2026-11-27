@@ -1,6 +1,7 @@
 import { config as loadDotenv } from 'dotenv';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import { parseOpenFeatures } from '@manage/shared';
 
 // .env lives at the repository root; apps/api/.env may override for local work.
 loadDotenv({ path: resolve(__dirname, '../../../.env'), quiet: true });
@@ -43,6 +44,9 @@ const envSchema = z.object({
   // read; PULSE_SECRET_KEY (≥ 32 characters, same value for api and pulse) encrypts the stored
   // کسب‌وکار password. PULSE_KASB_ORIGIN is the real site; only tests point it elsewhere.
   PULSE_ENABLED: z.string().default('false').transform((v) => v === 'true'),
+  // Central switch of unfinished modules (H2, packages/shared/src/features.ts): modules listed here
+  // (comma separated, e.g. «stoppages») are open to everyone, not only to the owner.
+  OPEN_FEATURES: z.string().optional().transform((v) => parseOpenFeatures(v)),
   PULSE_SECRET_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
   PULSE_KASB_ORIGIN: z.url().default('https://b2b.isaco.ir'),
   PULSE_TICK_MS: z.coerce.number().int().min(1000).max(600_000).default(30_000),
