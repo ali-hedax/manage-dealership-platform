@@ -1,3 +1,4 @@
+import { classifyJob } from './service-classify';
 import { toLatinDigits } from './text';
 
 // Daily reception statistics of «پذیرش تا ترخیص» (reconstruction scenario, owner 2026-11-25).
@@ -40,7 +41,38 @@ export interface ReceptionStatsRow {
   receptionist: string | null;
   /** Codes of the reception's current labour lines. */
   codes: readonly (string | null | undefined)[];
+  /** Names (descriptions) of the current labour lines, for «تعویض روغن» / «تعمیر فنی» (classifyJob). */
+  labourNames?: readonly (string | null | undefined)[];
+  /** Names of the parts actually used on the card (see `isConsumedPart`). */
+  consumedParts?: readonly (string | null | undefined)[];
 }
+
+/**
+ * «گزارش شب» by job (owner, 2026-11-27): from labour names and used parts (`classifyJob`), not
+ * from the service codes. Not exclusive: a car with an oil change and a repair is in both.
+ * `none` = neither yet (no labour line and no oil part on the card).
+ */
+export interface ReceptionJobCounts {
+  oilChange: number;
+  technicalRepair: number;
+  both: number;
+  none: number;
+}
+export interface ReceptionJobPersonStats extends ReceptionJobCounts {
+  name: string;
+  total: number;
+}
+
+/** A part line counts as used: still on the card, not rejected, and a quantity above zero (final, else requested). */
+export function isConsumedPart(p: { qtyFinal?: string | null; qtyRequested?: string | null; state?: string | null; rejectReason?: string | null; removed?: boolean }): boolean {
+  if (p.removed || p.rejectReason?.trim()) return false;
+  if (p.state && /رد\s*شده|ردشده/.test(p.state.replace(/‌/g, ''))) return false;
+  const raw = p.qtyFinal?.trim() ? p.qtyFinal : p.qtyRequested;
+  const qty = Number(toLatinDigits(raw ?? '').replace(/[,،٬\s]/g, ''));
+  return Number.isFinite(qty) && qty > 0;
+}
+
+const clean = (names: readonly (string | null | undefined)[] | undefined) => (names ?? []).filter((n): n is string => !!n?.trim());
 export interface ReceptionCounts {
   total: number;
   repair: number;
@@ -57,16 +89,22 @@ export interface ReceptionDayStats extends ReceptionCounts {
   byReceptionist: ReceptionPersonStats[];
   /** False while no service code is set: then every reception with labour counts as «تعمیراتی». */
   serviceCodesConfigured: boolean;
+  /** «تعویض روغن» / «تعمیر فنی» from labour names and used parts; a car may be in both. */
+  jobs: ReceptionJobCounts;
+  jobsByReceptionist: ReceptionJobPersonStats[];
 }
 
 export const UNKNOWN_RECEPTIONIST = 'ثبت نشده';
 
 const empty = (): ReceptionCounts => ({ total: 0, repair: 0, service: 0, unclassified: 0 });
+const emptyJobs = (): ReceptionJobCounts => ({ oilChange: 0, technicalRepair: 0, both: 0, none: 0 });
 
 export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow[], serviceCodes: readonly string[]): ReceptionDayStats {
   const service = new Set(serviceCodes.map(normalizeLaborCode).filter(Boolean));
   const all = empty();
   const people = new Map<string, ReceptionCounts>();
+  const jobs = emptyJobs();
+  const jobPeople = new Map<string, ReceptionJobCounts & { total: number }>();
   for (const row of rows) {
     const kind = receptionKind(row.codes, service);
     const name = row.receptionist?.replace(/\s+/g, ' ').trim() || UNKNOWN_RECEPTIONIST;
@@ -76,9 +114,19 @@ export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow
       c[kind] += 1;
     }
     people.set(name, person);
+    const job = classifyJob(clean(row.labourNames), clean(row.consumedParts));
+    const jobPerson = jobPeople.get(name) ?? { total: 0, ...emptyJobs() };
+    jobPerson.total += 1;
+    for (const c of [jobs, jobPerson]) {
+      if (job.oilChange) c.oilChange += 1;
+      if (job.repair) c.technicalRepair += 1;
+      if (job.oilChange && job.repair) c.both += 1;
+      if (!job.oilChange && !job.repair) c.none += 1;
+    }
+    jobPeople.set(name, jobPerson);
   }
-  const byReceptionist = [...people.entries()]
-    .map(([name, c]) => ({ name, ...c }))
-    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'fa'));
-  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0 };
+  const byName = <T extends { name: string; total: number }>(a: T, b: T) => b.total - a.total || a.name.localeCompare(b.name, 'fa');
+  const byReceptionist = [...people.entries()].map(([name, c]) => ({ name, ...c })).sort(byName);
+  const jobsByReceptionist = [...jobPeople.entries()].map(([name, c]) => ({ name, ...c })).sort(byName);
+  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0, jobs, jobsByReceptionist };
 }

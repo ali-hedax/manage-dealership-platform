@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { normalizeLaborCode, parseLaborCodes, receptionDayStats, receptionKind, UNKNOWN_RECEPTIONIST } from '../index';
+import { isConsumedPart, normalizeLaborCode, parseLaborCodes, receptionDayStats, receptionKind, UNKNOWN_RECEPTIONIST } from '../index';
 
 test('labour codes are compared as text with ASCII digits and leading zeros kept', () => {
   assert.equal(normalizeLaborCode(' ۰۱۲ ab '), '012AB');
@@ -34,4 +34,33 @@ test('daily statistics per receptionist, busiest first, blank names grouped', ()
   assert.ok(stats.byReceptionist.some((p) => p.name === UNKNOWN_RECEPTIONIST && p.repair === 1));
   assert.equal(stats.byReceptionist.reduce((n, p) => n + p.total, 0), stats.total);
   assert.equal(receptionDayStats('2026-01-10', [], []).serviceCodesConfigured, false);
+});
+
+test('«گزارش شب» by job: oil change and technical repair are counted apart, a car can be in both, per receptionist', () => {
+  const stats = receptionDayStats('2026-01-10', [
+    { receptionist: 'پذیرشگر الف', codes: ['1'], labourNames: ['سرويس ۱۰۰۰۰'], consumedParts: ['فیلتر روغن'] },
+    { receptionist: 'پذیرشگر الف', codes: ['2', '3'], labourNames: ['کوئیک سرویس', 'تعویض لنت جلو'], consumedParts: [] },
+    { receptionist: 'پذیرشگر ب', codes: ['4'], labourNames: ['تعویض روغن گیربکس'], consumedParts: ['روغن گیربکس'] },
+    { receptionist: 'پذیرشگر ب', codes: [], labourNames: [], consumedParts: ['روغن موتور'] },
+    { receptionist: null, codes: [], labourNames: [null, ' '], consumedParts: [] },
+  ], []);
+  assert.deepEqual(stats.jobs, { oilChange: 3, technicalRepair: 2, both: 1, none: 1 });
+  assert.deepEqual(stats.jobsByReceptionist, [
+    { name: 'پذیرشگر الف', total: 2, oilChange: 2, technicalRepair: 1, both: 1, none: 0 },
+    { name: 'پذیرشگر ب', total: 2, oilChange: 1, technicalRepair: 1, both: 0, none: 0 },
+    { name: UNKNOWN_RECEPTIONIST, total: 1, oilChange: 0, technicalRepair: 0, both: 0, none: 1 },
+  ]);
+  // Rows without names (older callers) are «بدون کار ثبت‌شده», never guessed.
+  assert.deepEqual(receptionDayStats('2026-01-10', [{ receptionist: 'x', codes: ['1'] }], []).jobs, { oilChange: 0, technicalRepair: 0, both: 0, none: 1 });
+});
+
+test('a part counts as used only when still on the card, not rejected and with a quantity above zero', () => {
+  assert.equal(isConsumedPart({ qtyFinal: '1', qtyRequested: '1', state: 'تحویل شده' }), true);
+  assert.equal(isConsumedPart({ qtyFinal: '', qtyRequested: '۲' }), true);
+  assert.equal(isConsumedPart({ qtyFinal: '0', qtyRequested: '1' }), false);
+  assert.equal(isConsumedPart({ qtyFinal: '1', state: 'ردشده' }), false);
+  assert.equal(isConsumedPart({ qtyFinal: '1', state: 'رد‌شده' }), false);
+  assert.equal(isConsumedPart({ qtyFinal: '1', rejectReason: 'عدم موجودی' }), false);
+  assert.equal(isConsumedPart({ qtyFinal: '1', removed: true }), false);
+  assert.equal(isConsumedPart({}), false);
 });

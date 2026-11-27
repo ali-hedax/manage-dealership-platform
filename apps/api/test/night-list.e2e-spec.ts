@@ -1,8 +1,8 @@
 import { and, eq } from 'drizzle-orm';
-import type { NightListPending, NightListView } from '@manage/shared';
+import type { NightListPending, NightListView, ReceptionDayStats } from '@manage/shared';
 import { newId } from '../src/common/ids';
 import { tehranAt } from '../src/daily-reports/daily-time';
-import { auditEvents, nightLists, notifications, receptionRepairs, receptions, tenants, users } from '../src/db/schema';
+import { auditEvents, nightLists, notifications, receptionParts, receptionRepairs, receptions, tenants, users } from '../src/db/schema';
 import { DEMO_TENANT_CODE } from '../src/demo/demo-seed.service';
 import { NightListService } from '../src/pulse/night-list.service';
 import { admissionKey } from '../src/pulse/pulse-map';
@@ -227,5 +227,32 @@ describe('Nightly list of the reception module', () => {
     expect((await view(reader, day)).status).toBe('draft');
     const file = await reader.get(`/reception/night-list/${accident.id}/excel`).expect(200);
     expect(file.headers['content-disposition']).toContain(`night-list-${day}-accident.xlsx`);
+  });
+
+  it('C5: the night report counts «تعویض روغن» and «تعمیر فنی» apart from labour names and used parts, per receptionist', async () => {
+    const day = '2025-04-30'; // Wednesday
+    const both = await reception(41, tehranAt(day, '09:00'));
+    const oilOnly = await reception(42, tehranAt(day, '09:30'));
+    const repairOnly = await reception(43, tehranAt(day, '10:00'));
+    await db().update(receptions).set({ receptionist: 'پذیرشگر ساختگی الف' }).where(eq(receptions.id, both));
+    await db().update(receptions).set({ receptionist: 'پذیرشگر ساختگی الف' }).where(eq(receptions.id, oilOnly));
+    await db().update(receptions).set({ receptionist: 'پذیرشگر ساختگی ب' }).where(eq(receptions.id, repairOnly));
+    // 41: «صافکاری ساختگی» and a periodic service → both.
+    await db().insert(receptionRepairs).values({ id: newId(), tenantId, receptionId: both, kasbLineId: 'c5-41', code: '0100', description: 'سرويس ۱۰۰۰۰', state: 'باز', official: {}, rowHash: 'c5r41', isTest: true });
+    // 42: its labour line was removed in کسب‌وکار; only an oil filter used → oil change only.
+    await db().update(receptionRepairs).set({ removedAt: new Date() }).where(eq(receptionRepairs.receptionId, oilOnly));
+    await db().insert(receptionParts).values({ id: newId(), tenantId, receptionId: oilOnly, kasbLineId: 'c5-42', name: 'فيلتر روغن', qtyRequested: '1', qtyFinal: '1', state: 'تحویل شده', official: {}, rowHash: 'c5p42', isTest: true });
+    // 43: engine oil was rejected (not used) → technical repair only.
+    await db().insert(receptionParts).values({ id: newId(), tenantId, receptionId: repairOnly, kasbLineId: 'c5-43', name: 'روغن موتور', qtyRequested: '1', qtyFinal: '0', state: 'ردشده', rejectReason: 'عدم موجودی', official: {}, rowHash: 'c5p43', isTest: true });
+
+    const stats = (await reader.post('/reception/stats', { date: day }).expect(201)).body as ReceptionDayStats;
+    expect(stats).toMatchObject({ total: 3, jobs: { oilChange: 2, technicalRepair: 2, both: 1, none: 0 } });
+    expect(stats.jobsByReceptionist).toEqual([
+      { name: 'پذیرشگر ساختگی الف', total: 2, oilChange: 2, technicalRepair: 1, both: 1, none: 0 },
+      { name: 'پذیرشگر ساختگی ب', total: 1, oilChange: 0, technicalRepair: 1, both: 0, none: 0 },
+    ]);
+    // The same summary rides on the night list.
+    const pending = (await reader.post('/reception/night-list', { day }).expect(201)).body as NightListPending;
+    expect(pending.summary?.jobs).toEqual(stats.jobs);
   });
 });

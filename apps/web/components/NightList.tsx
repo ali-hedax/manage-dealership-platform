@@ -182,23 +182,28 @@ function PresenceForm({ busy, onSave }: { busy: boolean; onSave: (body: { admiss
   </details>;
 }
 
-/** «گزارش شب»: the day's receptions — total, repair, periodic service, and per receptionist as written in کسب‌وکار. */
+/**
+ * «گزارش شب»: the day's receptions — total, «تعویض روغن» and «تعمیر فنی» (classifyJob, from labour
+ * names and used parts; a car may be in both), and the same per receptionist as written in کسب‌وکار.
+ */
 function NightSummary({ stats }: { stats: ReceptionDayStats }) {
+  const j = stats.jobs;
   return (
     <section className="panel night-summary" aria-labelledby="night-summary-h">
       <div className="panel-head"><h2 id="night-summary-h">گزارش شب · پذیرش‌های این روز</h2></div>
       <div className="panel-body stack">
         <dl className="night-kpis">
           <div><dt>کل پذیرش</dt><dd>{faNum(stats.total)}</dd></div>
-          <div><dt>تعمیراتی</dt><dd>{faNum(stats.repair)}</dd></div>
-          <div><dt>سرویس ادواری</dt><dd>{faNum(stats.service)}</dd></div>
-          {stats.unclassified > 0 && <div><dt>بدون اجرت</dt><dd>{faNum(stats.unclassified)}</dd></div>}
+          <div><dt>تعویض روغن</dt><dd>{faNum(j.oilChange)}</dd></div>
+          <div><dt>تعمیر فنی</dt><dd>{faNum(j.technicalRepair)}</dd></div>
+          {j.both > 0 && <div><dt>هر دو</dt><dd>{faNum(j.both)}</dd></div>}
+          {j.none > 0 && <div><dt>بدون کار ثبت‌شده</dt><dd>{faNum(j.none)}</dd></div>}
         </dl>
-        {!stats.serviceCodesConfigured && <p className="small muted">کدهای سرویس ادواری هنوز تعیین نشده‌اند؛ همهٔ پذیرش‌های دارای اجرت «تعمیراتی» شمرده شده‌اند.</p>}
-        {stats.byReceptionist.length > 0 && (
+        <p className="small muted">از روی نام اجرت‌ها و قطعات مصرف‌شدهٔ هر پذیرش؛ خودرویی که هم تعویض روغن و هم تعمیر داشته، در هر دو شمرده می‌شود.</p>
+        {stats.jobsByReceptionist.length > 0 && (
           <table className="table static night-people">
-            <thead><tr><th scope="col">پذیرشگر</th><th scope="col">کل</th><th scope="col">تعمیراتی</th><th scope="col">سرویس ادواری</th></tr></thead>
-            <tbody>{stats.byReceptionist.map((p) => <tr key={p.name}><td>{p.name}</td><td>{faNum(p.total)}</td><td>{faNum(p.repair)}</td><td>{faNum(p.service)}</td></tr>)}</tbody>
+            <thead><tr><th scope="col">پذیرشگر</th><th scope="col">کل</th><th scope="col">تعویض روغن</th><th scope="col">تعمیر فنی</th></tr></thead>
+            <tbody>{stats.jobsByReceptionist.map((p) => <tr key={p.name}><td>{p.name}</td><td>{faNum(p.total)}</td><td>{faNum(p.oilChange)}</td><td>{faNum(p.technicalRepair)}</td></tr>)}</tbody>
           </table>
         )}
       </div>

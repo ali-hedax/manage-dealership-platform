@@ -138,9 +138,9 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
       await expect(page.getByText('پیش‌نویس ساخته شد.')).toBeVisible();
     }
     await expect(list.first()).toBeVisible();
-    // «گزارش شب»: total, repair and periodic service separately, per receptionist.
+    // «گزارش شب»: total, oil change and technical repair (not exclusive), per receptionist.
     const summary = page.getByRole('region', { name: /گزارش شب/ });
-    for (const label of ['کل پذیرش', 'تعمیراتی', 'سرویس ادواری']) await expect(summary.getByText(label, { exact: true }).first()).toBeVisible();
+    for (const label of ['کل پذیرش', 'تعویض روغن', 'تعمیر فنی']) await expect(summary.getByText(label, { exact: true }).first()).toBeVisible();
     if (kind === 'repair') {
       const table = page.getByTestId('night-list');
       await expect(table.getByRole('columnheader', { name: 'نام اجرت' })).toHaveCount(0);
