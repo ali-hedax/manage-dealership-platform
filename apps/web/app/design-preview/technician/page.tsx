@@ -8,6 +8,8 @@ import { P } from '@/lib/design-preview-data';
 // buttons «شروع» / «پایان», «تذکر» for a missing or late part, wage per vehicle and month. Synthetic.
 export default function TechnicianJob() {
   const [running, setRunning] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [done, setDone] = useState(3);
   const [secs, setSecs] = useState(0);
   useEffect(() => {
     if (!running) return;
@@ -29,16 +31,24 @@ export default function TechnicianJob() {
         <div className="ds-timer" role="timer" aria-live="off">{mm.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]!)}:{ss.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]!)}</div>
         <div className="ds-bigbtns">
           <button type="button" className="ds-btn big start" onClick={() => setRunning(true)} disabled={running}><AppIcon name="clock" />شروع</button>
-          <button type="button" className="ds-btn big stop" onClick={() => setRunning(false)}><AppIcon name="check" />پایان</button>
+          <button type="button" className="ds-btn big stop" disabled={!running} onClick={() => setConfirming(true)}><AppIcon name="check" />پایان</button>
         </div>
+        {confirming && (
+          <div className="ds-confirm" role="alertdialog" aria-label="تأیید پایان کار">
+            <b>کار «صافکاری درب عقب چپ» تمام شد؟</b>
+            <div className="ds-bigbtns">
+              <button type="button" className="ds-btn big start" onClick={() => { setRunning(false); setConfirming(false); setDone((n) => n + 1); setSecs(0); }}>بله، تمام شد</button>
+              <button type="button" className="ds-btn big" onClick={() => setConfirming(false)}>ادامهٔ کار</button>
+            </div>
+          </div>
+        )}
       </section>
       <section aria-label="تذکر" className="ds-nudges">
         <button type="button" className="ds-btn" style={{ blockSize: 52 }}><AppIcon name="box" />قطعه نیست</button>
         <button type="button" className="ds-btn" style={{ blockSize: 52 }}><AppIcon name="clock" />قطعه دیر شد</button>
       </section>
-      <section className="ds-panel" aria-label="دستمزد">
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="ds-muted">دستمزد این خودرو</span><b className="ds-num">۱٬۲۰۰٬۰۰۰ ریال</b></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBlockStart: 'var(--ds-2)' }}><span className="ds-muted">جمع آذر</span><b className="ds-num">۳۸٬۴۰۰٬۰۰۰ ریال</b></div>
+      <section className="ds-panel" aria-label="کارهای امروز" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span className="ds-muted">کارهای تمام‌شدهٔ امروز</span><b className="ds-display" style={{ fontSize: 28, fontWeight: 300 }}>{done.toLocaleString('fa-IR')}</b>
       </section>
       <p className="ds-small ds-muted" style={{ textAlign: 'center' }}>کار بعدی: رانا · ۳۱ ق ۲۲۴</p>
     </main>

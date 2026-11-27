@@ -30,3 +30,23 @@ export const PARTS = [
 
 export const AID_STEPS = ['درخواست', 'در خرید', 'رسیده', 'دعوت', 'نوبت', 'تعویض'];
 export const CASE_STEPS = ['پذیرش', 'کارشناسی', 'برنامهٔ تعمیر', 'اجرای تعمیر', 'کنترل کیفیت', 'تحویل'];
+
+// Dates are computed from the Jalali calendar in Tehran time, never hard-coded (S04b).
+const TEHRAN = 'Asia/Tehran';
+export const jalaliLong = (d: Date) =>
+  new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TEHRAN }).format(d);
+export const jalaliDayMonth = (d: Date) =>
+  new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TEHRAN }).format(d);
+const isFriday = (d: Date) => new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: TEHRAN }).format(d) === 'Fri';
+/** The next `count` working days after `from` (Fridays skipped). */
+export function nextWorkingDays(from: Date, count: number): Date[] {
+  const out: Date[] = [];
+  for (let i = 1; out.length < count && i < 30; i++) {
+    const d = new Date(from.getTime() + i * 86_400_000);
+    if (!isFriday(d)) out.push(d);
+  }
+  return out;
+}
+export const TECHNICIANS: Record<string, string> = {
+  '۳۶': 'حسین رضایی', '۹۹': 'مهدی کاظمی', '۴۱': 'امیر حسینی', '۲۲': 'سعید مرادی', '۵۵': 'جواد نظری', '۱۲': 'رضا قاسمی',
+};

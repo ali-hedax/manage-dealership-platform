@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { DsFreshness, DsKpi } from '@/components/ds';
-import { STATIONS } from '@/lib/design-preview-data';
+import { jalaliLong, STATIONS } from '@/lib/design-preview-data';
 
 // (1) Vision on a TV (S04): 1920×1080, read-only revocable link, pages rotate every 15 s,
 // sensitive data masked (no names, no full plates or amounts). Synthetic data.
@@ -9,6 +9,8 @@ const PAGES = ['نمای کلی', 'بار جایگاه‌ها', 'امداد وی
 
 export default function VisionTv() {
   const [page, setPage] = useState(0);
+  const [today, setToday] = useState('');
+  useEffect(() => setToday(jalaliLong(new Date())), []);
   useEffect(() => {
     const t = setInterval(() => setPage((p) => (p + 1) % PAGES.length), 15_000);
     return () => clearInterval(t);
@@ -16,7 +18,7 @@ export default function VisionTv() {
   return (
     <main className="ds ds-tv" data-theme="vision" aria-live="polite">
       <header className="ds-page-head">
-        <div><h1>دیدبان · {PAGES[page]}</h1><p className="ds-muted" style={{ fontSize: 18 }}>نمایندگی ۱۳۰۷ · پنج‌شنبه ۶ آذر ۱۴۰۵</p></div>
+        <div><h1>دیدبان · {PAGES[page]}</h1><p className="ds-muted" style={{ fontSize: 18 }}>نمایندگی ۱۳۰۷{today ? ` · ${today}` : ''}</p></div>
         <DsFreshness minutesAgo={4} />
       </header>
       {page === 0 && (
