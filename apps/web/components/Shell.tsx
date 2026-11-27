@@ -36,7 +36,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const primary: NavItem[] = technicianOnly
     ? [
         { href: '/workshop/technician', label: 'کارهای من', icon: 'grid', show: true, match: (p) => p === '/workshop/technician' },
-        { href: '/workshop/technician/work', label: 'کارکرد ماه', icon: 'calendar', show: true },
       ]
     : [
         { href: home, label: 'میز کار', icon: 'grid', show: true, match: (p) => p === home || (p.startsWith('/accidents') && !dark) },

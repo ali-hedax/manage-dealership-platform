@@ -11,6 +11,7 @@ export * from './access';
 export * from './stock-code';
 export * from './daily-reports';
 export * from './workshop';
+export * from './technician-view';
 
 export * from './iran-holidays';
 export * from './assessment-dispatch';

@@ -32,6 +32,16 @@ export const RELEASE_LINE = { major: 1, minor: 0 } as const;
 /** Newest first. Add one note per user-visible change set in the PR that ships it. */
 export const CHANGE_NOTES: readonly ChangeNote[] = [
   {
+    key: 'technician-no-wage-20261127', date: '2026-11-27',
+    summary: 'صفحهٔ تکنسین دیگر هیچ مبلغی نشان نمی‌دهد؛ هر کار فقط پلاک، نام خودرو، اولویت، مهلت به روز و دکمه‌های شروع و پایان دارد.',
+    sections: [
+      {title:'تکنسین',items:[
+        '«اجرت شما»، «اجرت این ماه» و صفحهٔ «کارکرد ماه» از صفحه‌های تکنسین برداشته شد؛ پیوندهای قدیمی به «کارهای من» می‌روند.',
+        'هر کار اولویت دارد: موعد گذشته «فوری»، موعد امروز «امروز» و بقیه «عادی»، با مهلت به روز.',
+      ]},
+    ],
+  },
+  {
     key: 'c5-night-report-jobs-20261127', date: '2026-11-27',
     summary: 'گزارش شب «تعویض روغن» و «تعمیر فنی» را جدا می‌شمارد؛ خودرویی که هر دو را داشته در هر دو آمده و شمارش به تفکیک پذیرشگر هم هست.',
     sections: [

@@ -2,53 +2,31 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
-import { TECHNICIAN_PROBLEMS, TECHNICIAN_PROBLEM_LABELS, blockersOf, type MyWorkMonth, type TechnicianProblem, type WorkflowBlocker, type WorkshopTask } from '@manage/shared';
+import { TECHNICIAN_PRIORITY_LABELS, TECHNICIAN_PROBLEMS, TECHNICIAN_PROBLEM_LABELS, blockersOf, technicianDue, type TechnicianProblem, type WorkflowBlocker, type WorkshopTask } from '@manage/shared';
 import { useAuth } from '@/lib/auth';
 import { ApiError, api, errorMessage, fetcher } from '@/lib/api';
-import { faNum, formatJalali, rial, toPersianDigits } from '@/lib/format';
+import { faNum, formatJalali, toPersianDigits } from '@/lib/format';
 import { Plate, PlateText } from '@/components/Plate';
 import { Dialog } from '@/components/Dialog';
 import { ReminderCards } from '@/components/ReminderCards';
 import { WorkflowBlockerDialog } from '@/components/WorkflowBlockerDialog';
 
-// Technician desk (spec §9, mockup Technician.dc.html): this month's wage on top,
-// the current job as one card with a single big button that changes
-// «شروع کار» → «پایان کار» → «منتظر تأیید کارشناس», a direct «قطعه ندارم»,
-// «قطعه آماده است، تحویل بگیرید» when a part is ready, and the next jobs with their wage.
-const DAY = 86_400_000;
-const tehranDay = (ms: number) => Math.floor((ms + 210 * 60_000) / DAY);
-
-/** "۲ روز" / "امروز" / "موعد گذشته" from the planned end of the job. */
-function timeLeft(end: string | null | undefined): { text: string; tone: 'ok' | 'soon' | 'late' } | null {
-  if (!end) return null;
-  if (Date.parse(end) < Date.now()) return { text: 'موعد گذشته', tone: 'late' };
-  const days = tehranDay(Date.parse(end)) - tehranDay(Date.now());
-  if (days <= 0) return { text: 'امروز', tone: 'soon' };
-  return { text: `${toPersianDigits(days)} روز`, tone: 'ok' };
-}
+// Technician desk (spec §9, mockup Technician.dc.html; owner 2026-11-27): each job shows only the
+// plate, the short vehicle name, the priority and the deadline in days, with one big button that
+// changes «شروع کار» → «پایان کار» → «منتظر تأیید کارشناس». No wage or any other amount is shown.
+// «قطعه ندارم»، «مشکل دیگر» and «قطعه آماده است، تحویل بگیرید» stay: they are actions, not amounts.
+const TONE = { urgent: 'late', today: 'soon', normal: 'ok' } as const;
 const clock = (iso: string) => toPersianDigits(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Tehran', hour12: false }).format(new Date(iso)));
 
 export default function TechnicianPage() {
   const { me, can } = useAuth();
   const { data, error, mutate } = useSWR<WorkshopTask[]>(can('task.execute') ? '/workshop/my-tasks' : null, fetcher, { refreshInterval: 30000 });
-  const { data: month } = useSWR<MyWorkMonth>(can('task.execute') ? '/workshop/my-work' : null, fetcher, { refreshInterval: 120000 });
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [failure, setFailure] = useState('');
   const [problemFor, setProblemFor] = useState<WorkshopTask | null>(null);
   // Selecting a vehicle never changes its job status or closes another active job.
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   // A refused «شروع کار» explains each missing prerequisite; «تلاش دوباره» repeats the same action.
   const [blocked, setBlocked] = useState<{ blockers: WorkflowBlocker[]; retry?: () => void; opener?: HTMLElement | null } | null>(null);
-  const confirmed = useRef(new Set<string>());
-  // The first time an amount is shown it counts as seen; a later change shows "تغییر کرد" until confirmed.
-  useEffect(() => {
-    for (const t of data ?? []) {
-      const w = t.wage;
-      if (w && !w.seen && !confirmed.current.has(`${t.id}:${w.version}`)) {
-        confirmed.current.add(`${t.id}:${w.version}`);
-        void api(`/workshop/my-tasks/${t.id}/wage-seen`, { body: { expectedVersion: w.version } }).catch(() => {});
-      }
-    }
-  }, [data]);
 
   async function run(fn: () => Promise<unknown>, done: string) {
     if (busy) return;
@@ -68,7 +46,6 @@ export default function TechnicianPage() {
       start ? 'شروع کار ثبت شد.' : 'پایان کار ثبت شد؛ منتظر تأیید کارشناس.');
   };
   const pickup = (taskId: string, partId: string, expectedVersion: number) => run(() => api(`/tasks/${taskId}/part-pickup`, { body: { partId, expectedVersion } }), 'تحویل قطعه ثبت شد.');
-  const wageSeen = (t: WorkshopTask) => t.wage && run(() => api(`/workshop/my-tasks/${t.id}/wage-seen`, { body: { expectedVersion: t.wage!.version } }), '');
   /** Explanation of a blocked start; «تلاش دوباره» starts this same assignment once it is allowed. */
   const why = (t: WorkshopTask) => {
     retryRef.current = () => { void mutate().then((list) => { const fresh = list?.find((x) => x.id === t.id); if (fresh) act(fresh); }); };
@@ -91,11 +68,6 @@ export default function TechnicianPage() {
           <h1>سلام {me.displayName}</h1>
           <p>{place} · {formatJalali(new Date())}</p>
         </div>
-        <Link className="tc-month" href="/workshop/technician/work" aria-label="اجرت این ماه">
-          <span>اجرت این ماه</span>
-          <strong>{month ? faNum(month.totalRial) : '—'}</strong>
-          <small>ریال</small>
-        </Link>
       </header>
       <ReminderCards compact />
       {message && <p role="status" className="m-next">{message}</p>}
@@ -103,7 +75,7 @@ export default function TechnicianPage() {
       {error && <p role="alert" className="m-error">کارها دریافت نشد. <button className="m-btn-s" onClick={() => void mutate()}>تلاش دوباره</button></p>}
       {!data && !error && <p className="m-empty">در حال دریافت کارها…</p>}
 
-      {current && <CurrentJob key={current.id} t={current} busy={busy} onPause={(reason) => run(() => api(`/workshop/my-tasks/${current.id}/actions`, { body: { action: current.pauseReason ? 'resume' : 'pause', expectedVersion: current.version, note: reason } }), current.pauseReason ? 'ادامه کار ثبت شد.' : 'توقف این خودرو ثبت شد.')}  onAct={act} onPickup={pickup} onWageSeen={wageSeen} onNoPart={(t) => report(t, 'no_part')} onProblem={setProblemFor} onWhy={why} />}
+      {current && <CurrentJob key={current.id} t={current} busy={busy} onPause={(reason) => run(() => api(`/workshop/my-tasks/${current.id}/actions`, { body: { action: current.pauseReason ? 'resume' : 'pause', expectedVersion: current.version, note: reason } }), current.pauseReason ? 'ادامه کار ثبت شد.' : 'توقف این خودرو ثبت شد.')}  onAct={act} onPickup={pickup} onNoPart={(t) => report(t, 'no_part')} onProblem={setProblemFor} onWhy={why} />}
       <WorkflowBlockerDialog blockers={blocked?.blockers ?? null} title="شروع کار هنوز ممکن نیست" busy={busy} returnFocus={blocked?.opener ?? null} onClose={() => setBlocked(null)} onRetry={blocked?.retry ? () => { const r = blocked.retry!; setBlocked(null); r(); } : undefined} />
       {data && !open.length && <div className="tc-card tc-empty"><h2>کار بازی ندارید</h2><p>وقتی کاری به شما ارجاع شود، همین‌جا می‌آید.</p></div>}
 
@@ -111,22 +83,24 @@ export default function TechnicianPage() {
         <section aria-label="همه خودروهای من">
           <h2 className="tc-sub">سایر خودروهای من</h2>
           <ul className="tc-next">
-            {next.map((t) => (
-              <li key={t.id} className="tc-mini">
+            {next.map((t) => {
+              const due = technicianDue(t.plannedEndAt);
+              return (
+              <li key={t.id} className="tc-mini" data-testid="tc-job">
                 <div>
                   <strong>{t.vehicleLabel}</strong>
                   <span><PlateText value={t.plate} /> · {t.title || t.departmentName}{t.status === 'done' ? ' · منتظر تأیید کارشناس' : ''}</span>
+                  <span className="tc-due"><span className={`tc-pill tc-pill-${TONE[due.priority]}`}>{TECHNICIAN_PRIORITY_LABELS[due.priority]}</span> مهلت: {due.daysText}</span>
                   {t.status === 'pending' && !t.canStart && !!t.startBlockers?.length && <span className="tc-note">{t.startBlockers[0]!.message} <button type="button" className="m-btn-s" onClick={() => why(t)}>چرا و چه باید کرد؟</button></span>}
                   <button type="button" className="m-btn-s" disabled={busy} onClick={() => setSelectedTaskId(t.id)} aria-label={`باز کردن کار ${t.vehicleLabel}`}>باز کردن کار</button>
                 </div>
-                {t.wage && <b>{faNum(t.wage.amountRial)}</b>}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       )}
       <nav className="tc-links no-print" aria-label="کارکرد و فیدبک‌ها">
-        <Link href="/workshop/technician/work">کارکرد ماه</Link>
         <Link href="/reminders">فیدبک‌های من</Link>
       </nav>
 
@@ -140,36 +114,28 @@ export default function TechnicianPage() {
   );
 }
 
-function CurrentJob({ t, busy, onPause, onAct, onPickup, onWageSeen, onNoPart, onProblem, onWhy }: {
+function CurrentJob({ t, busy, onPause, onAct, onPickup, onNoPart, onProblem, onWhy }: {
   onPause: (reason: string) => Promise<void>;
   t: WorkshopTask; busy: boolean; onWhy: (t: WorkshopTask) => void;
-  onAct: (t: WorkshopTask) => void; onPickup: (taskId: string, partId: string, v: number) => void; onWageSeen: (t: WorkshopTask) => void;
+  onAct: (t: WorkshopTask) => void; onPickup: (taskId: string, partId: string, v: number) => void;
   onNoPart: (t: WorkshopTask) => void; onProblem: (t: WorkshopTask) => void;
 }) {
   const [reason, setReason] = useState('');
   useEffect(() => setReason(''), [t.version]);
-  const left = t.status === 'done' ? null : timeLeft(t.plannedEndAt);
+  const due = technicianDue(t.plannedEndAt);
   const waiting = t.status === 'pending' && !t.canStart;
-  const late = left?.tone === 'late';
   return (
-    <article className="tc-card" aria-label="کار فعلی">
+    <article className="tc-card" aria-label="کار فعلی" data-testid="tc-job">
       <div className="tc-card-top">
         <div className="tc-vehicle">
           <strong>{t.vehicleLabel}</strong>
-          {late && <span className="tc-pill tc-pill-late">فوری</span>}
+          <span className={`tc-pill tc-pill-${TONE[due.priority]}`} data-testid="tc-priority">{TECHNICIAN_PRIORITY_LABELS[due.priority]}</span>
         </div>
-        {left && <div className={`tc-left tc-left-${left.tone}`}><small>وقت</small><b>{left.text}</b></div>}
+        {t.status !== 'done' && <div className={`tc-left tc-left-${TONE[due.priority]}`}><small>مهلت</small><b>{due.daysText}</b></div>}
       </div>
       <Plate value={t.plate ?? ''} large />
       <div className="tc-job-line">
         <p>{t.title || t.departmentName}</p>
-        {t.wage && (
-          <div className="tc-wage">
-            <small>اجرت شما</small>
-            <b>{faNum(t.wage.amountRial)}</b>
-            {t.wage.changed && <><span className="tc-pill tc-pill-soon">تغییر کرد · قبلاً {rial(t.wage.previousRial ?? 0)}</span><button type="button" className="m-btn-s" disabled={busy} onClick={() => onWageSeen(t)}>دیدم</button></>}
-          </div>
-        )}
       </div>
 
       {t.status !== 'done' && t.partsReady && t.partsReady.count > 0 && (
@@ -210,7 +176,6 @@ function CurrentJob({ t, busy, onPause, onAct, onPickup, onWageSeen, onNoPart, o
           <button type="button" className="m-btn-s" disabled={busy} onClick={() => onProblem(t)} aria-label={`مشکل دیگر؛ ${t.title || t.departmentName}`}>مشکل دیگر</button>
         </div>
       )}
-      <p className="tc-note">پرونده <bdi>{toPersianDigits(t.caseNumber)}</bdi> · موعد {formatJalali(t.plannedEndAt, { time: true })}</p>
     </article>
   );
 }
