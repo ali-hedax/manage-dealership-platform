@@ -44,20 +44,26 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await compose.getByRole('button', { name: 'فرستادن فیدبک', exact: true }).click();
   await expect(compose).toBeHidden();
 
-  // Technician on a phone: the reminder card on top, the own wage on the job card, "I have a problem".
+  // Technician on a phone: the reminder card on top, no wage anywhere (owner 2026-11-27), "I have a problem".
   await login(page, 'technician');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/workshop/technician');
   await expect(page.getByRole('heading', { level: 1, name: /^سلام/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'اجرت این ماه' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'اجرت این ماه' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'کارکرد ماه' })).toHaveCount(0);
   const card = page.getByTestId('reminder-card').filter({ hasText: 'لطفاً امروز پیگیری کن.' });
   await expect(card).toContainText('فیدبک از کارشناس تصادفات نمونه');
   await card.getByRole('button', { name: 'دیدم', exact: true }).click();
   await card.getByRole('button', { name: 'انجام شد', exact: true }).click();
   await expect(card).toHaveCount(0);
   const job = page.locator('.tc-card').filter({ hasText: 'صافکاری گلگیر فاز سه' });
-  await expect(job).toContainText('اجرت شما');
-  await expect(job).toContainText('۴۵,۰۰۰,۰۰۰');
+  // Only plate, short vehicle name, priority and the deadline in days — never the wage set above.
+  await expect(job.getByTestId('tc-priority')).toHaveText(/^(فوری|امروز|عادی)$/);
+  await expect(job).toContainText('مهلت');
+  await expect(job.getByRole('img', { name: /^پلاک/ })).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('اجرت');
+  await expect(page.locator('main')).not.toContainText('۴۵,۰۰۰,۰۰۰');
+  await expect(page.locator('main')).not.toContainText('ریال');
   // «قطعه ندارم» is one tap, straight on the card (spec §9).
   await job.getByRole('button', { name: 'قطعه ندارم', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'قطعه ندارم' })).toBeVisible();
@@ -68,10 +74,9 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   expect(await page.evaluate(noHorizontalScroll)).toBe(true);
   await page.screenshot({ path: info.outputPath('technician-phase3-mobile.png'), fullPage: true });
 
-  // Not in the monthly work before the coordinator approves the handover.
+  // The old «کارکرد ماه» link lands on the job list; no monthly wage page any more.
   await page.goto('/workshop/technician/work');
-  await expect(page.getByRole('heading', { name: 'کارکرد من', exact: true })).toBeVisible();
-  await expect(page.getByTestId('my-work-row').filter({ hasText: 'صافکاری گلگیر فاز سه' })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/workshop\/technician$/);
 
   // Coordinator: the problem arrives as an urgent card; approve the job and transfer the case.
   await login(page, 'expert');
@@ -92,12 +97,14 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await expect(bar).toContainText('کارشناس تصادفات نمونهٔ دوم');
   await expect(bar).toContainText('تقسیم کار آزمون');
 
-  // Technician: approved job with its wage in this month's work, per coverage.
+  // Technician after the approval: still no amount on the technician pages.
   await login(page, 'technician');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/workshop/technician/work');
-  await expect(page.getByTestId('my-work-row').filter({ hasText: 'صافکاری گلگیر فاز سه' })).toContainText('۴۵,۰۰۰,۰۰۰ ریال');
-  await expect(page.locator('.my-work-buckets')).toContainText('کارت طلایی');
+  await expect(page).toHaveURL(/\/workshop\/technician$/);
+  await expect(page.getByRole('heading', { level: 1, name: /^سلام/ })).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('۴۵,۰۰۰,۰۰۰');
+  await expect(page.locator('main')).not.toContainText('اجرت');
   expect(await page.evaluate(noHorizontalScroll)).toBe(true);
   // Never the case, the assessment or anyone else's wage.
   expect((await page.request.get(`/api/v1/cases/${kase.id}/wages`)).status()).toBe(403);

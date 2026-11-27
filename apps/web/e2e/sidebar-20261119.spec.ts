@@ -71,11 +71,11 @@ test('the current page opens its group and is highlighted; compact mode keeps ic
   await page.getByRole('button', { name: 'جمع کردن منو' }).count();
 });
 
-test('technician keeps the two-item menu and My Tasks', async ({ page }) => {
+test('technician keeps only My Tasks (no monthly wage page)', async ({ page }) => {
   await login(page, 'technician');
   await nav(page).getByRole('link', { name: 'کارهای من' }).click();
   await expect(page).toHaveURL(/\/workshop\/technician$/);
-  await expect(nav(page).locator('a')).toHaveCount(2);
+  await expect(nav(page).locator('a')).toHaveCount(1);
   await expect(nav(page).locator('.nav-group-head')).toHaveCount(0);
 });
 

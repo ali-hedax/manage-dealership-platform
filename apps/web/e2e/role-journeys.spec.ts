@@ -59,11 +59,13 @@ test('parts clerk: parts desk with the cars, the unified list of the selected ca
   await expect(page.getByRole('heading', { level: 1, name: 'میز قطعات' })).toBeVisible();
 });
 
-test('technician on a phone: month wage on top and one big button', async ({ page }, info) => {
+test('technician on a phone: no wage, one big button', async ({ page }, info) => {
   await login(page, 'technician');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/workshop/technician');
-  await expect(page.getByRole('link', { name: 'اجرت این ماه' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /^سلام/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'اجرت این ماه' })).toHaveCount(0);
+  await expect(page.locator('main')).not.toContainText('اجرت');
   expect(await noSideways(page)).toBe(true);
   await page.screenshot({ path: info.outputPath('technician-390.png'), fullPage: true });
 });

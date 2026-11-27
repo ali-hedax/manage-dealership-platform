@@ -70,9 +70,6 @@ test('phase 3 screenshots', async ({ page }, info) => {
   await page.goto('/workshop/technician');
   await expect(page.getByTestId('reminder-card').first()).toBeVisible();
   await shoot(page, 'technician-card');
-  await page.goto('/workshop/technician/work');
-  await expect(page.getByTestId('my-work-total')).toBeVisible();
-  await shoot(page, 'my-work');
 
   // Owner controls with a synthetic owner session and synthetic report rows.
   await login(page, 'manager');
