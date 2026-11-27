@@ -35,7 +35,9 @@ test('each role sees only its own sections; modules not built yet (۳ سالن, 
     assert.ok(!hrefs(c).some((h) => h.startsWith('/modules/')), 'no roadmap or «در دست توسعه» links');
   }
   // «مدیر خدمات» only for managers; case statistics move to «تصادفات» for everyone else.
-  assert.ok(nums(expert).includes(4) && !nums(expert).includes(8) && !nums(expert).includes(1));
+  assert.ok(nums(expert).includes(4) && !nums(expert).includes(8));
+  // reception.read is in the accident expert's default (owner, 2026-11-27): receptions and the night list.
+  assert.deepEqual(buildMenu(expert).find((s) => s.num === 1)?.items.map((i) => i.href), ['/reception', '/reception/open', '/reception/released', '/reception/night']);
   assert.ok(hrefs(expert).includes('/'));
   assert.ok(nums(parts).includes(6) && !nums(parts).includes(8));
   assert.ok(nums(manager).includes(8) && hrefs(manager).includes('/reports'));

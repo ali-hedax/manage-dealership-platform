@@ -76,13 +76,18 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
 
   it('is reachable only with its permissions; the module is active behind the server flag', async () => {
     await expert.get('/pulse/status').expect(403);
-    await expert.post('/reception/search', { view: 'open' }).expect(403);
+    // The accident expert reads receptions since 2026-11-27; a parts clerk still does not.
+    const plain = await h.loginAs('pulse-no-reception', ['parts_clerk']);
+    await plain.post('/reception/search', { view: 'open' }).expect(403);
+    await expert.post('/reception/search', { view: 'open' }).expect(201);
     await expert.put('/pulse/credentials', { expectedVersion: 0, dealerCode: '9999', username: 'x', password: 'y' }).expect(403);
     const me = (await admin.get('/auth/me').expect(200)).body as { permissions: string[]; modules: { key: string; status: string }[] };
     expect(me.permissions).toEqual(expect.arrayContaining(['integration.manage', 'reception.read', 'reception.external_work']));
     expect(me.modules.find((m) => m.key === 'reception')!.status).toBe('active');
     expect((await expert.get('/auth/me')).body.modules.find((m: { key: string }) => m.key === 'reception').status).toBe('active');
-    expect((await expert.get('/auth/me')).body.permissions).not.toContain('reception.read');
+    expect((await expert.get('/auth/me')).body.permissions).toContain('reception.read');
+    expect((await expert.get('/auth/me')).body.permissions).not.toContain('reception.external_work');
+    expect((await plain.get('/auth/me')).body.permissions).not.toContain('reception.read');
     const s = await status();
     expect(s).toMatchObject({ featureEnabled: true, secretReady: true, configured: false, enabled: false, state: 'off' });
   });

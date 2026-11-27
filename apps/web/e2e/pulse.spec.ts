@@ -165,7 +165,8 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
 });
 
 test('the reception API refuses a colleague without reception.read', async ({ page }) => {
-  await login(page, 'expert');
+  // The accident expert reads receptions since 2026-11-27; the parts clerk still does not.
+  await login(page, 'parts');
   await expect(nav(page).getByRole('button', { name: 'پذیرش و جست‌وجو', exact: true })).toHaveCount(0);
   const res = await page.request.post('/api/v1/reception/search', { headers: { 'x-manage-client': 'e2e' }, data: { view: 'open' } });
   expect(res.status()).toBe(403);

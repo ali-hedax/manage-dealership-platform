@@ -58,7 +58,9 @@ describe('Reception statistics and stay filters', () => {
   afterAll(async () => h.close());
 
   it('needs reception.read; only the owner or system administrator edits the service codes', async () => {
-    await expert.post('/reception/stats', {}).expect(403);
+    // The accident expert reads receptions since 2026-11-27; a parts clerk still does not.
+    await (await h.loginAs('rcp-plain', ['parts_clerk'])).post('/reception/stats', {}).expect(403);
+    await expert.post('/reception/stats', {}).expect(201);
     await reader.post('/reception/stats', {}).expect(201);
     await reader.put('/reception/settings', { serviceLaborCodes: ['0100'] }).expect(403);
     await admin.post('/reception/stats', { date: '1404/12/24' }).expect(400);

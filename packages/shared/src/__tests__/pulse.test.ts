@@ -5,15 +5,21 @@ import {
   pulseSentence, pulseSettingsSchema, receptionExternalWorkSchema, receptionSearchSchema,
 } from '../index';
 
-test('Manage Pulse permissions: owner and system administrator only, never in a PIN session', () => {
+test('Manage Pulse permissions: owner and system administrator; the accident expert also reads receptions', () => {
   for (const p of ['integration.manage', 'reception.read', 'reception.external_work'] as const) {
     assert.equal(PERMISSIONS.includes(p), true, p);
     assert.equal(typeof PERMISSION_LABELS[p], 'string');
     assert.equal(PERMISSION_GROUPS.some((g) => g.permissions.includes(p)), true, p);
     assert.equal(permissionsFor(['system_admin']).has(p), true);
     assert.equal(permissionsFor([], {}, null, true).has(p), true);
-    for (const role of ['accident_expert', 'parts_clerk', 'service_manager', 'technician', 'special_aid_operator', 'special_aid_supply', 'guest']) assert.equal(permissionsFor([role]).has(p), false, `${role} ${p}`);
+    // Owner decision 2026-11-27: reception.read (receptions and the night list) is in the accident expert's default.
+    const without = ['accident_expert', 'parts_clerk', 'service_manager', 'technician', 'special_aid_operator', 'special_aid_supply', 'guest'].filter((r) => !(p === 'reception.read' && r === 'accident_expert'));
+    for (const role of without) assert.equal(permissionsFor([role]).has(p), false, `${role} ${p}`);
   }
+  assert.equal(permissionsFor(['accident_expert']).has('reception.read'), true);
+  assert.equal(permissionsFor(['accident_expert']).has('special_aid.read'), false);
+  // Read only for a PIN session too; settings and the connection stay out of PIN sessions.
+  assert.equal(PIN_DENIED_PERMISSIONS.includes('reception.read'), false);
   assert.equal(PIN_DENIED_PERMISSIONS.includes('integration.manage'), true);
 });
 
