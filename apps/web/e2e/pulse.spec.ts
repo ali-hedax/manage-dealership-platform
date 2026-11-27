@@ -120,6 +120,48 @@ test('reception lists, folder, outside work and Manage Pulse settings use the ex
   }
 });
 
+test('night lists (hotfix H1): repair and accident lists, station and reason dropdowns with free text, night report', async ({ page }) => {
+  await login(page, 'manager');
+  // A working day: today, or Thursday when today is Friday (the list is never built on a Friday).
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran' }).format(new Date());
+  const noon = Date.parse(`${today}T12:00:00Z`);
+  const day = new Date(noon).getUTCDay() === 5 ? new Date(noon - 86_400_000).toISOString().slice(0, 10) : today;
+  for (const kind of ['repair', 'accident'] as const) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/reception/night?day=${day}${kind === 'accident' ? '&kind=accident' : ''}`);
+    await expect(page.getByRole('heading', { level: 1, name: kind === 'accident' ? 'لیست شب تصادفی' : 'لیست شب تعمیراتی' })).toBeVisible();
+    const generate = page.getByRole('button', { name: 'ساخت پیش‌نویس همین حالا' });
+    const list = page.getByTestId('night-list').or(page.getByText('خودرویی در این لیست ثبت نشده است.'));
+    await expect(generate.or(list).first()).toBeVisible();
+    if (await generate.isVisible()) {
+      await generate.click();
+      await expect(page.getByText('پیش‌نویس ساخته شد.')).toBeVisible();
+    }
+    await expect(list.first()).toBeVisible();
+    // «گزارش شب»: total, repair and periodic service separately, per receptionist.
+    const summary = page.getByRole('region', { name: /گزارش شب/ });
+    for (const label of ['کل پذیرش', 'تعمیراتی', 'سرویس ادواری']) await expect(summary.getByText(label, { exact: true }).first()).toBeVisible();
+    if (kind === 'repair') {
+      const table = page.getByTestId('night-list');
+      await expect(table.getByRole('columnheader', { name: 'نام اجرت' })).toHaveCount(0);
+      const current = table.getByLabel('جایگاه فعلی', { exact: true }).first();
+      await expect(current.locator('option', { hasText: 'ندارد' })).toHaveCount(1);
+      await current.selectOption({ label: 'جایگاه دیگر (نوشتن)…' });
+      await table.getByLabel('جایگاه فعلی — نوشتن').first().fill('جایگاه ساختگی بیرون');
+      await table.getByLabel('علت ماندن', { exact: true }).first().selectOption({ label: 'سایر' });
+      await table.getByLabel('علت ماندن — نوشتن').first().fill('منتظر کارشناس بیمه');
+      await table.getByRole('button', { name: 'ذخیره' }).first().click();
+      await expect(page.getByText('ذخیره شد.')).toBeVisible();
+      await expect(table.getByLabel('علت ماندن — نوشتن').first()).toHaveValue('منتظر کارشناس بیمه');
+    }
+    for (const [width, height] of [[1440, 900], [390, 844]] as const) {
+      await page.setViewportSize({ width, height });
+      expect(await noSideScroll(page), `night list ${kind} at ${width} px`).toBe(true);
+      await shot(page, `night-${kind}-${width}`);
+    }
+  }
+});
+
 test('the reception API refuses a colleague without reception.read', async ({ page }) => {
   await login(page, 'expert');
   await expect(nav(page).getByRole('button', { name: 'پذیرش و ترخیص' })).toHaveCount(0);
