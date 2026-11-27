@@ -1,6 +1,8 @@
 /* Manage design system — base components (S03). Every value comes from ds-tokens.css. */
 .ds *, .ds *::before, .ds *::after { box-sizing: border-box; }
-.ds .ds-num, .ds table, .ds .ds-kpi-value { font-variant-numeric: tabular-nums; }
+.ds .ds-num, .ds table { font-variant-numeric: tabular-nums; }
+/* Large display numbers: proportional Persian digits, no tracking (tabular slots read as gaps). */
+.ds .ds-kpi-value, .ds .ds-display, .ds .ds-timer, .ds .ds-station-code, .ds .ds-tv-eta { font-variant-numeric: proportional-nums; letter-spacing: 0; font-feature-settings: normal; }
 .ds svg.app-icon { inline-size: var(--ds-icon); block-size: var(--ds-icon); stroke-width: var(--ds-icon-stroke); flex: none; }
 .ds h1, .ds h2, .ds h3 { margin: 0; font-weight: var(--ds-fw-bold); }
 .ds h1 { font-size: var(--ds-fs-title); }
@@ -29,7 +31,15 @@
 .ds-tag.gold { background: var(--ds-cov-gold-soft); color: var(--ds-cov-gold); }
 .ds-tag.ins { background: var(--ds-cov-ins-soft); color: var(--ds-cov-ins); }
 .ds-tag.own { background: var(--ds-cov-own-soft); color: var(--ds-cov-own); }
-.ds[data-theme='vision'] .ds-tag.gold, .ds[data-theme='vision'] .ds-tag.ins, .ds[data-theme='vision'] .ds-tag.own { background: var(--ds-surface-2); }
+.ds[data-theme='vision'] .ds-tag { background: var(--ds-surface-2); color: #C9CDD3; }
+.ds[data-theme='vision'] .ds-tag.gold { color: #E8CC94; }
+.ds[data-theme='vision'] .ds-tag.ins { color: #9CC3E8; }
+.ds[data-theme='vision'] .ds-tag.own { color: #D2D5DA; }
+.ds[data-theme='vision'] .ds-tag.good { color: #6FD3A6; }
+.ds[data-theme='vision'] .ds-tag.warn { color: #F0C070; }
+.ds[data-theme='vision'] .ds-tag.crit { color: #FF8F86; }
+.ds[data-theme='vision'] .ds-tag.info { color: #9CC3E8; }
+.ds[data-theme='vision'] .ds-day { color: var(--ds-text); border-color: #3A404B; }
 .ds-day { font-size: var(--ds-fs-xs); font-weight: var(--ds-fw-bold); padding: 1px var(--ds-2); border-radius: var(--ds-radius-pill); border: 1px solid var(--ds-line); color: var(--ds-text); }
 
 /* Panels and cards */
@@ -92,7 +102,7 @@ a.ds-card:hover { box-shadow: var(--ds-shadow-2); transform: translateY(-1px); }
 .ds-kpi { display: grid; gap: var(--ds-1); padding: var(--ds-4); background: var(--ds-surface); border-radius: var(--ds-radius-card); box-shadow: var(--ds-shadow-1); color: inherit; text-decoration: none; transition: box-shadow var(--ds-dur) var(--ds-ease); }
 a.ds-kpi:hover { box-shadow: var(--ds-shadow-2); }
 .ds-kpi-label { font-size: var(--ds-fs-sm); color: var(--ds-muted); }
-.ds-kpi-value { font-size: var(--ds-fs-kpi); font-weight: var(--ds-fw-light); line-height: 1.15; letter-spacing: -.01em; }
+.ds-kpi-value { font-size: var(--ds-fs-kpi); font-weight: var(--ds-fw-light); line-height: 1.15; }
 .ds-kpi.xl .ds-kpi-value { font-size: var(--ds-fs-kpi-xl); }
 .ds-kpi-delta { font-size: var(--ds-fs-xs); font-weight: var(--ds-fw-medium); }
 .ds-kpi-delta.up { color: var(--ds-good); }
@@ -124,6 +134,8 @@ a.ds-kpi:hover { box-shadow: var(--ds-shadow-2); }
 .ds-summary { font-size: var(--ds-fs-card); color: var(--ds-muted); font-weight: var(--ds-fw-light); }
 .ds-summary b { color: var(--ds-text); font-weight: var(--ds-fw-bold); }
 .ds-grid { display: grid; gap: var(--ds-3); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ds-typo { display: grid; grid-template-columns: 1fr 1fr; gap: var(--ds-6); }
+@media (max-width: 900px) { .ds-typo { grid-template-columns: 1fr; } }
 .ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--ds-2); }
 .ds-swatch { display: grid; gap: var(--ds-1); font-size: var(--ds-fs-xs); }
 .ds-swatch i { display: block; block-size: 44px; border-radius: var(--ds-radius-ctl); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }

@@ -83,7 +83,6 @@
   line-height: var(--ds-lh);
   color: var(--ds-text);
   background: var(--ds-bg);
-  font-feature-settings: 'ss01';
   -webkit-font-smoothing: antialiased;
 }
 @media (max-width: 640px) {
@@ -97,8 +96,8 @@
   --ds-line: #2A2F38;
   --ds-line-soft: #222731;
   --ds-text: #ECEDEF;
-  --ds-muted: #9BA1AB;
-  --ds-faint: #737A85;
+  --ds-muted: #A7ADB6;
+  --ds-faint: #8A919C;
   --ds-accent: #C9A46A;
   --ds-accent-ink: #E3C590;
   --ds-accent-soft: rgba(201, 164, 106, .12);

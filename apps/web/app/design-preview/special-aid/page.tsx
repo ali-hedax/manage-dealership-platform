@@ -1,17 +1,17 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DsFreshness, DsStepper } from '@/components/ds';
 import { AppIcon } from '@/components/AppIcon';
-import { AID_STEPS, PARTS } from '@/lib/design-preview-data';
+import { AID_STEPS, jalaliDayMonth, nextWorkingDays, PARTS } from '@/lib/design-preview-data';
 
 // (2) Special Assist officer's desk with the booking assistant (S04). «دعوت» suggests three slots
 // (day + shift + station) before the 20-working-day deadline, matching the station's skill, with
 // the most free capacity, all arrived parts of the vehicle in one visit. Synthetic data.
 const TABS = [['در انتظار تأمین', 23], ['آمادهٔ دعوت', 9], ['نوبت‌داده‌شده', 17], ['تعیین تکلیف‌شده', 41]] as const;
-const SLOTS = [
-  { day: 'شنبه ۸ آذر', shift: 'صبح', station: 'مکانیک ۴۱', free: 62, why: 'خلوت‌ترین روز پیش از روز کاری ۱۱' },
-  { day: 'یک‌شنبه ۹ آذر', shift: 'عصر', station: 'مکانیک ۴۱', free: 48, why: 'مشتری دفعهٔ قبل عصر آمده بود' },
-  { day: 'سه‌شنبه ۱۱ آذر', shift: 'صبح', station: 'جلوبندی ۲۲', free: 55, why: 'هر دو قطعهٔ رسیده در یک مراجعه' },
+const SLOT_PLAN = [
+  { at: 0, shift: 'صبح', station: 'مکانیک ۴۱', free: 62, why: 'خلوت‌ترین روز پیش از روز کاری ۱۱' },
+  { at: 1, shift: 'عصر', station: 'مکانیک ۴۱', free: 48, why: 'مشتری دفعهٔ قبل عصر آمده بود' },
+  { at: 3, shift: 'صبح', station: 'جلوبندی ۲۲', free: 55, why: 'هر دو قطعهٔ رسیده در یک مراجعه' },
 ];
 const CALLS = ['پاسخ داد و نوبت گرفت', 'پاسخ داد و انصراف داد', 'پاسخ نداد', 'خاموش', 'شماره اشتباه'];
 
@@ -19,6 +19,9 @@ export default function SpecialAidDesk() {
   const [tab, setTab] = useState(1);
   const [sel, setSel] = useState(0);
   const [slot, setSlot] = useState<number | null>(0);
+  const [days, setDays] = useState<string[]>([]);
+  useEffect(() => setDays(nextWorkingDays(new Date(), 4).map(jalaliDayMonth)), []);
+  const SLOTS = SLOT_PLAN.map((s) => ({ ...s, day: days[s.at] ?? '…' }));
   const p = PARTS[sel]!;
   return (
     <div className="ds">

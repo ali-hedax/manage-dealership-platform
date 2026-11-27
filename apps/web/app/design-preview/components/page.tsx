@@ -23,17 +23,20 @@ function Showcase({ theme }: { theme: 'desk' | 'vision' }) {
 
       <div className="ds-panel">
         <div className="ds-panel-head"><h2>رنگ‌ها</h2><span className="ds-small ds-muted">رنگ وضعیت فقط برای معنا</span></div>
-        <div className="ds-swatches">{SWATCHES.map(([v, label]) => <span key={v} className="ds-swatch"><i style={{ background: `var(${v})` }} />{label}<code className="ds-muted">{v}</code></span>)}</div>
+        <div className="ds-swatches">{SWATCHES.map(([v, label]) => <span key={v} className="ds-swatch"><i style={{ background: `var(${v})` }} />{label}<code className="ds-muted" dir="ltr">{v}</code></span>)}</div>
       </div>
 
       <div className="ds-panel">
         <div className="ds-panel-head"><h2>تایپوگرافی و کنترل‌ها</h2></div>
-        <div style={{ display: 'grid', gap: 'var(--ds-3)' }}>
-          <p style={{ fontSize: 'var(--ds-fs-kpi-xl)', fontWeight: 300 }}>۴۲</p>
+        <div className="ds-typo">
+         <div style={{ display: 'grid', gap: 'var(--ds-2)', alignContent: 'start' }}>
+          <p className="ds-display" style={{ fontSize: 'var(--ds-fs-kpi-xl)', fontWeight: 300, lineHeight: 1 }}>۴۲ · ۳۱۲ · ۸۷٪</p>
           <h1>عنوان صفحه · ۱۸</h1>
           <h2>عنوان کارت · ۱۵</h2>
           <p>متن پایه · ۱۳ — امروز ۳ خودرو منتظر قطعه‌اند.</p>
           <p className="ds-small ds-muted">متن کوچک · ۱۲ — آخرین به‌روزرسانی ده دقیقه پیش</p>
+         </div>
+         <div style={{ display: 'grid', gap: 'var(--ds-3)', alignContent: 'start' }}>
           <div style={{ display: 'flex', gap: 'var(--ds-2)', flexWrap: 'wrap' }}>
             <button type="button" className="ds-btn primary">اقدام اصلی</button>
             <button type="button" className="ds-btn accent">دعوت مشتری</button>
@@ -45,6 +48,7 @@ function Showcase({ theme }: { theme: 'desk' | 'vision' }) {
             <span className="ds-tag gold">کارت طلایی</span><span className="ds-tag ins">بیمه</span><span className="ds-tag own">شخصی</span>
             <span className="ds-tag good">به‌موقع</span><span className="ds-tag warn">روز ۱۱</span><span className="ds-tag crit">روز ۱۸</span><span className="ds-tag info">در خرید</span>
           </div>
+         </div>
         </div>
       </div>
 

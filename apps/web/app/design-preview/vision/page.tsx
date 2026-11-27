@@ -11,19 +11,44 @@ const TABS = ['نمای کلی', 'تصادفات', 'پذیرش تا ترخیص',
 const NOW = [38, 41, 37, 44, 46, 43, 49, 52, 48, 55, 58, 54, 61, 63];
 const PREV = [35, 36, 40, 38, 39, 42, 41, 44, 45, 43, 47, 46, 48, 50];
 
+const DAYS = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ش', 'ی', 'د', 'س', 'چ', 'پ', 'ش', 'امروز'];
+const fa = (n: number) => n.toLocaleString('fa-IR');
+
+/** Daily receptions, two weeks: axes with labels, legend, and a tooltip on hover or tap. */
 function Chart() {
-  const w = 640, h = 200, max = 70;
-  const pt = (v: number, i: number, n: number) => `${(i / (n - 1)) * w},${h - (v / max) * h}`;
-  const line = NOW.map((v, i) => pt(v, i, NOW.length)).join(' ');
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 640, H = 200, L = 34, B = 26, max = 70;
+  const x = (i: number) => L + (i / (NOW.length - 1)) * (W - L - 8);
+  const y = (v: number) => 8 + (1 - v / max) * (H - B - 8);
+  const line = NOW.map((v, i) => `${x(i)},${y(v)}`).join(' ');
   return (
-    <svg className="ds-chart" viewBox={`0 -10 ${w} ${h + 30}`} preserveAspectRatio="none" role="img" aria-label="پذیرش روزانه در دو هفتهٔ اخیر، رو به افزایش">
-      <defs><linearGradient id="ds-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--ds-accent)" stopOpacity=".28" /><stop offset="1" stopColor="var(--ds-accent)" stopOpacity="0" /></linearGradient></defs>
-      {[0, 25, 50].map((g) => <line key={g} className="grid" x1="0" x2={w} y1={h - (g / max) * h} y2={h - (g / max) * h} />)}
-      <polyline className="prev" points={PREV.map((v, i) => pt(v, i, PREV.length)).join(' ')} />
-      <polygon className="area" points={`0,${h} ${line} ${w},${h}`} />
-      <polyline className="line" points={line} />
-      <text x={w} y={h + 22} textAnchor="end">دو هفته پیش</text><text x="0" y={h + 22}>امروز</text>
-    </svg>
+    <div className="ds-chart-wrap">
+      <div className="ds-legend" aria-hidden="true"><span><i className="cur" />این دو هفته</span><span><i className="prev" />دورهٔ قبل</span></div>
+      <svg className="ds-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`پذیرش روزانه در دو هفتهٔ اخیر؛ امروز ${fa(NOW[NOW.length - 1]!)} پذیرش، دورهٔ قبل ${fa(PREV[PREV.length - 1]!)}`} onMouseLeave={() => setHover(null)}>
+        <defs><linearGradient id="ds-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--ds-accent)" stopOpacity=".28" /><stop offset="1" stopColor="var(--ds-accent)" stopOpacity="0" /></linearGradient></defs>
+        {[0, 20, 40, 60].map((g) => <g key={g}><line className="grid" x1={L} x2={W - 8} y1={y(g)} y2={y(g)} /><text x={L - 6} y={y(g) + 4} textAnchor="end">{fa(g)}</text></g>)}
+        <line className="axis" x1={L} x2={W - 8} y1={y(0)} y2={y(0)} />
+        <line className="axis" x1={L} x2={L} y1={8} y2={y(0)} />
+        {DAYS.map((d, i) => <text key={i} x={x(i)} y={H - 6} textAnchor="middle">{d}</text>)}
+        <text className="axis-label" x={W - 8} y={10} textAnchor="end">تعداد پذیرش</text>
+        <polyline className="prev" points={PREV.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
+        <polygon className="area" points={`${x(0)},${y(0)} ${line} ${x(NOW.length - 1)},${y(0)}`} />
+        <polyline className="line" points={line} />
+        {NOW.map((v, i) => (
+          <g key={i}>
+            <rect className="hit" x={x(i) - 20} y={0} width={40} height={H - B} onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} />
+            {hover === i && <><line className="cursor" x1={x(i)} x2={x(i)} y1={8} y2={y(0)} /><circle className="dot" cx={x(i)} cy={y(v)} r={4.5} /><circle className="dot prev" cx={x(i)} cy={y(PREV[i]!)} r={3.5} /></>}
+          </g>
+        ))}
+      </svg>
+      {hover !== null && (
+        <div className="ds-tooltip" role="status" style={{ insetInlineStart: `${(1 - x(hover) / W) * 100}%` }}>
+          <b>{DAYS[hover] === 'امروز' ? 'امروز' : `${fa(NOW.length - 1 - hover)} روز پیش`}</b>
+          <span><i className="cur" />{fa(NOW[hover]!)} پذیرش</span>
+          <span><i className="prev" />{fa(PREV[hover]!)} در دورهٔ قبل</span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -57,7 +82,7 @@ export default function VisionOverview() {
           <DsKpi xl label="برگشتی ۳۰ روزه" value="۲٫۱٪" delta={-0.4} goodWhenUp={false} note="هدف زیر ۳٪" href="#" />
         </div>
         <div className="ds-cols">
-          <section className="ds-panel ds-glass" aria-labelledby="v-chart"><div className="ds-panel-head"><h2 id="v-chart">پذیرش روزانه</h2><span className="ds-small ds-muted">خط‌چین: دورهٔ قبل</span></div><Chart /></section>
+          <section className="ds-panel ds-glass" aria-labelledby="v-chart"><div className="ds-panel-head"><h2 id="v-chart">پذیرش روزانه</h2><span className="ds-small ds-muted">روی هر روز بروید تا عدد را ببینید</span></div><Chart /></section>
           <section className="ds-panel ds-glass" aria-labelledby="v-load"><div className="ds-panel-head"><h2 id="v-load">بار جایگاه‌ها امروز</h2></div>
             <div className="ds-bars">{STATIONS.map((s) => <div className="ds-bar" key={s.code}><span>{s.name} {s.code}</span><i><b className={s.load > 100 ? 'crit' : s.load > 70 ? 'warn' : 'good'} style={{ inlineSize: `${Math.min(s.load, 100)}%` }} /></i><span className="ds-num">{s.load.toLocaleString('fa-IR')}٪</span></div>)}</div>
           </section>

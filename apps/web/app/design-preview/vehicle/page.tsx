@@ -27,7 +27,7 @@ export default function VehicleFile() {
             <span>سارا محمدی <span className="ds-muted">· ۰۹۳۵•••۲۷۷۰</span></span>
             <div style={{ display: 'flex', gap: 'var(--ds-1)', flexWrap: 'wrap' }}><span className="ds-tag ins">بیمه</span><span className="ds-tag crit">تصادف</span><span className="ds-tag info">امداد ویژه</span><span className="ds-tag warn">توقف رسمی</span></div>
           </div>
-          <div style={{ textAlign: 'end' }}><span className="ds-day">روز ۴</span><p className="ds-small ds-muted" style={{ marginBlockStart: 6 }}>پرونده AC-1405-0142</p></div>
+          <div style={{ textAlign: 'end' }}><span className="ds-day">روز ۴ در نمایندگی</span><p className="ds-small ds-muted" style={{ marginBlockStart: 6 }}>پرونده AC-1405-0142</p></div>
         </section>
         <section className="ds-panel"><div className="ds-panel-head"><h2>پروندهٔ تصادف</h2><span className="ds-small ds-muted">کار بعدی: اجرای صافکاری</span></div><DsStepper steps={CASE_STEPS} current={3} label="مراحل پرونده" /></section>
         <section aria-labelledby="tl"><div className="ds-panel-head"><h2 id="tl">خط زمانی</h2><span className="ds-small ds-muted">همهٔ رویدادهای این شاسی</span></div>
