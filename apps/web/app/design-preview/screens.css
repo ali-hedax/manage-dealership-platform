@@ -53,7 +53,7 @@
 .ds-tv-rot { display: flex; gap: 10px; }
 .ds-tv-rot i { inline-size: 36px; block-size: 4px; border-radius: 4px; background: var(--ds-line); }
 .ds-tv-rot i.on { background: var(--ds-accent); }
-.ds-tv-row { display: grid; grid-template-columns: 12ch auto 1fr 9ch; align-items: center; gap: 28px; padding: 18px 28px; border-radius: 14px; background: var(--ds-surface); box-shadow: var(--ds-shadow-1); font-size: 26px; }
+.ds-tv-row { display: grid; grid-template-columns: 12ch auto 1fr 15ch; align-items: center; gap: 28px; padding: 18px 28px; border-radius: 14px; background: var(--ds-surface); box-shadow: var(--ds-shadow-1); font-size: 26px; }
 .ds-tv-row .ds-plate { --h: 40px; }
 .ds-tv-progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .ds-tv-progress span { display: grid; gap: 8px; font-size: 16px; color: var(--ds-muted); }

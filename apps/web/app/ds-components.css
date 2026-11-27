@@ -37,7 +37,7 @@
 .ds-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-3); margin-block-end: var(--ds-3); }
 
 /* Iranian licence plate (three sizes). */
-.ds-plate { --h: 26px; display: inline-flex; align-items: stretch; direction: ltr; block-size: var(--h); border: 1.5px solid var(--ds-plate-ink); border-radius: calc(var(--h) * .16); background: #FFF; color: var(--ds-plate-ink); font-family: var(--ds-font); font-weight: var(--ds-fw-bold); font-size: calc(var(--h) * .58); line-height: 1; overflow: hidden; white-space: nowrap; }
+.ds-plate { --h: 26px; display: inline-flex; align-items: stretch; direction: ltr; unicode-bidi: isolate; block-size: var(--h); border: 1.5px solid var(--ds-plate-ink); border-radius: calc(var(--h) * .16); background: #FFF; color: var(--ds-plate-ink); font-family: var(--ds-font); font-weight: var(--ds-fw-bold); font-size: calc(var(--h) * .58); line-height: 1; overflow: hidden; white-space: nowrap; }
 .ds-plate.sm { --h: 20px; }
 .ds-plate.lg { --h: 40px; }
 .ds-plate-flag { inline-size: calc(var(--h) * .5); background: var(--ds-plate-blue); display: grid; place-items: end center; padding-block-end: 2px; }
