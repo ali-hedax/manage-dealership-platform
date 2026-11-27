@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import time
 
 src, sha = sys.argv[1], sys.argv[2]
 assert re.fullmatch('[0-9a-f]{40}', sha)
@@ -55,8 +56,12 @@ def rename(name):
 
 
 def oci_name(value):
-    # «docker.io/library/manage-api:latest» or «manage-api:latest»
-    return rename(value.split('/')[-1])
+    # «docker.io/library/manage-api:latest» → «docker.io/library/manage-staging-api:<sha>». The
+    # registry prefix must stay: Docker resolves names in their full form, and a bare name in the
+    # OCI index is listed but cannot be inspected or used (found 2026-11-27).
+    short = value.split('/')[-1]
+    prefix = value[: len(value) - len(short)] or 'docker.io/library/'
+    return prefix + rename(short)
 
 
 def rewrite(member_name, data):
@@ -123,8 +128,13 @@ def main():
         raise SystemExit(failure)
     if seen != set(RENAME):
         raise SystemExit(f'archive did not name both images: {sorted(seen)}')
-    for t in TARGETS:
-        subprocess.run(['docker', 'image', 'inspect', t], check=True, stdout=subprocess.DEVNULL)
+    for t in TARGETS:  # the image store may register the second image a moment after load returns
+        for attempt in range(10):
+            if subprocess.run(['docker', 'image', 'inspect', t], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+                break
+            time.sleep(2)
+        else:
+            raise SystemExit(f'loaded image {t} cannot be inspected')
     print(out.strip())
 
 
