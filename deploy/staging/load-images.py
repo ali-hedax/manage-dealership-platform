@@ -43,8 +43,9 @@ with tarfile.open(src, 'r|gz') as tin, tarfile.open(fileobj=load.stdin, mode='w|
             tout.addfile(member, io.BytesIO(data))
         else:
             tout.addfile(member)
-load.stdin.close()
-out, err = load.communicate(timeout=900)
+load.stdin.close()  # end of the stream; communicate() would try to flush the closed pipe
+load.wait(timeout=900)
+out, err = load.stdout.read(), load.stderr.read()
 assert load.returncode == 0, err.decode()[-400:]
 assert seen == set(RENAME), seen
 print(out.decode().strip())
