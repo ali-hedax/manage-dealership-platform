@@ -90,18 +90,19 @@
 }
 
 .ds[data-theme='vision'], .ds [data-theme='vision'] {
-  --ds-bg: #0F1115;
-  --ds-surface: #171A21;
-  --ds-surface-2: #1F232B;
-  --ds-line: #2A2F38;
-  --ds-line-soft: #222731;
+  /* Identity of S05 (owner, 2026-11-27): matte black, safety yellow, thin lines. */
+  --ds-bg: #0A0A0B;
+  --ds-surface: #121214;
+  --ds-surface-2: #18181B;
+  --ds-line: #26262B;
+  --ds-line-soft: #1C1C20;
   --ds-text: #ECEDEF;
   --ds-muted: #A7ADB6;
   --ds-faint: #8A919C;
-  --ds-accent: #C9A46A;
-  --ds-accent-ink: #E3C590;
-  --ds-accent-soft: rgba(201, 164, 106, .12);
-  --ds-on-accent: #14161B;
+  --ds-accent: #FFC400;
+  --ds-accent-ink: #FFD54D;
+  --ds-accent-soft: rgba(255, 196, 0, .12);
+  --ds-on-accent: #0A0A0B;
   --ds-good: #4FB78A;
   --ds-good-soft: rgba(79, 183, 138, .13);
   --ds-warn: #E0A84A;

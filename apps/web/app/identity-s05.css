@@ -1,0 +1,96 @@
+/* ============================================================================================
+   Identity of slice S05 (owner, 2026-11-27): matte black #0A0A0B, safety yellow #FFC400, thin
+   lines. Staff pages stay light, plain and fast; the shell (side menu and top bar) is matte black
+   with yellow only for «you are here», focus and attention. Tokens and styling only — no logic.
+   Loaded after every other stylesheet so it wins without !important.
+   ============================================================================================ */
+:root {
+  --hx-black: #0A0A0B;
+  --hx-black-2: #141416;
+  --hx-black-3: #1D1D21;
+  --hx-yellow: #FFC400;
+  --hx-yellow-soft: #FFF6D6;
+  --hx-hair: rgba(255, 255, 255, .08);
+  --hx-hair-light: #E7E6E1;
+  --hx-side-text: #D6D6DA;
+  --hx-side-muted: #8C8C94;
+
+  /* The old teal accent becomes black; soft fills become a pale yellow. White text on these stays readable. */
+  --navy: var(--hx-black);
+  --navy-2: #2A2A2F;
+  --gold: var(--hx-black);
+  --gold-ink: var(--hx-black);
+  --gold-soft: var(--hx-yellow-soft);
+  --blue-soft: var(--hx-yellow-soft);
+  --g-petrol: var(--hx-black);
+  --g-graphite: var(--hx-black);
+  --m-accent: var(--hx-black);
+  --line: var(--hx-hair-light);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--hx-yellow);
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --sidebar-w: 232px;
+}
+
+/* ---------------------------------------------------------------- side menu ۰–۹ */
+.app-side { background: var(--hx-black); color: var(--hx-side-text); border-inline-end: 1px solid var(--hx-hair); padding: 16px 10px 12px; }
+.app-side .brand-mark { border-color: var(--hx-hair); }
+.app-side .brand-word, .app-side .brand-by b { color: #F4F4F1; }
+.app-side .brand-by { color: var(--hx-side-muted); border-color: var(--hx-hair); }
+.app-side .brand-slashes i { background: var(--hx-yellow); }
+.side-nav { gap: 1px; }
+.side-nav > a, .nav-group-head {
+  min-block-size: 36px; padding: 0 10px; gap: 10px; border-radius: 6px;
+  font: 500 13px/1.4 Vazirmatn, sans-serif; color: var(--hx-side-text); background: none; box-shadow: none;
+}
+.side-nav > a:hover, .nav-group-head:hover, .nav-group-items a:hover { background: rgba(255, 255, 255, .05); text-decoration: none; }
+.nav-group.open > .nav-group-head { background: rgba(255, 255, 255, .04); }
+.nav-group.active > .nav-group-head { color: #FFFFFF; }
+.nav-num {
+  flex: none; inline-size: 18px; text-align: center; font: 500 12px/1 Vazirmatn, sans-serif;
+  font-variant-numeric: tabular-nums; color: var(--hx-side-muted);
+}
+.nav-group.active .nav-num, .side-nav > a[aria-current='page'] .nav-num { color: var(--hx-yellow); }
+.nav-group-head .chev { inline-size: 14px; block-size: 14px; opacity: .5; }
+.nav-group-items { padding: 2px 0 6px; padding-inline-start: 28px; gap: 0; }
+.nav-group-items a { min-block-size: 32px; padding: 0 10px; gap: 8px; border-radius: 6px; font-size: 12.5px; font-weight: 400; color: #BDBDC3; }
+.side-nav a .app-icon, .nav-group-items a .app-icon { inline-size: 15px; block-size: 15px; color: var(--hx-side-muted); opacity: 1; }
+.side-nav svg.app-icon { stroke-width: 1.25; }
+/* «You are here»: a thin yellow line and yellow text, never a heavy fill. */
+.side-nav a[aria-current='page'], .nav-group-items a[aria-current='page'] {
+  background: rgba(255, 196, 0, .08); color: var(--hx-yellow); box-shadow: inset -2px 0 0 var(--hx-yellow);
+}
+[dir='ltr'] .side-nav a[aria-current='page'] { box-shadow: inset 2px 0 0 var(--hx-yellow); }
+.side-nav a[aria-current='page'] .app-icon { color: var(--hx-yellow); }
+.nav-compact { color: var(--hx-side-muted); border-color: var(--hx-hair); font-size: 12px; }
+.nav-compact:hover { color: var(--hx-side-text); background: rgba(255, 255, 255, .05); }
+.side-foot { color: var(--hx-side-muted); font-size: 11px; }
+.side-compact .nav-num { inline-size: 100%; font-size: 13px; }
+
+/* ---------------------------------------------------------------- top bar */
+.app-top { background: var(--hx-black); border-block-end: 1px solid var(--hx-hair); padding-block: 8px; color: #EDEDEA; }
+.app-top .icon-btn .dot { background: var(--hx-yellow); box-shadow: 0 0 0 2px var(--hx-black); }
+.app-top .top-search { background: var(--hx-black-2); border: 1px solid var(--hx-black-3); min-block-size: 36px; border-radius: 6px; }
+.app-top .top-search:focus-within { border-color: var(--hx-yellow); box-shadow: 0 0 0 2px rgba(255, 196, 0, .22); }
+.app-top .top-search kbd, .app-top .top-tenant { border-color: var(--hx-black-3); }
+.app-top .account-menu > summary, .app-top .version-chip { background: transparent; border-color: var(--hx-black-3); border-radius: 6px; }
+.env-banner { background: var(--hx-yellow-soft); border-block-end: 1px solid #F0DF9C; color: #5C4600; font-size: 12px; }
+
+/* ---------------------------------------------------------------- staff pages: plain and fast */
+.btn, .m-btn, .m-btn2, .m-btn-s, .m-btn2-s { border-radius: 6px; box-shadow: none; }
+.btn-primary:focus-visible, .btn:focus-visible, .m-btn:focus-visible, .m-btn-s:focus-visible, .m-btn2-s:focus-visible { outline: 2px solid var(--hx-yellow); outline-offset: 2px; }
+.panel, .tc-card, .m-card { border-radius: 10px; }
+.back-link, a.back-link { font-size: 12.5px; }
+/* The login welcome button keeps contrast on its dark side: yellow with black text. */
+.entry-welcome .btn-primary { background: var(--hx-yellow); border-color: var(--hx-yellow); color: var(--hx-black); }
+.entry-welcome .btn-primary:hover { background: #FFD340; border-color: #FFD340; }
+
+@media (max-width: 960px) {
+  .app-side { inline-size: min(280px, 86vw); }
+  .side-nav > a, .nav-group-head { min-block-size: 44px; font-size: 14px; }
+  .nav-group-items a { min-block-size: 40px; font-size: 13.5px; }
+}
+@media (prefers-contrast: more) {
+  .nav-group-items a, .side-nav > a { color: #FFFFFF; }
+  .nav-num { color: #E0E0E4; }
+}

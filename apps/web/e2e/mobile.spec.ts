@@ -12,7 +12,7 @@ test('phone width: login, dashboard and case list fit without horizontal scrolli
   await page.getByRole('button', { name: 'منو' }).click();
   const nav = page.getByRole('navigation', { name: 'بخش‌های منیج' });
   await expect(nav.getByRole('link', { name: 'میزکار من', exact: true })).toBeVisible();
-  const accident = nav.getByRole('button', { name: 'مدیریت تصادفات' });
+  const accident = nav.getByRole('button', { name: 'تصادفات', exact: true });
   if ((await accident.getAttribute('aria-expanded')) !== 'true') await accident.click();
   await expect(nav.getByRole('link', { name: 'پرونده و کارشناسی', exact: true })).toBeVisible();
 });

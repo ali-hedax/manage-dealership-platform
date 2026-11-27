@@ -14,7 +14,7 @@ test('department menu exposes only the desks of the six roles, on desktop and ph
  await page.setViewportSize({width:390,height:844});await page.goto('/accidents/expert');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.getByRole('button',{name:'منو',exact:true}).click();const sidebar=page.getByRole('complementary',{name:'منوی اصلی'});
- await expect(sidebar.getByRole('link',{name:'میزکار من',exact:true})).toBeVisible();await sidebar.getByRole('button',{name:'مدیریت تصادفات'}).click();await expect(sidebar.getByRole('link',{name:'پرونده و کارشناسی',exact:true})).toBeVisible();await expect(sidebar.getByRole('button',{name:'تنظیمات سیستم'})).toBeVisible();
+ await expect(sidebar.getByRole('link',{name:'میزکار من',exact:true})).toBeVisible();await sidebar.getByRole('button',{name:'تصادفات',exact:true}).click();await expect(sidebar.getByRole('link',{name:'پرونده و کارشناسی',exact:true})).toBeVisible();await expect(sidebar.getByRole('button',{name:'تنظیمات',exact:true})).toBeVisible();
  await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'منو',exact:true})).toBeFocused();
  // A direct section link must scroll after asynchronously loaded case data arrives.
  const cases=await (await page.request.get('/api/v1/cases')).json();

@@ -27,7 +27,7 @@ test('service manager: KPI opens its list, filters survive opening a case, chart
   await page.goBack();
 
   // Accident view, filtered by stage; open a case from the work list and come back.
-  await page.getByRole('button', { name: 'تصادفات', exact: true }).click();
+  await page.getByRole('navigation', { name: 'نوع گزارش' }).getByRole('button', { name: 'تصادفات', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'گزارش‌ها — تصادفات' })).toBeVisible();
   await page.getByLabel('مرحله').selectOption({ label: 'در حال تعمیر' });
   await expect(page).toHaveURL(/stage=in_repair/);
