@@ -141,6 +141,8 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
     // «گزارش شب»: total, oil change and technical repair (not exclusive), per receptionist.
     const summary = page.getByRole('region', { name: /گزارش شب/ });
     for (const label of ['کل پذیرش', 'تعویض روغن', 'تعمیر فنی']) await expect(summary.getByText(label, { exact: true }).first()).toBeVisible();
+    // H2: the owner sees the C5 counts marked «آزمایشی».
+    await expect(summary.locator('.tag-exp')).toHaveText('آزمایشی');
     if (kind === 'repair') {
       const table = page.getByTestId('night-list');
       await expect(table.getByRole('columnheader', { name: 'نام اجرت' })).toHaveCount(0);

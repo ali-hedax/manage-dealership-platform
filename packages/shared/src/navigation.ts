@@ -2,6 +2,9 @@
 // Every link is an existing route behind its existing permission; a section shows only when at
 // least one of its links is allowed, so modules that do not exist yet (۳ سالن, ۷ مشتری و پیامک)
 // stay hidden instead of half-built. The numbers are fixed: a hidden section leaves a gap.
+// Unfinished modules follow the central switch (features.ts): closed ones disappear for everyone
+// except the owner, and the owner sees them marked «آزمایشی».
+import { featureOfPath, featureOpen, featureTagged } from './features';
 
 export interface MenuContext {
   roles: readonly string[];
@@ -13,6 +16,8 @@ export interface MenuContext {
   desks: readonly string[];
   /** «پذیرش و ترخیص» is active on the server (PULSE_ENABLED). */
   receptionActive: boolean;
+  /** Modules the server opened to everyone (OPEN_FEATURES, /auth/me). */
+  openFeatures?: readonly string[];
 }
 
 export interface MenuItem {
@@ -21,6 +26,8 @@ export interface MenuItem {
   icon: string;
   /** Whether a pathname belongs to this item (default: exact href). */
   match?: (pathname: string) => boolean;
+  /** Owner only: the module is unfinished (features.ts) — show the «آزمایشی» tag. */
+  experimental?: boolean;
 }
 
 export interface MenuSection {
@@ -113,7 +120,13 @@ export function buildMenu(ctx: MenuContext): MenuSection[] {
           (ctx.isOwner || can('user.manage')) && { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team' },
         ],
       };
-  return MENU_SECTIONS.map((s) => ({ ...s, items: (items[s.key] ?? []).filter((i): i is MenuItem => !!i) })).filter((s) => s.items.length > 0);
+  const gate = (i: MenuItem): MenuItem | null => {
+    const feature = featureOfPath(i.href);
+    if (!feature) return i;
+    if (!featureOpen(feature, ctx.isOwner, ctx.openFeatures)) return null;
+    return featureTagged(feature, ctx.isOwner) ? { ...i, experimental: true } : i;
+  };
+  return MENU_SECTIONS.map((s) => ({ ...s, items: (items[s.key] ?? []).filter((i): i is MenuItem => !!i).map(gate).filter((i): i is MenuItem => !!i) })).filter((s) => s.items.length > 0);
 }
 
 /** The menu item a pathname belongs to (its own `match`, else the exact href). */

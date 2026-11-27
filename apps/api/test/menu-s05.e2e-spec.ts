@@ -13,7 +13,7 @@ describe('Side menu ۰–۹ from the real permissions', () => {
     const me = (await c.get('/auth/me').expect(200)).body as Me;
     return buildMenu({
       roles: me.roles, permissions: me.permissions, isOwner: !!me.isOwner, home, desks,
-      receptionActive: me.modules.some((m) => m.key === 'reception' && m.status === 'active'),
+      receptionActive: me.modules.some((m) => m.key === 'reception' && m.status === 'active'), openFeatures: me.openFeatures,
     });
   };
   const nums = (m: Awaited<ReturnType<typeof menuOf>>) => m.map((s) => s.num);
@@ -45,10 +45,10 @@ describe('Side menu ۰–۹ from the real permissions', () => {
     expect(hrefs(admin)).toEqual(expect.arrayContaining(['/workshop', '/cases', '/stock', '/settings', '/users']));
   });
 
-  it('a section appears only with a granted page: stoppage list alone opens «۱ پذیرش و جست‌وجو»', async () => {
+  it('a section appears only with an open, granted page: the closed stoppage list (H2) does not open «۱»', async () => {
     const none = await menuOf(await h.loginAs('menu-none', ['accident_expert']), '/accidents/expert', ['expert']);
     const withStoppage = await menuOf(await h.loginAs('menu-stoppage', ['accident_expert'], ['stoppage.read']), '/accidents/expert', ['expert']);
     expect(nums(none)).not.toContain(1);
-    expect(withStoppage.find((s) => s.num === 1)?.items.map((i) => i.href)).toEqual(['/reception/stoppage']);
+    expect(nums(withStoppage)).not.toContain(1);
   });
 });

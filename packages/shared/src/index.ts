@@ -12,6 +12,7 @@ export * from './stock-code';
 export * from './daily-reports';
 export * from './workshop';
 export * from './technician-view';
+export * from './features';
 export * from './navigation';
 
 export * from './iran-holidays';

@@ -51,6 +51,8 @@ services:
       # Manage Pulse (spec section 26): module flag and the key that encrypts the کسب‌وکار password.
       PULSE_ENABLED: ${PULSE_ENABLED:-false}
       PULSE_SECRET_KEY: ${PULSE_SECRET_KEY:-}
+      # Central switch (H2): unfinished modules opened to everyone, comma separated (empty = owner only).
+      OPEN_FEATURES: ${OPEN_FEATURES:-}
     # Not published: only the web container reaches the API.
     expose:
       - "4000"

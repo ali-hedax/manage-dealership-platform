@@ -52,6 +52,8 @@ export interface Me {
   tenant: { id: string; code: string; name: string };
   environment: string;
   modules: { key: ModuleKey; status: 'active' | 'planned' }[];
+  /** Unfinished modules the server opened to everyone (OPEN_FEATURES; features.ts). */
+  openFeatures?: string[];
 }
 
 export interface UserRef {

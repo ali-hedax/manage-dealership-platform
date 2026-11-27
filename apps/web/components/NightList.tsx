@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import useSWR from 'swr';
 import {
+  featureOpen, featureTagged,
   NIGHT_LIST_KIND_LABELS, NIGHT_LIST_KINDS, NIGHT_LIST_REASONS, NIGHT_LIST_REASON_LABELS, NIGHT_LIST_STATUS_LABELS, NIGHT_STATION_NONE, formatJalali, nightReasonText, nightStationLabel, toPersianDigits,
   type NightListKind, type NightListPending, type NightListReason, type NightListRow, type NightListView, type NightStationOption, type ReceptionDayStats,
 } from '@manage/shared';
@@ -11,6 +12,7 @@ import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum } from '@/lib/format';
 import { AppIcon } from './AppIcon';
+import { ExperimentalTag } from './Shell';
 import { EmptyState } from './EmptyState';
 import { JalaliInput } from './JalaliInput';
 import { Plate } from './Plate';
@@ -66,7 +68,7 @@ export function NightList() {
         <div className="desk-hello">
           <h1 id="night-title">{NIGHT_LIST_KIND_LABELS[kind]}</h1>
           <p className="desk-sub">{data ? `${formatJalali(data.day + 'T12:00:00Z')}${isList(data) ? ` · ${NIGHT_LIST_STATUS_LABELS[data.status]}` : ''}` : 'در حال خواندن…'}</p>
-          <Link className="no-print" href="/reception/stoppage">خودروهای متوقف (گزارش توقف رسمی)</Link>
+          {featureOpen('stoppages', me.isOwner, me.openFeatures) && <Link className="no-print" href="/reception/stoppage">خودروهای متوقف (گزارش توقف رسمی)</Link>}
           <nav className="night-kinds no-print" aria-label="نوع لیست شب">
             {NIGHT_LIST_KINDS.map((k) => <Link key={k} className={'btn btn-sm' + (k === kind ? ' btn-primary' : '')} aria-current={k === kind ? 'page' : undefined} href={href(day, k)}>{NIGHT_LIST_KIND_LABELS[k]}</Link>)}
           </nav>
@@ -94,7 +96,7 @@ export function NightList() {
       </form>
       {can('integration.manage') && <LabourReview />}
       {error && <p role="alert" className="m-error">{errorMessage(error)}</p>}
-      {data?.summary && <NightSummary stats={data.summary} />}
+      {data?.summary && <NightSummary stats={data.summary} tagged={featureTagged('night_job_split', me.isOwner)} />}
       {data && !isList(data) && (
         <div className="callout">
           <p>{data.workingDay ? `${NIGHT_LIST_KIND_LABELS[kind]} ${day ? 'این روز' : 'امروز'} ساعت ${clock(data.generatesAt)} از پذیرش‌های باز ساخته می‌شود.` : `${day ? 'این روز' : 'امروز'} روز کاری نیست و لیست شب ساخته نمی‌شود.`}</p>
@@ -186,11 +188,11 @@ function PresenceForm({ busy, onSave }: { busy: boolean; onSave: (body: { admiss
  * «گزارش شب»: the day's receptions — total, «تعویض روغن» and «تعمیر فنی» (classifyJob, from labour
  * names and used parts; a car may be in both), and the same per receptionist as written in کسب‌وکار.
  */
-function NightSummary({ stats }: { stats: ReceptionDayStats }) {
+function NightSummary({ stats, tagged }: { stats: ReceptionDayStats; tagged: boolean }) {
   const j = stats.jobs;
   return (
     <section className="panel night-summary" aria-labelledby="night-summary-h">
-      <div className="panel-head"><h2 id="night-summary-h">گزارش شب · پذیرش‌های این روز</h2></div>
+      <div className="panel-head"><h2 id="night-summary-h">گزارش شب · پذیرش‌های این روز</h2>{tagged && <ExperimentalTag />}</div>
       <div className="panel-body stack">
         <dl className="night-kpis">
           <div><dt>کل پذیرش</dt><dd>{faNum(stats.total)}</dd></div>

@@ -1,3 +1,10 @@
+## 2026-11-27 — H2: سوییچ مرکزی ماژول‌های ناکامل (شاخهٔ `feat/h2-module-switch`)
+
+- **shared:** ۱۵۶/۱۵۶ پاس. آزمون تازهٔ `features` (فهرست مصوب، باز بودن برای مالک یا با OPEN_FEATURES، برچسب فقط برای مالک، نگاشت مسیرها) و `navigation` (منوی غیرمالک بدون خودروهای متوقف، مالک با برچسب، امداد ویژه برای کارکنان بدون برچسب).
+- **API (Jest، PGlite):** `features-h2.e2e-spec` ۳/۳ — غیرمالک با مجوز کامل روی هر مسیر `/stoppages` پاسخ ۴۰۴، مالک ۲۰۰، با `OPEN_FEATURES=stoppages` کارکنان با مجوز ۲۰۰ و بدون مجوز ۴۰۳. `stoppages` (با OPEN_FEATURES)، `menu-s05`، `guest-masking-sweep`، `parts-finance`، `parts-workbench`، `staff-invitations` همه پاس.
+- **مرورگر (محلی، Edge):** `h2-features` ۲/۲ (پیکربندی daily: مدیر سیستم ← «به‌زودی» و ۴۰۴، مالک ← برچسب «آزمایشی»)؛ `sidebar-s05` ۷/۷ و `stoppage-20261126` ۱/۱ (پیکربندی اصلی با OPEN_FEATURES=stoppages).
+- **typecheck و lint:** هر سه بسته پاس.
+
 ## 2026-11-27 — S05: پوسته و منوی ۰ تا ۹ (شاخهٔ `feat/s05-shell`)
 
 - **shared:** ۱۵۲/۱۵۲ پاس. آزمون تازهٔ `navigation`: ده بخش ثابت، تکنسین فقط ۰، هر نقش بخش‌های خودش، ۳ و ۷ و نقشهٔ راه هرگز، پیوند فعال در صفحه‌های تودرتو.

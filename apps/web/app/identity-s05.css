@@ -94,3 +94,14 @@
   .nav-group-items a, .side-nav > a { color: #FFFFFF; }
   .nav-num { color: #E0E0E4; }
 }
+
+/* ---------------------------------------------------------------- H2: «آزمایشی» (owner only) */
+.tag-exp {
+  display: inline-flex; align-items: center; margin-inline-start: auto; padding: 0 6px; block-size: 16px;
+  border: 1px solid currentColor; border-radius: 3px; font: 500 10px/1 Vazirmatn, sans-serif;
+  color: var(--hx-yellow); opacity: .85; letter-spacing: 0; white-space: nowrap; flex: none;
+}
+main .tag-exp, .panel .tag-exp, .exp-page-note .tag-exp { color: #8A6A00; margin-inline-start: 0; }
+.exp-page-note { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+.coming-soon .panel-body { padding: 32px 24px; text-align: center; }
+.coming-soon h1 { font-size: 18px; margin: 0 0 6px; }

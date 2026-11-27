@@ -38,7 +38,7 @@ test('each role sees only its own sections; modules not built yet (۳ سالن, 
   assert.ok(nums(expert).includes(4) && !nums(expert).includes(8) && !nums(expert).includes(1));
   assert.ok(hrefs(expert).includes('/'));
   assert.ok(nums(parts).includes(6) && !nums(parts).includes(8));
-  assert.ok(nums(manager).includes(8) && hrefs(manager).includes('/control-room/stoppages'));
+  assert.ok(nums(manager).includes(8) && hrefs(manager).includes('/reports'));
   assert.deepEqual(nums(admin), [0, 1, 2, 4, 5, 6, 8, 9]);
   assert.deepEqual(nums(guest), [0, 5]);
   assert.ok(!hrefs(guest).includes('/users') && !hrefs(guest).includes('/settings'));
@@ -50,16 +50,28 @@ test('each role sees only its own sections; modules not built yet (۳ سالن, 
   assert.ok(!buildMenu(expert)[0]!.items.some((i) => i.href === '/launch'));
 });
 
-test('reception links need the active module and reception.read; the stoppage list only stoppage.read', () => {
+test('reception links need the active module and reception.read', () => {
   const admin = ctx(['system_admin'], { home: '/accidents/admin' });
   assert.ok(hrefs(admin).includes('/reception/night'));
   const off = hrefs({ ...admin, receptionActive: false });
   assert.ok(!off.includes('/reception') && !off.includes('/reception/night'));
-  assert.ok(off.includes('/reception/stoppage'));
+});
+
+test('H2 switch: stoppages are closed for non-owners, open with OPEN_FEATURES, and tagged «آزمایشی» for the owner', () => {
+  const admin = ctx(['system_admin'], { home: '/accidents/admin' });
+  assert.ok(!hrefs(admin).includes('/reception/stoppage') && !hrefs(admin).includes('/control-room/stoppages'));
+  const opened = buildMenu({ ...admin, openFeatures: ['stoppages'] }).flatMap((s) => s.items);
+  assert.ok(opened.some((i) => i.href === '/reception/stoppage' && !i.experimental));
+  const owner = buildMenu({ ...admin, isOwner: true }).flatMap((s) => s.items);
+  for (const href of ['/reception/stoppage', '/control-room/stoppages', '/special-aid/vehicles']) assert.equal(owner.find((i) => i.href === href)?.experimental, true, href);
+  assert.ok(!owner.find((i) => i.href === '/cases')?.experimental);
+  // Special Aid stays open to staff, without the tag.
+  const staff = buildMenu(ctx(['special_aid_operator'], { home: '/special-aid', desks: ['special_aid'] })).flatMap((s) => s.items);
+  assert.ok(staff.some((i) => i.href === '/special-aid/vehicles' && !i.experimental));
 });
 
 test('the active item follows nested pages (case folder, reception folder, stoppage folder)', () => {
-  const all = buildMenu(ctx(['system_admin'], { home: '/accidents/admin' })).flatMap((s) => s.items);
+  const all = buildMenu(ctx(['system_admin'], { home: '/accidents/admin', isOwner: true })).flatMap((s) => s.items);
   const find = (href: string) => all.find((i) => i.href === href)!;
   assert.ok(menuItemActive(find('/cases'), '/cases/abc'));
   assert.ok(!menuItemActive(find('/cases'), '/cases/new'));
