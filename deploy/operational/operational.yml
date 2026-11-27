@@ -1,6 +1,8 @@
 # Last overlay for the owner's existing Manage VM. No public-port changes.
 services:
   api:
+    image: manage-api:prod-1.0.20
+    pull_policy: never
     environment:
       APP_ENV: production
       NODE_ID: manage-arvan-production
@@ -10,6 +12,8 @@ services:
   # Manage Pulse worker (profile "pulse"; started only after the owner approves and sets
   # PULSE_SECRET_KEY in /opt/manage/.env). Same production settings as the API.
   pulse:
+    image: manage-api:prod-1.0.20
+    pull_policy: never
     environment:
       APP_ENV: production
       NODE_ID: manage-arvan-production
@@ -22,3 +26,6 @@ services:
       - /home/manage/operations/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - /home/manage/operations/tls:/etc/caddy/tls:ro
       - /home/manage/operations/acme-webroot:/srv/acme:ro
+  web:
+    image: manage-web:prod-1.0.20
+    pull_policy: never

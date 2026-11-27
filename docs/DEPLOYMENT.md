@@ -82,6 +82,14 @@ Manage must not share the Source by HEDAX server's processes, database, credenti
 | `APP_ENV` | development | test | preview | production | production |
 | Approval | — | — | owner OK for host | **owner approval per release** | **owner + IT approval** |
 
+## Production image pin (since 2026-11-27)
+
+Production never runs `:latest`. The overlay `/home/manage/operations/operational.yml` names an immutable tag for `api`, `pulse` and `web` (`manage-api:prod-<version>`, `manage-web:prod-<version>`, `pull_policy: never`). The production repositories `manage-api` and `manage-web` belong to production alone; staging uses `manage-staging-api` / `manage-staging-web` (see [STAGING_FA](STAGING_FA.md)).
+
+- **Every release:** after loading the new images, tag them `prod-<new version>` and update the overlay (`deploy/operational/pin-production-images.sh` does this for the running images; a release script must set the new tag before `compose up`). A release that leaves the old pin restarts the old image, and its health check (commit ≠ target) rolls it back.
+- **Read-only check:** `bash /home/manage/operations/check-production-images.sh` prints each container's running image, its pinned tag and whether they match.
+- **Why:** on 2026-11-27 a staging image load moved `manage-*:latest` to staging images; running containers were unaffected and the tags were restored within about 30 minutes.
+
 ## Docker Compose
 
 ```bash
