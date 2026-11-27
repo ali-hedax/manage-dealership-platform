@@ -47,9 +47,11 @@
 /* TV boards (1920×1080, read from across the room) */
 .ds-tv { min-block-size: 100vh; padding: 48px 64px; display: grid; gap: 32px; grid-template-rows: auto 1fr auto; }
 .ds-tv h1 { font-size: 34px; font-weight: var(--ds-fw-light); }
-.ds-tv .ds-kpi-value { font-size: 72px; }
-.ds-tv .ds-kpi-label { font-size: 20px; }
-.ds-tv .ds-kpi-note { font-size: 16px; }
+.ds-tv .ds-kpi, .ds-tv .ds-kpi.xl { padding: 36px 40px; gap: 14px; align-content: center; }
+.ds-tv .ds-kpi .ds-kpi-value, .ds-tv .ds-kpi.xl .ds-kpi-value { font-size: 104px; line-height: 1; }
+.ds-tv .ds-kpi .ds-kpi-label { font-size: 26px; }
+.ds-tv .ds-kpi .ds-kpi-note { font-size: 20px; }
+.ds-tv .ds-kpi .ds-kpi-delta { font-size: 18px; }
 .ds-tv-rot { display: flex; gap: 10px; }
 .ds-tv-rot i { inline-size: 36px; block-size: 4px; border-radius: 4px; background: var(--ds-line); }
 .ds-tv-rot i.on { background: var(--ds-accent); }
@@ -63,7 +65,7 @@
 .ds-tv-progress span.now { color: var(--ds-text); font-weight: var(--ds-fw-medium); }
 .ds-tv-eta { text-align: end; font-weight: var(--ds-fw-light); font-size: 30px; }
 .ds-tv-eta small { display: block; font-size: 15px; color: var(--ds-muted); }
-.ds-tv-kpis { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); align-content: center; }
+.ds-tv-kpis { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); align-content: center; align-items: stretch; min-block-size: 52vh; }
 .ds-tv-bars { align-content: center; gap: 22px; }
 .ds-tv-bars .ds-bar { grid-template-columns: 11em 1fr 4em; font-size: 24px; }
 .ds-tv-bars .ds-bar i { block-size: 14px; }
@@ -78,8 +80,11 @@
   .ds-tv-progress { grid-column: 1 / -1; }
   .ds-tv-progress span { font-size: 11px; }
   .ds-tv-eta { font-size: 18px; }
-  .ds-tv .ds-kpi-value { font-size: 40px; }
-  .ds-tv .ds-kpi-label { font-size: 14px; }
+  .ds-tv .ds-kpi, .ds-tv .ds-kpi.xl { padding: 16px; }
+  .ds-tv .ds-kpi .ds-kpi-value, .ds-tv .ds-kpi.xl .ds-kpi-value { font-size: 44px; }
+  .ds-tv .ds-kpi .ds-kpi-label { font-size: 14px; }
+  .ds-tv .ds-kpi .ds-kpi-note, .ds-tv .ds-kpi .ds-kpi-delta { font-size: 12px; }
+  .ds-tv-kpis { min-block-size: 0; }
 }
 
 /* Desk with side panel */
