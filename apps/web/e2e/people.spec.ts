@@ -76,7 +76,7 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
 
   // The old «کارکرد ماه» link lands on the job list; no monthly wage page any more.
   await page.goto('/workshop/technician/work');
-  await expect(page).toHaveURL(//workshop/technician$/);
+  await expect(page).toHaveURL(/\/workshop\/technician$/);
 
   // Coordinator: the problem arrives as an urgent card; approve the job and transfer the case.
   await login(page, 'expert');
@@ -101,7 +101,7 @@ test('reminder, technician problem, wage, monthly work and case transfer', async
   await login(page, 'technician');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/workshop/technician/work');
-  await expect(page).toHaveURL(//workshop/technician$/);
+  await expect(page).toHaveURL(/\/workshop\/technician$/);
   await expect(page.getByRole('heading', { level: 1, name: /^سلام/ })).toBeVisible();
   await expect(page.locator('main')).not.toContainText('۴۵,۰۰۰,۰۰۰');
   await expect(page.locator('main')).not.toContainText('اجرت');
