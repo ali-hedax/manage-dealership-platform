@@ -1,5 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { login } from './helpers';
+
+/** After the cookies are cleared, the open desk may redirect itself to /login at the same moment;
+ *  that aborts this navigation once (same handling as helpers.login). */
+async function gotoLogin(page: Page) {
+  await page.goto('/login').catch(async (e: Error) => {
+    if (!String(e.message).includes('ERR_ABORTED')) throw e;
+    await page.goto('/login');
+  });
+}
 
 test('synthetic EXP00: fresh browser, PIN only, parts desk, reload and second sign-in', async ({ page }) => {
   const errors: string[] = [];
@@ -8,7 +17,7 @@ test('synthetic EXP00: fresh browser, PIN only, parts desk, reload and second si
   const created = await page.request.post('/api/v1/staff/technicians', { headers: { 'x-manage-client': 'test' }, data: { displayName: 'مسئول قطعات ساختگی', role: 'parts_clerk', personnelCode: '00', pin: '4815' } });
   expect(created.status()).toBe(201);
   await page.context().clearCookies();
-  await page.goto('/login');
+  await gotoLogin(page);
   const form = page.locator('#login-panel-technician');
   await form.getByLabel('نام کاربری', { exact: true }).fill('EXP ۰۰');
   for (const [index, digit] of [...'۴۸۱۵'].entries()) await form.getByLabel(`رقم ${['۱', '۲', '۳', '۴'][index]} رمز`, { exact: true }).fill(digit);
@@ -28,7 +37,7 @@ test('synthetic EXP00: fresh browser, PIN only, parts desk, reload and second si
   const device = (await page.context().cookies()).filter(cookie => cookie.name === 'manage_device');
   await page.context().clearCookies();
   await page.context().addCookies(device);
-  await page.goto('/login');
+  await gotoLogin(page);
   await form.getByLabel('نام کاربری', { exact: true }).fill('EXP00');
   for (const [index, digit] of [...'4815'].entries()) await form.getByLabel(`رقم ${['۱', '۲', '۳', '۴'][index]} رمز`, { exact: true }).fill(digit);
   await form.getByRole('button', { name: 'ورود به میز کار', exact: true }).click();
