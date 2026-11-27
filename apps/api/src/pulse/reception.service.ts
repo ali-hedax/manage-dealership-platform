@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import {
-  daysInShop, LABOUR_LETTER_PATTERN, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
+  daysInShop, isConsumedPart, LABOUR_LETTER_PATTERN, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
   type ReceptionDayStats, type ReceptionSettings, type ReceptionSettingsInput,
   type ReceptionDetail, type ReceptionEvent, type ReceptionEventKind, type ReceptionExternalState, type ReceptionExternalUpdateInput, type ReceptionExternalWork as ExternalWorkView, type ReceptionExternalWorkInput, type ReceptionList, type ReceptionSearchInput,
 } from '@manage/shared';
@@ -144,14 +144,26 @@ export class ReceptionService {
     const start = tehranDayStart(day);
     const rows = await this.db.select({ id: receptions.id, receptionist: receptions.receptionist }).from(receptions)
       .where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, start), lt(receptions.admittedAt, new Date(start.getTime() + DAY_MS))));
-    const lines = rows.length
-      ? await this.db.select({ receptionId: receptionRepairs.receptionId, code: receptionRepairs.code }).from(receptionRepairs)
-        .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, rows.map((r) => r.id)), isNull(receptionRepairs.removedAt)))
+    const ids = rows.map((r) => r.id);
+    const lines = ids.length
+      ? await this.db.select({ receptionId: receptionRepairs.receptionId, code: receptionRepairs.code, description: receptionRepairs.description }).from(receptionRepairs)
+        .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, ids), isNull(receptionRepairs.removedAt)))
       : [];
+    // Parts on the card, for «تعویض روغن» (owner, 2026-11-27): only those actually used count (isConsumedPart).
+    const parts = ids.length
+      ? await this.db.select({ receptionId: receptionParts.receptionId, name: receptionParts.name, qtyFinal: receptionParts.qtyFinal, qtyRequested: receptionParts.qtyRequested, state: receptionParts.state, rejectReason: receptionParts.rejectReason })
+        .from(receptionParts).where(and(eq(receptionParts.tenantId, tenantId), inArray(receptionParts.receptionId, ids), isNull(receptionParts.removedAt)))
+      : [];
+    const push = <T>(m: Map<string, T[]>, k: string, v: T) => m.set(k, [...(m.get(k) ?? []), v]);
     const codesOf = new Map<string, (string | null)[]>();
-    for (const l of lines) codesOf.set(l.receptionId, [...(codesOf.get(l.receptionId) ?? []), l.code]);
+    const labourOf = new Map<string, (string | null)[]>();
+    for (const l of lines) { push(codesOf, l.receptionId, l.code); push(labourOf, l.receptionId, l.description); }
+    const partsOf = new Map<string, (string | null)[]>();
+    for (const p of parts) if (isConsumedPart(p)) push(partsOf, p.receptionId, p.name);
     const { serviceLaborCodes } = await this.settings(actor);
-    return receptionDayStats(day, rows.map((r) => ({ receptionist: r.receptionist, codes: codesOf.get(r.id) ?? [] })), serviceLaborCodes);
+    return receptionDayStats(day, rows.map((r) => ({
+      receptionist: r.receptionist, codes: codesOf.get(r.id) ?? [], labourNames: labourOf.get(r.id) ?? [], consumedParts: partsOf.get(r.id) ?? [],
+    })), serviceLaborCodes);
   }
 
   private async load(tx: DbOrTx, tenantId: string, id: string) {
