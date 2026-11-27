@@ -33,10 +33,12 @@ export const CASE_STEPS = ['پذیرش', 'کارشناسی', 'برنامهٔ ت�
 
 // Dates are computed from the Jalali calendar in Tehran time, never hard-coded (S04b).
 const TEHRAN = 'Asia/Tehran';
+// «جمعه ۶ آذر ۱۴۰۵»: the browser's ICU puts a Latin comma after the weekday; Persian writes none.
+const noComma = (s: string) => s.replace(/\s*[,،]\s*/g, ' ');
 export const jalaliLong = (d: Date) =>
-  new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TEHRAN }).format(d);
+  noComma(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TEHRAN }).format(d));
 export const jalaliDayMonth = (d: Date) =>
-  new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TEHRAN }).format(d);
+  noComma(new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TEHRAN }).format(d));
 const isFriday = (d: Date) => new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: TEHRAN }).format(d) === 'Fri';
 /** The next `count` working days after `from` (Fridays skipped). */
 export function nextWorkingDays(from: Date, count: number): Date[] {
