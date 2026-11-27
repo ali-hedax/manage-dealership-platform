@@ -191,4 +191,41 @@ describe('Nightly list of the reception module', () => {
     expect(historical.rows.some((r) => r.receptionId === sameVehicle)).toBe(false);
     expect(historical.rows.flatMap((r) => r.labour).every((l) => l === 'نامشخص')).toBe(true);
   });
+
+  it('hotfix H1: a repair and an accident list each day, sent on their own; stations, free text and the day summary', async () => {
+    const day = '2025-04-29'; // Tuesday
+    const kase = (await admin.post('/cases', { admittedAt: tehranAt(day, '08:00').toISOString(), vehicle: { model: 'خودروی ساختگی', plate: 'پلاک ساختگی' }, customer: { fullName: 'مشتری ساختگی', phone: '09000000077' } }).expect(201)).body as { id: string };
+    const repairCar = await reception(31, tehranAt(day, '09:00'));
+    const accidentCar = await reception(32, tehranAt(day, '09:30'));
+    await db().update(receptions).set({ caseId: kase.id, receptionist: 'پذیرشگر ساختگی' }).where(eq(receptions.id, accidentCar));
+    await db().update(receptions).set({ receptionist: 'پذیرشگر ساختگی' }).where(eq(receptions.id, repairCar));
+    expect((await reader.post('/reception/night-list', { day, kind: 'accident' }).expect(201)).body).toMatchObject({ status: 'not_generated', kind: 'accident' });
+    await service.tick(tehranAt(day, '18:00'));
+    const repair = await view(reader, day);
+    const accident = (await reader.post('/reception/night-list', { day, kind: 'accident' }).expect(201)).body as NightListView;
+    expect(repair).toMatchObject({ kind: 'repair', status: 'draft' });
+    expect(accident).toMatchObject({ kind: 'accident', status: 'draft' });
+    expect(accident.id).not.toBe(repair.id);
+    expect(repair.rows.map((r) => r.receptionId)).toContain(repairCar);
+    expect(repair.rows.map((r) => r.receptionId)).not.toContain(accidentCar);
+    expect(accident.rows.map((r) => r.receptionId)).toEqual([accidentCar]);
+    expect(Array.isArray(repair.stations)).toBe(true);
+    // «گزارش شب»: receptions admitted that day, per receptionist.
+    expect(repair.summary).toMatchObject({ date: day, total: 2 });
+    expect(repair.summary!.byReceptionist).toContainEqual(expect.objectContaining({ name: 'پذیرشگر ساختگی', total: 2 }));
+    // «ندارد», a station typed by hand and «سایر» with the receptionist's own text, kept as typed.
+    const row = accident.rows[0]!;
+    const set = (await clerk.post(`/reception/night-list/items/${row.id}`, { expectedVersion: row.version, reason: 'other', reasonNote: 'منتظر کارشناس بیمه', currentStation: 'ندارد', nextStations: 'صافکاری بیرون از نمایندگی' }).expect(201)).body as NightListView;
+    expect(set.kind).toBe('accident');
+    expect(set.rows[0]).toMatchObject({ reason: 'other', reasonNote: 'منتظر کارشناس بیمه', currentStation: 'ندارد', nextStations: 'صافکاری بیرون از نمایندگی' });
+    // Late alerts, one per list, then each list is sent on its own.
+    expect((await service.tick(tehranAt(day, '18:46'))).alerted).toBeGreaterThanOrEqual(2);
+    const keys = (await db().select({ k: notifications.dedupeKey }).from(notifications).where(eq(notifications.tenantId, tenantId))).map((n) => n.k);
+    expect(keys).toEqual(expect.arrayContaining([`night_list_late:${day}`, `night_list_late:${day}:accident`]));
+    const sent = (await admin.post(`/reception/night-list/${accident.id}/send`, { expectedVersion: set.version }).expect(201)).body as NightListView;
+    expect(sent).toMatchObject({ kind: 'accident', status: 'sent' });
+    expect((await view(reader, day)).status).toBe('draft');
+    const file = await reader.get(`/reception/night-list/${accident.id}/excel`).expect(200);
+    expect(file.headers['content-disposition']).toContain(`night-list-${day}-accident.xlsx`);
+  });
 });

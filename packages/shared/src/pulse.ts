@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { formatJalali } from './jalali';
-import { NIGHT_LIST_REASONS } from './night-list';
+import { NIGHT_LIST_KINDS, NIGHT_LIST_REASONS } from './night-list';
 import { toLatinDigits, toPersianDigits } from './text';
 import type { Paged } from './types';
 
@@ -288,7 +288,7 @@ export type ReceptionSettingsInput = z.infer<typeof receptionSettingsSchema>;
 export interface ReceptionSettings { serviceLaborCodes: string[] }
 
 /** «لیست شب» (scenario 2026-11-25): the list of one Tehran day (today when omitted). */
-export const nightListQuerySchema = z.object({ day: receptionDay.optional() }).strict();
+export const nightListQuerySchema = z.object({ day: receptionDay.optional(), kind: z.enum(NIGHT_LIST_KINDS).optional() }).strict();
 export const nightListItemSchema = z.object({
   expectedVersion: z.number().int().min(1),
   reason: z.enum(NIGHT_LIST_REASONS).nullable(),

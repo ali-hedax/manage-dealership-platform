@@ -223,8 +223,10 @@ export const stoppageImportQuerySchema = z.object({
   acceptWarnings: z.enum(['true', 'false']).optional(),
 }).strict();
 
-export const stoppageOwnerSchema = z.object({ expectedVersion: z.number().int().min(1), ownerUserId: z.uuid().nullable() }).strict();
-export type StoppageOwnerInput = z.infer<typeof stoppageOwnerSchema>;
+/** Add or remove one follower of a stopped vehicle (hotfix H1): any active Manage user, several allowed. */
+export const stoppageFollowerSchema = z.object({ expectedVersion: z.number().int().min(1), userId: z.uuid(), action: z.enum(['add', 'remove']) }).strict();
+export type StoppageFollowerInput = z.infer<typeof stoppageFollowerSchema>;
+export interface StoppageFollower { userId: string; name: string }
 
 export const stoppageLinkSchema = z.object({
   expectedVersion: z.number().int().min(1),
@@ -277,8 +279,8 @@ export interface StoppageSummary {
   reasons: StoppageReasonKind[];
   items: number;
   activeItems: number;
-  followUpUserId: string | null;
-  followUpName: string | null;
+  /** People following this stoppage, in the order they were added. */
+  followers: StoppageFollower[];
   reception: { id: string; admissionNo: string | null } | null;
   linkState: StoppageLinkState;
   /** Why this stoppage needs a person's look (empty: nothing to review). */

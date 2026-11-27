@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import {
-  stoppageImportQuerySchema, stoppageLinkSchema, stoppageListQuerySchema, stoppageOwnerSchema,
-  type StoppageLinkInput, type StoppageOwnerInput,
+  stoppageImportQuerySchema, stoppageLinkSchema, stoppageListQuerySchema, stoppageFollowerSchema,
+  type StoppageFollowerInput, type StoppageLinkInput,
 } from '@manage/shared';
 import type { z } from 'zod';
 import type { Actor } from '../auth/auth.types';
@@ -41,9 +41,9 @@ export class StoppagesController {
   @RequirePermissions('stoppage.read') @Get(':id')
   get(@CurrentActor() actor: Actor, @IdParam() id: string) { return this.stoppages.byId(actor, id); }
 
-  @RequirePermissions('stoppage.manage') @Patch(':id/follow-up')
-  followUp(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(stoppageOwnerSchema)) body: StoppageOwnerInput) {
-    return this.stoppages.setFollowUp(actor, id, body);
+  @RequirePermissions('stoppage.manage') @Post(':id/followers')
+  follower(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(stoppageFollowerSchema)) body: StoppageFollowerInput) {
+    return this.stoppages.setFollower(actor, id, body);
   }
 
   @RequirePermissions('stoppage.manage') @Post(':id/reception')

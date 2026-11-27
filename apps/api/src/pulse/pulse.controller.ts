@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   pulseCaptchaSchema, pulseCommandSchema, pulseCredentialsSchema, pulseSettingsSchema, pulseToggleSchema,
   receptionExternalCancelSchema, receptionExternalUpdateSchema, receptionExternalWorkSchema, receptionInvoiceSchema, receptionNoteSchema, receptionSearchSchema, receptionSettingsSchema, receptionStatsQuerySchema, nightListItemSchema, nightListQuerySchema, nightListSendSchema,
-  type PulseCommandInput, type PulseCredentialsInput, type PulseSettingsInput, type ReceptionExternalUpdateInput, type ReceptionExternalWorkInput, type ReceptionSearchInput, type ReceptionSettingsInput, type NightListItemInput,
+  type PulseCommandInput, type PulseCredentialsInput, type PulseSettingsInput, type ReceptionExternalUpdateInput, type ReceptionExternalWorkInput, type ReceptionSearchInput, type ReceptionSettingsInput, type NightListItemInput, type NightListKind,
 } from '@manage/shared';
 import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
@@ -56,10 +56,10 @@ export class ReceptionController {
 
   /** «لیست شب» of a Tehran day (scenario 2026-11-25). Declared before ':id'. */
   @RequirePermissions('reception.read') @Post('night-list')
-  nightList(@CurrentActor() actor: Actor, @Body(new ZodPipe(nightListQuerySchema)) body: { day?: string }) { return this.night.view(actor, body.day); }
+  nightList(@CurrentActor() actor: Actor, @Body(new ZodPipe(nightListQuerySchema)) body: { day?: string; kind?: NightListKind }) { return this.night.view(actor, body.day, new Date(), body.kind); }
 
   @RequirePermissions('reception.read', 'reception.night_list_send') @Post('night-list/generate')
-  nightListGenerate(@CurrentActor() actor: Actor, @Body(new ZodPipe(nightListQuerySchema)) body: { day?: string }) { return this.night.generateNow(actor, body.day); }
+  nightListGenerate(@CurrentActor() actor: Actor, @Body(new ZodPipe(nightListQuerySchema)) body: { day?: string; kind?: NightListKind }) { return this.night.generateNow(actor, body.day, body.kind); }
 
   @RequirePermissions('reception.read', 'reception.night_list') @Post('night-list/items/:id')
   nightListItem(@CurrentActor() actor: Actor, @IdParam('id') id: string, @Body(new ZodPipe(nightListItemSchema)) body: NightListItemInput) { return this.night.setItem(actor, id, body); }
@@ -76,8 +76,8 @@ export class ReceptionController {
 
   @RequirePermissions('reception.read') @Get('night-list/:id/excel')
   async nightListExcel(@CurrentActor() actor: Actor, @IdParam('id') id: string) {
-    const { day, bytes } = await this.night.excel(actor, id);
-    return new StreamableFile(Buffer.from(bytes), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', disposition: `attachment; filename="night-list-${day}.xlsx"` });
+    const { day, kind, bytes } = await this.night.excel(actor, id);
+    return new StreamableFile(Buffer.from(bytes), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', disposition: `attachment; filename="night-list-${day}${kind === 'repair' ? '' : `-${kind}`}.xlsx"` });
   }
 
   @RequirePermissions('reception.read') @Post('search')

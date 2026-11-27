@@ -40,7 +40,7 @@ function VehicleCard({ s }: { s: StoppageSummary }) {
       <p className="stp-who">{s.ownerName ?? 'نامشخص'} · {STOPPAGE_STAGE_LABELS[s.stage]}</p>
       <p className="stp-reasons">{s.reasons.map((r) => STOPPAGE_REASON_LABELS[r]).join('، ')} · {faNum(s.activeItems)} از {faNum(s.items)} ردیف باز</p>
       {s.review.length > 0 && <p className="stp-review">{s.review[0]}{s.review.length > 1 ? ` (+${faNum(s.review.length - 1)})` : ''}</p>}
-      <p className="stp-ids">اعلام توقف {toPersianDigits(s.noticeNo)} · {s.reception?.admissionNo ? `پذیرش ${toPersianDigits(s.reception.admissionNo)}` : 'پذیرش نامشخص'}{s.followUpName ? ` · پیگیر: ${s.followUpName}` : ''}</p>
+      <p className="stp-ids">اعلام توقف {toPersianDigits(s.noticeNo)} · {s.reception?.admissionNo ? `پذیرش ${toPersianDigits(s.reception.admissionNo)}` : 'پذیرش نامشخص'}{s.followers.length ? ` · پیگیر: ${s.followers.map((x) => x.name).join('، ')}` : ''}</p>
     </Link>
   );
 }
@@ -223,12 +223,24 @@ export function StoppageCase({ id }: { id: string }) {
       <section className="panel" aria-labelledby="stp-follow-h">
         <div className="panel-head"><h2 id="stp-follow-h">پیگیری و پذیرش</h2></div>
         <div className="panel-body stack">
-          <label className="field">پیگیر این خودرو
-            {manage ? <select className="input" value={data.followUpUserId ?? ''} disabled={busy} onChange={(e) => void act(() => api(`/stoppages/${data.id}/follow-up`, { method: 'PATCH', body: { expectedVersion: data.version, ownerUserId: e.target.value || null } }), 'پیگیر ثبت شد.')}>
-              <option value="">— بدون پیگیر —</option>
-              {(followers ?? []).map((f) => <option key={f.id} value={f.id}>{f.displayName}</option>)}
-            </select> : <span>{data.followUpName ?? 'تعیین نشده'}</span>}
-          </label>
+          {/* Any active Manage user can follow; several followers allowed (hotfix H1). */}
+          <div className="field">
+            <span id="stp-followers-l">پیگیرهای این خودرو</span>
+            <ul className="stp-followers" aria-labelledby="stp-followers-l">
+              {data.followers.length ? data.followers.map((x) => (
+                <li key={x.userId} className="m-tag mute">
+                  {x.name}
+                  {manage && <button type="button" className="stp-follower-x" aria-label={`حذف ${x.name} از پیگیرها`} disabled={busy} onClick={() => void act(() => api(`/stoppages/${data.id}/followers`, { body: { expectedVersion: data.version, userId: x.userId, action: 'remove' } }), 'پیگیر حذف شد.')}>×</button>}
+                </li>
+              )) : <li className="muted small">پیگیری تعیین نشده</li>}
+            </ul>
+            {manage && (
+              <select className="input" aria-label="افزودن پیگیر" value="" disabled={busy} onChange={(e) => { const userId = e.target.value; if (userId) void act(() => api(`/stoppages/${data.id}/followers`, { body: { expectedVersion: data.version, userId, action: 'add' } }), 'پیگیر افزوده شد.'); }}>
+                <option value="">+ افزودن پیگیر…</option>
+                {(followers ?? []).filter((f) => !data.followers.some((x) => x.userId === f.id)).map((f) => <option key={f.id} value={f.id}>{f.displayName}</option>)}
+              </select>
+            )}
+          </div>
           <p className="small">پذیرش: {data.reception ? <Link href={`/reception/${data.reception.id}`}>{data.reception.admissionNo ? toPersianDigits(data.reception.admissionNo) : 'باز کردن پذیرش'}</Link> : 'نامشخص'}{data.linkState === 'manual' ? ' (انتخاب دستی)' : data.linkState === 'linked' ? ' (خودکار با شاسی و تاریخ)' : ''}</p>
           {manage && data.candidates.length > 0 && (
             <div className="stack">

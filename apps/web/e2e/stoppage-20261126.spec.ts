@@ -35,6 +35,21 @@ test('stopped vehicles: upload, cards, case stepper and manager report', async (
   await page.getByRole('button', { name: 'ثبت گزارش' }).click();
   await expect(page.getByText(/گزارش توقف ثبت شد|قبلاً ثبت شده بود/)).toBeVisible();
 
+  // Hotfix H1: any active Manage user can follow a stoppage, several at once, and be removed again.
+  await page.goto('/reception/stoppage');
+  await page.locator('a.stp-card', { hasText: 'SDK82226' }).click();
+  const followers = page.getByRole('list', { name: 'پیگیرهای این خودرو' });
+  const add = page.getByLabel('افزودن پیگیر');
+  for (const n of [1, 2, 3]) {
+    await add.selectOption({ index: 1 });
+    await expect(followers.getByRole('listitem')).toHaveCount(n);
+  }
+  await followers.getByRole('button', { name: /^حذف .* از پیگیرها$/ }).last().click();
+  await expect(followers.getByRole('listitem')).toHaveCount(2);
+  const followFile = shot('stoppage-followers-1440.png');
+  await page.screenshot({ path: followFile, fullPage: true, animations: 'disabled' });
+  await info.attach('stoppage-followers-1440', { path: followFile, contentType: 'image/png' });
+
   await login(page, 'manager');
   await page.goto('/reception/stoppage');
   const card = page.locator('a.stp-card', { hasText: 'SDK82226' });
