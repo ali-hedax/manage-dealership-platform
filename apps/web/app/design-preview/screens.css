@@ -145,13 +145,13 @@
 .ds-station-name { font-size: var(--ds-fs-card); }
 .ds-station-tech { display: flex; align-items: center; gap: var(--ds-1); color: var(--ds-muted); font-size: var(--ds-fs-sm); }
 @media (min-width: 1600px) {
-  .ds-shop { min-block-size: 100vh; grid-template-rows: auto auto 1fr; padding: 2.2vw 3vw; gap: 1.3vw; font-size: 1.05vw; }
+  .ds-shop { min-block-size: 100vh; grid-template-rows: auto auto 1fr; padding: 1.4vw 3vw; gap: .9vw; font-size: 1.05vw; }
   .ds-shop h1 { font-size: 2.2vw; }
   .ds-shop .ds-summary { font-size: 1.3vw; }
   .ds-shop .ds-fresh { font-size: .9vw; }
   .ds-shop .ds-announce { font-size: 1.5vw; padding: 1vw 1.4vw; }
-  .ds-shop .ds-board { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 1.2vw; }
-  .ds-shop .ds-station { padding: 1.4vw; gap: .9vw; align-content: start; }
+  .ds-shop .ds-board { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 1vw; }
+  .ds-shop .ds-station { padding: 1.1vw 1.4vw; gap: .6vw; align-content: start; }
   .ds-shop .ds-station-code { font-size: 3.6vw; }
   .ds-shop .ds-station-name { font-size: 1.6vw; }
   .ds-shop .ds-station-tech { font-size: 1.2vw; }
