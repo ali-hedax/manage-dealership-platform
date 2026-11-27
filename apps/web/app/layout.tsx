@@ -12,6 +12,8 @@ import './globals.css';
 // New design language (spec section 12); components are prefixed m-.
 import './manage-ui.css';
 import './design-20261118.css';
+// Identity of slice S05 (matte black and safety yellow); last, so it wins.
+import './identity-s05.css';
 import { ToastProvider } from '@/lib/toast';
 import {InstallProvider} from '@/components/InstallApp';
 import {NetworkStatus} from '@/components/NetworkStatus';

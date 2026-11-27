@@ -140,3 +140,12 @@ a.ds-kpi:hover { box-shadow: var(--ds-shadow-2); }
 .ds-swatch { display: grid; gap: var(--ds-1); font-size: var(--ds-fs-xs); }
 .ds-swatch i { display: block; block-size: 44px; border-radius: var(--ds-radius-ctl); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
 @media (max-width: 640px) { .ds-page { padding: var(--ds-4); } }
+
+/* Airport split-flap digits on the displays (S05 identity): each number sits on a dark tile with
+   the hairline split of a flap board, tabular figures in safety yellow. Displays only. */
+.ds-tv .ds-kpi-value, .ds-tv .ds-tv-eta, .ds-wait-clock, .ds-shop .ds-station-code {
+  display: inline-block; padding: .04em .22em; border: 1px solid var(--ds-line); border-radius: 4px;
+  background: linear-gradient(180deg, #19191C 0 49.4%, #050506 49.4% 50.6%, #121214 50.6% 100%);
+  color: var(--ds-accent); font-variant-numeric: tabular-nums; letter-spacing: .08em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 1px 0 rgba(0, 0, 0, .6);
+}

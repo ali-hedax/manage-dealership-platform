@@ -32,7 +32,7 @@ async function noSidewaysScroll(page: Page, path: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${path} at phone width`).toBe(true);
 }
 
-test('owner can switch between all five desks, with planned modules in the roadmap', async ({ page }) => {
+test('owner can switch between all five desks; planned modules stay out of the menu', async ({ page }) => {
   await login(page, 'manager');
   const nav = page.getByRole('navigation', { name: 'بخش‌های منیج' });
   for (const desk of [
@@ -49,11 +49,12 @@ test('owner can switch between all five desks, with planned modules in the roadm
   }
   // Pulse is off here: the reception pages stay out of the menu. The group remains only for
   // «خودروهای متوقف» (an uploaded official report, owner 2026-11-26), which needs no Pulse.
-  await nav.getByRole('button', { name: 'پذیرش و ترخیص' }).click();
+  await nav.getByRole('button', { name: 'پذیرش و جست‌وجو', exact: true }).click();
   await expect(nav.getByRole('link', { name: 'خودروهای متوقف' })).toBeVisible();
   for (const name of ['پذیرش‌های امروز', 'پذیرش‌های باز', 'ترخیص‌شده‌ها', 'لیست شب']) await expect(nav.getByRole('link', { name, exact: true })).toHaveCount(0);
-  await nav.getByRole('button', { name: 'نقشهٔ راه' }).click();
-  await expect(nav.getByRole('link', { name: /پذیرش و خدمات عمومی/ })).toBeVisible();
+  // Slice S05: modules that are not built yet are hidden, not listed as a roadmap.
+  await expect(nav.getByRole('button', { name: 'نقشهٔ راه' })).toHaveCount(0);
+  await expect(nav.locator('a[href^="/modules/"]')).toHaveCount(0);
 });
 
 test('daily stock and Emdad files, exact option choice, reservation steps and history', async ({ page }, info) => {

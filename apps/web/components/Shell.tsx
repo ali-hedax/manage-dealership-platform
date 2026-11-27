@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MODULE_LABELS, ROLE_LABELS, type ModuleKey } from '@manage/shared';
+import { MODULE_LABELS, ROLE_LABELS, buildMenu, isTechnicianOnly, menuItemActive, menuNumber, type MenuItem, type ModuleKey } from '@manage/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { visibleWorkspaces, workspaceHome } from '@/lib/workspaces';
@@ -13,10 +13,9 @@ import { PageActions } from './PageActions';
 import { InstallButton } from './InstallApp';
 import { ReleaseNotice, VersionChip } from './ReleaseNotice';
 
-// App shell of the approved design (owner references, Nov 2026): brand and five
-// destinations on the inline-start side, a top bar with the global search (Ctrl+K),
-// reminders and the account menu. The control room switches the shell to the dark space.
-interface NavItem { href: string; label: string; icon: IconName; show: boolean; match?: (p: string) => boolean; planned?: boolean }
+// App shell (slice S05, owner 2026-11-27): matte black side menu numbered ۰–۹ from buildMenu
+// (packages/shared/src/navigation.ts), a top bar with the global search (Ctrl+K), reminders and
+// the account menu, and a way back on every page. The control room switches to the dark space.
 
 export function Shell({ children }: { children: ReactNode }) {
   const { me, can } = useAuth();
@@ -28,109 +27,26 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => { if (!open || !mobile) return; const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); menu.current?.focus(); } }; document.addEventListener('keydown', key); return () => document.removeEventListener('keydown', key); }, [open, mobile]);
   useEffect(() => { document.title = `${pageTitle(pathname)} | Manage by HEDAX`; setOpen(false); }, [pathname]);
 
-  const technicianOnly = me.roles.length === 1 && me.roles[0] === 'technician';
+  const technicianOnly = isTechnicianOnly(me.roles);
   const home = workspaceHome(me);
-  const dark = ['/control-room', '/accidents/manager', '/accidents/owner'].includes(pathname);
   const desks = visibleWorkspaces(me);
-
-  const primary: NavItem[] = technicianOnly
-    ? [
-        { href: '/workshop/technician', label: 'کارهای من', icon: 'grid', show: true, match: (p) => p === '/workshop/technician' },
-      ]
-    : [
-        { href: home, label: 'میز کار', icon: 'grid', show: true, match: (p) => p === home || (p.startsWith('/accidents') && !dark) },
-        { href: '/control-room', label: 'اتاق کنترل', icon: 'gauge', show: can('report.manager'), match: (p) => p === '/control-room' || (dark && p !== home) },
-        { href: '/cases', label: 'پرونده‌ها', icon: 'folder', show: can('case.read'), match: (p) => p.startsWith('/cases') },
-        { href: '/parts', label: 'قطعات', icon: 'box', show: can('case.read') && (can('part.manage') || can('part.request') || can('stock.read')), match: (p) => p === '/parts' || p === '/stock' || p === '/emdad' },
-        { href: '/reports', label: 'گزارش‌ها', icon: 'chart', show: can('report.manager') || can('part.manage') || can('case.update') || can('task.manage') || can('wage.report'), match: (p) => p.startsWith('/reports') },
-        { href: '/settings', label: 'تنظیمات', icon: 'gear', show: me.isOwner || can('user.manage') || can('calendar.manage') || can('workshop.manage') || can('settings.manage') || can('reference.parts.read') || can('daily_reports.upload') || can('workshop.read') || can('integration.manage'), match: (p) => ['/settings', '/users', '/workshop/settings', '/reference-data', '/daily-reports'].includes(p) },
-      ];
-  const more: NavItem[] = technicianOnly ? [] : [
-    { href: '/workshop', label: 'برنامه و گزارش تعمیر', icon: 'wrench', show: can('workshop.read'), match: (p) => p === '/workshop' },
-    { href: '/daily-reports', label: 'گزارش‌های روزانه', icon: 'upload', show: can('daily_reports.upload') || can('daily_reports.apply') },
-    { href: '/stock', label: 'موجودی و رزرو', icon: 'layers', show: can('stock.read') },
-    { href: '/emdad', label: 'پیگیری امداد ویژه', icon: 'truck', show: can('emdad.read') },
-    { href: '/', label: 'داشبورد شمارشی', icon: 'chart', show: can('dashboard.read'), match: (p) => p === '/' },
-  ];
-  // Side menu (owner, 2026-11-19 — final structure). Every link is an existing route with its
-  // existing permission; nothing duplicates the person's own workspace, and unfinished modules
-  // are grouped in the owner-only roadmap. Only one group is open at a time.
-  const planned = me.modules.filter((m) => m.status === 'planned');
-  const plannedLink = (key: ModuleKey, icon: IconName): NavItem => ({ href: `/modules/${key}`, label: MODULE_LABELS[key], icon, show: !!me.isOwner && planned.some((m) => m.key === key), planned: true });
-  const byHref = (href: string) => [...primary, ...more].find((i) => i.href === href)!;
-  const manager = can('report.manager');
-  const reports = byHref('/reports');
-  // «پذیرش و ترخیص» (owner, 2026-11-23; spec section 26): only when the server flag made the
-  // module active and only with reception.read (owner and system administrator during the trial).
-  const receptionActive = me.modules.some((m) => m.key === 'reception' && m.status === 'active');
-  const groups: NavGroupDef[] = technicianOnly ? [] : [
-    { key: 'reception', label: 'پذیرش و ترخیص', icon: 'file', items: [
-      { href: '/reception', label: 'پذیرش‌های امروز', icon: 'calendar', show: receptionActive && can('reception.read'), match: (p) => p === '/reception' },
-      { href: '/reception/open', label: 'پذیرش‌های باز', icon: 'folder', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/open' || (/^\/reception\/[^/]+$/.test(p) && p !== '/reception/released' && p !== '/reception/stoppage') },
-      { href: '/reception/released', label: 'ترخیص‌شده‌ها', icon: 'check', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/released' },
-      { href: '/reception/night', label: 'لیست شب', icon: 'clock', show: receptionActive && can('reception.read'), match: (p) => p === '/reception/night' },
-      // Official stoppage report (owner, 2026-11-26): an uploaded file, so it does not wait for Pulse.
-      { href: '/reception/stoppage', label: 'خودروهای متوقف', icon: 'alert', show: can('stoppage.read'), match: (p) => p.startsWith('/reception/stoppage') },
-    ] },
-    { key: 'accident', label: 'مدیریت تصادفات', icon: 'nav-car', items: [
-      { href: '/accidents/expert', label: 'خودروهای تصادفی', icon: 'car', show: desks.some((w) => w.key === 'expert') && home !== '/accidents/expert', match: (p) => p === '/accidents/expert' },
-      { ...byHref('/cases'), label: 'پرونده و کارشناسی', match: (p) => p.startsWith('/cases') && p !== '/cases/new' },
-      { href: '/cases/new', label: 'پذیرش خودرو', icon: 'add', show: can('case.create'), match: (p) => p === '/cases/new' },
-      { ...reports, label: 'گزارش‌ها و فرم‌های تصادفات', show: reports.show && !manager },
-    ] },
-    { key: 'parts', label: 'انبار قطعات یدکی', icon: 'nav-package', items: [
-      { ...byHref('/parts'), label: 'درخواست و تأمین قطعات', show: byHref('/parts').show && home !== '/accidents/parts', match: (p) => p === '/parts' },
-      { ...byHref('/stock'), label: 'موجودی و رزرو' },
-      { ...byHref('/emdad'), label: 'امداد ویژه تصادفات' },
-      { ...byHref('/daily-reports'), label: 'گزارش‌های روزانهٔ انبار' },
-    ] },
-    // Standalone Special Aid follow-up (owner, 2026-11-22; spec section 25): its own group, nothing else moved.
-    { key: 'special_aid', label: 'پیگیری امداد ویژه', icon: 'truck', items: [
-      { href: '/special-aid', label: 'کارهای امروز', icon: 'calendar', show: can('special_aid.read') && home !== '/special-aid', match: (p) => p === '/special-aid' },
-      { href: '/special-aid/vehicles', label: 'پرونده خودروها', icon: 'folder', show: can('special_aid.read'), match: (p) => p.startsWith('/special-aid/vehicles') },
-      { href: '/special-aid/supply', label: 'پیگیری تأمین قطعات', icon: 'truck', show: can('special_aid.supply'), match: (p) => p === '/special-aid/supply' },
-      { href: '/special-aid/reports', label: 'گزارش‌ها', icon: 'chart', show: can('special_aid.report'), match: (p) => p === '/special-aid/reports' || p === '/special-aid/feedback' },
-    ] },
-    { key: 'workshop', label: 'مدیریت تعمیرگاه', icon: 'nav-calendar', items: [
-      { ...byHref('/workshop'), label: 'برنامه و پیگیری مراحل تعمیر' },
-    ] },
-    { key: 'manager', label: 'مدیر خدمات', icon: 'nav-chart', items: [
-      { ...byHref('/control-room'), label: 'داشبورد مدیر خدمات', show: manager && home !== '/accidents/manager' && home !== '/accidents/owner' },
-      { href: '/control-room/stoppages', label: 'گزارش خودروهای متوقف', icon: 'chart', show: manager && can('stoppage.read'), match: (p) => p === '/control-room/stoppages' },
-      { ...reports, label: 'گزارش‌های مدیریتی', show: reports.show && manager },
-      { ...byHref('/'), label: 'آمار پرونده‌ها' },
-    ] },
-    { key: 'settings', label: 'تنظیمات سیستم', icon: 'nav-settings', items: [
-      { ...byHref('/settings'), label: 'تنظیمات سیستم', match: (p) => ['/settings', '/settings/reports', '/settings/pulse', '/workshop/settings', '/reference-data'].includes(p) },
-      { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team', show: me.isOwner || can('user.manage'), match: (p) => p === '/users' },
-    ] },
-    { key: 'roadmap', label: 'نقشهٔ راه', icon: 'layers', items: [
-      plannedLink('parts_inventory', 'box'),
-      plannedLink('periodic_service', 'calendar'),
-      plannedLink('workforce', 'team'),
-      plannedLink('reception', 'file'),
-      plannedLink('customer_comms', 'send'),
-      plannedLink('finance', 'money'),
-      plannedLink('warranty', 'shield'),
-      plannedLink('multi_dealership', 'grid'),
-      plannedLink('integrations', 'layers'),
-    ] },
-  ];
-  const isActive = (i: NavItem) => (i.match ? i.match(pathname) : pathname === i.href);
-  const visibleGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).filter((g) => g.items.length);
-  const activeGroup = visibleGroups.find((g) => g.items.some(isActive))?.key ?? null;
+  const sections = buildMenu({
+    roles: me.roles, permissions: me.permissions, isOwner: !!me.isOwner, home, desks: desks.map((w) => w.key),
+    receptionActive: me.modules.some((m) => m.key === 'reception' && m.status === 'active'),
+  });
+  const [desk, ...groups] = sections[0]?.num === 0 ? sections : [{ num: 0, key: 'desk', label: '', icon: '', items: [] }, ...sections];
+  const isActive = (i: MenuItem) => menuItemActive(i, pathname);
+  const activeGroup = groups.find((g) => g.items.some(isActive))?.key ?? null;
   const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
   // Navigating keeps the group of the current page open (and only that one).
   useEffect(() => { setOpenGroup(activeGroup); }, [activeGroup]);
   const [compact, setCompact] = useState(false);
   useEffect(() => { try { setCompact(localStorage.getItem('manage-nav-compact') === '1'); } catch { /* storage unavailable */ } }, []);
   const toggleCompact = () => { const next = !compact; setCompact(next); try { localStorage.setItem('manage-nav-compact', next ? '1' : '0'); } catch { /* storage unavailable */ } };
-  const workspaceItem: NavItem = technicianOnly ? primary[0]! : { href: home, label: 'میزکار من', icon: 'nav-workspace', show: true, match: (p) => p === home };
 
-  const link = (i: NavItem) => {
-    if (!i.show) return null;
+  const link = (i: MenuItem, num?: number) => {
     const active = isActive(i);
-    return <Link key={i.href + i.label} href={i.href} className={i.planned ? 'planned' : undefined} aria-current={active ? 'page' : undefined} title={compact ? i.label : undefined}><AppIcon name={i.icon} /><span>{i.label}</span>{i.planned && <span className="tag-dev">در دست توسعه</span>}</Link>;
+    return <Link key={i.href + i.label} href={i.href} aria-current={active ? 'page' : undefined} title={compact ? i.label : undefined}>{num !== undefined ? <span className="nav-num" aria-hidden="true">{menuNumber(num)}</span> : <AppIcon name={i.icon as IconName} />}<span>{i.label}</span></Link>;
   };
   async function logout() { await api('/auth/logout', { method: 'POST' }).catch(() => {}); router.replace('/login'); }
   const back = backTarget(pathname, home, desks.length > 1);
@@ -146,12 +62,11 @@ export function Shell({ children }: { children: ReactNode }) {
           <span className="brand-by">by <b>HEDAX</b></span>
         </Link>
         <nav className="side-nav" id="main-navigation" aria-label="بخش‌های منیج">
-          {technicianOnly ? primary.map(link) : link(workspaceItem)}
-          {desks.length > 1 && link({ href: '/launch', label: 'انتخاب میزکار', icon: 'desk', show: true })}
-          {visibleGroups.map((g) => (
-            <NavGroup key={g.key} id={g.key} label={g.label} icon={g.icon} open={!compact && openGroup === g.key} active={activeGroup === g.key}
+          {desk!.items.map((i, n) => link(i, n === 0 ? 0 : undefined))}
+          {groups.map((g) => (
+            <NavGroup key={g.key} id={g.key} num={g.num} label={g.label} open={!compact && openGroup === g.key} active={activeGroup === g.key}
               onToggle={() => { if (compact) { setCompact(false); setOpenGroup(g.key); } else setOpenGroup(openGroup === g.key ? null : g.key); }}>
-              {g.items.map(link)}
+              {g.items.map((i) => link(i))}
             </NavGroup>
           ))}
         </nav>
@@ -192,38 +107,34 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Every page has a way back (spec §12): to the case for its edit page, otherwise to the own desk. Pages with their own back link and the desks themselves get none. */
-interface NavGroupDef { key: string; label: string; icon: IconName; items: NavItem[] }
-
 /** A module heading of the side menu (accordion: the parent keeps one group open). */
-function NavGroup({ id, label, icon, open, active, onToggle, children }: { id: string; label: string; icon: IconName; open: boolean; active: boolean; onToggle: () => void; children: ReactNode }) {
+function NavGroup({ id, num, label, open, active, onToggle, children }: { id: string; num: number; label: string; open: boolean; active: boolean; onToggle: () => void; children: ReactNode }) {
   return (
     <div className={`nav-group${open ? ' open' : ''}${active ? ' active' : ''}`}>
       <button type="button" className="nav-group-head" aria-expanded={open} aria-controls={`nav-${id}`} onClick={onToggle} title={label}>
-        <AppIcon name={icon} /><span>{label}</span><AppIcon name="chevron-down" className="chev" />
+        <span className="nav-num" aria-hidden="true">{menuNumber(num)}</span><span>{label}</span><AppIcon name="chevron-down" className="chev" />
       </button>
       {open && <div className="nav-group-items" id={`nav-${id}`} role="group" aria-label={label}>{children}</div>}
     </div>
   );
 }
 
+/**
+ * Every page has a way back (spec §12; slice S05 «هر صفحه دکمهٔ بازگشت»): a folder goes back to its
+ * list, a settings page to the settings, everything else to the own desk. Only the own desk itself
+ * and the pages that draw their own back link (case folder, feedback, people report) get none here.
+ */
 export function backTarget(pathname: string, home: string, canChooseDesk = false): { href: string; label: string } | null {
-  if (pathname === home || pathname === '/launch' || pathname === '/control-room') return null;
+  if (pathname === home) return null;
+  if (pathname === '/reminders' || pathname === '/reports/people' || /^\/cases\/(?!new$|import$|deleted$)[^/]+$/.test(pathname)) return null;
   if (canChooseDesk && /^\/accidents\/[^/]+$/.test(pathname)) return { href: '/launch', label: 'بازگشت به انتخاب میزکار' };
-  // Sidebar destinations are top-level places: no «back» link above them.
-  if (['/reminders', '/reports/people', '/workshop/technician/work', '/parts', '/settings', '/reports', '/cases'].includes(pathname)) return null;
-  // Special Aid pages carry their own workspace tabs; a dossier goes back to the vehicle list.
   if (/^\/special-aid\/vehicles\/[^/]+$/.test(pathname)) return { href: '/special-aid/vehicles', label: 'بازگشت به پرونده خودروها' };
-  if (pathname.startsWith('/special-aid')) return null;
-  // Reception lists carry their own tabs; a reception folder goes back to the open admissions.
   if (/^\/reception\/stoppage\/[^/]+$/.test(pathname)) return { href: '/reception/stoppage', label: 'بازگشت به خودروهای متوقف' };
   if (pathname === '/control-room/stoppages') return { href: '/control-room', label: 'بازگشت به اتاق کنترل' };
   if (/^\/reception\/(?!open$|released$|night$|stoppage$)[^/]+$/.test(pathname)) return { href: '/reception/open', label: 'بازگشت به پذیرش‌ها' };
-  if (pathname.startsWith('/reception')) return null;
-  if (/^\/cases\/(?!new$|import$)[^/]+$/.test(pathname)) return null;
   const edit = /^\/cases\/([^/]+)\/edit$/.exec(pathname);
   if (edit) return { href: `/cases/${edit[1]}`, label: 'بازگشت به پرونده' };
-  if (['/users', '/settings/reports', '/settings/pulse', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
+  if (['/users', '/settings/reports', '/settings/pulse', '/settings/nexus', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
   return { href: home, label: 'بازگشت به میز کار' };
 }
 

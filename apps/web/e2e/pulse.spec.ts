@@ -44,7 +44,7 @@ test('reception lists, folder, outside work and Manage Pulse settings use the ex
   await shot(page, 'existing-daily-reports-desktop');
 
   // The group appears only because the server flag is on; the roadmap no longer lists it.
-  const reception = nav(page).getByRole('button', { name: 'پذیرش و ترخیص' });
+  const reception = nav(page).getByRole('button', { name: 'پذیرش و جست‌وجو', exact: true });
   await reception.click();
   await nav(page).getByRole('link', { name: 'پذیرش‌های باز' }).click();
   await expect(page).toHaveURL(/\/reception\/open$/);
@@ -164,7 +164,7 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
 
 test('the reception API refuses a colleague without reception.read', async ({ page }) => {
   await login(page, 'expert');
-  await expect(nav(page).getByRole('button', { name: 'پذیرش و ترخیص' })).toHaveCount(0);
+  await expect(nav(page).getByRole('button', { name: 'پذیرش و جست‌وجو', exact: true })).toHaveCount(0);
   const res = await page.request.post('/api/v1/reception/search', { headers: { 'x-manage-client': 'e2e' }, data: { view: 'open' } });
   expect(res.status()).toBe(403);
   expect((await page.request.get('/api/v1/pulse/status')).status()).toBe(403);
