@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyStockMatch, codeMatchKey, isOemStockCode, nonOemPrefix } from '../stock-code';
-import { CHANGE_NOTES, RELEASE_LINE, compareVersions, nextVersion, releaseProblems, versionNotes } from '../releases';
+import { CHANGE_NOTES, RELEASE_LINE, compareVersions, nextVersion, releaseHighlights, releaseProblems, versionNotes } from '../releases';
 import { SERVICE_KPIS, buildFollowUps, serviceKpiMembers } from '../service-kpis';
 import { shortVehicleName, vehicleHeadName } from '../desk';
 
@@ -89,4 +89,13 @@ test('vehicleHeadName: short name from ISACO model descriptions', () => {
   assert.equal(vehicleHeadName('پژو 207i HB موتور TU5 گیربکس دستی 5 دنده'), 'پژو 207i');
   assert.equal(vehicleHeadName('هایما S7 توربو'), 'هایما S7');
   assert.equal(vehicleHeadName(null), '');
+});
+
+test('the in-app announcement shows at most five short lines (owner, 2026-11-27)', () => {
+  const all = versionNotes(CHANGE_NOTES.map((n) => n.key)).summary;
+  const lines = releaseHighlights(all);
+  assert.ok(lines.length > 0 && lines.length <= 5);
+  assert.ok(lines.every((l) => l.length <= 110));
+  assert.deepEqual(releaseHighlights('یک؛ دو. سه؛ چهار'), ['یک', 'دو', 'سه', 'چهار']);
+  assert.equal(releaseHighlights(CHANGE_NOTES[0]!.summary).length, 5);
 });

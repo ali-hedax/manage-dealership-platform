@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
-import { type VersionInfo } from '@manage/shared';
+import { releaseHighlights, type VersionInfo } from '@manage/shared';
 import { api, fetcher } from '@/lib/api';
 import { formatJalali } from '@/lib/format';
 
@@ -54,7 +54,11 @@ export function ReleaseNotice() {
   if (data.seen || !data.version) return null;
   return (
     <div className="release-notice no-print" role="region" aria-label="اعلان نسخهٔ تازه" data-testid="release-notice">
-      <span className="grow"><b>نسخه جدید منیج منتشر شد</b> — <bdi dir="ltr">{data.version}</bdi>{data.deployedAt ? ` (${formatJalali(data.deployedAt)})` : ''}. {data.summary}</span>
+      <div className="grow">
+        <b>نسخه جدید منیج منتشر شد</b> — <bdi dir="ltr">{data.version}</bdi>{data.deployedAt ? ` (${formatJalali(data.deployedAt)})` : ''}
+        {/* At most five short lines; the full change list is on «/releases» (owner, 2026-11-27). */}
+        <ul className="release-bullets">{releaseHighlights(data.summary).map((line) => <li key={line}>{line}</li>)}</ul>
+      </div>
       <Link className="m-btn-s" href="/releases" onClick={() => void ack()}>مشاهده تغییرات</Link>
       <button type="button" className="m-btn2-s" onClick={() => void ack()}>متوجه شدم</button>
     </div>

@@ -9,6 +9,8 @@ test('version indicator, one-time announcement and the complete Persian release 
   await expect(chip).toContainText(/v\d+\.\d+\.\d+/);
   const notice = page.getByTestId('release-notice');
   await expect(notice).toContainText('نسخه جدید منیج منتشر شد');
+  // Short announcement: at most five lines; the full list stays on /releases (owner, 2026-11-27).
+  expect(await notice.getByRole('listitem').count()).toBeLessThanOrEqual(5);
   await expect(page.getByTestId('print-inspection')).toHaveAttribute('href', '/api/v1/print/inspection.pdf');
   await page.screenshot({ path: info.outputPath('release-notice-desktop.png') });
   await notice.getByRole('link', { name: 'مشاهده تغییرات' }).click();
