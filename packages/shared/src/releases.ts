@@ -32,6 +32,27 @@ export const RELEASE_LINE = { major: 1, minor: 0 } as const;
 /** Newest first. Add one note per user-visible change set in the PR that ships it. */
 export const CHANGE_NOTES: readonly ChangeNote[] = [
   {
+    key: 'h1-night-lists-followers-20261127', date: '2026-11-27',
+    summary: 'لیست شب در دو لیست جدا: تعمیراتی و تصادفی؛ جایگاه فعلی و بعدی با فهرست جایگاه‌ها و امکان نوشتن؛ علت «سایر» با متن آزاد؛ گزارش شب با آمار پذیرش هر پذیرشگر؛ چند پیگیر برای هر خودروی متوقف.',
+    sections: [
+      {title:'لیست شب',items:[
+        'هر روز دو لیست جدا ساخته می‌شود: «لیست شب تعمیراتی» و «لیست شب تصادفی» (فقط خودروهای متصل به پروندهٔ تصادفی)؛ هر کدام تأیید، مهلت و هشدار خودش را دارد.',
+        'ستون نام اجرت حذف شد؛ هر ردیف نام کوتاه خودرو، پلاک، جایگاه فعلی و جایگاه بعدی را نشان می‌دهد.',
+        'جایگاه فعلی و بعدی از فهرست همهٔ جایگاه‌های فعال انتخاب می‌شود، با «ندارد» و «جایگاه دیگر (نوشتن)».',
+        'علت ماندن از فهرست انتخاب می‌شود و «سایر» کادر متن آزاد باز می‌کند؛ متن همان‌طور که نوشته شده نمایش و خروجی گرفته می‌شود.',
+      ]},
+      {title:'گزارش شب',items:[
+        'بالای لیست شب: کل پذیرش‌های روز، تعمیراتی، سرویس ادواری و تعداد پذیرش هر پذیرشگر.',
+      ]},
+      {title:'خودروهای متوقف',items:[
+        'هر کاربر فعال منیج می‌تواند پیگیر یک خودروی متوقف باشد و چند پیگیر هم‌زمان مجاز است؛ افزودن و حذف با نام و زمان ثبت می‌شود.',
+      ]},
+      {title:'اعلان نسخه',items:[
+        'اعلان نسخهٔ تازه حداکثر پنج خط کوتاه است؛ فهرست کامل در «تاریخچهٔ نسخه‌ها» می‌ماند.',
+      ]},
+    ],
+  },
+  {
     key: 'reconstruction-1a-stoppages-20261126', date: '2026-11-26',
     summary: 'خودروهای متوقف از «گزارش توقف خودرو»ی کسب‌وکار به‌صورت پرونده پیگیری می‌شوند؛ لیست شب پس از تأیید ثابت می‌ماند و نام اجرت به‌جای کد نمایش داده می‌شود.',
     sections: [
@@ -491,6 +512,15 @@ export function nextVersion(existing: readonly { major: number; minor: number; p
 export function versionNotes(noteKeys: readonly string[], notes: readonly ChangeNote[] = CHANGE_NOTES): { summary: string; sections: ReleaseSection[] } {
   const own = notes.filter((n) => noteKeys.includes(n.key));
   return { summary: own.map((n) => n.summary).join(' '), sections: own.flatMap((n) => n.sections) };
+}
+
+/**
+ * The in-app announcement (owner, 2026-11-27): at most `max` short bullets from a version's
+ * summary, never the whole change list; the full list stays on «/releases».
+ */
+export function releaseHighlights(summary: string, max = 5, maxChars = 110): string[] {
+  return summary.split(/[؛;]\s*|(?<=[.!؟?])\s+/u).map((s) => s.trim().replace(/[.؛;]+$/u, '')).filter(Boolean).slice(0, max)
+    .map((s) => (s.length > maxChars ? `${s.slice(0, maxChars - 1).trimEnd()}…` : s));
 }
 
 /** Problems of the change notes (CI test): unique keys, dates, newest first, content. */

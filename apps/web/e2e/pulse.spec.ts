@@ -160,6 +160,16 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
       await shot(page, `night-${kind}-${width}`);
     }
   }
+  // «گزارش شب» with sample data: the demo seed admits two receptions today by «پذیرشگر نمونه»;
+  // the summary shows even before the list is built (and on a Friday).
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/reception/night?day=${today}`);
+  const summary = page.getByRole('region', { name: /گزارش شب/ });
+  await expect(summary.locator('dd').first()).not.toHaveText('۰');
+  const people = summary.getByRole('table');
+  await expect(people.getByRole('columnheader', { name: 'پذیرشگر' })).toBeVisible();
+  await expect(people.getByRole('row', { name: /پذیرشگر نمونه/ })).toBeVisible();
+  await shot(page, 'night-summary-today-1440');
 });
 
 test('the reception API refuses a colleague without reception.read', async ({ page }) => {
