@@ -26,8 +26,11 @@ test('missing reasons, lateness after 18:45 only while a draft, longest stay fir
 test('the Excel sheet keeps the scenario column order and marks carried reasons', () => {
   const sheet = nightListSheet([row({ reason: 'waiting_parts', carried: true, labour: ['صافکاری (باز)'], currentStation: 'باتری‌سازی 36', nextStations: 'مکانیکی 99', accident: true, isOpen: false })]);
   assert.deepEqual(sheet[0], [...NIGHT_LIST_COLUMNS]);
-  assert.deepEqual(sheet[1], ['دنا پلاس', '11 ب 111 - 11', 'مشتری ساختگی', '100', 2, 'باتری‌سازی 36', 'صافکاری (باز)', 'مکانیکی 99', 'منتظر قطعه از انبار (از دیروز)', '', 'بله', 'ترخیص شد']);
-  assert.equal(nightListSheet([row({})])[1]![8], 'ثبت نشده');
+  assert.deepEqual(sheet[1], ['دنا پلاس', '11 ب 111 - 11', 'مشتری ساختگی', '100', 2, 'باتری‌سازی 36', 'مکانیکی 99', 'منتظر قطعه از انبار (از دیروز)', '', 'بله', 'ترخیص شد']);
+  assert.equal(nightListSheet([row({})])[1]![7], 'ثبت نشده');
+  assert.ok(!(sheet[0] as string[]).includes('نام اجرت'));
+  // «سایر» shows the receptionist's text as typed, not the preset label.
+  assert.equal(nightListSheet([row({ reason: 'other', reasonNote: 'منتظر کارشناس بیمه' })])[1]![7], 'منتظر کارشناس بیمه');
 });
 
 test('build and send-by times follow the work calendar: full day 18:00/18:45, half-day Thursday 12:30/13:15, Friday none', () => {

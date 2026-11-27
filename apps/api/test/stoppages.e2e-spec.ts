@@ -177,10 +177,18 @@ describe('Official stoppage report «گزارش توقف خودرو»', () => {
   it('follow-up owner and a manual reception decision are audited, versioned and survive imports', async () => {
     const s = await byNotice(clerk, '951951');
     const followers = (await clerk.get('/stoppages/followers').expect(200)).body as { id: string; displayName: string }[];
-    const me = followers.find((f) => f.displayName)!;
-    const owned = (await clerk.patch(`/stoppages/${s.id}/follow-up`, { expectedVersion: s.version, ownerUserId: me.id }).expect(200)).body as StoppageCaseView;
-    expect(owned.followUpUserId).toBe(me.id);
-    await clerk.patch(`/stoppages/${s.id}/follow-up`, { expectedVersion: s.version, ownerUserId: null }).expect(409);
+    // Any active user may follow (not only stoppage.manage holders), several at once (hotfix H1).
+    expect(followers.length).toBeGreaterThanOrEqual(3);
+    const [me, other, third] = followers;
+    const one = (await clerk.post(`/stoppages/${s.id}/followers`, { expectedVersion: s.version, userId: me!.id, action: 'add' }).expect(201)).body as StoppageCaseView;
+    const two = (await clerk.post(`/stoppages/${s.id}/followers`, { expectedVersion: one.version, userId: other!.id, action: 'add' }).expect(201)).body as StoppageCaseView;
+    const three = (await clerk.post(`/stoppages/${s.id}/followers`, { expectedVersion: two.version, userId: third!.id, action: 'add' }).expect(201)).body as StoppageCaseView;
+    expect(three.followers.map((x) => x.userId)).toEqual([me!.id, other!.id, third!.id]);
+    const owned = (await clerk.post(`/stoppages/${s.id}/followers`, { expectedVersion: three.version, userId: other!.id, action: 'remove' }).expect(201)).body as StoppageCaseView;
+    expect(owned.followers.map((x) => x.userId)).toEqual([me!.id, third!.id]);
+    await clerk.post(`/stoppages/${s.id}/followers`, { expectedVersion: s.version, userId: me!.id, action: 'remove' }).expect(409);
+    await clerk.post(`/stoppages/${s.id}/followers`, { expectedVersion: owned.version, userId: '00000000-0000-4000-8000-000000000000', action: 'add' }).expect(422);
+    expect((await clerk.get('/stoppages').expect(200)).body.items.find((x: { id: string }) => x.id === s.id).followers).toHaveLength(2);
     const wrong = (await db().select({ id: receptions.id }).from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.chassis, 'SDK82226'))))[0]!.id;
     await clerk.post(`/stoppages/${s.id}/reception`, { expectedVersion: owned.version, receptionId: wrong, reason: 'آزمون شاسی دیگر' }).expect(422);
     const chosen = s.candidates[0]!.id;
@@ -190,7 +198,7 @@ describe('Official stoppage report «گزارش توقف خودرو»', () => {
     await h.app.get(StoppagesService).reconcile(db(), tenantId, [s.id]);
     expect((await byNotice(clerk, '951951')).linkState).toBe('manual');
     const actions = (await db().select({ action: auditEvents.action }).from(auditEvents).where(eq(auditEvents.tenantId, tenantId))).map((a) => a.action);
-    expect(actions).toEqual(expect.arrayContaining(['stoppage.follow_up_set', 'stoppage.reception_linked']));
+    expect(actions).toEqual(expect.arrayContaining(['stoppage.follower_added', 'stoppage.follower_removed', 'stoppage.reception_linked']));
   });
 
   it('manager report: counts, reasons, stages, ageing and the night-list comparison', async () => {

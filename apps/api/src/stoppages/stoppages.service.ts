@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import {
-  daysBetween, EMDAD_ARRIVED_CATEGORIES, EMDAD_STATUS_CATEGORY_LABELS, type EmdadStatusCategory, emdadNoKey, headerKey, maskPhone, parseJalali, parseStoppageGrid, permissionsFor, shortVehicleName,
+  daysBetween, EMDAD_ARRIVED_CATEGORIES, EMDAD_STATUS_CATEGORY_LABELS, type EmdadStatusCategory, emdadNoKey, headerKey, maskPhone, parseJalali, parseStoppageGrid, shortVehicleName,
   STOPPAGE_AGE_BUCKETS, STOPPAGE_COLUMNS, STOPPAGE_MAX_BYTES, STOPPAGE_FIELDS, STOPPAGE_PARSER_VERSION, STOPPAGE_REASON_KINDS, STOPPAGE_REASON_LABELS, STOPPAGE_SHEET,
   STOPPAGE_STAGE_LABELS, STOPPAGE_STAGES, isKnownStoppageStatus, stoppageItemActive, stoppageItemStage, stoppageReasonKind, stoppageStage, stoppageStartedAt,
-  type NightListView, type ParsedStoppageRow, type ParsedStoppageSheet, type Role, type StoppageAidLink, type StoppageCaseView, type StoppageImportPreview,
+  type NightListView, type ParsedStoppageRow, type ParsedStoppageSheet, type StoppageAidLink, type StoppageCaseView, type StoppageImportPreview,
   type StoppageImportResult, type StoppageItemView, type StoppageLastImport, type StoppageLinkInput, type StoppageLinkState, type StoppageListKind,
-  type StoppageListView, type StoppageOfficial, type StoppageOwnerInput, type StoppageReport, type StoppageStage, type StoppageSummary,
+  type StoppageListView, type StoppageFollower, type StoppageFollowerInput, type StoppageOfficial, type StoppageReport, type StoppageStage, type StoppageSummary,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
 import type { Actor } from '../auth/auth.types';
@@ -16,7 +16,7 @@ import { newId } from '../common/ids';
 import { detectFormat, FORMAT_ERRORS } from '../daily-reports/spreadsheet-formats';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import {
-  emdadRequests, nightListItems, nightLists, receptions, stoppageImports, stoppageItems, stoppageItemVersions, stoppages, tenants, users,
+  emdadRequests, nightListItems, nightLists, receptions, stoppageFollowers, stoppageImports, stoppageItems, stoppageItemVersions, stoppages, users,
 } from '../db/schema';
 import { readWorkbook, XlsxError } from '../parts/xlsx';
 
@@ -246,15 +246,22 @@ export class StoppagesService {
 
   private async summaries(actor: Actor, where?: ReturnType<typeof and>, now = new Date()): Promise<StoppageSummary[]> {
     const tenantId = actor.user.tenantId;
-    const rows = await this.db.select({ s: stoppages, followUpName: users.displayName, admissionNo: receptions.admissionNo })
-      .from(stoppages).leftJoin(users, eq(users.id, stoppages.followUpUserId)).leftJoin(receptions, eq(receptions.id, stoppages.receptionId))
+    const rows = await this.db.select({ s: stoppages, admissionNo: receptions.admissionNo })
+      .from(stoppages).leftJoin(receptions, eq(receptions.id, stoppages.receptionId))
       .where(where ? and(eq(stoppages.tenantId, tenantId), where) : eq(stoppages.tenantId, tenantId));
     if (!rows.length) return [];
     const ids = rows.map((r) => r.s.id);
     const its: ItemRow[] = [];
     for (const part of chunks(ids)) its.push(...await this.db.select().from(stoppageItems).where(and(eq(stoppageItems.tenantId, tenantId), inArray(stoppageItems.stoppageId, part))));
+    const following = new Map<string, StoppageFollower[]>();
+    for (const part of chunks(ids)) {
+      const fs = await this.db.select({ stoppageId: stoppageFollowers.stoppageId, userId: stoppageFollowers.userId, name: users.displayName }).from(stoppageFollowers)
+        .innerJoin(users, eq(users.id, stoppageFollowers.userId))
+        .where(and(eq(stoppageFollowers.tenantId, tenantId), inArray(stoppageFollowers.stoppageId, part), isNull(stoppageFollowers.removedAt))).orderBy(asc(stoppageFollowers.addedAt));
+      for (const f of fs) following.set(f.stoppageId, [...(following.get(f.stoppageId) ?? []), { userId: f.userId, name: f.name }]);
+    }
     const [latest] = await this.db.select({ id: stoppageImports.id }).from(stoppageImports).where(eq(stoppageImports.tenantId, tenantId)).orderBy(desc(stoppageImports.importedAt)).limit(1);
-    return rows.map(({ s, followUpName, admissionNo }) => toSummary(s, its.filter((i) => i.stoppageId === s.id), followUpName, admissionNo, latest?.id ?? null, now))
+    return rows.map(({ s, admissionNo }) => toSummary(s, its.filter((i) => i.stoppageId === s.id), following.get(s.id) ?? [], admissionNo, latest?.id ?? null, now))
       .sort((a, b) => (b.daysStopped ?? -1) - (a.daysStopped ?? -1) || a.noticeNo.localeCompare(b.noticeNo));
   }
 
@@ -354,30 +361,35 @@ export class StoppagesService {
     };
   }
 
-  /** People who may follow a stopped vehicle (effective `stoppage.manage`). */
+  /** People who may follow a stopped vehicle: every active Manage user of the dealership (hotfix H1). */
   async followers(actor: Actor) {
-    const tenantId = actor.user.tenantId;
-    const [t] = await this.db.select({ templates: tenants.permissionTemplates }).from(tenants).where(eq(tenants.id, tenantId));
-    const people = await this.db.select({ id: users.id, displayName: users.displayName, roles: users.roles, overrides: users.permissionOverrides, isOwner: users.isOwner })
-      .from(users).where(and(eq(users.tenantId, tenantId), eq(users.isActive, true)));
-    return people.filter((u) => permissionsFor(u.roles as Role[], t?.templates, u.overrides, u.isOwner).has('stoppage.manage'))
-      .map((u) => ({ id: u.id, displayName: u.displayName })).sort((a, b) => a.displayName.localeCompare(b.displayName, 'fa'));
+    const people = await this.db.select({ id: users.id, displayName: users.displayName })
+      .from(users).where(and(eq(users.tenantId, actor.user.tenantId), eq(users.isActive, true)));
+    return people.sort((a, b) => a.displayName.localeCompare(b.displayName, 'fa'));
   }
 
   // ------------------------------------------------------------------ changes
 
-  async setFollowUp(actor: Actor, id: string, input: StoppageOwnerInput) {
+  /** Adds or removes one follower; a removal keeps the row with who and when. Adding someone twice changes nothing. */
+  async setFollower(actor: Actor, id: string, input: StoppageFollowerInput) {
     const tenantId = actor.user.tenantId;
     await this.db.transaction(async (tx) => {
       const [s] = await tx.select().from(stoppages).where(and(eq(stoppages.tenantId, tenantId), eq(stoppages.id, id))).for('update');
       if (!s) throw notFound('خودروی متوقف');
       if (s.version !== input.expectedVersion) throw versionConflict(s.version);
-      if (input.ownerUserId) {
-        const [u] = await tx.select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, input.ownerUserId), eq(users.isActive, true)));
+      const [current] = await tx.select({ id: stoppageFollowers.id }).from(stoppageFollowers)
+        .where(and(eq(stoppageFollowers.tenantId, tenantId), eq(stoppageFollowers.stoppageId, id), eq(stoppageFollowers.userId, input.userId), isNull(stoppageFollowers.removedAt)));
+      if (input.action === 'add') {
+        if (current) return;
+        const [u] = await tx.select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, input.userId), eq(users.isActive, true)));
         if (!u) throw badRequest('STOPPAGE_FOLLOWER', 'این همکار پیدا نشد یا غیرفعال است.');
+        await tx.insert(stoppageFollowers).values({ id: newId(), tenantId, stoppageId: id, userId: input.userId, addedBy: actor.user.id, isTest: s.isTest });
+      } else {
+        if (!current) return;
+        await tx.update(stoppageFollowers).set({ removedAt: new Date(), removedBy: actor.user.id }).where(eq(stoppageFollowers.id, current.id));
       }
-      await tx.update(stoppages).set({ followUpUserId: input.ownerUserId, updatedAt: new Date(), version: s.version + 1 }).where(and(eq(stoppages.tenantId, tenantId), eq(stoppages.id, id)));
-      await this.audit.record(tx, actor, { entityType: 'stoppage', entityId: id, action: 'stoppage.follow_up_set', before: { followUpUserId: s.followUpUserId }, after: { followUpUserId: input.ownerUserId } });
+      await tx.update(stoppages).set({ updatedAt: new Date(), version: s.version + 1 }).where(and(eq(stoppages.tenantId, tenantId), eq(stoppages.id, id)));
+      await this.audit.record(tx, actor, { entityType: 'stoppage', entityId: id, action: input.action === 'add' ? 'stoppage.follower_added' : 'stoppage.follower_removed', after: { userId: input.userId } });
     });
     return this.byId(actor, id);
   }
@@ -408,7 +420,7 @@ function groupRows(rows: ParsedStoppageRow[]) {
   return groups;
 }
 
-function toSummary(s: StoppageRow, its: ItemRow[], followUpName: string | null, admissionNo: string | null, latestImport: string | null, now: Date): StoppageSummary {
+function toSummary(s: StoppageRow, its: ItemRow[], followers: StoppageFollower[], admissionNo: string | null, latestImport: string | null, now: Date): StoppageSummary {
   const o = s.official;
   const officials = its.map((i) => i.official as StoppageOfficial);
   const review: string[] = [];
@@ -432,7 +444,7 @@ function toSummary(s: StoppageRow, its: ItemRow[], followUpName: string | null, 
     stoppedAt: s.stoppedAt?.toISOString() ?? null, endedAt: s.endedAt?.toISOString() ?? null,
     reasons: STOPPAGE_REASON_KINDS.filter((k) => officials.some((x) => stoppageReasonKind(x.reason) === k)),
     items: its.length, activeItems: its.filter((i) => i.active).length,
-    followUpUserId: s.followUpUserId, followUpName,
+    followers,
     reception: s.receptionId ? { id: s.receptionId, admissionNo } : null,
     linkState: s.linkState as StoppageLinkState,
     review: [...new Set(review)],

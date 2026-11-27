@@ -4,6 +4,7 @@
 // Pulse reads; the receptionist only picks the stay reason (and the stations while کسب‌وکار has no
 // technician data); the reception supervisor sends it within 15 minutes after closing (18:45 /
 // 13:15), otherwise the service manager is told. Warnings never block (spec section 2).
+import type { ReceptionDayStats } from './reception-stats';
 import type { WorkCalendar } from './workshop';
 
 /** Defaults of a full working day (ends 18:30); a day's real times come from `nightListTimes`. */
@@ -52,6 +53,28 @@ export const NIGHT_LIST_REASON_LABELS: Record<NightListReason, string> = {
   other: 'سایر',
 };
 
+/**
+ * Two separate lists a day (owner, hotfix H1 2026-11-27): «لیست شب تعمیراتی» for the open cards and
+ * «لیست شب تصادفی» for accident vehicles only (a reception linked to an accident case). Each has its
+ * own draft, approval, send-by time and late alert.
+ */
+export const NIGHT_LIST_KINDS = ['repair', 'accident'] as const;
+export type NightListKind = (typeof NIGHT_LIST_KINDS)[number];
+export const NIGHT_LIST_KIND_LABELS: Record<NightListKind, string> = { repair: 'لیست شب تعمیراتی', accident: 'لیست شب تصادفی' };
+
+/** Station value for «no current / next station»; any other text is a listed station or what the receptionist typed. */
+export const NIGHT_STATION_NONE = 'ندارد';
+export interface NightStationOption { code: string; name: string }
+/** «۳۶ صافکاری» — the text stored when a listed station is picked. */
+export const nightStationLabel = (s: NightStationOption) => `${s.code} ${s.name}`.trim();
+
+/** The reason as shown and exported: for «سایر» the receptionist's own text, as typed. */
+export function nightReasonText(r: Pick<NightListRow, 'reason' | 'reasonNote' | 'carried'>): string {
+  if (!r.reason) return 'ثبت نشده';
+  const text = r.reason === 'other' && r.reasonNote?.trim() ? r.reasonNote.trim() : NIGHT_LIST_REASON_LABELS[r.reason];
+  return text + (r.carried ? ' (از دیروز)' : '');
+}
+
 export const NIGHT_LIST_STATUSES = ['draft', 'sent'] as const;
 export type NightListStatus = (typeof NIGHT_LIST_STATUSES)[number];
 export const NIGHT_LIST_STATUS_LABELS: Record<NightListStatus, string> = { draft: 'پیش‌نویس', sent: 'ارسال‌شده' };
@@ -71,7 +94,7 @@ export interface NightListRow {
   isOpen: boolean;
   /** Linked to an accident case (the accident module keeps its own plan). */
   accident: boolean;
-  /** Labour lines of the card as written in کسب‌وکار (description and state). */
+  /** Labour lines of the card as written in کسب‌وکار; no longer shown or exported (hotfix H1). */
   labour: string[];
   currentStation: string | null;
   nextStations: string | null;
@@ -86,6 +109,7 @@ export interface NightListRow {
 
 export interface NightListView {
   id: string;
+  kind: NightListKind;
   /** Tehran calendar day, YYYY-MM-DD. */
   day: string;
   status: NightListStatus;
@@ -104,6 +128,10 @@ export interface NightListView {
   /** The nearest earlier / later day that has a list, for «لیست قبل» and «لیست بعد». */
   previousDay: string | null;
   nextDay: string | null;
+  /** Active workshop stations, for the «جایگاه فعلی / بعدی» dropdowns. */
+  stations: NightStationOption[];
+  /** «گزارش شب»: receptions admitted that day — total, repair, periodic service, per receptionist. */
+  summary: ReceptionDayStats | null;
 }
 
 export const UNKNOWN_LABOUR_NAME = 'نام اجرت در منبع مشخص نیست';
@@ -120,6 +148,8 @@ export function officialLabourName(description: string | null, code: string | nu
 /** No list yet for the day (before its build time, or not a working day). */
 export interface NightListPending {
   day: string;
+  kind: NightListKind;
+  summary: ReceptionDayStats | null;
   status: 'not_generated';
   generatesAt: string;
   workingDay: boolean;
@@ -140,7 +170,7 @@ export function compareNightRows(a: Pick<NightListRow, 'daysIn' | 'admissionNo'>
   return (b.daysIn ?? -1) - (a.daysIn ?? -1) || (a.admissionNo ?? '').localeCompare(b.admissionNo ?? '', 'en', { numeric: true });
 }
 
-export const NIGHT_LIST_COLUMNS = ['نوع خودرو', 'پلاک', 'نام مالک', 'شماره پذیرش', 'روزهای ماندن', 'جایگاه فعلی', 'نام اجرت', 'جایگاه‌های بعدی', 'علت ماندن', 'توضیح', 'تصادفی', 'وضعیت فعلی'] as const;
+export const NIGHT_LIST_COLUMNS = ['نوع خودرو', 'پلاک', 'نام مالک', 'شماره پذیرش', 'روزهای ماندن', 'جایگاه فعلی', 'جایگاه بعدی', 'علت ماندن', 'توضیح', 'تصادفی', 'وضعیت فعلی'] as const;
 
 /** Header and rows of the Excel export, in the column order of the scenario. */
 export function nightListSheet(rows: readonly NightListRow[]): (string | number)[][] {
@@ -153,10 +183,9 @@ export function nightListSheet(rows: readonly NightListRow[]): (string | number)
       r.admissionNo ?? '',
       r.daysIn ?? '',
       r.currentStation ?? '',
-      r.labour.join(' · '),
       r.nextStations ?? '',
-      r.reason ? NIGHT_LIST_REASON_LABELS[r.reason] + (r.carried ? ' (از دیروز)' : '') : 'ثبت نشده',
-      r.reasonNote ?? '',
+      nightReasonText(r),
+      r.reason === 'other' ? '' : r.reasonNote ?? '',
       r.accident ? 'بله' : '',
       r.isOpen ? 'باز' : 'ترخیص شد',
     ]),

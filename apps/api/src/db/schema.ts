@@ -1911,13 +1911,16 @@ export const receptionEvents = pgTable('reception_events', {
 
 /**
  * «لیست شب» (reconstruction scenario, owner 2026-11-25; migration 0037): the open receptions of a
- * Tehran working day at 18:00, sent by the reception supervisor by 18:45. One list per day.
+ * Tehran working day at 18:00, sent by the reception supervisor by 18:45. One list per day and kind
+ * (repair / accident, hotfix H1).
  */
 export const nightLists = pgTable('night_lists', {
   id: uuid('id').primaryKey(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
   /** Tehran calendar day, YYYY-MM-DD. */
   day: text('day').notNull(),
+  /** repair | accident — two lists a day, each approved and sent on its own (hotfix H1, migration 0042). */
+  kind: text('kind').notNull().default('repair'),
   /** draft | sent */
   status: text('status').notNull().default('draft'),
   generatedAt: ts('generated_at').notNull().defaultNow(),
@@ -1928,7 +1931,7 @@ export const nightLists = pgTable('night_lists', {
   lateNotifiedAt: ts('late_notified_at'),
   version: integer('version').notNull().default(1),
   isTest: boolean('is_test').notNull().default(false),
-}, (t) => [uniqueIndex('night_lists_tenant_day_uq').on(t.tenantId, t.day)]);
+}, (t) => [uniqueIndex('night_lists_tenant_day_kind_uq').on(t.tenantId, t.day, t.kind)]);
 
 /** One vehicle on a nightly list: the stay reason and stations the receptionist picks. */
 export const nightListItems = pgTable('night_list_items', {
@@ -1985,7 +1988,7 @@ export const stoppages = pgTable('stoppages', {
   endedAt: ts('ended_at'),
   firstImportId: uuid('first_import_id').notNull().references(() => stoppageImports.id),
   lastImportId: uuid('last_import_id').notNull().references(() => stoppageImports.id),
-  /** Follow-up owner in Manage (never overwritten by an import). */
+  /** Former single follow-up owner; since migration 0042 the followers live in `stoppage_followers` (kept, no longer written). */
   followUpUserId: uuid('follow_up_user_id').references(() => users.id),
   receptionId: uuid('reception_id').references(() => receptions.id),
   /** none | linked | ambiguous | manual (a manual decision is never redone by an import) */
@@ -2033,3 +2036,23 @@ export const stoppageItemVersions = pgTable('stoppage_item_versions', {
   observedAt: ts('observed_at').notNull().defaultNow(),
   isTest: boolean('is_test').notNull().default(false),
 }, (t) => [index('stoppage_item_versions_item_idx').on(t.tenantId, t.itemId)]);
+
+/**
+ * Followers of a stopped vehicle (hotfix H1, owner 2026-11-27; migration 0042): any active Manage
+ * user, as many as needed. Removing a follower keeps the row with who/when (nothing is deleted).
+ * Replaces the single `stoppages.follow_up_user_id`, which the migration copied in.
+ */
+export const stoppageFollowers = pgTable('stoppage_followers', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  stoppageId: uuid('stoppage_id').notNull().references(() => stoppages.id),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  addedBy: uuid('added_by').references(() => users.id),
+  addedAt: ts('added_at').notNull().defaultNow(),
+  removedBy: uuid('removed_by').references(() => users.id),
+  removedAt: ts('removed_at'),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [
+  index('stoppage_followers_stoppage_idx').on(t.tenantId, t.stoppageId),
+  uniqueIndex('stoppage_followers_active_uq').on(t.stoppageId, t.userId).where(sql`${t.removedAt} is null`),
+]);
