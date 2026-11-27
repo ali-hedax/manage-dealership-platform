@@ -2,9 +2,11 @@
 # Deploy one commit of the `rebuild` branch to STAGING (isolated stack «manage-staging» on the
 # production machine). Installed at /home/manage/manage-staging/bin/ by setup.sh; run by the restricted
 # gate or by poll.sh. Never touches production containers, images, tags, database or files:
-#  - CI image archives carry the tags manage-api:latest / manage-web:latest that production uses;
-#    load-images.py rewrites them to :staging-<sha> inside the stream before `docker load`.
-#  - Images a production release already loaded (manage-api:<sha>) are only given extra tags.
+#  - Staging images live only in their own repositories manage-staging-api / manage-staging-web
+#    (:<sha>, :current, :previous). Production's manage-api / manage-web tags are never written.
+#  - load-images.py renames CI archive names into those repositories, refuses any overlap with a
+#    production tag and restores any production tag that moved; this script checks all of them again.
+#  - Images a production release already loaded (manage-api:<sha>) only get a staging tag added.
 # On failure the previous staging images are started again.
 set -euo pipefail
 umask 077
@@ -20,39 +22,43 @@ compose() { STAGING_SHA="$SHA" docker compose -p manage-staging -f "$BIN/docker-
 psql_staging() { docker exec -i manage-staging-staging-db-1 psql -X -qAt -v ON_ERROR_STOP=1 -U manage_staging -d manage_staging "$@"; }
 log() { echo "$(date -u +%FT%TZ) $*"; }
 
-prod_before="$(docker image inspect -f '{{.Id}}' manage-api:latest manage-web:latest)"
+prod_tags() {
+  docker image ls manage-api --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}'
+  docker image ls manage-web --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}'
+}
+prod_before="$(prod_tags | sort)"
+check_prod() { [ "$(prod_tags | sort)" = "$prod_before" ] || { echo "ABORT: a production image tag changed" >&2; exit 9; }; }
 
-# 1. Images for this commit.
-if docker image inspect "manage-api:staging-$SHA" "manage-web:staging-$SHA" >/dev/null 2>&1; then
+# 1. Images for this commit (staging repositories only).
+if docker image inspect "manage-staging-api:$SHA" "manage-staging-web:$SHA" >/dev/null 2>&1; then
   log "images already loaded"
 elif docker image inspect "manage-api:$SHA" "manage-web:$SHA" >/dev/null 2>&1; then
-  docker tag "manage-api:$SHA" "manage-api:staging-$SHA"
-  docker tag "manage-web:$SHA" "manage-web:staging-$SHA"
+  docker tag "manage-api:$SHA" "manage-staging-api:$SHA"
+  docker tag "manage-web:$SHA" "manage-staging-web:$SHA"
   log "reused images of the production release $SHA"
 else
   [ -f "$ART/preview-images.tar.gz" ] || { echo "no images for $SHA: run fetch-artifact first" >&2; exit 3; }
   [ "$(tr -d '[:space:]' < "$ART/preview-image-source.txt")" = "$SHA" ] || { echo "artifact is for another commit" >&2; exit 3; }
   (cd "$ART" && sha256sum -c --quiet preview-images.sha256)
-  python3 -I "$BIN/load-images.py" "$ART/preview-images.tar.gz" "$SHA"
+  python3 -I "$BIN/load-images.py" "$ART/preview-images.tar.gz" "$SHA" || { check_prod; exit 3; }
   log "loaded images from the CI artifact"
 fi
-[ "$(docker image inspect -f '{{.Id}}' manage-api:latest manage-web:latest)" = "$prod_before" ] \
-  || { echo "ABORT: production image tags changed during load" >&2; exit 9; }
+check_prod
 
 # 2. Keep the running staging images for rollback, then switch the staging tags.
-if docker image inspect manage-api:staging manage-web:staging >/dev/null 2>&1; then
-  docker tag manage-api:staging manage-api:staging-previous
-  docker tag manage-web:staging manage-web:staging-previous
+if docker image inspect manage-staging-api:current manage-staging-web:current >/dev/null 2>&1; then
+  docker tag manage-staging-api:current manage-staging-api:previous
+  docker tag manage-staging-web:current manage-staging-web:previous
   cp -f "$STATE/deployed.sha" "$STATE/previous.sha" 2>/dev/null || true
 fi
-docker tag "manage-api:staging-$SHA" manage-api:staging
-docker tag "manage-web:staging-$SHA" manage-web:staging
+docker tag "manage-staging-api:$SHA" manage-staging-api:current
+docker tag "manage-staging-web:$SHA" manage-staging-web:current
 
 rollback() {
   log "deploy failed; starting the previous staging images"
-  if docker image inspect manage-api:staging-previous >/dev/null 2>&1 && [ -f "$STATE/previous.sha" ]; then
-    docker tag manage-api:staging-previous manage-api:staging
-    docker tag manage-web:staging-previous manage-web:staging
+  if docker image inspect manage-staging-api:previous >/dev/null 2>&1 && [ -f "$STATE/previous.sha" ]; then
+    docker tag manage-staging-api:previous manage-staging-api:current
+    docker tag manage-staging-web:previous manage-staging-web:current
     STAGING_SHA="$(cat "$STATE/previous.sha")" docker compose -p manage-staging -f "$BIN/docker-compose.staging.yml" up -d --wait --wait-timeout 180 || true
   fi
 }
@@ -77,8 +83,11 @@ trap - ERR
 psql_staging -c "update pulse_connections set settings = jsonb_set(settings, '{intervalMinutes}', '30') where coalesce((settings->>'intervalMinutes')::int, 0) < 30;" || true
 
 echo "$SHA" > "$STATE/deployed.sha"
-# Keep the images of the last three staging commits.
-docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -E '^manage-(api|web):staging-[0-9a-f]{40}$' \
-  | grep -v "$SHA" | sort | uniq | head -n -4 | xargs -r docker image rm >/dev/null 2>&1 || true
+# Old staging commit tags (staging repositories only; production repositories are never pruned here).
+for repo in manage-staging-api manage-staging-web; do
+  docker image ls "$repo" --format '{{.Repository}}:{{.Tag}}' | grep -E ':[0-9a-f]{40}$' | grep -v ":$SHA$" \
+    | tail -n +4 | xargs -r docker image rm >/dev/null 2>&1 || true
+done
+check_prod
 log "staging now runs $SHA"
 echo "$health"
