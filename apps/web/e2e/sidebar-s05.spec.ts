@@ -83,6 +83,9 @@ test('S05 technician: only «۰ میزکار من», which is the own job list',
 test('S05 every page has a way back except the own desk', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page, 'expert');
+  // The own desk is the one page without a way back.
+  await nav(page).getByRole('link', { name: 'میزکار من' }).click();
+  await expect(page).toHaveURL(/\/accidents\/expert$/);
   await expect(page.locator('main').getByRole('link', { name: /^بازگشت/ })).toHaveCount(0);
   for (const path of ['/cases', '/parts', '/reports', '/settings', '/stock', '/workshop', '/emdad', '/cases/new', '/reminders', '/workshop/settings']) {
     await page.goto(path);
