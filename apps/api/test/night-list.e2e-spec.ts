@@ -139,8 +139,10 @@ describe('Nightly list of the reception module', () => {
   it('builds a draft on request for today only', async () => {
     await clerk.post('/reception/night-list/generate', {}).expect(403);
     await admin.post('/reception/night-list/generate', { day: '2999-01-01' }).expect(422);
-    const today = (await admin.post('/reception/night-list/generate', {}).expect(201)).body as NightListView;
-    expect(today.status).toBe('draft');
+    const today = (await admin.post('/reception/night-list/generate', {}).expect(201)).body as NightListView | NightListPending;
+    // The real «today»: on a Friday or holiday no list is built (work calendar), otherwise a draft.
+    if ('workingDay' in today && today.workingDay === false) expect(today.status).toBe('not_generated');
+    else expect(today.status).toBe('draft');
   });
 
   it('reconciles at the cut-off, audits manual presence and freezes the approved rows', async () => {
