@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import {
   compareNightRows, daysInShop, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, NIGHT_LIST_KIND_LABELS, NIGHT_LIST_KINDS, nightListLate, nightListTimes, nightListMissing, nightListSheet, normalizeRoles, officialLabourName, shortVehicleName, toPersianDigits,
   type NightListItemInput, type NightListKind, type NightListPending, type NightListReason, type NightListRow, type NightListStatus, type NightListView, type NightStationOption, type ReceptionDayStats,
@@ -26,16 +26,25 @@ const kindQuery = (kind: NightListKind) => (kind === 'repair' ? '' : `&kind=${ki
 const ofKind = (kind: NightListKind) => (kind === 'accident' ? isNotNull(receptions.caseId) : isNull(receptions.caseId));
 
 /**
- * On the list: admitted before `at` and still in the dealership at `at` — open, or released after it.
- * `at` is the day's closing time (or now, while the day is still running): a car released before the
- * dealership closes is not on that night's list, even when the draft was built half an hour earlier
- * (owner, 2026-11-28, H3). A released card without a release time is not on it either.
+ * On the list: admitted before `at` (the day's closing time, or now while the day is still running) and
+ * still in the dealership at the end of that day — open, or released only after midnight (owner,
+ * 2026-11-28, H3 + H4 part 4). A car released or cancelled at any time that day, even after closing, is
+ * never on that night's list; a released card without a release time is not on it either.
  */
-function qualified(r: typeof receptions.$inferSelect, at: Date): boolean {
-  return !!r.admittedAt && r.admittedAt < at && (r.isOpen || (!!r.releasedAt && r.releasedAt > at));
+function qualified(r: typeof receptions.$inferSelect, at: Date, dayEnd: Date): boolean {
+  return !!r.admittedAt && r.admittedAt < at && (r.isOpen || (!!r.releasedAt && r.releasedAt >= dayEnd));
 }
-/** The moment presence is judged: closing time, or now if the working day has not ended yet. */
+/** The moment admissions are counted up to: closing time, or now if the working day has not ended yet. */
 const presenceAt = (now: Date, closeAt: Date) => (now < closeAt ? now : closeAt);
+/** Midnight at the end of a Tehran day: released before it means not there that night. */
+const endOfDay = (day: string) => new Date(tehranAt(day, '00:00').getTime() + 86_400_000);
+
+/**
+ * «آماده تحویل به مشتری» / «در انتظار مراجعه مشتری» in کسب‌وکار (status codes 6 and 7 of CAR_STATE_REC):
+ * the car is done and waits for its owner, so its stay reason is known without asking anyone.
+ */
+const READY_STATUS = /آماده\s*(ی|ٔ)?\s*تحویل|در\s*انتظار\s*مراجعه/;
+export const readyForCustomer = (r: { statusCode: string | null; statusText: string | null }) => (r.statusText ? READY_STATUS.test(r.statusText) : r.statusCode === '6' || r.statusCode === '7');
 
 /**
  * «لیست شب» (reconstruction scenario, owner 2026-11-25). Half an hour before the end of the working
@@ -121,8 +130,14 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
     let alerted = 0;
     for (const t of await this.db.select({ id: tenants.id, isTest: tenants.isTest }).from(tenants)) {
       const s = await this.schedule(t.id, day);
-      if (!s.working || now < s.generateAt) continue;
+      if (!s.working) continue;
       for (const kind of NIGHT_LIST_KINDS) {
+        if (now < s.generateAt) {
+          // A draft someone built early («ساخت پیش‌نویس») keeps up with Pulse until the build time (H4 part 4).
+          const [early] = await this.db.select({ id: nightLists.id }).from(nightLists).where(and(eq(nightLists.tenantId, t.id), eq(nightLists.day, day), eq(nightLists.kind, kind), eq(nightLists.status, 'draft')));
+          if (early) await this.generate(t.id, day, null, t.isTest, now, kind);
+          continue;
+        }
         if (await this.generate(t.id, day, null, t.isTest, now, kind)) generated += 1;
         alerted += await this.alertLate(t.id, day, kind, now, s.deadline, s.deadlineText);
       }
@@ -145,11 +160,20 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       const [list] = await tx.select().from(nightLists).where(and(eq(nightLists.tenantId, tenantId), eq(nightLists.day, day), eq(nightLists.kind, kind))).for('update');
       if (!list) return false;
       if (list.status !== 'draft') return created.length > 0;
-      const open = await tx.select({ id: receptions.id }).from(receptions)
+      const open = await tx.select({ id: receptions.id, statusCode: receptions.statusCode, statusText: receptions.statusText }).from(receptions)
         .where(and(eq(receptions.tenantId, tenantId), lt(receptions.admittedAt, cutoff), ofKind(kind), ...(await realReceptionsOnly(tx, tenantId)),
-          or(eq(receptions.isOpen, true), gt(receptions.releasedAt, cutoff))));
-      const present = new Set((await tx.select({ receptionId: nightListItems.receptionId }).from(nightListItems).where(eq(nightListItems.listId, list.id))).map((r) => r.receptionId));
+          or(eq(receptions.isOpen, true), gte(receptions.releasedAt, endOfDay(day)))));
+      const ready = new Set(open.filter(readyForCustomer).map((r) => r.id));
+      const items = await tx.select({ id: nightListItems.id, receptionId: nightListItems.receptionId, reason: nightListItems.reason, carried: nightListItems.carried, setBy: nightListItems.setBy, version: nightListItems.version })
+        .from(nightListItems).where(eq(nightListItems.listId, list.id));
+      const present = new Set(items.map((r) => r.receptionId));
       const missing = open.map((r) => r.id).filter((id) => !present.has(id));
+      // A car that became «آماده تحویل» / «در انتظار مراجعه مشتری»: its reason follows, unless staff chose one today.
+      const nowReady = items.filter((i) => ready.has(i.receptionId) && i.reason !== 'ready_customer_absent' && (!i.reason || i.carried || !i.setBy));
+      for (const i of nowReady) {
+        await tx.update(nightListItems).set({ reason: 'ready_customer_absent', reasonNote: null, carried: false, version: i.version + 1 })
+          .where(and(eq(nightListItems.tenantId, tenantId), eq(nightListItems.id, i.id)));
+      }
       if (missing.length) {
         // The latest earlier list item of each reception, for the reason and stations to copy.
         const earlier = await tx.select({ receptionId: nightListItems.receptionId, reason: nightListItems.reason, reasonNote: nightListItems.reasonNote, currentStation: nightListItems.currentStation, nextStations: nightListItems.nextStations, day: nightLists.day })
@@ -160,15 +184,16 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
         for (const e of earlier) if (!previous.has(e.receptionId)) previous.set(e.receptionId, e);
         await tx.insert(nightListItems).values(missing.map((receptionId) => {
           const p = previous.get(receptionId);
+          if (ready.has(receptionId)) return { id: newId(), tenantId, listId: list.id, receptionId, reason: 'ready_customer_absent', reasonNote: null, currentStation: p?.currentStation ?? null, nextStations: p?.nextStations ?? null, carried: false, isTest };
           return { id: newId(), tenantId, listId: list.id, receptionId, reason: p?.reason ?? null, reasonNote: p?.reasonNote ?? null, currentStation: p?.currentStation ?? null, nextStations: p?.nextStations ?? null, carried: !!p?.reason, isTest };
         })).onConflictDoNothing();
-        if (!created.length) {
-          await tx.update(nightLists).set({ version: list.version + 1 })
-            .where(and(eq(nightLists.tenantId, tenantId), eq(nightLists.id, list.id)));
-        }
       }
-      if (created.length || missing.length) {
-        if (actor) await this.audit.record(tx, actor, { entityType: 'night_list', entityId: list.id, action: 'reception.night_list_generated', after: { day, kind, added: missing.length } });
+      if (!created.length && (missing.length || nowReady.length)) {
+        await tx.update(nightLists).set({ version: list.version + 1 })
+          .where(and(eq(nightLists.tenantId, tenantId), eq(nightLists.id, list.id)));
+      }
+      if (created.length || missing.length || nowReady.length) {
+        if (actor) await this.audit.record(tx, actor, { entityType: 'night_list', entityId: list.id, action: 'reception.night_list_generated', after: { day, kind, added: missing.length, readyForCustomer: nowReady.length } });
       }
       return created.length > 0;
     });
@@ -238,7 +263,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       labourOf.set(x.receptionId, [...(labourOf.get(x.receptionId) ?? []), text]);
     }
     const at = s.generateAt;
-    const included = new Set(items.filter(({ i, r }) => (historical ? i.correction?.present !== false : i.correction?.present ?? qualified(r, cutoff))).map(({ i }) => i.id));
+    const included = new Set(items.filter(({ i, r }) => (historical ? i.correction?.present !== false : i.correction?.present ?? qualified(r, cutoff, endOfDay(l.day)))).map(({ i }) => i.id));
     const draftRows: NightListRow[] = items.map(({ i, r, setByName }) => ({
       id: i.id,
       version: i.version,
