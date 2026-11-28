@@ -2,8 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import {
-  daysInShop, isConsumedPart, LABOUR_LETTER_PATTERN, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
-  type ReceptionDayStats, type ReceptionSettings, type ReceptionSettingsInput,
+  DEFAULT_JOB_CODES, daysInShop, isConsumedPart, isDeclinedLabour, LABOUR_LETTER_PATTERN, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
+  type JobLabourLine, type JobPartLine, type ReceptionDayStats, type ReceptionSettings, type ReceptionSettingsInput,
   type ReceptionDetail, type ReceptionEvent, type ReceptionEventKind, type ReceptionExternalState, type ReceptionExternalUpdateInput, type ReceptionExternalWork as ExternalWorkView, type ReceptionExternalWorkInput, type ReceptionList, type ReceptionSearchInput,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
@@ -13,7 +13,9 @@ import { newId } from '../common/ids';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { cases, externalContractors, pulseConnections, tenants, receptionDefects, receptionDocuments, receptionEvents, receptionExternalWork, receptionNotes, receptionParts, receptionRepairs, receptions, users } from '../db/schema';
-import { CARD } from './kasb-protocol';
+import { realReceptionsOnly } from './demo-data';
+import { officialText } from './kasb-fields';
+import { ACCIDENT_TEXT, CARD, KASB_LINE_TEXT } from './kasb-protocol';
 import { cleanText, kasbInstant } from './kasb-table';
 import { cardDescription, tehranMidnight } from './pulse-map';
 
@@ -35,10 +37,11 @@ export class ReceptionService {
   async labourReview(actor: Actor) {
     this.ensureActive();
     const tenantId = actor.user.tenantId;
+    const real = await realReceptionsOnly(this.db, tenantId);
     const rows = await this.db.select({
       id: receptionRepairs.id, receptionId: receptions.id, admissionNo: receptions.admissionNo, lineId: receptionRepairs.kasbLineId,
     }).from(receptionRepairs).innerJoin(receptions, eq(receptionRepairs.receptionId, receptions.id))
-      .where(and(eq(receptionRepairs.tenantId, tenantId), eq(receptions.tenantId, tenantId), isNull(receptionRepairs.removedAt),
+      .where(and(eq(receptionRepairs.tenantId, tenantId), eq(receptions.tenantId, tenantId), isNull(receptionRepairs.removedAt), ...real,
         sql`(coalesce(${receptionRepairs.description}, '') COLLATE "C" !~ ${LABOUR_LETTER_PATTERN}
           OR btrim(${receptionRepairs.description}) = btrim(${receptionRepairs.code}))`))
       .orderBy(desc(receptions.admittedAt), asc(receptionRepairs.id)).limit(201);
@@ -61,7 +64,7 @@ export class ReceptionService {
   async search(actor: Actor, input: ReceptionSearchInput): Promise<ReceptionList> {
     this.ensureActive();
     const tenantId = actor.user.tenantId;
-    const conds = [eq(receptions.tenantId, tenantId)];
+    const conds = [eq(receptions.tenantId, tenantId), ...(await realReceptionsOnly(this.db, tenantId))];
     if (input.view === 'today') conds.push(gte(receptions.admittedAt, tehranMidnight(new Date())));
     if (input.view === 'open') conds.push(eq(receptions.isOpen, true));
     if (input.view === 'released') conds.push(eq(receptions.isOpen, false));
@@ -114,21 +117,33 @@ export class ReceptionService {
     };
   }
 
-  /** Labour codes of periodic service and oil change kept in the dealership settings. */
+  /**
+   * Codes of «تعویض روغن» / «سرویس سریع» kept in the dealership settings (H4 part 1). A list never saved
+   * takes the owner's defaults (DEFAULT_JOB_CODES); a list saved empty stays empty.
+   */
   async settings(actor: Actor): Promise<ReceptionSettings> {
     const [t] = await this.db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, actor.user.tenantId));
-    const codes = (t?.settings as Record<string, unknown> | undefined)?.receptionServiceLaborCodes;
-    return { serviceLaborCodes: Array.isArray(codes) ? codes.filter((c): c is string => typeof c === 'string') : [] };
+    const s = (t?.settings ?? {}) as Record<string, unknown>;
+    const list = (v: unknown, fallback: readonly string[]) => (Array.isArray(v) ? v.filter((c): c is string => typeof c === 'string') : [...fallback]);
+    return {
+      serviceLaborCodes: list(s.receptionServiceLaborCodes, DEFAULT_JOB_CODES.serviceLabourCodes),
+      quickServiceGroups: list(s.receptionQuickServiceGroups, DEFAULT_JOB_CODES.quickServiceGroups),
+      oilPartCodes: list(s.receptionOilPartCodes, DEFAULT_JOB_CODES.oilPartCodes),
+      saved: Array.isArray(s.receptionServiceLaborCodes) || Array.isArray(s.receptionQuickServiceGroups) || Array.isArray(s.receptionOilPartCodes),
+    };
   }
 
   async saveSettings(actor: Actor, input: ReceptionSettingsInput): Promise<ReceptionSettings> {
-    const codes = [...new Set(input.serviceLaborCodes.map(normalizeLaborCode).filter(Boolean))];
+    const norm = (codes: string[]) => [...new Set(codes.map(normalizeLaborCode).filter(Boolean))];
+    const next: Record<string, string[]> = { receptionServiceLaborCodes: norm(input.serviceLaborCodes) };
+    if (input.quickServiceGroups) next.receptionQuickServiceGroups = norm(input.quickServiceGroups);
+    if (input.oilPartCodes) next.receptionOilPartCodes = norm(input.oilPartCodes);
     await this.db.transaction(async (tx) => {
       const [t] = await tx.select().from(tenants).where(eq(tenants.id, actor.user.tenantId)).for('update');
       const before = (t!.settings ?? {}) as Record<string, unknown>;
-      const after: Record<string, unknown> = { ...before, receptionServiceLaborCodes: codes };
-      await tx.update(tenants).set({ settings: after }).where(eq(tenants.id, actor.user.tenantId));
-      await this.audit.record(tx, actor, { entityType: 'tenant', entityId: actor.user.tenantId, action: 'settings.reception_service_codes_updated', before: { receptionServiceLaborCodes: before.receptionServiceLaborCodes ?? [] }, after: { receptionServiceLaborCodes: codes } });
+      await tx.update(tenants).set({ settings: { ...before, ...next } }).where(eq(tenants.id, actor.user.tenantId));
+      const was = Object.fromEntries(Object.keys(next).map((k) => [k, before[k] ?? null]));
+      await this.audit.record(tx, actor, { entityType: 'tenant', entityId: actor.user.tenantId, action: 'settings.reception_service_codes_updated', before: was, after: next });
     });
     return this.settings(actor);
   }
@@ -143,43 +158,46 @@ export class ReceptionService {
     const day = date ?? tehranDayKey(new Date());
     const start = tehranDayStart(day);
     const rows = await this.db.select({ id: receptions.id, receptionist: receptions.receptionist, vin: receptions.vin, chassis: receptions.chassis, plate: receptions.plate, hall: receptions.hall, linesReadAt: receptions.linesReadAt }).from(receptions)
-      .where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, start), lt(receptions.admittedAt, new Date(start.getTime() + DAY_MS))));
+      .where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, start), lt(receptions.admittedAt, new Date(start.getTime() + DAY_MS)), ...(await realReceptionsOnly(this.db, tenantId))));
     const ids = rows.map((r) => r.id);
+    // Defect group and state text of each labour line, as کسب‌وکار sent them (H4 part 1: codes decide, not names).
     const lines = ids.length
-      ? await this.db.select({ receptionId: receptionRepairs.receptionId, code: receptionRepairs.code, name: receptionRepairs.name, description: receptionRepairs.description }).from(receptionRepairs)
+      ? await this.db.select({ receptionId: receptionRepairs.receptionId, code: receptionRepairs.code, name: receptionRepairs.name, description: receptionRepairs.description,
+        group: officialText(receptionRepairs.official, KASB_LINE_TEXT.repairGroup), stateText: officialText(receptionRepairs.official, KASB_LINE_TEXT.repairState) }).from(receptionRepairs)
         .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, ids), isNull(receptionRepairs.removedAt)))
       : [];
     // Parts on the card, for «تعویض روغن» (owner, 2026-11-27): only those actually used count (isConsumedPart).
     const parts = ids.length
-      ? await this.db.select({ receptionId: receptionParts.receptionId, name: receptionParts.name, qtyFinal: receptionParts.qtyFinal, qtyRequested: receptionParts.qtyRequested, state: receptionParts.state, rejectReason: receptionParts.rejectReason })
+      ? await this.db.select({ receptionId: receptionParts.receptionId, code: receptionParts.code, name: receptionParts.name, qtyFinal: receptionParts.qtyFinal, qtyRequested: receptionParts.qtyRequested, state: receptionParts.state, rejectReason: receptionParts.rejectReason })
         .from(receptionParts).where(and(eq(receptionParts.tenantId, tenantId), inArray(receptionParts.receptionId, ids), isNull(receptionParts.removedAt)))
       : [];
     const push = <T>(m: Map<string, T[]>, k: string, v: T) => m.set(k, [...(m.get(k) ?? []), v]);
     const codesOf = new Map<string, (string | null)[]>();
-    const labourOf = new Map<string, (string | null)[]>();
+    const labourOf = new Map<string, JobLabourLine[]>();
     const unnamedLabour = new Map<string, number>();
     const letter = new RegExp(LABOUR_LETTER_PATTERN, 'u');
     for (const l of lines) {
       push(codesOf, l.receptionId, l.code);
       const name = l.name ?? l.description;
-      // A line with only a code in the source is counted as missing data, never classified by guess.
-      if (name && letter.test(name)) push(labourOf, l.receptionId, name);
-      else unnamedLabour.set(l.receptionId, (unnamedLabour.get(l.receptionId) ?? 0) + 1);
+      const named = !!name && letter.test(name);
+      // A line with only a code is still work (by its code); its missing name is shown as a data gap.
+      push(labourOf, l.receptionId, { code: l.code, name: named ? name : null, group: l.group, state: l.stateText });
+      if (!named) unnamedLabour.set(l.receptionId, (unnamedLabour.get(l.receptionId) ?? 0) + 1);
     }
-    const partsOf = new Map<string, (string | null)[]>();
+    const partsOf = new Map<string, JobPartLine[]>();
     const unnamedParts = new Map<string, number>();
     for (const p of parts) {
       if (!isConsumedPart(p)) continue;
-      if (p.name?.trim()) push(partsOf, p.receptionId, p.name);
-      else unnamedParts.set(p.receptionId, (unnamedParts.get(p.receptionId) ?? 0) + 1);
+      push(partsOf, p.receptionId, { code: p.code, name: p.name?.trim() ? p.name : null });
+      if (!p.name?.trim()) unnamedParts.set(p.receptionId, (unnamedParts.get(p.receptionId) ?? 0) + 1);
     }
-    const { serviceLaborCodes } = await this.settings(actor);
+    const { serviceLaborCodes, quickServiceGroups, oilPartCodes } = await this.settings(actor);
     return receptionDayStats(day, rows.map((r) => ({
-      receptionist: r.receptionist, codes: codesOf.get(r.id) ?? [], labourNames: labourOf.get(r.id) ?? [], consumedParts: partsOf.get(r.id) ?? [],
+      receptionist: r.receptionist, codes: codesOf.get(r.id) ?? [], labour: labourOf.get(r.id) ?? [], parts: partsOf.get(r.id) ?? [],
       // The same car twice that day (two cards) is one car in each job count (S09).
       vehicleKey: r.vin || r.chassis || r.plate || null, hall: r.hall, linesRead: !!r.linesReadAt,
       labourWithoutName: unnamedLabour.get(r.id) ?? 0, partsWithoutName: unnamedParts.get(r.id) ?? 0,
-    })), serviceLaborCodes);
+    })), serviceLaborCodes, { quickServiceGroups, oilPartCodes });
   }
 
   private async load(tx: DbOrTx, tenantId: string, id: string) {
@@ -229,7 +247,7 @@ export class ReceptionService {
         entranceKm: r.entranceKm,
         deliveredOn: cleanText(official[CARD.deliveredOn]),
         goldCard: goldType || goldId ? { type: goldType, id: goldId, expires: goldExpires } : null,
-        accident: cleanText(official[CARD.accident]),
+        accident: ((v) => (v ? ACCIDENT_TEXT[v] ?? v : null))(cleanText(official[CARD.accident])),
       },
       customer: {
         name: r.customerName,
@@ -255,9 +273,18 @@ export class ReceptionService {
         hall: r.hall,
       },
       source: r.source === 'manual' ? 'manual' : 'pulse',
-      defects: defects.map((d) => ({ id: d.id, lineId: d.kasbLineId, customerText: d.customerText, expertText: d.expertText, state: d.state, type: d.type, removedAt: iso(d.removedAt) })),
-      repairs: repairs.map((x) => ({ id: x.id, lineId: x.kasbLineId, code: x.code, description: x.description, name: x.name ?? x.description, technician: x.technician, station: x.station, manual: x.kasbLineId.startsWith('m:'), state: x.state, finalPriceRial: x.finalPriceRial, warranty: x.warranty, removedAt: iso(x.removedAt) })),
-      parts: parts.map((p) => ({ id: p.id, lineId: p.kasbLineId, name: p.name, code: p.code, qtyRequested: p.qtyRequested, qtyFinal: p.qtyFinal, unitPriceRial: p.unitPriceRial, state: p.state, specialAid: p.specialAid, warranty: p.warranty, rejectReason: p.rejectReason, removedAt: iso(p.removedAt) })),
+      defects: defects.map((d) => {
+        const o = d.official ?? {};
+        return { id: d.id, lineId: d.kasbLineId, customerText: d.customerText, expertText: d.expertText, state: cleanText(o[KASB_LINE_TEXT.defectState]) ?? d.state, type: d.type,
+          groupCode: cleanText(o[KASB_LINE_TEXT.defectGroupCode]), groupTitle: cleanText(o[KASB_LINE_TEXT.defectGroupTitle]), removedAt: iso(d.removedAt) };
+      }),
+      repairs: repairs.map((x) => {
+        const o = x.official ?? {};
+        const stateText = cleanText(o[KASB_LINE_TEXT.repairState]);
+        return { id: x.id, lineId: x.kasbLineId, code: x.code, description: x.description, name: x.name ?? x.description, technician: x.technician, station: x.station, manual: x.kasbLineId.startsWith('m:'),
+          state: stateText ?? x.state, stateCode: x.state, declined: isDeclinedLabour(stateText), group: cleanText(o[KASB_LINE_TEXT.repairGroup]), finalPriceRial: x.finalPriceRial, priceRial: num(o[KASB_LINE_TEXT.repairPrice]), warranty: x.warranty, removedAt: iso(x.removedAt) };
+      }),
+      parts: parts.map((p) => ({ id: p.id, lineId: p.kasbLineId, name: p.name, code: p.code, qtyRequested: p.qtyRequested, qtyFinal: p.qtyFinal, unitPriceRial: p.unitPriceRial, totalPriceRial: num((p.official ?? {})[KASB_LINE_TEXT.partTotal]), state: p.state, specialAid: p.specialAid, warranty: p.warranty, rejectReason: p.rejectReason, removedAt: iso(p.removedAt) })),
       externalWork: works.map(({ w, by }) => this.workView(w, by ?? null, docs.filter((d) => d.workId === w.id))),
       notes: notes.map(({ n, by }) => ({ id: n.id, text: n.text, createdAt: n.createdAt.toISOString(), createdByName: by ?? null })),
       events: events.map(({ e, by }) => eventView(e, by ?? null)),

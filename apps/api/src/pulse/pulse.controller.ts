@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Put, StreamableFile } from '@nestjs/common';
 import { z } from 'zod';
 import {
-  kasbFieldMapSchema, receptionImportFileSchema, type KasbFieldMapInput, type ReceptionImportFileInput,
+  accidentDecisionSchema, type AccidentDecisionInput, kasbFieldMapSchema, receptionImportFileSchema, type KasbFieldMapInput, type ReceptionImportFileInput,
   pulseCaptchaSchema, pulseCommandSchema, pulseCredentialsSchema, pulseSettingsSchema, pulseToggleSchema,
   receptionExternalCancelSchema, receptionExternalUpdateSchema, receptionExternalWorkSchema, receptionInvoiceSchema, receptionNoteSchema, receptionSearchSchema, receptionSettingsSchema, receptionStatsQuerySchema, nightListItemSchema, nightListQuerySchema, nightListSendSchema,
   type PulseCommandInput, type PulseCredentialsInput, type PulseSettingsInput, type ReceptionExternalUpdateInput, type ReceptionExternalWorkInput, type ReceptionSearchInput, type ReceptionSettingsInput, type NightListItemInput, type NightListKind,
@@ -10,6 +10,8 @@ import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
 import { IdParam } from '../common/params';
 import { ZodPipe } from '../common/zod.pipe';
+import { stoppageColumns } from '../stoppages/stoppage-columns';
+import { AccidentSuggestionsService } from './accident-suggestions.service';
 import { NightListService } from './night-list.service';
 import { PulseService } from './pulse.service';
 import { ReceptionImportService } from './reception-import.service';
@@ -26,6 +28,10 @@ export class PulseController {
   sourcesView(@CurrentActor() actor: Actor) { return this.sources.view(actor); }
 
   /** Confirms the column of a repair-card field among the columns Pulse observed (never a typed guess). */
+  /** «گزارش توقف خودرو → گزارش جزئی اکسل» (H4 part 7): column names only; nothing mapped or stored. */
+  @RequirePermissions('integration.manage') @Post('sources/stoppages/columns')
+  stoppageColumns(@Body(new ZodPipe(receptionImportFileSchema)) body: ReceptionImportFileInput) { return stoppageColumns(body.fileName, Buffer.from(body.fileBase64, 'base64')); }
+
   @RequirePermissions('integration.manage') @Put('field-map')
   fieldMap(@CurrentActor() actor: Actor, @Body(new ZodPipe(kasbFieldMapSchema)) body: KasbFieldMapInput) { return this.sources.saveFieldMap(actor, body); }
 
@@ -75,7 +81,14 @@ const invoiceSchema = receptionInvoiceSchema;
 /** «پذیرش و ترخیص»: read-only folders from کسب‌وکار plus outside work and notes recorded in Manage. Search is POSTed to keep VINs out of URLs. */
 @Controller('reception')
 export class ReceptionController {
-  constructor(private readonly reception: ReceptionService, private readonly night: NightListService) {}
+  constructor(private readonly reception: ReceptionService, private readonly night: NightListService, private readonly accidents: AccidentSuggestionsService) {}
+
+  /** «پیشنهاد تصادفی» (H4 part 6): open cards flagged «احتمال تصادفی» without a case, for the accident expert. */
+  @RequirePermissions('reception.read', 'case.read') @Get('accident-suggestions')
+  accidentSuggestions(@CurrentActor() actor: Actor) { return this.accidents.list(actor); }
+
+  @RequirePermissions('reception.read', 'case.update') @Post(':id/accident-decision')
+  accidentDecision(@CurrentActor() actor: Actor, @IdParam() id: string, @Body(new ZodPipe(accidentDecisionSchema)) body: AccidentDecisionInput) { return this.accidents.decide(actor, id, body); }
 
   @RequirePermissions('reception.read', 'integration.manage') @Get('labour-review')
   labourReview(@CurrentActor() actor: Actor) { return this.reception.labourReview(actor); }

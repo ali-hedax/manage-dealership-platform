@@ -117,6 +117,8 @@ export interface PulseCursor {
   codesAt?: string;
   /** Official text of each admission status code (domain CAR_STATE_REC of Sec/Code). */
   statusTexts?: Record<string, string>;
+  /** Every domain of the same reference answer: domain → code → official text (H4 part 3). */
+  codeDomains?: Record<string, Record<string, string>>;
   /** Tehran day of the last staged stock report, and which warehouse it was. */
   stockDay?: string;
   stockTriedAt?: string;
@@ -282,12 +284,24 @@ export const receptionSearchSchema = z.object({
 export type ReceptionSearchInput = z.infer<typeof receptionSearchSchema>;
 /** Daily statistics of one Tehran day (today when omitted). */
 export const receptionStatsQuerySchema = z.object({ date: receptionDay.optional() }).strict();
-/** Labour codes of periodic service and oil change (owner or system administrator). */
+/**
+ * Codes that decide «تعویض روغن» / «سرویس سریع» (owner or system administrator; H4 part 1): labour codes of
+ * periodic service and oil change, quick-service defect groups, and oil part codes. A list left out keeps its saved value.
+ */
+const codeList = z.array(z.string().trim().min(1).max(32)).max(500);
 export const receptionSettingsSchema = z.object({
-  serviceLaborCodes: z.array(z.string().trim().min(1).max(32)).max(500),
+  serviceLaborCodes: codeList,
+  quickServiceGroups: codeList.optional(),
+  oilPartCodes: codeList.optional(),
 }).strict();
 export type ReceptionSettingsInput = z.infer<typeof receptionSettingsSchema>;
-export interface ReceptionSettings { serviceLaborCodes: string[] }
+export interface ReceptionSettings {
+  serviceLaborCodes: string[];
+  quickServiceGroups: string[];
+  oilPartCodes: string[];
+  /** False while a list was never saved and the defaults apply. */
+  saved: boolean;
+}
 
 /** «لیست شب» (scenario 2026-11-25): the list of one Tehran day (today when omitted). */
 export const nightListQuerySchema = z.object({ day: receptionDay.optional(), kind: z.enum(NIGHT_LIST_KINDS).optional() }).strict();
@@ -329,6 +343,8 @@ export interface ReceptionPart {
   qtyRequested: string | null;
   qtyFinal: string | null;
   unitPriceRial: number | null;
+  /** «قیمت کل» of the line as کسب‌وکار sends it (NdFinalPrice; H4 part 2). */
+  totalPriceRial: number | null;
   state: string | null;
   specialAid: boolean;
   warranty: string | null;
@@ -348,8 +364,19 @@ export interface ReceptionRepair {
   station: string | null;
   /** «دستی»: typed into the manual «پذیرش و ریز کارت» file, not read by Pulse. */
   manual: boolean;
+  /** State as کسب‌وکار writes it («نهایی», «پیش نویس», «امداد ویژه» …; H4 part 3), else its code. */
   state: string | null;
+  stateCode: string | null;
+  /** «عدم تمایل به انجام تعمیر»: shown apart, never counted as work done. */
+  declined: boolean;
+  /** Defect group of the line, e.g. «910100 - سرویس سریع (کوئیک سرویس)». */
+  group: string | null;
   finalPriceRial: number | null;
+  /**
+   * Amount of the labour line in DrerIntialPrice (H4 part 2): DrerFinalPrice is empty on almost every real
+   * line. Shown under its own label until the owner confirms it is the «هزینه» of «اطلاعات جامع پذیرش».
+   */
+  priceRial: number | null;
   warranty: string | null;
   removedAt: string | null;
 }
@@ -358,8 +385,12 @@ export interface ReceptionDefect {
   lineId: string;
   customerText: string | null;
   expertText: string | null;
+  /** State as کسب‌وکار writes it (H4 part 3), else its code. */
   state: string | null;
   type: string | null;
+  /** Defect group code and title (e.g. 910100 · «سرویس سریع (کوئیک سرویس)»). */
+  groupCode: string | null;
+  groupTitle: string | null;
   removedAt: string | null;
 }
 
@@ -459,7 +490,8 @@ export interface ReceptionDetail {
   notes: ReceptionNote[];
   events: ReceptionEvent[];
   case: { id: string; caseNumber: string } | null;
-  linkState: 'none' | 'linked' | 'ambiguous';
+  /** rejected: the accident expert said this flagged card is not an accident case (H4 part 6). */
+  linkState: 'none' | 'linked' | 'ambiguous' | 'rejected';
 }
 
 const contractorRefine = (v: { contractorId?: string | null; contractorName?: string }) => !!v.contractorId || !!v.contractorName?.trim();
@@ -492,3 +524,35 @@ export const receptionInvoiceSchema = z.object({
   dataBase64: z.string().min(1).max(4_200_000).regex(/^[A-Za-z0-9+/]+={0,2}$/),
 }).strict();
 export const receptionNoteSchema = z.object({ text: z.string().trim().min(2, 'یادداشت خالی است').max(2000) }).strict();
+
+/**
+ * «پیشنهاد تصادفی» (H4 part 6, owner 2026-11-28): کسب‌وکار's «احتمال تصادفی» flag is not reliable, so a
+ * flagged open card never becomes a case by itself. It waits on the accident expert's desk: one click
+ * links it to an accident case, one click rejects it.
+ */
+export interface AccidentSuggestionCase {
+  id: string;
+  caseNumber: string;
+  plate: string | null;
+  vehicle: string | null;
+  /** Same VIN, chassis or plate as the card. */
+  matches: boolean;
+}
+export interface AccidentSuggestion {
+  receptionId: string;
+  version: number;
+  admissionNo: string | null;
+  plate: string | null;
+  vehicleName: string | null;
+  customerName: string | null;
+  admittedAt: string | null;
+  daysIn: number | null;
+  statusText: string | null;
+  /** Open cases of the same car first (matches), then the latest open cases. */
+  cases: AccidentSuggestionCase[];
+}
+export const accidentDecisionSchema = z.discriminatedUnion('decision', [
+  z.object({ decision: z.literal('confirm'), caseId: z.uuid(), expectedVersion: z.number().int().min(1) }).strict(),
+  z.object({ decision: z.literal('reject'), reason: z.string().trim().max(300).optional(), expectedVersion: z.number().int().min(1) }).strict(),
+]);
+export type AccidentDecisionInput = z.infer<typeof accidentDecisionSchema>;

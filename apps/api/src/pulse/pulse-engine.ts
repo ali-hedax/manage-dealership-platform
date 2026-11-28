@@ -11,9 +11,9 @@ import { notifyUsers } from '../parts/part-notify';
 import { calendarAt } from '../workshop/work-calendar';
 import { KasbClient, type LineKind } from './kasb-client';
 import { describeKasbError, KasbError } from './kasb-errors';
-import { CARD, PULSE_PROTOCOL_REVISION } from './kasb-protocol';
+import { CARD, PULSE_PROTOCOL_REVISION, STATUS_DOMAIN } from './kasb-protocol';
 import type { KasbTable } from './kasb-table';
-import { dayChunks, diffLines, isClosed, jalaliDay, mapCard, mapDefect, mapPart, mapRepair, statusTexts, tehranDateKey, tehranMidnight, withinWorkingHours, type DefectValues, type LineBase, type PartValues, type ReceptionValues, type RepairValues } from './pulse-map';
+import { dayChunks, diffLines, isClosed, jalaliDay, mapCard, mapDefect, mapPart, mapRepair, codeDomains, tehranDateKey, tehranMidnight, withinWorkingHours, type DefectValues, type LineBase, type PartValues, type ReceptionValues, type RepairValues } from './pulse-map';
 import { findCaseLink } from './pulse-link';
 import { loadFieldMap } from './kasb-fields';
 import { lockAdmission } from './reception-lock';
@@ -564,8 +564,11 @@ export class PulseEngine {
     if (cursor.codesAt && this.now().getTime() - Date.parse(cursor.codesAt) < 86_400_000) return;
     cursor.codesAt = this.now().toISOString();
     try {
-      const texts = statusTexts(await this.withSession(conn, (c) => c.codes()));
+      const domains = codeDomains(await this.withSession(conn, (c) => c.codes()));
+      const texts = domains[STATUS_DOMAIN] ?? {};
       if (Object.keys(texts).length) cursor.statusTexts = texts;
+      // All domains, for the texts of the other coded fields of a card (H4 part 3).
+      if (Object.keys(domains).length) cursor.codeDomains = domains;
     } catch (e) {
       if (e instanceof PulseStop) throw e;
       if (e instanceof KasbError && (e.code === 'KASB_UNREACHABLE' || e.code === 'KASB_TIMEOUT')) throw e;
@@ -636,7 +639,8 @@ export class PulseEngine {
       const releasedAt = closed ? v.exitAt ?? old.releasedAt ?? now : null;
       await tx.update(receptions).set({
         ...fields, releasedAt, lastSeenAt: now, updatedAt: now, version: old.version + 1,
-        ...(link ? { caseId: link.state === 'linked' ? link.caseIds[0]! : null, linkState: link.state } : {}),
+        // A suggestion the accident expert rejected stays rejected unless a case now matches exactly (H4 part 6).
+        ...(link ? { caseId: link.state === 'linked' ? link.caseIds[0]! : null, linkState: link.state === 'linked' || old.linkState !== 'rejected' ? link.state : 'rejected' } : {}),
       }).where(eq(receptions.id, old.id));
       if (old.statusCode !== v.statusCode) await this.event(tx, conn, run, old.id, 'status', { from: old.statusText ?? old.statusCode, to: statusText ?? v.statusCode });
       if (old.isOpen && closed) await this.event(tx, conn, run, old.id, 'released', null);

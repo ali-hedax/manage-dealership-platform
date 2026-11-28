@@ -295,6 +295,8 @@ export const cases = pgTable(
     origin: text('origin').notNull().default('manual'),
     importKey: text('import_key'),
     isLegacyEntry: boolean('is_legacy_entry').notNull().default(false),
+    // Sample case of the demo dealership (H4 part 5): never offered or counted next to real receptions.
+    isDemo: boolean('is_demo').notNull().default(false),
     // «تعویض اتاق» (owner, 2026-11-18): independent of coverage; old cases stay false, never inferred.
     bodyReplacement: boolean('body_replacement').notNull().default(false),
     // Owner-only soft deletion (migration 0028): status becomes 'deleted' and the previous
@@ -1796,6 +1798,11 @@ export const receptions = pgTable('receptions', {
   /** Accident case with the same admission number or full VIN, only when unique. */
   caseId: uuid('case_id').references(() => cases.id),
   linkState: text('link_state').notNull().default('none'),
+  /**
+   * Synthetic reception of the demo seed (H4 part 5). Once the dealership has a real reception, demo
+   * ones are left out of every list, count and night list; with only demo data they stay (demo, tests).
+   */
+  isDemo: boolean('is_demo').notNull().default(false),
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
   version: integer('version').notNull().default(1),

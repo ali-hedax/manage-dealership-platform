@@ -33,7 +33,8 @@ it('0036 up, down and up again on PGlite without touching existing rows', async 
 
     await migrate(db, { migrationsFolder: source });
     for (const t of PULSE_TABLES) expect((await client.query(`select to_regclass('public.${t}') as name`)).rows).toEqual([{ name: t }]);
-    expect((await client.query('select to_jsonb(c) as data from cases c where id=$1', [kase])).rows).toEqual(before);
+    // 0044 (H4) adds is_demo, set in a test dealership; nothing else of the case changes.
+    expect((await client.query("select to_jsonb(c)-'is_demo' as data from cases c where id=$1", [kase])).rows).toEqual(before);
     // A reception linked to the case, with a part, then a second card with the same DrcdRcd is refused.
     const reception = randomUUID();
     await client.query("insert into receptions(id,tenant_id,kasb_rcd,admission_no,admission_no_key,official,row_hash,case_id,link_state,is_test) values ($1,$2,'880001','1405020001','1405020001','{}'::jsonb,'h',$3,'linked',true)", [reception, tenant, kase]);

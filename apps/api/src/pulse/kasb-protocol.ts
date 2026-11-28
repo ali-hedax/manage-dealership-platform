@@ -177,8 +177,11 @@ export const PART = {
   rejectReason: 'DrepDcarCar',
   seq: 'DrepSeq',
 } as const;
-/** Part name: not in the (empty) recorded answer; the first present column is used, otherwise the code is shown. */
-export const PART_NAME_COLUMNS = ['WgdsDesc', 'GdsDesc', 'DrepDesc', 'WgdsName', 'DrepWgdsDesc'] as const;
+/**
+ * Part name: the first present column. WgdsFarDes (parts catalogue description) is what the real answers
+ * carry (H4 part 2, 2026-11-28); the others were guesses from an empty recording and stay as fallbacks.
+ */
+export const PART_NAME_COLUMNS = ['WgdsFarDes', 'WgdsDesc', 'GdsDesc', 'DrepDesc', 'WgdsName', 'DrepWgdsDesc'] as const;
 
 export const REPAIR = {
   line: 'DrerRer',
@@ -189,6 +192,30 @@ export const REPAIR = {
   warranty: 'DrerIsGar',
   defectLine: 'DrerDrefRef',
 } as const;
+
+/**
+ * Text columns that come with every line in the real answers (seen by Pulse on staging, 2026-11-28; H4).
+ * The stored code columns above stay; these carry the Persian text کسب‌وکار shows beside them.
+ */
+export const KASB_LINE_TEXT = {
+  /** Labour name from the labour catalogue (e.g. «تعویض روغن موتور»). */
+  repairName: 'GrprDesc',
+  /** Defect group of the labour line: «910100 - سرویس سریع (کوئیک سرویس)». */
+  repairGroup: 'VDesc',
+  /** State text of the labour line: «نهایی», «پیش نویس», «امداد ویژه», «عدم تمایل به انجام تعمیر» … */
+  repairState: 'VDrerStateDesc',
+  /** Part description from the parts catalogue. */
+  partName: 'WgdsFarDes',
+  /** Amount of a labour line (filled on almost every real line; DrerFinalPrice is not) and total of a part line. */
+  repairPrice: 'DrerIntialPrice',
+  partTotal: 'NdFinalPrice',
+  /** State text of the defect line and its group code and title. */
+  defectState: 'VDrefStateDesc',
+  defectGroupCode: 'VCode',
+  defectGroupTitle: 'GtrbDesc',
+} as const;
+/** «احتمال تصادفی» of a card (DrcdAccident): the owner's reading, 2026-11-28 (H4 part 3). */
+export const ACCIDENT_TEXT: Record<string, string> = { 1: 'بله', 2: 'خیر' };
 
 export const DEFECT = {
   line: 'DrefRef',

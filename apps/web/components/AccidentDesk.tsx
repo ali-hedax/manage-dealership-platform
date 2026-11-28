@@ -2,8 +2,8 @@
 import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { coverageTab, DESK_FILTER_LABELS, deskFilterMatch, toLatinDigits, type DeskFilter, type DeskFolder } from '@manage/shared';
-import { fetcher } from '@/lib/api';
+import { coverageTab, DESK_FILTER_LABELS, deskFilterMatch, toLatinDigits, type AccidentSuggestion, type DeskFilter, type DeskFolder } from '@manage/shared';
+import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum, toPersianDigits } from '@/lib/format';
 import { AppIcon } from './AppIcon';
@@ -51,6 +51,8 @@ export function AccidentDesk({ intro }: { intro?: ReactNode }) {
         </div>
         <div className="adesk-actions">{intro}</div>
       </header>
+
+      <AccidentSuggestions />
 
       <div className="adesk-filters" role="search">
         <label className="adesk-search">
@@ -133,5 +135,60 @@ function AccidentRow({ f, mine }: { f: DeskFolder; mine: boolean }) {
         <Link href={actionHref} className="arow-open" title={f.next.text} aria-label={`کارهای ضروری — ${f.vehicle}${f.plate ? ` با پلاک ${toPersianDigits(f.plate)}` : ''}`}><AppIcon name="folder" />کارهای ضروری</Link>
       </div>
     </li>
+  );
+}
+
+/**
+ * «پیشنهاد تصادفی» (H4 part 6, owner 2026-11-28): open cards کسب‌وکار flagged «احتمال تصادفی» without a
+ * case. The flag is not reliable, so nothing is created by itself: one click links the card to an open
+ * accident case (the same car's cases first), one click rejects the suggestion.
+ */
+function AccidentSuggestions() {
+  const { can } = useAuth();
+  const allowed = can('reception.read') && can('case.read');
+  const { data, mutate } = useSWR<AccidentSuggestion[]>(allowed ? '/reception/accident-suggestions' : null, fetcher, { refreshInterval: 120_000 });
+  const [choice, setChoice] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  if (!data?.length) return null;
+  const decide = async (s: AccidentSuggestion, decision: 'confirm' | 'reject') => {
+    const caseId = choice[s.receptionId] ?? s.cases[0]?.id;
+    if (decision === 'confirm' && !caseId) return;
+    setBusy(s.receptionId);
+    setMessage('');
+    try {
+      await api(`/reception/${s.receptionId}/accident-decision`, { body: decision === 'confirm' ? { decision, caseId, expectedVersion: s.version } : { decision, expectedVersion: s.version } });
+      await mutate();
+      setMessage(decision === 'confirm' ? 'پذیرش به پروندهٔ تصادفی وصل شد.' : 'پیشنهاد رد شد.');
+    } catch (err) {
+      setMessage(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const canDecide = can('case.update');
+  return (
+    <section className="panel adesk-suggest" aria-labelledby="adesk-suggest-h" data-testid="accident-suggestions">
+      <div className="panel-head"><div><h2 id="adesk-suggest-h">پیشنهاد تصادفی · {faNum(data.length)} پذیرش</h2><p className="small muted">کسب‌وکار این کارت‌ها را «احتمال تصادفی» زده است؛ این نشانه قابل اتکا نیست و پرونده خودکار ساخته نمی‌شود.</p></div></div>
+      <ul className="panel-body rcp-lines">
+        {data.map((s) => (
+          <li key={s.receptionId} className="row" data-testid="accident-suggestion">
+            <Link href={`/reception/${s.receptionId}`} className="row"><Plate value={s.plate} size="row" /><span><strong>{s.vehicleName ?? 'خودرو'}</strong> <span className="small muted">پذیرش {s.admissionNo ? toPersianDigits(s.admissionNo) : '—'}{s.daysIn != null ? ` · ${faNum(s.daysIn)} روز` : ''}{s.statusText ? ` · ${s.statusText}` : ''}</span></span></Link>
+            {canDecide && (
+              <span className="row">
+                {s.cases.length ? (
+                  <select className="input" aria-label="پروندهٔ تصادفی" value={choice[s.receptionId] ?? s.cases[0]!.id} onChange={(e) => setChoice((c) => ({ ...c, [s.receptionId]: e.target.value }))}>
+                    {s.cases.map((c) => <option key={c.id} value={c.id}>{c.matches ? 'همین خودرو · ' : ''}{toPersianDigits(c.caseNumber)}{c.plate ? ` · ${toPersianDigits(c.plate)}` : ''}{c.vehicle ? ` · ${c.vehicle}` : ''}</option>)}
+                  </select>
+                ) : <span className="small muted">پروندهٔ تصادفی بازی نیست؛ <Link href="/cases/new">پروندهٔ تازه بسازید</Link>.</span>}
+                <button type="button" className="btn btn-sm btn-primary" disabled={busy === s.receptionId || !s.cases.length} onClick={() => void decide(s, 'confirm')}>تأیید و اتصال</button>
+                <button type="button" className="btn btn-sm btn-ghost" disabled={busy === s.receptionId} onClick={() => void decide(s, 'reject')}>رد</button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {message && <p className="small panel-body" role="status">{message}</p>}
+    </section>
   );
 }

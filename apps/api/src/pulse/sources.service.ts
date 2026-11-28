@@ -12,6 +12,7 @@ import { APP_CONFIG, type AppConfig } from '../config';
 import { DATABASE, type DatabaseHandle } from '../db/database';
 import { dailyReportImports, pulseConnections, pulseRuns, receptionImports, receptionParts, receptionRepairs, receptions, referenceImports, stoppageImports, tenants } from '../db/schema';
 import { calendarAt } from '../workshop/work-calendar';
+import { realReceptionsOnly } from './demo-data';
 import { applyFieldMap, loadFieldMap, sanitizeFieldMap } from './kasb-fields';
 import { withinWorkingHours } from './pulse-map';
 
@@ -79,7 +80,7 @@ export class SourcesService {
 
   private async coverage(tenantId: string, now: Date): Promise<KasbFieldCoverage> {
     const since = new Date(now.getTime() - 30 * DAY);
-    const recent = and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, since));
+    const recent = and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, since), ...(await realReceptionsOnly(this.db, tenantId)));
     const has = (c: AnyPgColumn) => sql<number>`count(*) filter (where ${c} is not null)::int`;
     const [r] = await this.db.select({
       n: sql<number>`count(*)::int`, lines: has(receptions.linesReadAt), vin: has(receptions.vin), hall: has(receptions.hall),
@@ -101,12 +102,14 @@ export class SourcesService {
   /** Column names Pulse recorded from real answers, plus the keys of the newest stored rows (names only, never values). */
   private async observedColumns(tenantId: string, structures: Partial<Record<string, string[]>> | undefined): Promise<Record<KasbFieldList, string[]>> {
     const keys = (rows: { official: Record<string, unknown> | null }[]) => rows.flatMap((r) => Object.keys(r.official ?? {}));
+    // Demo rows are invented: their keys never count as columns seen in کسب‌وکار once real data exists (H4 part 5).
+    const real = await realReceptionsOnly(this.db, tenantId);
     const cards = await this.db.select({ official: receptions.official }).from(receptions)
-      .where(and(eq(receptions.tenantId, tenantId), eq(receptions.source, 'pulse'))).orderBy(desc(receptions.lastSeenAt)).limit(5);
-    const repairs = await this.db.select({ official: receptionRepairs.official }).from(receptionRepairs)
-      .where(and(eq(receptionRepairs.tenantId, tenantId), not(like(receptionRepairs.kasbLineId, 'm:%')))).orderBy(desc(receptionRepairs.updatedAt)).limit(5);
-    const parts = await this.db.select({ official: receptionParts.official }).from(receptionParts)
-      .where(and(eq(receptionParts.tenantId, tenantId), not(like(receptionParts.kasbLineId, 'm:%')))).orderBy(desc(receptionParts.updatedAt)).limit(5);
+      .where(and(eq(receptions.tenantId, tenantId), eq(receptions.source, 'pulse'), ...real)).orderBy(desc(receptions.lastSeenAt)).limit(5);
+    const repairs = await this.db.select({ official: receptionRepairs.official }).from(receptionRepairs).innerJoin(receptions, eq(receptions.id, receptionRepairs.receptionId))
+      .where(and(eq(receptionRepairs.tenantId, tenantId), not(like(receptionRepairs.kasbLineId, 'm:%')), ...real)).orderBy(desc(receptionRepairs.updatedAt)).limit(5);
+    const parts = await this.db.select({ official: receptionParts.official }).from(receptionParts).innerJoin(receptions, eq(receptions.id, receptionParts.receptionId))
+      .where(and(eq(receptionParts.tenantId, tenantId), not(like(receptionParts.kasbLineId, 'm:%')), ...real)).orderBy(desc(receptionParts.updatedAt)).limit(5);
     const merge = (...lists: (string[] | undefined)[]) => [...new Set(lists.flatMap((l) => l ?? []).filter((c) => /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(c)))].sort();
     return { cards: merge(structures?.cards, keys(cards)), repairs: merge(structures?.repairs, keys(repairs)), parts: merge(structures?.parts, keys(parts)) };
   }
@@ -176,7 +179,7 @@ export class SourcesService {
 
   /** Cards whose own line read failed last time (S07: shown, never silently skipped). */
   private async failedCards(tenantId: string): Promise<number> {
-    const [r] = await this.db.select({ n: count() }).from(receptions).where(and(eq(receptions.tenantId, tenantId), not(isNull(receptions.linesErrorCode))));
+    const [r] = await this.db.select({ n: count() }).from(receptions).where(and(eq(receptions.tenantId, tenantId), not(isNull(receptions.linesErrorCode)), ...(await realReceptionsOnly(this.db, tenantId))));
     return Number(r?.n ?? 0);
   }
 }

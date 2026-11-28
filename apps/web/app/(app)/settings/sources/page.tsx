@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import {
   KASB_FIELD_DEFS, KASB_FIELD_KEYS, KASB_FIELD_LIST_LABELS, pulseErrorText,
-  type DataSourceEntry, type DataSourceRead, type DataSourcesView, type KasbFieldCoverage, type KasbFieldKey, type KasbFieldMap, type ReceptionImportPreview,
+  type DataSourceEntry, type DataSourceRead, type DataSourcesView, type KasbFieldCoverage, type KasbFieldKey, type KasbFieldMap, type ReceptionImportPreview, type StoppageColumnsPreview,
 } from '@manage/shared';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -57,6 +57,7 @@ export default function SourcesPage() {
         <Coverage coverage={data.coverage} />
         <FieldMap view={data} onSaved={(v) => void mutate(v, { revalidate: false })} />
         <ManualReception onDone={() => void mutate()} />
+        <StoppageColumns />
       </>}
     </div>
   );
@@ -209,6 +210,42 @@ function ManualReception({ onDone }: { onDone: () => void }) {
             <tbody>{shown.cards.slice(0, 200).map((c) => <tr key={c.admissionNo}><td><bdi>{c.admissionNo}</bdi></td><td>{OUTCOME[c.outcome]}{c.message ? ` — ${c.message}` : ''}</td><td>{faNum(c.labour)}</td><td>{faNum(c.parts)}</td></tr>)}</tbody></table></div>
           {shown.status === 'preview' && <div className="row"><button type="button" className="btn btn-primary btn-sm" disabled={busy || !(shown.counts.new + shown.counts.update)} onClick={() => void apply(shown.id)}>ثبت {faNum(shown.counts.new + shown.counts.update)} کارت</button></div>}
         </div>}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * «گزارش توقف خودرو → گزارش جزئی اکسل» (H4 part 7): only the column names of the file, how many rows it
+ * has and how many rows fill each column. Nothing is stored or mapped; what each column means is decided
+ * later from this list, never guessed.
+ */
+function StoppageColumns() {
+  const toast = useToast();
+  const [preview, setPreview] = useState<StoppageColumnsPreview | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function choose(list: FileList | null) {
+    const f = list?.[0];
+    if (!f) return;
+    if (f.size > 5_000_000) return toast('فایل باید کمتر از پنج مگابایت باشد.', 'error');
+    setBusy(true);
+    try { setPreview(await api<StoppageColumnsPreview>('/pulse/sources/stoppages/columns', { body: { fileName: f.name, fileBase64: await b64(f) } })); }
+    catch (e) { toast(errorMessage(e), 'error'); } finally { setBusy(false); }
+  }
+  return (
+    <section className="panel" id="stoppage-columns" aria-labelledby="src-stop-cols" data-testid="stoppage-columns">
+      <div className="panel-head"><div><h2 id="src-stop-cols">پیش‌نمایش ستون‌های گزارش توقف خودرو</h2>
+        <p className="small muted">کسب‌وکار: بازرگانی ← گزارش ← گزارشات انبار ← گزارش توقف خودرو، خروجی «گزارش جزئی اکسل». فقط نام ستون‌ها و تعداد ردیف‌ها دیده می‌شود؛ چیزی ثبت نمی‌شود و ستونی حدس زده نمی‌شود.</p></div></div>
+      <div className="panel-body stack">
+        <label className="field"><span>فایل «گزارش جزئی اکسل»</span><input className="input" type="file" accept=".xlsx,.xls,.xml,.html" disabled={busy} onChange={(e) => { void choose(e.target.files); e.target.value = ''; }} /></label>
+        {preview && (preview.blocked ? <p className="callout callout-red small" role="alert">{preview.blocked}</p> : (
+          <div className="stack">
+            <p className="small"><bdi>{preview.fileName}</bdi> · {preview.format} · برگهٔ {preview.sheetName ?? '—'} · ردیف نام ستون‌ها {faNum(preview.headerRow ?? 0)} · {faNum(preview.rows)} ردیف · {faNum(preview.columns.length)} ستون</p>
+            <p className={`callout small ${preview.importer.readable ? 'callout-blue' : 'callout-amber'}`}>{preview.importer.readable ? 'ورود فعلی «خودروهای متوقف» این قالب را می‌خواند.' : `ورود فعلی «خودروهای متوقف» این قالب را نمی‌خواند${preview.importer.problem ? `: ${preview.importer.problem}` : ''}.`}</p>
+            <div className="table-scroll"><table className="table static"><thead><tr><th scope="col">#</th><th scope="col">نام ستون</th><th scope="col">ردیف‌های پر</th></tr></thead>
+              <tbody>{preview.columns.map((c, i) => <tr key={i}><td>{faNum(i + 1)}</td><td>{c.header}</td><td>{faNum(c.filled)} از {faNum(preview.rows)}</td></tr>)}</tbody></table></div>
+          </div>
+        ))}
       </div>
     </section>
   );

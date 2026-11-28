@@ -66,9 +66,12 @@ describe('Reception statistics and stay filters', () => {
     await admin.post('/reception/stats', { date: '1404/12/24' }).expect(400);
   });
 
-  it('counts every reception of the day as «بدون اجرت» or «تعمیراتی» until service codes are set', async () => {
+  it('uses the default codes of the owner (H4 part 1) until other codes are saved', async () => {
+    const defaults = (await reader.get('/reception/settings').expect(200)).body as ReceptionSettings;
+    expect(defaults).toEqual({ serviceLaborCodes: ['10165C0', '10145C0', '91117S1', '91117S2'], quickServiceGroups: ['910100'], oilPartCodes: ['07707016', '07707073', '07707076', '07707089', '12402027', '12402043', '12402008'], saved: false });
+    // None of this test's synthetic codes is a default service code: every reception with labour is «تعمیراتی».
     const stats = (await admin.post('/reception/stats', { date: DAY }).expect(201)).body as ReceptionDayStats;
-    expect(stats).toMatchObject({ date: DAY, total: 5, repair: 4, service: 0, unclassified: 1, serviceCodesConfigured: false });
+    expect(stats).toMatchObject({ date: DAY, total: 5, repair: 4, service: 0, unclassified: 1, serviceCodesConfigured: true });
   });
 
   it('classifies with the saved codes, per receptionist, and audits the change', async () => {

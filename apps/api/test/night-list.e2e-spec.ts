@@ -294,15 +294,72 @@ describe('Nightly list of the reception module', () => {
     // A second card of the same car that day (same VIN): one car in each count.
     await db().update(receptions).set({ vin: 'TESTVIN7777777763' }).where(eq(receptions.id, sameCarAgain));
     await db().update(receptionRepairs).set({ description: 'تعویض لنت جلو' }).where(eq(receptionRepairs.receptionId, sameCarAgain));
-    // Only a code in the source: counted as missing data, never classified by guess.
+    // Only a code in the source: still work by its code (H4 part 1: «اجرت بی‌نام بدون کار نیست»); the missing name is a data gap.
     await db().update(receptionRepairs).set({ description: '۷۷۷۷' }).where(eq(receptionRepairs.receptionId, onlyCode));
     await db().update(receptions).set({ linesReadAt: tehranAt(day, '11:30') }).where(inArray(receptions.id, [service10k, quick, oilAndRepair, sameCarAgain, onlyCode]));
     const stats = (await reader.post('/reception/stats', { date: day }).expect(201)).body as ReceptionDayStats;
     expect(stats.total).toBe(5);
-    expect(stats.jobs).toEqual({ quickService: 1, oilChange: 3, technicalRepair: 1, both: 1, none: 1, vehicles: 4 });
+    expect(stats.jobs).toEqual({ quickService: 1, oilChange: 3, technicalRepair: 2, both: 1, none: 0, vehicles: 4 });
     expect(stats.dataGaps).toEqual({ linesNotRead: 0, labourWithoutName: 1, partsWithoutName: 0 });
     // The night report of that Thursday shows the same counts.
     await service.tick(tehranAt(day, '12:30'));
     expect((await view(reader, day)).summary?.jobs).toEqual(stats.jobs);
+  });
+
+  it('H4 part 4: only cars still there at the end of the day; «آماده تحویل» / «در انتظار مراجعه مشتری» get their reason; an early draft keeps up', async () => {
+    const day = '2025-05-13'; // Tuesday
+    const status = (id: string, statusCode: string, statusText: string, released?: string) =>
+      db().update(receptions).set({ statusCode, statusText, ...(released ? { isOpen: false, releasedAt: tehranAt(day, released) } : {}) }).where(eq(receptions.id, id));
+    const repairing = await reception(71, tehranAt(day, '08:00'));
+    const ready = await reception(72, tehranAt(day, '08:05'));
+    const waiting = await reception(73, tehranAt(day, '08:10'));
+    const releasedToday = await reception(74, tehranAt(day, '08:15'));
+    const cancelled = await reception(75, tehranAt(day, '08:20'));
+    const leavesAfterClosing = await reception(76, tehranAt(day, '08:25'));
+    await status(repairing, '2', 'در حال تعمیر');
+    await status(ready, '6', 'آماده تحویل به مشتری');
+    await status(waiting, '7', 'در انتظار مراجعه مشتری');
+    await status(releasedToday, '14', 'ترخیص شده', '15:00');
+    await status(cancelled, '19', 'انصرافی', '11:00');
+    await status(leavesAfterClosing, '2', 'در حال تعمیر');
+    // Built early by hand at 10:00, then kept up to date by the minute tick before 18:00.
+    await service.generate(tenantId, day, null, true, tehranAt(day, '10:00'));
+    const lateMorning = await reception(77, tehranAt(day, '11:00'));
+    await service.tick(tehranAt(day, '11:05'));
+    let list = await view(reader, day);
+    expect(list.rows.map((r) => r.receptionId)).toEqual(expect.arrayContaining([repairing, ready, waiting, lateMorning, leavesAfterClosing]));
+    expect(list.rows.find((r) => r.receptionId === ready)).toMatchObject({ reason: 'ready_customer_absent', carried: false });
+    expect(list.rows.find((r) => r.receptionId === waiting)).toMatchObject({ reason: 'ready_customer_absent' });
+    expect(list.rows.find((r) => r.receptionId === repairing)?.reason).toBeNull();
+    // Staff chose a reason today: it stays when the car later becomes «در انتظار مراجعه مشتری».
+    const row = list.rows.find((r) => r.receptionId === repairing)!;
+    await clerk.post(`/reception/night-list/items/${row.id}`, { expectedVersion: row.version, reason: 'waiting_parts' }).expect(201);
+    await status(repairing, '7', 'در انتظار مراجعه مشتری');
+    // A car still repairing at 18:00 that leaves at 18:40, after closing: not there that night.
+    await service.tick(tehranAt(day, '18:00'));
+    await status(leavesAfterClosing, '14', 'ترخیص شده', '18:40');
+    await service.tick(tehranAt(day, '19:00'));
+    list = await view(reader, day);
+    const ids = list.rows.map((r) => r.receptionId);
+    expect(ids).toEqual(expect.arrayContaining([repairing, ready, waiting, lateMorning]));
+    for (const gone of [releasedToday, cancelled, leavesAfterClosing]) expect(ids).not.toContain(gone);
+    expect(list.rows.find((r) => r.receptionId === repairing)).toMatchObject({ reason: 'waiting_parts' });
+    expect(list.rows.every((r) => r.isOpen)).toBe(true);
+  });
+
+  it('H4 decision 1: a car with a labour line «امداد ویژه» gets «منتظر امداد ویژه»; «آماده تحویل» comes first', async () => {
+    const day = '2025-05-14'; // Wednesday
+    const aid = await reception(81, tehranAt(day, '08:00'));
+    const aidButReady = await reception(82, tehranAt(day, '08:10'));
+    const plain = await reception(83, tehranAt(day, '08:20'));
+    for (const id of [aid, aidButReady]) {
+      await db().insert(receptionRepairs).values({ id: newId(), tenantId, receptionId: id, kasbLineId: `aid-${id}`, code: '53200C9', state: '6', official: { VDrerStateDesc: 'امداد ویژه' }, rowHash: `aid-${id}`, isTest: true });
+    }
+    await db().update(receptions).set({ statusCode: '6', statusText: 'آماده تحویل به مشتری' }).where(eq(receptions.id, aidButReady));
+    await service.tick(tehranAt(day, '18:00'));
+    const rows = new Map((await view(reader, day)).rows.map((r) => [r.receptionId, r]));
+    expect(rows.get(aid)).toMatchObject({ reason: 'waiting_special_aid', carried: false });
+    expect(rows.get(aidButReady)).toMatchObject({ reason: 'ready_customer_absent' });
+    expect(rows.get(plain)?.reason).toBeNull();
   });
 });

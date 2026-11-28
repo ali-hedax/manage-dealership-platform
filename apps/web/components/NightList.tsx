@@ -186,8 +186,8 @@ function PresenceForm({ busy, onSave }: { busy: boolean; onSave: (body: { admiss
 }
 
 /**
- * «گزارش شب»: the day's receptions — total, «سرویس سریع», «تعویض روغن» and «تعمیر فنی» (classifyJob,
- * from labour names, used parts and the confirmed «سالن تعمیرات»; a car may be in several, but once in
+ * «گزارش شب»: the day's receptions — total, «سرویس سریع», «تعویض روغن» and «تعمیر فنی» (classifyCard,
+ * from labour codes, defect groups, used part codes, names where present and the confirmed «سالن تعمیرات»; a car may be in several, but once in
  * each), the same per receptionist, and what the counts could not see (never guessed).
  */
 function NightSummary({ stats, tagged }: { stats: ReceptionDayStats; tagged: boolean }) {
@@ -203,8 +203,10 @@ function NightSummary({ stats, tagged }: { stats: ReceptionDayStats; tagged: boo
           <div><dt>تعمیر فنی</dt><dd>{faNum(j.technicalRepair)}</dd></div>
           {j.both > 0 && <div><dt>هر دو</dt><dd>{faNum(j.both)}</dd></div>}
           {j.none > 0 && <div><dt>بدون کار ثبت‌شده</dt><dd>{faNum(j.none)}</dd></div>}
+          {stats.specialAidLabour > 0 && <div data-testid="night-special-aid"><dt>اجرت منتظر امداد ویژه</dt><dd>{faNum(stats.specialAidLabour)}</dd></div>}
+          {stats.declinedLabour > 0 && <div data-testid="night-declined"><dt>اجرت با عدم تمایل</dt><dd>{faNum(stats.declinedLabour)}</dd></div>}
         </dl>
-        <p className="small muted">از روی نام اجرت‌ها و قطعات مصرف‌شدهٔ هر پذیرش؛ هر سرویس (۵۰۰۰، ۱۰۰۰۰، ۲۰۰۰۰، روغن و فیلتر، سرویس سریع) تعویض روغن است. خودرویی که هم تعویض روغن و هم تعمیر داشته در هر دو، ولی در هر دسته فقط یک بار شمرده می‌شود ({faNum(j.vehicles)} خودرو).</p>
+        <p className="small muted">از روی کد اجرت‌ها، گروه ایراد (سرویس سریع) و کد قطعات مصرف‌شدهٔ هر پذیرش، و نام‌ها هرجا باشند؛ اجرت با «عدم تمایل به انجام تعمیر» یا «امداد ویژه» تعمیر فنی انجام‌شده حساب نمی‌شود. هر سرویس (۵۰۰۰، ۱۰۰۰۰، ۲۰۰۰۰، روغن و فیلتر، سرویس سریع) تعویض روغن است. خودرویی که هم تعویض روغن و هم تعمیر داشته در هر دو، ولی در هر دسته فقط یک بار شمرده می‌شود ({faNum(j.vehicles)} خودرو).</p>
         <DataGaps stats={stats} />
         {stats.jobsByReceptionist.length > 0 && (
           <div className="table-scroll"><table className="table static night-people">
