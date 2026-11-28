@@ -3,7 +3,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { KASB_FIELD_KEYS, type KasbFieldMap } from '@manage/shared';
 import type { DbOrTx } from '../db/database';
 import { receptionParts, receptionRepairs, receptions, tenants } from '../db/schema';
-import { PART_NAME_COLUMNS } from './kasb-protocol';
+import { KASB_LINE_TEXT, PART_NAME_COLUMNS } from './kasb-protocol';
 
 // Columns of کسب‌وکار the administrator confirmed in «منبع‌ها» (S08, owner 2026-11-28). Kept in the
 // dealership settings (tenants.settings.kasbFieldMap). A confirmation never needs a new read: the
@@ -38,11 +38,12 @@ const pulseLine = (line: AnyPgColumn) => sql`${line} not like 'm:%'`;
 /**
  * Re-derives the confirmed fields of every stored card and line of the dealership from the official
  * rows: labour name, technician and station, part name and «سالن تعمیرات». Unconfirmed fields go back
- * to their earlier source (labour name = description, part name = the candidate columns) or empty.
+ * to their default source (labour name = GrprDesc, else the description; part name = the candidate columns) or empty.
  */
 export async function applyFieldMap(tx: DbOrTx, tenantId: string, map: KasbFieldMap): Promise<void> {
   await tx.update(receptionRepairs).set({
-    name: map.repairName ? officialText(receptionRepairs.official, map.repairName) : sql`${receptionRepairs.description}`,
+    // Unconfirmed: the labour catalogue name GrprDesc, else the description (H4 part 2).
+    name: map.repairName ? officialText(receptionRepairs.official, map.repairName) : sql`coalesce(${officialText(receptionRepairs.official, KASB_LINE_TEXT.repairName)}, ${receptionRepairs.description})`,
     technician: map.repairTechnician ? officialText(receptionRepairs.official, map.repairTechnician) : null,
     station: map.repairStation ? officialText(receptionRepairs.official, map.repairStation) : null,
   }).where(and(eq(receptionRepairs.tenantId, tenantId), pulseLine(receptionRepairs.kasbLineId)));

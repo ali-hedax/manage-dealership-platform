@@ -343,6 +343,8 @@ export interface ReceptionPart {
   qtyRequested: string | null;
   qtyFinal: string | null;
   unitPriceRial: number | null;
+  /** «قیمت کل» of the line as کسب‌وکار sends it (NdFinalPrice; H4 part 2). */
+  totalPriceRial: number | null;
   state: string | null;
   specialAid: boolean;
   warranty: string | null;
@@ -370,6 +372,11 @@ export interface ReceptionRepair {
   /** Defect group of the line, e.g. «910100 - سرویس سریع (کوئیک سرویس)». */
   group: string | null;
   finalPriceRial: number | null;
+  /**
+   * Amount of the labour line in DrerIntialPrice (H4 part 2): DrerFinalPrice is empty on almost every real
+   * line. Shown under its own label until the owner confirms it is the «هزینه» of «اطلاعات جامع پذیرش».
+   */
+  priceRial: number | null;
   warranty: string | null;
   removedAt: string | null;
 }

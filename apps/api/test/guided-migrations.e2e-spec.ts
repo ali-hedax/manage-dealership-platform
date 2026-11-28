@@ -31,7 +31,7 @@ it('upgrades the previous schema without rewriting existing cases and rehearses 
     expect((await client.query('select workflow from cases where tenant_id=$1 and id=$2', [tenant, kase])).rows).toEqual([{ workflow: null }]);
     expect((await client.query("select to_jsonb(c)-'workflow'-'deleted_at'-'deleted_by'-'delete_reason'-'deleted_from_status'-'body_replacement'-'is_demo' as data from cases c where tenant_id=$1 and id=$2", [tenant, kase])).rows).toEqual(before);
     expect((await client.query("select to_regclass('public.case_documents') as name")).rows).toEqual([{ name: 'case_documents' }]);
-    for (const name of ['0044_demo_flag', '0043_data_foundation', '0042_night_list_kinds_followers', '0041_deep_ink', '0040_magenta_captain_midlands', '0039_petite_wendell_rand', '0038_special_aid_requesting_station', '0037_night_list', '0036_manage_pulse', '0035_special_aid_completion', '0034_special_aid_module', '0032_task_cancellation', '0031_assessment_source_code', '0030_body_replacement_versions', '0029_smart_assessment', '0028_pretty_chamber', '0027_low_praxagora', '0026_broad_wildside', '0025_freezing_alex_power', '0024_fat_zaran']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
+    for (const name of ['0045_line_names', '0044_demo_flag', '0043_data_foundation', '0042_night_list_kinds_followers', '0041_deep_ink', '0040_magenta_captain_midlands', '0039_petite_wendell_rand', '0038_special_aid_requesting_station', '0037_night_list', '0036_manage_pulse', '0035_special_aid_completion', '0034_special_aid_module', '0032_task_cancellation', '0031_assessment_source_code', '0030_body_replacement_versions', '0029_smart_assessment', '0028_pretty_chamber', '0027_low_praxagora', '0026_broad_wildside', '0025_freezing_alex_power', '0024_fat_zaran']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
     expect((await client.query('select to_jsonb(c) as data from cases c where tenant_id=$1 and id=$2', [tenant, kase])).rows).toEqual(before);
   } finally {
     await client.close();
@@ -104,7 +104,7 @@ it('0034 keeps every accident reservation, allows a special-aid hold only with i
     expect((await client.query('select count(*)::int as n from notifications where urgent')).rows).toEqual([{ n: 0 }]);
     // 0035 also checks users: job titles default to none and guest expiry is empty for existing staff.
     expect((await client.query('select job_titles, access_expires_at from users where id=$1', [user])).rows).toEqual([{ job_titles: [], access_expires_at: null }]);
-    for (const name of ['0044_demo_flag', '0043_data_foundation', '0042_night_list_kinds_followers', '0041_deep_ink', '0040_magenta_captain_midlands', '0039_petite_wendell_rand', '0038_special_aid_requesting_station', '0037_night_list', '0036_manage_pulse', '0035_special_aid_completion', '0034_special_aid_module']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
+    for (const name of ['0045_line_names', '0044_demo_flag', '0043_data_foundation', '0042_night_list_kinds_followers', '0041_deep_ink', '0040_magenta_captain_midlands', '0039_petite_wendell_rand', '0038_special_aid_requesting_station', '0037_night_list', '0036_manage_pulse', '0035_special_aid_completion', '0034_special_aid_module']) await client.exec(readFileSync(join(source, '../down', `${name}.sql`), 'utf8'));
     expect((await client.query("select count(*)::int as n from information_schema.columns where table_name='users' and column_name in ('job_titles','access_expires_at')")).rows).toEqual([{ n: 0 }]);
     expect((await client.query('select to_jsonb(r) as data from stock_reservations r where id=$1', [res])).rows).toEqual(before);
     expect((await client.query("select to_regclass('public.special_aid_items') as name")).rows).toEqual([{ name: null }]);
@@ -143,6 +143,47 @@ it('0044 flags only the demo seed of test dealerships and rolls back', async () 
     ]);
     await client.exec(readFileSync(join(source, '../down', '0044_demo_flag.sql'), 'utf8'));
     expect((await client.query("select count(*)::int as n from information_schema.columns where column_name = 'is_demo'")).rows).toEqual([{ n: 0 }]);
+  } finally {
+    await client.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+it('0045 names labour and parts from the catalogue text of each line, never a typed line or a confirmed column', async () => {
+  const source = resolve(__dirname, '../src/db/migrations');
+  const prefix = join(tmpdir(), 'manage-line-names-migration-');
+  const folder = mkdtempSync(prefix);
+  if (!resolve(folder).startsWith(resolve(prefix))) throw new Error('Unexpected migration rehearsal path');
+  const client = new PGlite();
+  try {
+    const journal = JSON.parse(readFileSync(join(source, 'meta/_journal.json'), 'utf8'));
+    const previous = { ...journal, entries: journal.entries.filter((e: { idx: number }) => e.idx < 45) };
+    mkdirSync(join(folder, 'meta'));
+    writeFileSync(join(folder, 'meta/_journal.json'), JSON.stringify(previous));
+    for (const entry of previous.entries) copyFileSync(join(source, `${entry.tag}.sql`), join(folder, `${entry.tag}.sql`));
+    const db = drizzle(client);
+    await migrate(db, { migrationsFolder: folder });
+    const [plain, confirmed, recA, recB] = Array.from({ length: 4 }, () => randomUUID());
+    await client.query("insert into tenants(id,code,name,is_test,settings) values ($1,'names-plain','Synthetic',true,'{}'),($2,'names-confirmed','Synthetic',true,'{\"kasbFieldMap\":{\"repairName\":\"DrerDesc\",\"partName\":\"WgdsDesc\"}}')", [plain, confirmed]);
+    await client.query("insert into receptions(id,tenant_id,kasb_rcd,official,row_hash,is_test) values ($1,$2,'1','{}','h',true),($3,$4,'2','{}','h',true)", [recA, plain, recB, confirmed]);
+    const repair = (id: string, tenant: string, rec: string, line: string, name: string | null, description: string | null) =>
+      client.query('insert into reception_repairs(id,tenant_id,reception_id,kasb_line_id,name,description,official,row_hash,is_test) values ($1,$2,$3,$4,$5,$6,$7,\'h\',true)', [id, tenant, rec, line, name, description, JSON.stringify({ GrprDesc: ' تعويض  روغن موتور ' })]);
+    await repair(randomUUID(), plain, recA, '101', null, null);
+    await repair(randomUUID(), plain, recA, '102', 'یادداشت تعمیرکار', 'یادداشت تعمیرکار');
+    await repair(randomUUID(), plain, recA, 'm:103', 'نام دستی', null);
+    await repair(randomUUID(), confirmed, recB, '201', null, null);
+    const part = (tenant: string, rec: string, line: string) =>
+      client.query('insert into reception_parts(id,tenant_id,reception_id,kasb_line_id,official,row_hash,is_test) values ($1,$2,$3,$4,$5,\'h\',true)', [randomUUID(), tenant, rec, line, JSON.stringify({ WgdsFarDes: 'فيلتر روغن موتور' })]);
+    await part(plain, recA, '301');
+    await part(confirmed, recB, '401');
+    await migrate(db, { migrationsFolder: source });
+    expect((await client.query('select kasb_line_id, name from reception_repairs order by kasb_line_id')).rows).toEqual([
+      { kasb_line_id: '101', name: 'تعویض روغن موتور' }, { kasb_line_id: '102', name: 'تعویض روغن موتور' },
+      { kasb_line_id: '201', name: null }, { kasb_line_id: 'm:103', name: 'نام دستی' },
+    ]);
+    expect((await client.query('select kasb_line_id, name from reception_parts order by kasb_line_id')).rows).toEqual([
+      { kasb_line_id: '301', name: 'فیلتر روغن موتور' }, { kasb_line_id: '401', name: null },
+    ]);
   } finally {
     await client.close();
     rmSync(folder, { recursive: true, force: true });

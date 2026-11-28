@@ -100,8 +100,8 @@ export default function ReceptionFolderPage() {
         <div className="panel-body stack">
           {!r.defects.length && !r.repairs.length && <p className="m-empty">ایراد یا اجرتی روی کارت ثبت نشده است.</p>}
           {r.defects.length > 0 && <ul className="rcp-lines">{r.defects.map((d) => <li key={d.id} className={d.removedAt ? 'is-removed' : ''}><strong>{d.customerText ?? d.groupTitle ?? 'ایراد'}</strong>{d.groupCode && <bdi className="small muted"> {d.groupCode}{d.customerText && d.groupTitle ? ` · ${d.groupTitle}` : ''}</bdi>}{d.expertText && <span className="small"> · کارشناس: {d.expertText}</span>}<span className="row xs">{d.state && <span className="m-tag mute">{d.state}</span>}{d.removedAt && <span className="m-tag stop">حذف‌شده در کسب‌وکار</span>}</span></li>)}</ul>}
-          {r.repairs.length > 0 && <div className="table-scroll"><table className="table static"><thead><tr><th scope="col">نام اجرت</th><th scope="col">کد</th><th scope="col">تعمیرکار</th><th scope="col">جایگاه</th><th scope="col">وضعیت</th><th scope="col">مبلغ نهایی</th><th scope="col">گارانتی</th></tr></thead><tbody>
-            {r.repairs.map((x) => <tr key={x.id} className={x.removedAt || x.declined ? 'is-removed' : ''} data-declined={x.declined || undefined}><td>{officialLabourName(x.name ?? x.description, x.code)}{x.declined && <span className="m-tag stop" title="مشتری انجام این اجرت را نخواست؛ در شمارش کار انجام‌شده نیامده"> عدم تمایل · در شمارش کار نیست</span>}{x.manual && <span className="m-tag wait"> دستی</span>}{x.removedAt && <span className="m-tag stop"> {x.manual ? 'جایگزین با دادهٔ پالس' : 'حذف‌شده در کسب‌وکار'}</span>}</td><td><bdi dir="ltr">{t(x.code)}</bdi></td><td>{t(x.technician)}</td><td>{t(x.station)}</td><td>{x.state ?? '—'}</td><td>{x.finalPriceRial == null ? '—' : rial(x.finalPriceRial)}</td><td>{t(x.warranty)}</td></tr>)}
+          {r.repairs.length > 0 && <div className="table-scroll"><table className="table static"><thead><tr><th scope="col">نام اجرت</th><th scope="col">کد</th><th scope="col">تعمیرکار</th><th scope="col">جایگاه</th><th scope="col">وضعیت</th><th scope="col" title="ستون DrerIntialPrice کسب‌وکار">مبلغ اجرت</th><th scope="col">مبلغ نهایی</th><th scope="col">گارانتی</th></tr></thead><tbody>
+            {r.repairs.map((x) => <tr key={x.id} className={x.removedAt || x.declined ? 'is-removed' : ''} data-declined={x.declined || undefined}><td>{officialLabourName(x.name ?? x.description, x.code)}{x.declined && <span className="m-tag stop" title="مشتری انجام این اجرت را نخواست؛ در شمارش کار انجام‌شده نیامده"> عدم تمایل · در شمارش کار نیست</span>}{x.manual && <span className="m-tag wait"> دستی</span>}{x.removedAt && <span className="m-tag stop"> {x.manual ? 'جایگزین با دادهٔ پالس' : 'حذف‌شده در کسب‌وکار'}</span>}</td><td><bdi dir="ltr">{t(x.code)}</bdi></td><td>{t(x.technician)}</td><td>{t(x.station)}</td><td>{x.state ?? '—'}</td><td>{x.priceRial == null ? '—' : rial(x.priceRial)}</td><td>{x.finalPriceRial == null ? '—' : rial(x.finalPriceRial)}</td><td>{t(x.warranty)}</td></tr>)}
           </tbody></table></div>}
         </div>
       </section>
@@ -114,7 +114,8 @@ export default function ReceptionFolderPage() {
               <span className="rcp-line-name"><strong>{p.name ?? 'قطعه'}</strong> <bdi className="small muted">{t(p.code)}</bdi></span>
               <span className="row xs">
                 <span>درخواستی {t(p.qtyRequested)} · نهایی {t(p.qtyFinal)}</span>
-                {p.unitPriceRial != null && <span>{rial(p.unitPriceRial)}</span>}
+                {p.unitPriceRial != null && <span>فی {rial(p.unitPriceRial)}</span>}
+                {p.totalPriceRial != null && <span>کل {rial(p.totalPriceRial)}</span>}
                 {p.state && <span className="m-tag mute">{p.state}</span>}
                 {p.specialAid && <span className="m-tag em">امداد ویژه</span>}
                 {p.rejectReason && <span className="m-tag stop">رد: {p.rejectReason}</span>}

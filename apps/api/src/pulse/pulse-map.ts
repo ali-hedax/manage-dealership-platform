@@ -1,6 +1,6 @@
 import { formatJalaliDateInput, isWorkingDay, searchKey, TEHRAN_OFFSET_MINUTES, type KasbFieldMap, type PulseSettings, type WorkCalendar } from '@manage/shared';
 import { idKey, isFullVin, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
-import { CARD, CARD_DESCRIPTION_COLUMNS, CLOSED_STATUS_RE, CODE_DOMAIN_COLUMNS, CODE_TEXT_COLUMNS, CODE_VALUE_COLUMNS, DEFECT, PART, PART_NAME_COLUMNS, REPAIR, STATUS_DOMAIN } from './kasb-protocol';
+import { CARD, CARD_DESCRIPTION_COLUMNS, CLOSED_STATUS_RE, CODE_DOMAIN_COLUMNS, CODE_TEXT_COLUMNS, CODE_VALUE_COLUMNS, DEFECT, KASB_LINE_TEXT, PART, PART_NAME_COLUMNS, REPAIR, STATUS_DOMAIN } from './kasb-protocol';
 import { cleanText, flagOf, idText, intOf, kasbInstant, pickText, quantityText, rowHash, type KasbRow, type KasbTable } from './kasb-table';
 
 // From one row of کسب‌وکار to the columns Manage stores. Pure: no database, no network.
@@ -159,7 +159,7 @@ export interface PartValues extends LineBase {
 export interface RepairValues extends LineBase {
   code: string | null;
   description: string | null;
-  /** Labour name: the confirmed column, else the description (as before S08). */
+  /** Labour name: the confirmed column, else the labour catalogue name (GrprDesc), else the description (H4 part 2). */
   name: string | null;
   /** Technician and station of the line: only from confirmed columns. */
   technician: string | null;
@@ -200,7 +200,7 @@ export const mapRepair = (row: KasbRow, fields: KasbFieldMap = {}): RepairValues
   ...base(row, REPAIR.line),
   code: idText(row[REPAIR.code]),
   description: cleanText(row[REPAIR.description]),
-  name: fields.repairName ? confirmedText(row, fields.repairName) ?? null : cleanText(row[REPAIR.description]),
+  name: fields.repairName ? confirmedText(row, fields.repairName) ?? null : cleanText(row[KASB_LINE_TEXT.repairName]) ?? cleanText(row[REPAIR.description]),
   technician: confirmedText(row, fields.repairTechnician) ?? null,
   station: confirmedText(row, fields.repairStation) ?? null,
   state: cleanText(row[REPAIR.state]),

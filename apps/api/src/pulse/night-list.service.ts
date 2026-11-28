@@ -253,12 +253,12 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       .where(and(eq(nightListItems.tenantId, tenantId), eq(nightListItems.listId, l.id), eq(receptions.tenantId, tenantId), ...(l.status === 'draft' ? [ofKind(l.kind as NightListKind), ...(await realReceptionsOnly(db, tenantId))] : [])));
     const ids = items.map((x) => x.r.id);
     const labour = ids.length && !historical
-      ? await db.select({ receptionId: receptionRepairs.receptionId, description: receptionRepairs.description, code: receptionRepairs.code, state: receptionRepairs.state }).from(receptionRepairs)
+      ? await db.select({ receptionId: receptionRepairs.receptionId, name: receptionRepairs.name, description: receptionRepairs.description, code: receptionRepairs.code, state: receptionRepairs.state }).from(receptionRepairs)
         .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, ids), isNull(receptionRepairs.removedAt)))
       : [];
     const labourOf = new Map<string, string[]>();
     for (const x of labour) {
-      const name = officialLabourName(x.description, x.code);
+      const name = officialLabourName(x.name ?? x.description, x.code);
       const text = [name, x.state && `(${x.state})`].filter(Boolean).join(' ');
       labourOf.set(x.receptionId, [...(labourOf.get(x.receptionId) ?? []), text]);
     }

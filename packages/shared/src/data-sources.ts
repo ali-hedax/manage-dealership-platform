@@ -148,10 +148,10 @@ export const KASB_FIELD_KEYS = ['repairName', 'repairTechnician', 'repairStation
 export type KasbFieldKey = (typeof KASB_FIELD_KEYS)[number];
 export type KasbFieldList = 'cards' | 'repairs' | 'parts';
 export const KASB_FIELD_DEFS: Record<KasbFieldKey, { label: string; list: KasbFieldList; hint: string }> = {
-  repairName: { label: 'نام اجرت', list: 'repairs', hint: 'شرح اجرت؛ تا تأیید نشود از DrerDesc خوانده می‌شود (گاهی فقط کد است).' },
+  repairName: { label: 'نام اجرت', list: 'repairs', hint: 'شرح اجرت؛ تا تأیید نشود از نام کاتالوگ اجرت (GrprDesc) و اگر نبود از DrerDesc خوانده می‌شود.' },
   repairTechnician: { label: 'تعمیرکار اجرت', list: 'repairs', hint: 'نام یا کد تعمیرکاری که اجرت را انجام داده است.' },
   repairStation: { label: 'جایگاه اجرت', list: 'repairs', hint: 'جایگاه تعمیراتی همان اجرت.' },
-  partName: { label: 'نام قطعه', list: 'parts', hint: 'شرح قطعهٔ مصرفی؛ تا تأیید نشود از چند نام احتمالی خوانده می‌شود و اغلب خالی است.' },
+  partName: { label: 'نام قطعه', list: 'parts', hint: 'شرح قطعهٔ مصرفی؛ تا تأیید نشود از شرح کاتالوگ قطعه (WgdsFarDes) خوانده می‌شود.' },
   cardHall: { label: 'سالن تعمیرات کارت', list: 'cards', hint: 'سرویس سریع یا سالن تعمیرات؛ برای آمار سرویس سریع.' },
 };
 export const KASB_FIELD_LIST_LABELS: Record<KasbFieldList, string> = { cards: 'فهرست پذیرش (Drcds)', repairs: 'اجرت‌های کارت (Drers)', parts: 'قطعه‌های کارت (Dreps)' };

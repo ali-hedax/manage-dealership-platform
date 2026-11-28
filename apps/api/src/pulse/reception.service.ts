@@ -282,9 +282,9 @@ export class ReceptionService {
         const o = x.official ?? {};
         const stateText = cleanText(o[KASB_LINE_TEXT.repairState]);
         return { id: x.id, lineId: x.kasbLineId, code: x.code, description: x.description, name: x.name ?? x.description, technician: x.technician, station: x.station, manual: x.kasbLineId.startsWith('m:'),
-          state: stateText ?? x.state, stateCode: x.state, declined: isDeclinedLabour(stateText), group: cleanText(o[KASB_LINE_TEXT.repairGroup]), finalPriceRial: x.finalPriceRial, warranty: x.warranty, removedAt: iso(x.removedAt) };
+          state: stateText ?? x.state, stateCode: x.state, declined: isDeclinedLabour(stateText), group: cleanText(o[KASB_LINE_TEXT.repairGroup]), finalPriceRial: x.finalPriceRial, priceRial: num(o[KASB_LINE_TEXT.repairPrice]), warranty: x.warranty, removedAt: iso(x.removedAt) };
       }),
-      parts: parts.map((p) => ({ id: p.id, lineId: p.kasbLineId, name: p.name, code: p.code, qtyRequested: p.qtyRequested, qtyFinal: p.qtyFinal, unitPriceRial: p.unitPriceRial, state: p.state, specialAid: p.specialAid, warranty: p.warranty, rejectReason: p.rejectReason, removedAt: iso(p.removedAt) })),
+      parts: parts.map((p) => ({ id: p.id, lineId: p.kasbLineId, name: p.name, code: p.code, qtyRequested: p.qtyRequested, qtyFinal: p.qtyFinal, unitPriceRial: p.unitPriceRial, totalPriceRial: num((p.official ?? {})[KASB_LINE_TEXT.partTotal]), state: p.state, specialAid: p.specialAid, warranty: p.warranty, rejectReason: p.rejectReason, removedAt: iso(p.removedAt) })),
       externalWork: works.map(({ w, by }) => this.workView(w, by ?? null, docs.filter((d) => d.workId === w.id))),
       notes: notes.map(({ n, by }) => ({ id: n.id, text: n.text, createdAt: n.createdAt.toISOString(), createdByName: by ?? null })),
       events: events.map(({ e, by }) => eventView(e, by ?? null)),
