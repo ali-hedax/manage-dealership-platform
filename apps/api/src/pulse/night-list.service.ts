@@ -15,6 +15,7 @@ import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { nightListItems, nightLists, notifications, receptionRepairs, receptions, tenants, users, workshopStations } from '../db/schema';
 import { writeWorkbook } from '../parts/xlsx';
 import { calendarAt } from '../workshop/work-calendar';
+import { realReceptionsOnly } from './demo-data';
 import { admissionKey } from './pulse-map';
 import { ReceptionService } from './reception.service';
 
@@ -145,7 +146,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       if (!list) return false;
       if (list.status !== 'draft') return created.length > 0;
       const open = await tx.select({ id: receptions.id }).from(receptions)
-        .where(and(eq(receptions.tenantId, tenantId), lt(receptions.admittedAt, cutoff), ofKind(kind),
+        .where(and(eq(receptions.tenantId, tenantId), lt(receptions.admittedAt, cutoff), ofKind(kind), ...(await realReceptionsOnly(tx, tenantId)),
           or(eq(receptions.isOpen, true), gt(receptions.releasedAt, cutoff))));
       const present = new Set((await tx.select({ receptionId: nightListItems.receptionId }).from(nightListItems).where(eq(nightListItems.listId, list.id))).map((r) => r.receptionId));
       const missing = open.map((r) => r.id).filter((id) => !present.has(id));
@@ -223,7 +224,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
     const items = l.approvedSnapshot ? [] : await db.select({ i: nightListItems, r: receptions, setByName: users.displayName }).from(nightListItems)
       .innerJoin(receptions, eq(receptions.id, nightListItems.receptionId))
       .leftJoin(users, eq(users.id, nightListItems.setBy))
-      .where(and(eq(nightListItems.tenantId, tenantId), eq(nightListItems.listId, l.id), eq(receptions.tenantId, tenantId), ...(l.status === 'draft' ? [ofKind(l.kind as NightListKind)] : [])));
+      // Demo receptions put on a draft before real data arrived drop off it (H4 part 5).
+      .where(and(eq(nightListItems.tenantId, tenantId), eq(nightListItems.listId, l.id), eq(receptions.tenantId, tenantId), ...(l.status === 'draft' ? [ofKind(l.kind as NightListKind), ...(await realReceptionsOnly(db, tenantId))] : [])));
     const ids = items.map((x) => x.r.id);
     const labour = ids.length && !historical
       ? await db.select({ receptionId: receptionRepairs.receptionId, description: receptionRepairs.description, code: receptionRepairs.code, state: receptionRepairs.state }).from(receptionRepairs)
@@ -330,7 +332,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       const key = admissionKey(input.admissionNo);
       if (!key) throw badRequest('NIGHT_LIST_RECEPTION_MATCH', 'شمارهٔ پذیرش معتبر نیست.');
       const matches = await tx.select({ id: receptions.id }).from(receptions)
-        .where(and(eq(receptions.tenantId, tenantId), eq(receptions.admissionNoKey, key))).limit(2);
+        .where(and(eq(receptions.tenantId, tenantId), eq(receptions.admissionNoKey, key), ...(await realReceptionsOnly(tx, tenantId)))).limit(2);
       if (matches.length !== 1) throw badRequest('NIGHT_LIST_RECEPTION_MATCH', 'شمارهٔ پذیرش باید دقیقاً با یک کارت مطابقت داشته باشد.');
       const receptionId = matches[0]!.id;
       const [item] = await tx.select().from(nightListItems)

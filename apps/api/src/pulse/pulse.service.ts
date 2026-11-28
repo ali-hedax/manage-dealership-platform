@@ -11,6 +11,7 @@ import { newId } from '../common/ids';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { pulseCommands, pulseConnections, pulseRuns, receptionEvents, receptions } from '../db/schema';
+import { realReceptionsOnly } from './demo-data';
 import { caseNumbers, findCaseLink } from './pulse-link';
 import { encryptSecret } from './pulse-secret';
 import { tehranMidnight } from './pulse-map';
@@ -44,9 +45,10 @@ export class PulseService {
     const tenantId = actor.user.tenantId;
     const conn = await this.connection(this.db, tenantId);
     const today = tehranMidnight(new Date());
-    const [{ n: todayReceptions }] = await this.db.select({ n: count() }).from(receptions).where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, today))) as [{ n: number }];
+    const real = await realReceptionsOnly(this.db, tenantId);
+    const [{ n: todayReceptions }] = await this.db.select({ n: count() }).from(receptions).where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, today), ...real)) as [{ n: number }];
     const [{ n: todayChanges }] = await this.db.select({ n: count() }).from(receptionEvents).where(and(eq(receptionEvents.tenantId, tenantId), gte(receptionEvents.occurredAt, today), inArray(receptionEvents.kind, CHANGE_EVENTS))) as [{ n: number }];
-    const [{ n: reviewCount }] = await this.db.select({ n: count() }).from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.linkState, 'ambiguous'))) as [{ n: number }];
+    const [{ n: reviewCount }] = await this.db.select({ n: count() }).from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.linkState, 'ambiguous'), ...real)) as [{ n: number }];
     const runs = await this.db.select().from(pulseRuns).where(eq(pulseRuns.tenantId, tenantId)).orderBy(desc(pulseRuns.startedAt)).limit(20);
     const commands = await this.db.select().from(pulseCommands)
       .where(and(eq(pulseCommands.tenantId, tenantId), or(inArray(pulseCommands.status, ['pending', 'running']), gte(pulseCommands.createdAt, new Date(Date.now() - 86_400_000)))))
@@ -181,7 +183,7 @@ export class PulseService {
   async review(actor: Actor): Promise<PulseReviewRow[]> {
     const tenantId = actor.user.tenantId;
     const rows = await this.db.select({ id: receptions.id, admissionNo: receptions.admissionNo, admissionNoKey: receptions.admissionNoKey, vin: receptions.vin, plate: receptions.plate, productName: receptions.productName })
-      .from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.linkState, 'ambiguous'))).orderBy(desc(receptions.admittedAt)).limit(100);
+      .from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.linkState, 'ambiguous'), ...(await realReceptionsOnly(this.db, tenantId)))).orderBy(desc(receptions.admittedAt)).limit(100);
     const out: PulseReviewRow[] = [];
     for (const r of rows) {
       const link = await findCaseLink(this.db, tenantId, r.admissionNoKey, r.vin);

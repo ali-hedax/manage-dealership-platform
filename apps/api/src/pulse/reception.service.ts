@@ -13,6 +13,7 @@ import { newId } from '../common/ids';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { cases, externalContractors, pulseConnections, tenants, receptionDefects, receptionDocuments, receptionEvents, receptionExternalWork, receptionNotes, receptionParts, receptionRepairs, receptions, users } from '../db/schema';
+import { realReceptionsOnly } from './demo-data';
 import { CARD } from './kasb-protocol';
 import { cleanText, kasbInstant } from './kasb-table';
 import { cardDescription, tehranMidnight } from './pulse-map';
@@ -35,10 +36,11 @@ export class ReceptionService {
   async labourReview(actor: Actor) {
     this.ensureActive();
     const tenantId = actor.user.tenantId;
+    const real = await realReceptionsOnly(this.db, tenantId);
     const rows = await this.db.select({
       id: receptionRepairs.id, receptionId: receptions.id, admissionNo: receptions.admissionNo, lineId: receptionRepairs.kasbLineId,
     }).from(receptionRepairs).innerJoin(receptions, eq(receptionRepairs.receptionId, receptions.id))
-      .where(and(eq(receptionRepairs.tenantId, tenantId), eq(receptions.tenantId, tenantId), isNull(receptionRepairs.removedAt),
+      .where(and(eq(receptionRepairs.tenantId, tenantId), eq(receptions.tenantId, tenantId), isNull(receptionRepairs.removedAt), ...real,
         sql`(coalesce(${receptionRepairs.description}, '') COLLATE "C" !~ ${LABOUR_LETTER_PATTERN}
           OR btrim(${receptionRepairs.description}) = btrim(${receptionRepairs.code}))`))
       .orderBy(desc(receptions.admittedAt), asc(receptionRepairs.id)).limit(201);
@@ -61,7 +63,7 @@ export class ReceptionService {
   async search(actor: Actor, input: ReceptionSearchInput): Promise<ReceptionList> {
     this.ensureActive();
     const tenantId = actor.user.tenantId;
-    const conds = [eq(receptions.tenantId, tenantId)];
+    const conds = [eq(receptions.tenantId, tenantId), ...(await realReceptionsOnly(this.db, tenantId))];
     if (input.view === 'today') conds.push(gte(receptions.admittedAt, tehranMidnight(new Date())));
     if (input.view === 'open') conds.push(eq(receptions.isOpen, true));
     if (input.view === 'released') conds.push(eq(receptions.isOpen, false));
@@ -143,7 +145,7 @@ export class ReceptionService {
     const day = date ?? tehranDayKey(new Date());
     const start = tehranDayStart(day);
     const rows = await this.db.select({ id: receptions.id, receptionist: receptions.receptionist, vin: receptions.vin, chassis: receptions.chassis, plate: receptions.plate, hall: receptions.hall, linesReadAt: receptions.linesReadAt }).from(receptions)
-      .where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, start), lt(receptions.admittedAt, new Date(start.getTime() + DAY_MS))));
+      .where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, start), lt(receptions.admittedAt, new Date(start.getTime() + DAY_MS)), ...(await realReceptionsOnly(this.db, tenantId))));
     const ids = rows.map((r) => r.id);
     const lines = ids.length
       ? await this.db.select({ receptionId: receptionRepairs.receptionId, code: receptionRepairs.code, name: receptionRepairs.name, description: receptionRepairs.description }).from(receptionRepairs)

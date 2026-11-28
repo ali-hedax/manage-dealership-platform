@@ -15,7 +15,7 @@ import { CompletionService } from '../completion/completion.service';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { newId } from '../common/ids';
 import { DATABASE, type DatabaseHandle } from '../db/database';
-import { departments, tenants, users, workshopStations } from '../db/schema';
+import { cases, departments, tenants, users, workshopStations } from '../db/schema';
 import { RemindersService } from '../people/reminders.service';
 import { seedFleet } from './demo-fleet';
 import { PartsOperationsService } from '../parts/parts-operations.service';
@@ -103,6 +103,8 @@ export class DemoSeedService {
 
     if (opts.withCases !== false) await this.seedCases(tenantId);
     if (opts.withCases !== false && (opts.fleet ?? this.cfg.DEMO_FLEET) !== false) await this.seedFleetCars(tenantId, passwordHash);
+    // Every case of the new demo dealership is a sample (H4 part 5): never offered or counted next to real receptions.
+    await db.update(cases).set({ isDemo: true }).where(eq(cases.tenantId, tenantId));
     // Manage Pulse (spec section 26): synthetic receptions only where the demo runs (never in tests or production).
     if (opts.withCases !== false && this.cfg.PULSE_ENABLED && (this.cfg.APP_ENV === 'development' || this.cfg.APP_ENV === 'preview')) {
       await db.transaction((tx) => seedDemoReceptions(tx, tenantId));

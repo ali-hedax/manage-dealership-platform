@@ -54,7 +54,7 @@ export async function seedDemoReceptions(tx: DbOrTx, tenantId: string): Promise<
     const { kasbRcd, exitAt, searchText, official, rowHash, ...fields } = v;
     await tx.insert(receptions).values({
       ...fields, id, tenantId, kasbRcd, searchText, official, rowHash, statusText, isOpen: !closed, releasedAt: closed ? exitAt ?? now : null,
-      firstSeenAt: now, lastSeenAt: now, linesReadAt: now, caseId: link.state === 'linked' ? link.caseIds[0]! : null, linkState: link.state, isTest: true,
+      firstSeenAt: now, lastSeenAt: now, linesReadAt: now, caseId: link.state === 'linked' ? link.caseIds[0]! : null, linkState: link.state, isDemo: true, isTest: true,
     });
     await tx.insert(receptionEvents).values({ id: newId(), tenantId, receptionId: id, kind: 'created', data: { status: statusText }, isTest: true });
     if (link.state === 'linked') await tx.insert(receptionEvents).values({ id: newId(), tenantId, receptionId: id, kind: 'case_linked', data: { caseId: link.caseIds[0] }, isTest: true });
