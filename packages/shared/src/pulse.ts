@@ -112,6 +112,8 @@ export const DEFAULT_PULSE_SETTINGS: PulseSettings = { intervalMinutes: 3, hours
 export interface PulseCursor {
   todayAt?: string;
   openAt?: string;
+  /** Last re-read of open receptions admitted before the open window (hourly, S07). */
+  staleOpenAt?: string;
   codesAt?: string;
   /** Official text of each admission status code (domain CAR_STATE_REC of Sec/Code). */
   statusTexts?: Record<string, string>;
@@ -339,6 +341,13 @@ export interface ReceptionRepair {
   lineId: string;
   code: string | null;
   description: string | null;
+  /** Labour name from the column the administrator confirmed (else the description); null when the source has none. */
+  name: string | null;
+  /** Technician and station of the labour line, once their columns are confirmed (S08); never guessed. */
+  technician: string | null;
+  station: string | null;
+  /** «دستی»: typed into the manual «پذیرش و ریز کارت» file, not read by Pulse. */
+  manual: boolean;
   state: string | null;
   finalPriceRial: number | null;
   warranty: string | null;
@@ -438,7 +447,11 @@ export interface ReceptionDetail {
     warrantyStatus: string | null;
     costEstimateRial: number | null;
     finalCostRial: number | null;
+    /** «سالن تعمیرات», once its column is confirmed in «منبع‌ها» (S08/S09). */
+    hall: string | null;
   };
+  /** Read by Pulse, or entered from the manual «پذیرش و ریز کارت» file while Pulse was down. */
+  source: 'pulse' | 'manual';
   defects: ReceptionDefect[];
   repairs: ReceptionRepair[];
   parts: ReceptionPart[];

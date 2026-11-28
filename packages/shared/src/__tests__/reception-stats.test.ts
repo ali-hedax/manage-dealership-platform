@@ -44,14 +44,27 @@ test('«گزارش شب» by job: oil change and technical repair are counted ap
     { receptionist: 'پذیرشگر ب', codes: [], labourNames: [], consumedParts: ['روغن موتور'] },
     { receptionist: null, codes: [], labourNames: [null, ' '], consumedParts: [] },
   ], []);
-  assert.deepEqual(stats.jobs, { oilChange: 3, technicalRepair: 2, both: 1, none: 1 });
+  assert.deepEqual(stats.jobs, { quickService: 1, oilChange: 3, technicalRepair: 2, both: 1, none: 1, vehicles: 5 });
   assert.deepEqual(stats.jobsByReceptionist, [
-    { name: 'پذیرشگر الف', total: 2, oilChange: 2, technicalRepair: 1, both: 1, none: 0 },
-    { name: 'پذیرشگر ب', total: 2, oilChange: 1, technicalRepair: 1, both: 0, none: 0 },
-    { name: UNKNOWN_RECEPTIONIST, total: 1, oilChange: 0, technicalRepair: 0, both: 0, none: 1 },
+    { name: 'پذیرشگر الف', total: 2, quickService: 1, oilChange: 2, technicalRepair: 1, both: 1, none: 0, vehicles: 2 },
+    { name: 'پذیرشگر ب', total: 2, quickService: 0, oilChange: 1, technicalRepair: 1, both: 0, none: 0, vehicles: 2 },
+    { name: UNKNOWN_RECEPTIONIST, total: 1, quickService: 0, oilChange: 0, technicalRepair: 0, both: 0, none: 1, vehicles: 1 },
   ]);
   // Rows without names (older callers) are «بدون کار ثبت‌شده», never guessed.
-  assert.deepEqual(receptionDayStats('2026-01-10', [{ receptionist: 'x', codes: ['1'] }], []).jobs, { oilChange: 0, technicalRepair: 0, both: 0, none: 1 });
+  assert.deepEqual(receptionDayStats('2026-01-10', [{ receptionist: 'x', codes: ['1'] }], []).jobs, { quickService: 0, oilChange: 0, technicalRepair: 0, both: 0, none: 1, vehicles: 1 });
+});
+
+test('S09: one car is counted once in each category, even with two cards that day; gaps are counted, not guessed', () => {
+  const stats = receptionDayStats('2026-01-10', [
+    { receptionist: 'الف', codes: [], vehicleKey: 'TESTVIN0000000001', labourNames: ['سرویس سریع'], consumedParts: ['فیلتر روغن'], labourWithoutName: 0, linesRead: true },
+    { receptionist: 'الف', codes: [], vehicleKey: 'TESTVIN0000000001', labourNames: ['سرویس ۵۰۰۰', 'تعویض لنت'], consumedParts: [], labourWithoutName: 1, linesRead: true },
+    { receptionist: 'ب', codes: [], vehicleKey: 'TESTVIN0000000002', labourNames: ['صافکاری'], consumedParts: [], partsWithoutName: 2, linesRead: true },
+    { receptionist: 'ب', codes: [], vehicleKey: 'TESTVIN0000000003', labourNames: [], consumedParts: [], hall: 'سرویس سریع', linesRead: false },
+  ], []);
+  assert.equal(stats.total, 4);
+  assert.deepEqual(stats.jobs, { quickService: 2, oilChange: 1, technicalRepair: 2, both: 1, none: 0, vehicles: 3 });
+  assert.deepEqual(stats.dataGaps, { linesNotRead: 1, labourWithoutName: 1, partsWithoutName: 2 });
+  assert.deepEqual(stats.jobsByReceptionist.map((p) => [p.name, p.total, p.vehicles, p.oilChange]), [['الف', 2, 1, 1], ['ب', 2, 2, 0]]);
 });
 
 test('a part counts as used only when still on the card, not rejected and with a quantity above zero', () => {

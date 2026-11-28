@@ -8,6 +8,7 @@ import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { faNum } from '@/lib/format';
 import { AppIcon } from './AppIcon';
+import { DataGaps } from './DataGaps';
 import { EmptyState } from './EmptyState';
 import { Plate } from './Plate';
 
@@ -62,20 +63,22 @@ export function ReceptionStats() {
   if (!data) return null;
   return (
     <section className="rcp-stats" aria-label="آمار پذیرش امروز" data-testid="reception-stats">
-      <div className="rcp-stat-row">
+      {/* S09 (owner, 2026-11-28): from labour names, used parts and «سالن تعمیرات», one car once in each. */}
+      <div className="rcp-stat-row" data-testid="reception-jobs">
         <span className="rcp-stat-total"><strong>{faNum(data.total)}</strong> پذیرش امروز</span>
-        <span className="m-tag">{RECEPTION_KIND_LABELS.repair} {faNum(data.repair)}</span>
-        <span className="m-tag ok">{RECEPTION_KIND_LABELS.service} {faNum(data.service)}</span>
-        {data.unclassified > 0 && <span className="m-tag mute" title="هنوز اجرتی روی کارت ثبت نشده">{RECEPTION_KIND_LABELS.unclassified} {faNum(data.unclassified)}</span>}
+        <span className="m-tag ok">سرویس سریع {faNum(data.jobs.quickService)}</span>
+        <span className="m-tag">تعمیراتی {faNum(data.jobs.technicalRepair)}</span>
+        <span className="m-tag ok">تعویض روغن {faNum(data.jobs.oilChange)}</span>
+        {data.jobs.none > 0 && <span className="m-tag mute" title="هنوز اجرت یا قطعهٔ روغنی روی کارت نیست">{RECEPTION_KIND_LABELS.unclassified} {faNum(data.jobs.none)}</span>}
       </div>
-      {!data.serviceCodesConfigured && <p className="muted small">کدهای اجرت سرویس ادواری و روغن هنوز تنظیم نشده‌اند؛ تا آن موقع هر پذیرشِ دارای اجرت «تعمیراتی» شمرده می‌شود.</p>}
-      {data.byReceptionist.length > 0 && (
+      <DataGaps stats={data} />
+      {data.jobsByReceptionist.length > 0 && (
         <details className="rcp-people">
           <summary>به تفکیک پذیرشگر</summary>
           <div className="table-scroll">
             <table className="table static">
-              <thead><tr><th scope="col">پذیرشگر</th><th scope="col">همه</th><th scope="col">{RECEPTION_KIND_LABELS.repair}</th><th scope="col">{RECEPTION_KIND_LABELS.service}</th><th scope="col">{RECEPTION_KIND_LABELS.unclassified}</th></tr></thead>
-              <tbody>{data.byReceptionist.map((p) => <tr key={p.name}><th scope="row">{p.name}</th><td>{faNum(p.total)}</td><td>{faNum(p.repair)}</td><td>{faNum(p.service)}</td><td>{faNum(p.unclassified)}</td></tr>)}</tbody>
+              <thead><tr><th scope="col">پذیرشگر</th><th scope="col">همه</th><th scope="col">سرویس سریع</th><th scope="col">تعمیراتی</th><th scope="col">تعویض روغن</th></tr></thead>
+              <tbody>{data.jobsByReceptionist.map((p) => <tr key={p.name}><th scope="row">{p.name}</th><td>{faNum(p.total)}</td><td>{faNum(p.quickService)}</td><td>{faNum(p.technicalRepair)}</td><td>{faNum(p.oilChange)}</td></tr>)}</tbody>
             </table>
           </div>
         </details>

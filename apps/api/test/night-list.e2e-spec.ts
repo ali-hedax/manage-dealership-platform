@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { NightListPending, NightListView, ReceptionDayStats } from '@manage/shared';
 import { newId } from '../src/common/ids';
 import { tehranAt } from '../src/daily-reports/daily-time';
@@ -246,13 +246,63 @@ describe('Nightly list of the reception module', () => {
     await db().insert(receptionParts).values({ id: newId(), tenantId, receptionId: repairOnly, kasbLineId: 'c5-43', name: 'روغن موتور', qtyRequested: '1', qtyFinal: '0', state: 'ردشده', rejectReason: 'عدم موجودی', official: {}, rowHash: 'c5p43', isTest: true });
 
     const stats = (await reader.post('/reception/stats', { date: day }).expect(201)).body as ReceptionDayStats;
-    expect(stats).toMatchObject({ total: 3, jobs: { oilChange: 2, technicalRepair: 2, both: 1, none: 0 } });
+    expect(stats).toMatchObject({ total: 3, jobs: { quickService: 0, oilChange: 2, technicalRepair: 2, both: 1, none: 0, vehicles: 3 } });
     expect(stats.jobsByReceptionist).toEqual([
-      { name: 'پذیرشگر ساختگی الف', total: 2, oilChange: 2, technicalRepair: 1, both: 1, none: 0 },
-      { name: 'پذیرشگر ساختگی ب', total: 1, oilChange: 0, technicalRepair: 1, both: 0, none: 0 },
+      { name: 'پذیرشگر ساختگی الف', total: 2, quickService: 0, oilChange: 2, technicalRepair: 1, both: 1, none: 0, vehicles: 2 },
+      { name: 'پذیرشگر ساختگی ب', total: 1, quickService: 0, oilChange: 0, technicalRepair: 1, both: 0, none: 0, vehicles: 1 },
     ]);
     // The same summary rides on the night list.
     const pending = (await reader.post('/reception/night-list', { day }).expect(201)).body as NightListPending;
     expect(pending.summary?.jobs).toEqual(stats.jobs);
+  });
+
+  it('H3: a car released after the 12:30 build but before the 13:00 Thursday closing is off the list; one still there at closing is on it', async () => {
+    const day = '2025-05-01'; // Thursday, half day: build 12:30, closing 13:00
+    const leaves = await reception(51, tehranAt(day, '08:30'));
+    const stays = await reception(52, tehranAt(day, '09:00'));
+    const lateArrival = await reception(53, tehranAt(day, '12:40'));
+    await service.tick(tehranAt(day, '12:30'));
+    let list = await view(reader, day);
+    expect(list.rows.map((r) => r.receptionId)).toEqual(expect.arrayContaining([leaves, stays]));
+    expect(list.rows.some((r) => r.receptionId === lateArrival)).toBe(false);
+    // One car leaves at 12:45, before closing; the other only the next working morning.
+    await db().update(receptions).set({ isOpen: false, releasedAt: tehranAt(day, '12:45') }).where(eq(receptions.id, leaves));
+    await db().update(receptions).set({ isOpen: false, releasedAt: tehranAt('2025-05-03', '08:15') }).where(eq(receptions.id, stays));
+    await service.tick(tehranAt(day, '12:50'));
+    list = await view(reader, day);
+    const ids = list.rows.map((r) => r.receptionId);
+    expect(ids).toEqual(expect.arrayContaining([stays, lateArrival]));
+    expect(ids).not.toContain(leaves);
+    expect(list.excluded.map((r) => r.receptionId)).toContain(leaves);
+    // A released car never appears as open on the list.
+    expect(list.rows.every((r) => r.receptionId !== leaves)).toBe(true);
+    // Earlier lists stay visible: this one links back to the previous day that has one.
+    expect(list).toMatchObject({ status: 'draft', previousDay: '2025-04-29' });
+    expect((await view(reader, '2025-04-29')).status).toBe('draft');
+  });
+
+  it('H3/S09: a Thursday with periodic services, quick service and oil parts counts them — never «۰ تعویض روغن»; one car twice is one car', async () => {
+    const day = '2025-05-08'; // Thursday
+    const service10k = await reception(61, tehranAt(day, '08:10'));
+    const quick = await reception(62, tehranAt(day, '08:20'));
+    const oilAndRepair = await reception(63, tehranAt(day, '08:40'));
+    const sameCarAgain = await reception(64, tehranAt(day, '10:00'));
+    const onlyCode = await reception(65, tehranAt(day, '11:00'));
+    await db().update(receptionRepairs).set({ description: 'سرويس ۱۰,۰۰۰ کيلومتري' }).where(eq(receptionRepairs.receptionId, service10k));
+    await db().update(receptionRepairs).set({ description: 'سرویس سریع' }).where(eq(receptionRepairs.receptionId, quick));
+    await db().insert(receptionParts).values({ id: newId(), tenantId, receptionId: oilAndRepair, kasbLineId: 'h3-63', name: 'روغن موتور ۱۰W40', qtyRequested: '4', qtyFinal: '4', state: 'تحویل شده', official: {}, rowHash: 'h3p63', isTest: true });
+    // A second card of the same car that day (same VIN): one car in each count.
+    await db().update(receptions).set({ vin: 'TESTVIN7777777763' }).where(eq(receptions.id, sameCarAgain));
+    await db().update(receptionRepairs).set({ description: 'تعویض لنت جلو' }).where(eq(receptionRepairs.receptionId, sameCarAgain));
+    // Only a code in the source: counted as missing data, never classified by guess.
+    await db().update(receptionRepairs).set({ description: '۷۷۷۷' }).where(eq(receptionRepairs.receptionId, onlyCode));
+    await db().update(receptions).set({ linesReadAt: tehranAt(day, '11:30') }).where(inArray(receptions.id, [service10k, quick, oilAndRepair, sameCarAgain, onlyCode]));
+    const stats = (await reader.post('/reception/stats', { date: day }).expect(201)).body as ReceptionDayStats;
+    expect(stats.total).toBe(5);
+    expect(stats.jobs).toEqual({ quickService: 1, oilChange: 3, technicalRepair: 1, both: 1, none: 1, vehicles: 4 });
+    expect(stats.dataGaps).toEqual({ linesNotRead: 0, labourWithoutName: 1, partsWithoutName: 0 });
+    // The night report of that Thursday shows the same counts.
+    await service.tick(tehranAt(day, '12:30'));
+    expect((await view(reader, day)).summary?.jobs).toEqual(stats.jobs);
   });
 });

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Put, StreamableFile } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  kasbFieldMapSchema, receptionImportFileSchema, type KasbFieldMapInput, type ReceptionImportFileInput,
   pulseCaptchaSchema, pulseCommandSchema, pulseCredentialsSchema, pulseSettingsSchema, pulseToggleSchema,
   receptionExternalCancelSchema, receptionExternalUpdateSchema, receptionExternalWorkSchema, receptionInvoiceSchema, receptionNoteSchema, receptionSearchSchema, receptionSettingsSchema, receptionStatsQuerySchema, nightListItemSchema, nightListQuerySchema, nightListSendSchema,
   type PulseCommandInput, type PulseCredentialsInput, type PulseSettingsInput, type ReceptionExternalUpdateInput, type ReceptionExternalWorkInput, type ReceptionSearchInput, type ReceptionSettingsInput, type NightListItemInput, type NightListKind,
@@ -11,12 +12,37 @@ import { IdParam } from '../common/params';
 import { ZodPipe } from '../common/zod.pipe';
 import { NightListService } from './night-list.service';
 import { PulseService } from './pulse.service';
+import { ReceptionImportService } from './reception-import.service';
 import { ReceptionService } from './reception.service';
+import { SourcesService } from './sources.service';
 
 /** «منیج پالس · اتصال کسب‌وکار» (spec section 26): owner and system administrator only. The password is never returned. */
 @Controller('pulse')
 export class PulseController {
-  constructor(private readonly pulse: PulseService) {}
+  constructor(private readonly pulse: PulseService, private readonly sources: SourcesService, private readonly imports: ReceptionImportService) {}
+
+  /** «منبع‌ها» (S07/S08): every report from کسب‌وکار with its last read, rows, errors and the manual fallback. */
+  @RequirePermissions('integration.manage') @Get('sources')
+  sourcesView(@CurrentActor() actor: Actor) { return this.sources.view(actor); }
+
+  /** Confirms the column of a repair-card field among the columns Pulse observed (never a typed guess). */
+  @RequirePermissions('integration.manage') @Put('field-map')
+  fieldMap(@CurrentActor() actor: Actor, @Body(new ZodPipe(kasbFieldMapSchema)) body: KasbFieldMapInput) { return this.sources.saveFieldMap(actor, body); }
+
+  /** Manual «پذیرش و ریز کارت» (S08): template, newest file, preview, apply once. */
+  @RequirePermissions('integration.manage') @Get('reception-import/template')
+  importTemplate() {
+    return new StreamableFile(Buffer.from(this.imports.template()), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', disposition: 'attachment; filename="manage-reception-import.xlsx"' });
+  }
+
+  @RequirePermissions('integration.manage') @Get('reception-import/latest')
+  async importLatest(@CurrentActor() actor: Actor) { return { import: await this.imports.latest(actor) }; }
+
+  @RequirePermissions('integration.manage') @Post('reception-import/preview')
+  importPreview(@CurrentActor() actor: Actor, @Body(new ZodPipe(receptionImportFileSchema)) body: ReceptionImportFileInput) { return this.imports.preview(actor, body); }
+
+  @RequirePermissions('integration.manage') @Post('reception-import/:id/apply')
+  importApply(@CurrentActor() actor: Actor, @IdParam() id: string) { return this.imports.apply(actor, id); }
 
   @RequirePermissions('integration.manage') @Get('status')
   status(@CurrentActor() actor: Actor) { return this.pulse.status(actor); }

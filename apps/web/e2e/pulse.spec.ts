@@ -164,6 +164,24 @@ test('night lists (hotfix H1): repair and accident lists, station and reason dro
   }
 });
 
+test('«منبع‌ها» (S07/S08): each report with its last read, the manual guide while Pulse is down, data coverage and the manual upload', async ({ page }) => {
+  await login(page, 'manager');
+  for (const [width, height] of [[1440, 900], [390, 844]] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/settings/sources');
+    await expect(page.getByRole('heading', { level: 1, name: 'منبع‌ها' })).toBeVisible();
+    // Nothing is configured in this suite: Pulse is down and every guide is open.
+    await expect(page.getByTestId('pulse-down')).toContainText('پالس قطع است');
+    for (const key of ['cards', 'lines', 'stock', 'emdad', 'appointments', 'stoppages']) await expect(page.getByTestId(`source-${key}`)).toBeVisible();
+    await expect(page.getByTestId('source-cards')).toContainText('خدمات ← عملیات ← تعمیرات خودرو');
+    await expect(page.getByTestId('sources-coverage')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'بارگذاری دستی پذیرش و ریز کارت' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'قالب Excel' })).toHaveAttribute('href', '/api/v1/pulse/reception-import/template');
+    expect(await noSideScroll(page), `sources at ${width} px`).toBe(true);
+    await shot(page, `sources-${width}`);
+  }
+});
+
 test('the reception API refuses a colleague without reception.read', async ({ page }) => {
   // The accident expert reads receptions since 2026-11-27; the parts clerk still does not.
   await login(page, 'parts');

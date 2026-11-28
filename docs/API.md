@@ -116,7 +116,10 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | GET | `/api/v1/price-notices` | [source](../apps/api/src/parts/parts.controller.ts) |
 | GET | `/api/v1/print/cases/:id/picking.pdf` | [source](../apps/api/src/print/print.controller.ts) |
 | GET | `/api/v1/print/inspection.pdf` | [source](../apps/api/src/print/print.controller.ts) |
+| GET | `/api/v1/pulse/reception-import/latest` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/pulse/reception-import/template` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/pulse/review` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| GET | `/api/v1/pulse/sources` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/pulse/status` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/:id` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | GET | `/api/v1/reception/contractors` | [source](../apps/api/src/pulse/pulse.controller.ts) |
@@ -258,6 +261,8 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/price-notices/:id/respond` | [source](../apps/api/src/parts/parts.controller.ts) |
 | POST | `/api/v1/pulse/captcha` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/pulse/commands` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/pulse/reception-import/:id/apply` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/pulse/reception-import/preview` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/pulse/start` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/pulse/stop` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/:id/external-work` | [source](../apps/api/src/pulse/pulse.controller.ts) |
@@ -325,6 +330,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | PUT | `/api/v1/access/users/:id` | [source](../apps/api/src/auth/access.controller.ts) |
 | PUT | `/api/v1/cases/:id/finance/shares` | [source](../apps/api/src/finance/finance.controller.ts) |
 | PUT | `/api/v1/pulse/credentials` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| PUT | `/api/v1/pulse/field-map` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | PUT | `/api/v1/pulse/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | PUT | `/api/v1/reception/settings` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | PUT | `/api/v1/report-center` | [source](../apps/api/src/special-aid/report-center.controller.ts) |

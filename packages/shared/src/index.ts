@@ -45,6 +45,7 @@ export * from './employee-activity';
 export * from './special-aid';
 export * from './report-center';
 export * from './pulse';
+export * from './data-sources';
 export * from './case-order';
 export * from './assessment-supplies';
 export * from './vehicle-identity';

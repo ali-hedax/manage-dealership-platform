@@ -116,7 +116,7 @@ export function buildMenu(ctx: MenuContext): MenuSection[] {
         ],
         settings: [
           (ctx.isOwner || can('user.manage') || can('calendar.manage') || can('workshop.manage') || can('settings.manage') || can('reference.parts.read') || can('daily_reports.upload') || can('workshop.read') || can('integration.manage'))
-            && { href: '/settings', label: 'تنظیمات سیستم', icon: 'gear', match: (p) => ['/settings', '/settings/reports', '/settings/pulse', '/settings/nexus', '/workshop/settings', '/reference-data'].includes(p) },
+            && { href: '/settings', label: 'تنظیمات سیستم', icon: 'gear', match: (p) => ['/settings', '/settings/reports', '/settings/pulse', '/settings/nexus', '/settings/sources', '/workshop/settings', '/reference-data'].includes(p) },
           (ctx.isOwner || can('user.manage')) && { href: '/users', label: 'کاربران و دسترسی‌ها', icon: 'team' },
         ],
       };

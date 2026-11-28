@@ -1,9 +1,9 @@
 import { and, eq, sql } from 'drizzle-orm';
-import type { PulseStatus, ReceptionDetail, ReceptionList } from '@manage/shared';
+import { RECEPTION_IMPORT_FIELDS, RECEPTION_IMPORT_HEADERS, type DataSourcesView, type PulseStatus, type ReceptionDetail, type ReceptionImportField, type ReceptionImportPreview, type ReceptionList } from '@manage/shared';
 import { AuditService } from '../src/audit/audit.service';
 import { newId } from '../src/common/ids';
 import { APP_CONFIG, type AppConfig } from '../src/config';
-import { auditEvents, cases, dailyReportImports, notifications, pulseConnections, receptionEvents, receptionParts, receptions, referenceImports, tenants, users, vehicles, workCalendars } from '../src/db/schema';
+import { auditEvents, cases, dailyReportImports, notifications, pulseConnections, receptionEvents, receptionParts, receptionRepairs, receptions, referenceImports, tenants, users, vehicles, workCalendars } from '../src/db/schema';
 import { buildEmdadXml, emdadRow } from '../src/daily-reports/fixtures';
 import { writeWorkbook } from '../src/parts/xlsx';
 import { DailyReportsService } from '../src/daily-reports/daily-reports.service';
@@ -62,7 +62,7 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     h = await createHarness({ withCases: true, config: { PULSE_ENABLED: 'true', PULSE_SECRET_KEY: SECRET, PULSE_KASB_ORIGIN: mock.url } });
     admin = await h.login('admin');
     expert = await h.login('expert');
-    engine = new PulseEngine(h.db, h.app.get<AppConfig>(APP_CONFIG), h.app.get(AuditService), { now: () => new Date(base + shift), clientFactory: (origin) => new KasbClient({ origin, minGapMs: 0 }) });
+    engine = new PulseEngine(h.db, h.app.get<AppConfig>(APP_CONFIG), h.app.get(AuditService), { now: () => new Date(base + shift), clientFactory: (origin) => new KasbClient({ origin, minGapMs: 0 }), retryDelayMs: 0 });
     const [t] = await db().select({ id: tenants.id }).from(tenants).where(eq(tenants.code, DEMO_TENANT_CODE));
     tenantId = t!.id;
     const [adminUser] = await db().select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.username, 'admin')));
@@ -426,6 +426,100 @@ describe('Manage Pulse with the synthetic کسب‌وکار', () => {
     s = await status();
     expect(s.commands.find((c) => c.kind === 'backfill')).toMatchObject({ status: 'done', progress: { done: 4, total: 4 } });
     expect((await receptionOf(880009)).isOpen).toBe(true);
+  });
+
+  it('S07: a card whose lines کسب‌وکار refuses never stops the other cards; it is marked and tried again at its turn', async () => {
+    // Column names of the technician and station were never in a recording: the mock uses invented ones.
+    mock.cards.push(
+      { row: mockCardRow(21, { DrcdRcptDate: today }), linesRefused: true },
+      { row: mockCardRow(22, { DrcdRcptDate: today }), repairs: [{ DrerRer: 2201, DrerGrprRpr: '010', DrerDesc: 'سرویس ۱۰۰۰۰', DrerState: 'انجام شد', DrerFinalPrice: 900000, TestTechnician: 'تعمیرکار ساختگی', TestStation: 'جایگاه ۷' }] },
+    );
+    advance(4);
+    await engine.tick();
+    const refused = await receptionOf(880021);
+    expect(refused.linesErrorCode).toBe('KASB_REJECTED');
+    expect(refused.linesReadAt).not.toBeNull();
+    const healthy = await detail(880022);
+    expect(healthy.repairs).toHaveLength(1);
+    // Not confirmed yet: technician and station stay empty, never guessed.
+    expect(healthy.repairs[0]).toMatchObject({ name: 'سرویس ۱۰۰۰۰', technician: null, station: null, manual: false });
+    const lines = (await status()).runs.find((r) => r.kind === 'lines')!;
+    expect(lines).toMatchObject({ outcome: 'ok', details: { failedCards: { count: 1, codes: { KASB_REJECTED: 1 } } } });
+    expect((await receptionOf(880022)).linesErrorCode).toBeNull();
+  });
+
+  it('S08: only a column Pulse has seen is confirmed; then every stored line takes its value from the official row', async () => {
+    const view = (await admin.get('/pulse/sources').expect(200)).body as DataSourcesView;
+    expect(view.sources.map((x) => x.key)).toEqual(['cards', 'lines', 'stock', 'emdad', 'appointments', 'stoppages']);
+    expect(view.sources.find((x) => x.key === 'cards')).toMatchObject({ lastAuto: { mode: 'auto', ok: true }, lastSuccess: { mode: 'auto' } });
+    expect(view.pulse).toMatchObject({ configured: true, enabled: true });
+    expect(view.failedLineCards).toBeGreaterThanOrEqual(1);
+    expect(view.observedColumns.repairs).toEqual(expect.arrayContaining(['DrerDesc', 'TestTechnician', 'TestStation']));
+    expect(view.observedColumns.cards).toContain('DrcdDealerSeq');
+    expect(view.fieldMap).toEqual({});
+    await expert.put('/pulse/field-map', { repairTechnician: 'TestTechnician' }).expect(403);
+    expect((await admin.put('/pulse/field-map', { repairTechnician: 'NdTechnicianGuess' }).expect(422)).body.code).toBe('KASB_COLUMN_UNSEEN');
+    await admin.put('/pulse/field-map', { repairTechnician: 'bad column' }).expect(400);
+    const saved = (await admin.put('/pulse/field-map', { repairTechnician: 'TestTechnician', repairStation: 'TestStation' }).expect(200)).body as DataSourcesView;
+    expect(saved.fieldMap).toEqual({ repairTechnician: 'TestTechnician', repairStation: 'TestStation' });
+    expect((await detail(880022)).repairs[0]).toMatchObject({ technician: 'تعمیرکار ساختگی', station: 'جایگاه ۷' });
+    expect(saved.coverage.labourWithTechnician).toBeGreaterThanOrEqual(1);
+    expect((await db().select({ action: auditEvents.action }).from(auditEvents).where(eq(auditEvents.action, 'settings.kasb_field_map_saved')))).toHaveLength(1);
+  });
+
+  it('S08: when Pulse is down cards and lines come from the manual file, keyed by admission number; Pulse adopts the card later', async () => {
+    const tpl = await admin.get('/pulse/reception-import/template').expect(200);
+    expect(String(tpl.headers['content-type'])).toContain('spreadsheetml');
+    await expert.post('/pulse/reception-import/preview', { fileName: 'x.xlsx', fileBase64: 'AAAA' }).expect(403);
+    const header = RECEPTION_IMPORT_FIELDS.map((f) => RECEPTION_IMPORT_HEADERS[f][0]!);
+    const row = (v: Partial<Record<ReceptionImportField, string>>) => RECEPTION_IMPORT_FIELDS.map((f) => v[f] ?? '');
+    const rows = [header,
+      row({ admissionNo: '1405020031', rowType: 'کارت', chassis: 'NAA10031', vehicleName: 'تارا', customerName: 'مشتری ساختگی دستی', receptionist: 'پذیرشگر ساختگی', admittedDate: today, admittedTime: '08:00' }),
+      row({ admissionNo: '1405020031', rowType: 'اجرت', code: '0100', name: 'سرویس ۵۰۰۰', technician: 'تعمیرکار دستی', station: 'جایگاه ۲' }),
+      row({ admissionNo: '1405020031', rowType: 'قطعه', code: '0012345', name: 'فیلتر روغن', quantity: '1', amountRial: '650,000' }),
+      // A card Pulse already read is released by the file (Pulse was down at the release).
+      row({ admissionNo: '1405020002', releasedDate: today, releasedTime: '11:00' }),
+      row({ rowType: 'اجرت', name: 'بدون شماره پذیرش' }),
+    ];
+    const fileBase64 = Buffer.from(writeWorkbook([{ name: 'پذیرش و ریز کارت', rows }])).toString('base64');
+    const preview = (await admin.post('/pulse/reception-import/preview', { fileName: 'manual.xlsx', fileBase64 }).expect(201)).body as ReceptionImportPreview;
+    expect(preview.columns.every((c) => c.field !== null)).toBe(true);
+    expect(preview.counts).toMatchObject({ new: 1, update: 1, error: 0, labour: 1, parts: 1 });
+    expect(preview.rowErrors).toEqual([{ rowNo: 6, message: expect.stringContaining('شمارهٔ پذیرش') }]);
+    // The same file again is the same preview, never a second one.
+    expect(((await admin.post('/pulse/reception-import/preview', { fileName: 'again.xlsx', fileBase64 }).expect(201)).body as ReceptionImportPreview).id).toBe(preview.id);
+    const applied = (await admin.post(`/pulse/reception-import/${preview.id}/apply`).expect(201)).body as ReceptionImportPreview;
+    expect(applied.status).toBe('applied');
+    await admin.post(`/pulse/reception-import/${preview.id}/apply`).expect(409);
+    const manual = (await db().select().from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.admissionNoKey, '1405020031'))));
+    expect(manual).toHaveLength(1);
+    expect(manual[0]).toMatchObject({ source: 'manual', kasbRcd: 'manual:1405020031', isOpen: true, customerName: 'مشتری ساختگی دستی' });
+    const d = (await admin.get(`/reception/${manual[0]!.id}`).expect(200)).body as ReceptionDetail;
+    expect(d).toMatchObject({ source: 'manual' });
+    expect(d.repairs).toEqual([expect.objectContaining({ name: 'سرویس ۵۰۰۰', code: '0100', technician: 'تعمیرکار دستی', station: 'جایگاه ۲', manual: true, removedAt: null })]);
+    expect(d.parts).toEqual([expect.objectContaining({ name: 'فیلتر روغن', qtyFinal: '1', unitPriceRial: 650000, removedAt: null })]);
+    expect((await receptionOf(880002)).isOpen).toBe(false);
+    // A second file with the same card and lines adds nothing.
+    const again = Buffer.from(writeWorkbook([{ name: 'پذیرش و ریز کارت', rows: rows.slice(0, 4) }])).toString('base64');
+    const second = (await admin.post('/pulse/reception-import/preview', { fileName: 'second.xlsx', fileBase64: again }).expect(201)).body as ReceptionImportPreview;
+    await admin.post(`/pulse/reception-import/${second.id}/apply`).expect(201);
+    expect(await db().select().from(receptionRepairs).where(eq(receptionRepairs.receptionId, manual[0]!.id))).toHaveLength(1);
+    expect(await db().select().from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.admissionNoKey, '1405020031')))).toHaveLength(1);
+    // The sources page shows the manual read.
+    expect(((await admin.get('/pulse/sources').expect(200)).body as DataSourcesView).sources.find((x) => x.key === 'cards')!.lastManual).toMatchObject({ mode: 'manual', ok: true });
+
+    // Pulse is back: it reads the same admission from کسب‌وکار and takes over the manual card.
+    mock.cards.push({ row: mockCardRow(31, { DrcdRcptDate: today }), repairs: [{ DrerRer: 3101, DrerGrprRpr: '0100', DrerDesc: 'سرویس ۵۰۰۰', DrerState: 'انجام شد', DrerFinalPrice: 900000 }] });
+    advance(4);
+    await engine.tick();
+    const adopted = await db().select().from(receptions).where(and(eq(receptions.tenantId, tenantId), eq(receptions.admissionNoKey, '1405020031')));
+    expect(adopted).toHaveLength(1);
+    expect(adopted[0]).toMatchObject({ id: manual[0]!.id, source: 'pulse', kasbRcd: '880031' });
+    const lines = await db().select().from(receptionRepairs).where(eq(receptionRepairs.receptionId, manual[0]!.id));
+    expect(lines.find((l) => l.kasbLineId.startsWith('m:'))!.removedAt).not.toBeNull();
+    expect(lines.find((l) => l.kasbLineId === '3101')).toMatchObject({ name: 'سرویس ۵۰۰۰', removedAt: null });
+    // The official card wins over the file once Pulse reads it again (card 2 is still open in کسب‌وکار).
+    expect((await receptionOf(880002)).isOpen).toBe(true);
   });
 });
 

@@ -22,11 +22,13 @@ const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2
  * last working interval minus 30 minutes, and plus 15 minutes. Null when the weekday has no working
  * hours (Friday). Thursday with 08:00–13:00 → 12:30 and 13:15.
  */
-export function nightListTimes(dateKey: string, calendar: WorkCalendar): { generateAt: string; deadline: string } | null {
+export function nightListTimes(dateKey: string, calendar: WorkCalendar): { generateAt: string; deadline: string; close: string } | null {
   const weekday = new Date(dateKey + 'T12:00:00Z').getUTCDay();
   const end = Math.max(0, ...(calendar.week[weekday] ?? []).map((i) => i.end));
   if (!end) return null;
-  return { generateAt: hhmm(Math.max(0, end - NIGHT_LIST_LEAD_MINUTES)), deadline: hhmm(Math.min(24 * 60 - 1, end + NIGHT_LIST_GRACE_MINUTES)) };
+  // `close`: end of the day's last working period. A car still in the dealership then stays overnight
+  // and belongs on the list; one released before it does not (owner, 2026-11-28, H3).
+  return { generateAt: hhmm(Math.max(0, end - NIGHT_LIST_LEAD_MINUTES)), deadline: hhmm(Math.min(24 * 60 - 1, end + NIGHT_LIST_GRACE_MINUTES)), close: hhmm(end) };
 }
 
 export const NIGHT_LIST_REASONS = [

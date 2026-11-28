@@ -45,6 +45,19 @@ export interface ReceptionStatsRow {
   labourNames?: readonly (string | null | undefined)[];
   /** Names of the parts actually used on the card (see `isConsumedPart`). */
   consumedParts?: readonly (string | null | undefined)[];
+  /**
+   * The physical car (full VIN, else chassis, else plate). Receptions of one car on one day are one car
+   * in each job count (owner, 2026-11-28: «یک خودرو در هر دسته فقط یک بار»). Missing: the row is its own car.
+   */
+  vehicleKey?: string | null;
+  /** «سالن تعمیرات» of the card, once its column in کسب‌وکار is confirmed (quick service hall). */
+  hall?: string | null;
+  /** Current labour lines whose name is missing in the source (only a code): counted, never guessed. */
+  labourWithoutName?: number;
+  /** Current part lines without a name in the source. */
+  partsWithoutName?: number;
+  /** False while Pulse has not read the card's labour and parts yet. */
+  linesRead?: boolean;
 }
 
 /**
@@ -53,14 +66,28 @@ export interface ReceptionStatsRow {
  * `none` = neither yet (no labour line and no oil part on the card).
  */
 export interface ReceptionJobCounts {
+  /** «سرویس سریع» (labour name, or the quick-service hall once its column is confirmed). */
+  quickService: number;
   oilChange: number;
   technicalRepair: number;
   both: number;
   none: number;
+  /** Distinct cars behind the counts (each car once per category). */
+  vehicles: number;
 }
 export interface ReceptionJobPersonStats extends ReceptionJobCounts {
   name: string;
+  /** Receptions of this receptionist that day. */
   total: number;
+}
+/**
+ * What the counts could not see (S08/S09: shown, never guessed): receptions whose labour and parts
+ * Pulse has not read yet, labour lines with only a code, and part lines without a name.
+ */
+export interface ReceptionDataGaps {
+  linesNotRead: number;
+  labourWithoutName: number;
+  partsWithoutName: number;
 }
 
 /** A part line counts as used: still on the card, not rejected, and a quantity above zero (final, else requested). */
@@ -92,20 +119,44 @@ export interface ReceptionDayStats extends ReceptionCounts {
   /** «تعویض روغن» / «تعمیر فنی» from labour names and used parts; a car may be in both. */
   jobs: ReceptionJobCounts;
   jobsByReceptionist: ReceptionJobPersonStats[];
+  dataGaps: ReceptionDataGaps;
 }
 
 export const UNKNOWN_RECEPTIONIST = 'ثبت نشده';
 
 const empty = (): ReceptionCounts => ({ total: 0, repair: 0, service: 0, unclassified: 0 });
-const emptyJobs = (): ReceptionJobCounts => ({ oilChange: 0, technicalRepair: 0, both: 0, none: 0 });
+const emptyJobs = (): ReceptionJobCounts => ({ quickService: 0, oilChange: 0, technicalRepair: 0, both: 0, none: 0, vehicles: 0 });
+
+interface CarDay { labour: string[]; parts: string[]; halls: string[] }
+const addCar = (cars: Map<string, CarDay>, key: string, row: ReceptionStatsRow) => {
+  const car = cars.get(key) ?? { labour: [], parts: [], halls: [] };
+  car.labour.push(...clean(row.labourNames));
+  car.parts.push(...clean(row.consumedParts));
+  if (row.hall?.trim()) car.halls.push(row.hall);
+  cars.set(key, car);
+};
+function countCars(cars: Map<string, CarDay>, into: ReceptionJobCounts) {
+  for (const car of cars.values()) {
+    const job = classifyJob(car.labour, car.parts, car.halls.find(Boolean) ?? null);
+    // Any of the car's cards in the quick-service hall makes it a quick service.
+    const quick = job.quickService || car.halls.some((h) => classifyJob([], [], h).quickService);
+    into.vehicles += 1;
+    if (quick) into.quickService += 1;
+    if (job.oilChange) into.oilChange += 1;
+    if (job.repair) into.technicalRepair += 1;
+    if (job.oilChange && job.repair) into.both += 1;
+    if (!job.oilChange && !job.repair && !quick) into.none += 1;
+  }
+}
 
 export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow[], serviceCodes: readonly string[]): ReceptionDayStats {
   const service = new Set(serviceCodes.map(normalizeLaborCode).filter(Boolean));
   const all = empty();
   const people = new Map<string, ReceptionCounts>();
-  const jobs = emptyJobs();
-  const jobPeople = new Map<string, ReceptionJobCounts & { total: number }>();
-  for (const row of rows) {
+  const cars = new Map<string, CarDay>();
+  const personCars = new Map<string, { total: number; cars: Map<string, CarDay> }>();
+  const dataGaps: ReceptionDataGaps = { linesNotRead: 0, labourWithoutName: 0, partsWithoutName: 0 };
+  rows.forEach((row, index) => {
     const kind = receptionKind(row.codes, service);
     const name = row.receptionist?.replace(/\s+/g, ' ').trim() || UNKNOWN_RECEPTIONIST;
     const person = people.get(name) ?? empty();
@@ -114,19 +165,24 @@ export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow
       c[kind] += 1;
     }
     people.set(name, person);
-    const job = classifyJob(clean(row.labourNames), clean(row.consumedParts));
-    const jobPerson = jobPeople.get(name) ?? { total: 0, ...emptyJobs() };
-    jobPerson.total += 1;
-    for (const c of [jobs, jobPerson]) {
-      if (job.oilChange) c.oilChange += 1;
-      if (job.repair) c.technicalRepair += 1;
-      if (job.oilChange && job.repair) c.both += 1;
-      if (!job.oilChange && !job.repair) c.none += 1;
-    }
-    jobPeople.set(name, jobPerson);
-  }
+    const car = row.vehicleKey?.trim() || `row:${index}`;
+    addCar(cars, car, row);
+    const mine = personCars.get(name) ?? { total: 0, cars: new Map<string, CarDay>() };
+    mine.total += 1;
+    addCar(mine.cars, car, row);
+    personCars.set(name, mine);
+    if (row.linesRead === false) dataGaps.linesNotRead += 1;
+    dataGaps.labourWithoutName += row.labourWithoutName ?? 0;
+    dataGaps.partsWithoutName += row.partsWithoutName ?? 0;
+  });
+  const jobs = emptyJobs();
+  countCars(cars, jobs);
   const byName = <T extends { name: string; total: number }>(a: T, b: T) => b.total - a.total || a.name.localeCompare(b.name, 'fa');
   const byReceptionist = [...people.entries()].map(([name, c]) => ({ name, ...c })).sort(byName);
-  const jobsByReceptionist = [...jobPeople.entries()].map(([name, c]) => ({ name, ...c })).sort(byName);
-  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0, jobs, jobsByReceptionist };
+  const jobsByReceptionist = [...personCars.entries()].map(([name, p]) => {
+    const counts = emptyJobs();
+    countCars(p.cars, counts);
+    return { name, total: p.total, ...counts };
+  }).sort(byName);
+  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0, jobs, jobsByReceptionist, dataGaps };
 }

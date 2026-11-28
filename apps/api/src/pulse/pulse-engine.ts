@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import { DEFAULT_PULSE_SETTINGS, normalizeRoles, REPORT_CENTER_DEFAULTS, type ReportCenterKind, PULSE_ATTENTION_STATES, PULSE_ERROR_LABELS, PULSE_STATE_LABELS, parseJalali, type PulseCursor, type PulseRunKind, type PulseSettings, type PulseState } from '@manage/shared';
+import { DEFAULT_PULSE_SETTINGS, normalizeRoles, REPORT_CENTER_DEFAULTS, type KasbFieldMap, type ReportCenterKind, PULSE_ATTENTION_STATES, PULSE_ERROR_LABELS, PULSE_STATE_LABELS, parseJalali, type PulseCursor, type PulseRunKind, type PulseSettings, type PulseState } from '@manage/shared';
 import type { AuditService } from '../audit/audit.service';
 import type { AppConfig } from '../config';
 import { newId } from '../common/ids';
@@ -15,6 +15,8 @@ import { CARD, PULSE_PROTOCOL_REVISION } from './kasb-protocol';
 import type { KasbTable } from './kasb-table';
 import { dayChunks, diffLines, isClosed, jalaliDay, mapCard, mapDefect, mapPart, mapRepair, statusTexts, tehranDateKey, tehranMidnight, withinWorkingHours, type DefectValues, type LineBase, type PartValues, type ReceptionValues, type RepairValues } from './pulse-map';
 import { findCaseLink } from './pulse-link';
+import { loadFieldMap } from './kasb-fields';
+import { lockAdmission } from './reception-lock';
 import { stageAutomaticReport } from '../daily-reports/auto-stage';
 import { decryptSecret } from './pulse-secret';
 import { pulseActor, pulseAutoApply } from './pulse-actor';
@@ -37,6 +39,10 @@ import { ReportCenterService } from '../special-aid/report-center.service';
 export const PULSE_LOCK_KEY = 731_621_002;
 const LINES_PER_TICK = 30;
 const BACKFILL_DAYS_PER_TICK = 5;
+/** Open receptions admitted before the open window are re-read through their admission day, a few days per hour (S07). */
+const STALE_OPEN_DAYS_PER_CYCLE = 7;
+/** A failure of one card's lines that is about that card only: the card is marked and the others go on (S07). */
+const CARD_ONLY_ERRORS = new Set(['KASB_REJECTED', 'KASB_PROTOCOL']);
 type StructureKind = 'cards' | 'parts' | 'repairs' | 'defects';
 
 type Connection = typeof pulseConnections.$inferSelect;
@@ -64,6 +70,8 @@ function withoutPending(cursor: PulseCursor | null | undefined): PulseCursor {
 export interface PulseEngineOptions {
   clientFactory?: (origin: string) => KasbClient;
   now?: () => Date;
+  /** Pause before the one repeat of a small read the site did not answer (default 2 s; tests use 0). */
+  retryDelayMs?: number;
 }
 
 const settingsOf = (c: Connection): PulseSettings => ({ ...DEFAULT_PULSE_SETTINGS, ...(c.settings ?? {}) });
@@ -74,6 +82,7 @@ const safe = (e: unknown) => (e instanceof KasbError ? describeKasbError(e) : e 
 export class PulseEngine {
   private readonly logger = new Logger('ManagePulse');
   private readonly clients = new Map<string, { key: string; client: KasbClient }>();
+  private readonly fieldMaps = new Map<string, { at: number; map: KasbFieldMap }>();
   private relogins = 0;
   private prunedAt = 0;
 
@@ -89,6 +98,27 @@ export class PulseEngine {
   }
   private now(): Date {
     return this.opts.now?.() ?? new Date();
+  }
+
+  /** Columns confirmed in «منبع‌ها» (S08), read at most once a minute. */
+  private async fields(conn: Connection): Promise<KasbFieldMap> {
+    const cached = this.fieldMaps.get(conn.tenantId);
+    if (cached && Date.now() - cached.at < 60_000) return cached.map;
+    const map = await loadFieldMap(this.db, conn.tenantId);
+    this.fieldMaps.set(conn.tenantId, { at: Date.now(), map });
+    return map;
+  }
+
+  /** Small JSON reads: one more try after a short pause when the site did not answer in time (S07). */
+  private async retrying<T>(read: () => Promise<T>): Promise<T> {
+    try {
+      return await read();
+    } catch (e) {
+      if (!(e instanceof KasbError) || (e.code !== 'KASB_TIMEOUT' && e.code !== 'KASB_UNREACHABLE')) throw e;
+      const pause = this.opts.retryDelayMs ?? 2_000;
+      if (pause > 0) await new Promise((r) => setTimeout(r, pause));
+      return read();
+    }
   }
 
   /** The کسب‌وکار client of a dealership; a new one (no session) when the credentials changed. */
@@ -162,6 +192,9 @@ export class PulseEngine {
     const fresh = new Set<string>();
     if (due(cursor.todayAt, s.intervalMinutes)) ok = (await this.cardsCycle(conn, 'today', [{ from: now, to: now }], fresh)) && ok;
     if (ok && due(cursor.openAt, 15)) ok = (await this.cardsCycle(conn, 'open', dayChunks(new Date(now.getTime() - s.openWindowDays * 86_400_000), now, 7), fresh)) && ok;
+    // Open receptions older than the window were never read again, so a release in کسب‌وکار never reached
+    // Manage and they stayed «open» (and on the night list) for good. Their admission days are re-read hourly.
+    if (ok && due(cursor.staleOpenAt, 60)) ok = (await this.staleOpenCycle(conn, fresh)) && ok;
     if (ok) ok = (await this.linesCycle(conn, [...fresh])) && ok;
     if (ok && s.stockAuto !== false && (force || this.stockDue(conn, s))) ok = (await this.stockCycle(conn)) && ok;
     // The two reports never stop the admission reads: a refused report is only logged.
@@ -465,24 +498,27 @@ export class PulseEngine {
   // ------------------------------------------------------------ admissions
 
   /** Reads admissions of the given Tehran-day ranges and stores them; ids of new or changed ones go to `fresh`. */
-  private async cardsCycle(conn: Connection, kind: 'today' | 'open' | 'backfill', ranges: { from: Date; to: Date }[], fresh: Set<string>): Promise<boolean> {
+  private async cardsCycle(conn: Connection, kind: 'today' | 'open' | 'backfill' | 'stale_open', ranges: { from: Date; to: Date }[], fresh: Set<string>): Promise<boolean> {
     this.relogins = 0;
     const startedAt = this.now();
     const cursor: PulseCursor = { ...(conn.cursor ?? {}) };
     if (kind === 'today') cursor.todayAt = startedAt.toISOString();
     if (kind === 'open') cursor.openAt = startedAt.toISOString();
+    if (kind === 'stale_open') cursor.staleOpenAt = startedAt.toISOString();
     // The next attempt waits for the interval even if this one fails (no hammering).
     if (kind !== 'backfill') await this.patch(conn, { cursor });
-    const run = await this.startRun(conn, kind);
+    // Old open receptions are logged with the open window («پذیرش‌های باز»).
+    const run = await this.startRun(conn, kind === 'stale_open' ? 'open' : kind);
     const stats: Stats = { read: 0, created: 0, changed: 0 };
     const details: Record<string, unknown> = {};
     try {
       await this.ensureCodes(conn);
+      const fields = await this.fields(conn);
       for (const r of ranges) {
-        const table = await this.withSession(conn, (c) => c.cards(conn.dealerCode, jalaliDay(r.from), jalaliDay(r.to)));
+        const table = await this.retrying(() => this.withSession(conn, (c) => c.cards(conn.dealerCode, jalaliDay(r.from), jalaliDay(r.to))));
         await this.noteStructure(conn, 'cards', table, details);
         for (const row of table.rows) {
-          const values = mapCard(row);
+          const values = mapCard(row, fields);
           if (!values) continue;
           stats.read++;
           const { id, outcome } = await this.upsertReception(conn, run, values);
@@ -500,6 +536,26 @@ export class PulseEngine {
       await this.fail(conn, run, e, stats, details);
       return false;
     }
+  }
+
+  /**
+   * Receptions still open in Manage whose admission day is before the open window: their days are read
+   * again (oldest first, a few per hour), so a release in کسب‌وکار reaches Manage however old the card is.
+   */
+  private async staleOpenCycle(conn: Connection, fresh: Set<string>): Promise<boolean> {
+    const s = settingsOf(conn);
+    const windowStart = tehranMidnight(new Date(this.now().getTime() - s.openWindowDays * 86_400_000));
+    const rows = await this.db.select({ at: receptions.admittedAt }).from(receptions)
+      .where(and(eq(receptions.tenantId, conn.tenantId), eq(receptions.isOpen, true), eq(receptions.source, 'pulse'), lt(receptions.admittedAt, windowStart)))
+      .orderBy(asc(receptions.admittedAt)).limit(500);
+    const days = [...new Set(rows.map((r) => (r.at ? tehranDateKey(r.at) : null)).filter((d): d is string => !!d))].slice(0, STALE_OPEN_DAYS_PER_CYCLE);
+    if (!days.length) {
+      await this.patch(conn, { cursor: { ...(conn.cursor ?? {}), staleOpenAt: this.now().toISOString() } });
+      return true;
+    }
+    // Noon of each Tehran day (fixed +03:30, no daylight saving in Iran) names that day.
+    const ranges = days.map((d) => { const day = new Date(`${d}T12:00:00+03:30`); return { from: day, to: day }; });
+    return this.cardsCycle(conn, 'stale_open', ranges, fresh);
   }
 
   /** Official status texts (Sec/Code, domain CAR_STATE_REC), refreshed once a day. A failure is not fatal. */
@@ -540,14 +596,26 @@ export class PulseEngine {
     const closed = isClosed(v.exitAt, statusText);
     const scope = { tenantId: conn.tenantId, isTest: conn.isTest, requestId: `pulse:${run}` };
     return this.db.transaction(async (tx) => {
-      const [old] = await tx.select().from(receptions).where(and(eq(receptions.tenantId, conn.tenantId), eq(receptions.kasbRcd, v.kasbRcd)));
+      await lockAdmission(tx, this.handle.driver, conn.tenantId, v.admissionNoKey);
+      let [old] = await tx.select().from(receptions).where(and(eq(receptions.tenantId, conn.tenantId), eq(receptions.kasbRcd, v.kasbRcd)));
+      if (!old && v.admissionNoKey) {
+        // A card entered by hand while Pulse was down (key: admission number) becomes this card: same row,
+        // same night-list history; its manual lines give way when Pulse reads the card's lines.
+        const manual = await tx.select().from(receptions).where(and(eq(receptions.tenantId, conn.tenantId), eq(receptions.admissionNoKey, v.admissionNoKey), eq(receptions.source, 'manual'))).limit(2);
+        if (manual.length === 1) {
+          old = manual[0]!;
+          await tx.update(receptions).set({ kasbRcd: v.kasbRcd, source: 'pulse', rowHash: '', linesReadAt: null }).where(eq(receptions.id, old.id));
+          await this.event(tx, conn, run, old.id, 'created', { status: statusText ?? v.statusCode, fromManual: true });
+          old = { ...old, kasbRcd: v.kasbRcd, source: 'pulse', rowHash: '', linesReadAt: null };
+        }
+      }
       const fields = {
         admissionNo: v.admissionNo, admissionNoKey: v.admissionNoKey, cardNo: v.cardNo, chassis: v.chassis, vin: v.vin, engineNo: v.engineNo,
         productCode: v.productCode, productName: v.productName, modelCode: v.modelCode, modelName: v.modelName, color: v.color,
         plate: v.plate, plateRegion: v.plateRegion, plateSection: v.plateSection, plateLetter: v.plateLetter, plateThree: v.plateThree,
         customerName: v.customerName, customerPhone: v.customerPhone, customerMobile: v.customerMobile, customerNationalId: v.customerNationalId,
         customerAddress: v.customerAddress, delivererName: v.delivererName, delivererMobile: v.delivererMobile, entranceKm: v.entranceKm,
-        admittedAt: v.admittedAt, statusCode: v.statusCode, statusText, isOpen: !closed, station: v.station, receptionist: v.receptionist,
+        admittedAt: v.admittedAt, statusCode: v.statusCode, statusText, isOpen: !closed, station: v.station, receptionist: v.receptionist, hall: v.hall,
         searchText: v.searchText, official: v.official, rowHash: v.rowHash,
       };
       if (!old) {
@@ -581,7 +649,12 @@ export class PulseEngine {
 
   // ------------------------------------------------------------ lines
 
-  /** Parts, labour and defects of the cards that are due (new or changed ones first). */
+  /**
+   * Parts, labour and defects of the cards that are due. Order (S07): new or changed cards first, then
+   * today's cards, then other open cards, then never-read older cards, then released ones — so a backlog
+   * of old cards never holds back today's labour and parts. A card whose own read is refused is marked
+   * and skipped until its next turn; it never stops the others.
+   */
   private async linesCycle(conn: Connection, priority: string[]): Promise<boolean> {
     this.relogins = 0;
     const now = this.now();
@@ -594,29 +667,51 @@ export class PulseEngine {
       and(eq(receptions.isOpen, true), lt(receptions.admittedAt, today), lt(receptions.linesReadAt, ago(30 * 60_000))),
       and(eq(receptions.isOpen, false), gte(receptions.releasedAt, ago(s.openWindowDays * 86_400_000)), lt(receptions.linesReadAt, ago(7 * 86_400_000))),
     );
+    const tier = sql`case
+      when ${receptions.admittedAt} >= ${today.toISOString()}::timestamptz then 0
+      when ${receptions.isOpen} then 1
+      when ${receptions.linesReadAt} is null then 2
+      else 3 end`;
     const pick = { id: receptions.id, official: receptions.official };
-    const first = priority.length ? await this.db.select(pick).from(receptions).where(and(eq(receptions.tenantId, conn.tenantId), inArray(receptions.id, priority.slice(0, LINES_PER_TICK)))) : [];
+    // Manual cards (no DrcdRcd yet) have nothing to read until Pulse sees the card itself.
+    const own = and(eq(receptions.tenantId, conn.tenantId), eq(receptions.source, 'pulse'));
+    const first = priority.length ? await this.db.select(pick).from(receptions).where(and(own, inArray(receptions.id, priority.slice(0, LINES_PER_TICK)))) : [];
     const rest = first.length < LINES_PER_TICK
-      ? await this.db.select(pick).from(receptions).where(and(eq(receptions.tenantId, conn.tenantId), due, ...(first.length ? [notInArray(receptions.id, first.map((r) => r.id))] : [])))
-        .orderBy(sql`${receptions.linesReadAt} asc nulls first`, desc(receptions.admittedAt)).limit(LINES_PER_TICK - first.length)
+      ? await this.db.select(pick).from(receptions).where(and(own, due, ...(first.length ? [notInArray(receptions.id, first.map((r) => r.id))] : [])))
+        .orderBy(tier, sql`${receptions.linesReadAt} asc nulls first`, desc(receptions.admittedAt)).limit(LINES_PER_TICK - first.length)
       : [];
     const cards = [...first, ...rest];
     if (!cards.length) return true;
     const run = await this.startRun(conn, 'lines');
     const stats: Stats = { read: 0, created: 0, changed: 0 };
     const details: Record<string, unknown> = {};
+    const failed: Record<string, number> = {};
     try {
+      const fields = await this.fields(conn);
       for (const card of cards) {
         const rcd = card.official[CARD.rcd];
-        for (const kind of ['defects', 'repairs', 'parts'] as LineKind[]) {
-          const table = await this.withSession(conn, (c) => c.lines(kind, rcd));
-          await this.noteStructure(conn, kind, table, details);
-          const n = await this.applyLines(conn, run, card.id, kind, table);
-          stats.read += table.rows.length;
-          stats.created += n.created;
-          stats.changed += n.changed;
+        try {
+          for (const kind of ['defects', 'repairs', 'parts'] as LineKind[]) {
+            const table = await this.retrying(() => this.withSession(conn, (c) => c.lines(kind, rcd)));
+            await this.noteStructure(conn, kind, table, details);
+            const n = await this.applyLines(conn, run, card.id, kind, table, fields);
+            stats.read += table.rows.length;
+            stats.created += n.created;
+            stats.changed += n.changed;
+          }
+          await this.db.update(receptions).set({ linesReadAt: this.now(), linesErrorCode: null }).where(eq(receptions.id, card.id));
+        } catch (e) {
+          if (!(e instanceof KasbError) || !CARD_ONLY_ERRORS.has(e.code)) throw e;
+          // This card only: tried again at its normal turn, after the others.
+          failed[e.code] = (failed[e.code] ?? 0) + 1;
+          await this.db.update(receptions).set({ linesReadAt: this.now(), linesErrorCode: e.code }).where(eq(receptions.id, card.id));
         }
-        await this.db.update(receptions).set({ linesReadAt: this.now() }).where(eq(receptions.id, card.id));
+      }
+      const failedCards = Object.values(failed).reduce((a, b) => a + b, 0);
+      if (failedCards) details.failedCards = { count: failedCards, codes: failed };
+      if (failedCards === cards.length) {
+        await this.finishRun(run, 'error', stats, Object.keys(failed)[0] ?? 'KASB_REJECTED', details);
+        return true;
       }
       await this.finishRun(run, 'ok', stats, null, Object.keys(details).length ? details : null);
       return true;
@@ -626,12 +721,12 @@ export class PulseEngine {
     }
   }
 
-  private async applyLines(conn: Connection, run: string, receptionId: string, kind: LineKind, table: KasbTable): Promise<{ created: number; changed: number }> {
+  private async applyLines(conn: Connection, run: string, receptionId: string, kind: LineKind, table: KasbTable, fields: KasbFieldMap): Promise<{ created: number; changed: number }> {
     const now = this.now();
     const scope = { tenantId: conn.tenantId, isTest: conn.isTest, requestId: `pulse:${run}` };
     // The three line tables share id, reception_id, kasb_line_id, row_hash and removed_at.
     const target = (kind === 'parts' ? receptionParts : kind === 'repairs' ? receptionRepairs : receptionDefects) as unknown as typeof receptionParts;
-    const incoming: LineBase[] = table.rows.map((r) => (kind === 'parts' ? mapPart(r) : kind === 'repairs' ? mapRepair(r) : mapDefect(r)));
+    const incoming: LineBase[] = table.rows.map((r) => (kind === 'parts' ? mapPart(r, fields) : kind === 'repairs' ? mapRepair(r, fields) : mapDefect(r)));
     const columns = (l: LineBase): Record<string, unknown> => {
       const common = { official: l.official, rowHash: l.rowHash };
       if (kind === 'parts') {
@@ -640,7 +735,7 @@ export class PulseEngine {
       }
       if (kind === 'repairs') {
         const r = l as RepairValues;
-        return { ...common, code: r.code, description: r.description, state: r.state, finalPriceRial: r.finalPriceRial, warranty: r.warranty, defectLineId: r.defectLine };
+        return { ...common, code: r.code, description: r.description, name: r.name, technician: r.technician, station: r.station, state: r.state, finalPriceRial: r.finalPriceRial, warranty: r.warranty, defectLineId: r.defectLine };
       }
       const d = l as DefectValues;
       return { ...common, customerText: d.customerText, expertText: d.expertText, state: d.state, type: d.type };
@@ -667,7 +762,8 @@ export class PulseEngine {
       }
       for (const s of diff.removed) {
         await tx.update(target).set({ removedAt: now, updatedAt: now } as never).where(eq(target.id, s.id));
-        if (kind === 'parts') {
+        // A line typed into the manual file gives way to what Pulse read: not a removal in کسب‌وکار.
+        if (kind === 'parts' && !s.lineId.startsWith('m:')) {
           const [p] = await tx.select({ name: receptionParts.name, code: receptionParts.code }).from(receptionParts).where(eq(receptionParts.id, s.id));
           await this.event(tx, conn, run, receptionId, 'part_removed', { name: p?.name ?? null, code: p?.code ?? null });
         }

@@ -1780,6 +1780,8 @@ export const receptions = pgTable('receptions', {
   isOpen: boolean('is_open').notNull().default(true),
   station: text('station'),
   receptionist: text('receptionist'),
+  /** «سالن تعمیرات» from the column the administrator confirmed in «منبع‌ها» (migration 0043); never guessed. */
+  hall: text('hall'),
   searchText: text('search_text').notNull().default(''),
   official: jsonb('official').$type<Record<string, unknown>>().notNull(),
   rowHash: text('row_hash').notNull(),
@@ -1787,6 +1789,10 @@ export const receptions = pgTable('receptions', {
   lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
   /** Last read of parts, repairs and defects of the card. */
   linesReadAt: ts('lines_read_at'),
+  /** Stable code of the last failed read of this card's lines (one bad card never stops the others); null after a good read. */
+  linesErrorCode: text('lines_error_code'),
+  /** pulse: read by Manage Pulse (kasb_rcd = DrcdRcd). manual: from the «پذیرش و ریز کارت» file (kasb_rcd = manual:<admission key>) until Pulse reads it. */
+  source: text('source').notNull().default('pulse'),
   /** Accident case with the same admission number or full VIN, only when unique. */
   caseId: uuid('case_id').references(() => cases.id),
   linkState: text('link_state').notNull().default('none'),
@@ -1834,6 +1840,10 @@ export const receptionRepairs = pgTable('reception_repairs', {
   ...receptionLine(),
   code: text('code'),
   description: text('description'),
+  /** Labour name from the confirmed column (else the description); technician and station of the line (S08, migration 0043). */
+  name: text('name'),
+  technician: text('technician'),
+  station: text('station'),
   state: text('state'),
   finalPriceRial: bigint('final_price_rial', { mode: 'number' }),
   warranty: text('warranty'),
@@ -1847,6 +1857,28 @@ export const receptionDefects = pgTable('reception_defects', {
   state: text('state'),
   type: text('type'),
 }, (t) => [uniqueIndex('reception_defects_line_uq').on(t.receptionId, t.kasbLineId), index('reception_defects_tenant_idx').on(t.tenantId)]);
+
+/**
+ * Manual «پذیرش و ریز کارت» files (S08, migration 0043): previewed, then applied once. The admission
+ * number is the key of every row, so applying the same file again changes nothing. One row per file.
+ */
+export const receptionImports = pgTable('reception_imports', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  fileName: text('file_name').notNull(),
+  sha256: text('sha256').notNull(),
+  /** preview | applied */
+  status: text('status').notNull().default('preview'),
+  /** The parsed preview (cards with their lines, column matches, row errors); no file is kept. */
+  plan: jsonb('plan').$type<Record<string, unknown>>().notNull(),
+  rowCount: integer('row_count').notNull().default(0),
+  errorCount: integer('error_count').notNull().default(0),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  appliedBy: uuid('applied_by').references(() => users.id),
+  appliedAt: ts('applied_at'),
+  isTest: boolean('is_test').notNull().default(false),
+}, (t) => [uniqueIndex('reception_imports_tenant_sha_uq').on(t.tenantId, t.sha256), index('reception_imports_tenant_created_idx').on(t.tenantId, t.createdAt)]);
 
 /** Work done outside the dealership for a reception (recorded in Manage; basis of a future ARPAST link). */
 export const receptionExternalWork = pgTable('reception_external_work', {
