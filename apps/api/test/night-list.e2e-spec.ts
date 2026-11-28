@@ -346,4 +346,20 @@ describe('Nightly list of the reception module', () => {
     expect(list.rows.find((r) => r.receptionId === repairing)).toMatchObject({ reason: 'waiting_parts' });
     expect(list.rows.every((r) => r.isOpen)).toBe(true);
   });
+
+  it('H4 decision 1: a car with a labour line «امداد ویژه» gets «منتظر امداد ویژه»; «آماده تحویل» comes first', async () => {
+    const day = '2025-05-14'; // Wednesday
+    const aid = await reception(81, tehranAt(day, '08:00'));
+    const aidButReady = await reception(82, tehranAt(day, '08:10'));
+    const plain = await reception(83, tehranAt(day, '08:20'));
+    for (const id of [aid, aidButReady]) {
+      await db().insert(receptionRepairs).values({ id: newId(), tenantId, receptionId: id, kasbLineId: `aid-${id}`, code: '53200C9', state: '6', official: { VDrerStateDesc: 'امداد ویژه' }, rowHash: `aid-${id}`, isTest: true });
+    }
+    await db().update(receptions).set({ statusCode: '6', statusText: 'آماده تحویل به مشتری' }).where(eq(receptions.id, aidButReady));
+    await service.tick(tehranAt(day, '18:00'));
+    const rows = new Map((await view(reader, day)).rows.map((r) => [r.receptionId, r]));
+    expect(rows.get(aid)).toMatchObject({ reason: 'waiting_special_aid', carried: false });
+    expect(rows.get(aidButReady)).toMatchObject({ reason: 'ready_customer_absent' });
+    expect(rows.get(plain)?.reason).toBeNull();
+  });
 });

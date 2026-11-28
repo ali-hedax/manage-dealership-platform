@@ -51,7 +51,7 @@ export * from './assessment-supplies';
 export * from './vehicle-identity';
 export * from './reception-stats';
 export * from './service-classify';
-export { DECLINED_LABOUR_STATES, DEFAULT_JOB_CODES } from './service-classify.config';
+export { DECLINED_LABOUR_STATES, DEFAULT_JOB_CODES, SPECIAL_AID_LABOUR_STATES } from './service-classify.config';
 export * from './night-list';
 export * from './stoppage';
 export * from './guest-mask';

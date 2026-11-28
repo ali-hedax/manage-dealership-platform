@@ -1,4 +1,4 @@
-import { DECLINED_LABOUR_STATES, DEFAULT_JOB_CODES, JOB_CLASSIFICATION_CONFIG } from './service-classify.config';
+import { DECLINED_LABOUR_STATES, DEFAULT_JOB_CODES, JOB_CLASSIFICATION_CONFIG, SPECIAL_AID_LABOUR_STATES } from './service-classify.config';
 
 export interface JobClassification {
   /** Any service (5000/10000/20000, oil and filter, quick service) or engine oil / oil filter used. */
@@ -92,6 +92,8 @@ export interface JobCodes {
 export interface CardClassification extends JobClassification {
   /** Labour lines the customer refused («عدم تمایل به انجام تعمیر»): shown apart, never counted as work. */
   declined: number;
+  /** Labour lines waiting for special aid («امداد ویژه»): not technical repair done (H4 decision 1). */
+  specialAid: number;
 }
 
 const codeKey = (code: string | null | undefined) => normalizePersianJobText(code ?? '').replace(/\s+/g, '').toUpperCase();
@@ -104,6 +106,11 @@ export const isDeclinedLabour = (state: string | null | undefined) => {
   const s = normalizePersianJobText(state ?? '');
   return !!s && declinedStates.some((d) => s.includes(d));
 };
+const specialAidStates = SPECIAL_AID_LABOUR_STATES.map(normalizePersianJobText);
+export const isSpecialAidLabour = (state: string | null | undefined) => {
+  const s = normalizePersianJobText(state ?? '');
+  return !!s && specialAidStates.some((d) => s.includes(d));
+};
 
 /**
  * Oil change / repair / quick service of one car (owner, H4 part 1, 2026-11-28). Codes first:
@@ -112,14 +119,15 @@ export const isDeclinedLabour = (state: string | null | undefined) => {
  *   never «no work»;
  * - a used part with an oil code (base part number) is an oil change.
  * The names only add to the codes (a periodic service or oil named in the line). A line the customer
- * refused is left out and counted in `declined`. Not exclusive: a car can be both.
+ * refused is left out and counted in `declined`; a line waiting for special aid («امداد ویژه») is not
+ * repair done and is counted in `specialAid`. Not exclusive: a car can be both.
  */
 export function classifyCard(labour: readonly JobLabourLine[], parts: readonly JobPartLine[], hall: string | null | undefined, codes: JobCodes = DEFAULT_JOB_CODES): CardClassification {
   const service = new Set(codes.serviceLabourCodes.map(codeKey));
   const quickGroups = new Set(codes.quickServiceGroups.map(codeKey));
   const oilParts = new Set(codes.oilPartCodes.map(partKey));
   const reasons: string[] = [];
-  let oilChange = false, repair = false, quickService = false, declined = 0;
+  let oilChange = false, repair = false, quickService = false, declined = 0, specialAid = 0;
   for (const line of labour) {
     const code = codeKey(line.code), name = line.name?.trim() ? line.name : null;
     if (!code && !name) continue;
@@ -127,6 +135,11 @@ export function classifyCard(labour: readonly JobLabourLine[], parts: readonly J
     if (isDeclinedLabour(line.state)) {
       declined += 1;
       reasons.push(`اجرت با «عدم تمایل»: ${label}`);
+      continue;
+    }
+    if (isSpecialAidLabour(line.state)) {
+      specialAid += 1;
+      reasons.push(`اجرت منتظر امداد ویژه: ${label}`);
       continue;
     }
     const group = defectGroupCode(line.group);
@@ -151,7 +164,7 @@ export function classifyCard(labour: readonly JobLabourLine[], parts: readonly J
     quickService = true;
     reasons.push(`سالن تعمیرات: ${hall}`);
   }
-  return { oilChange, repair, quickService, reasons, declined };
+  return { oilChange, repair, quickService, reasons, declined, specialAid };
 }
 
 /**

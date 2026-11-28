@@ -120,3 +120,10 @@ test('H4: آمار روز با کدها؛ خودرو با سرویس و تعوی
   assert.equal(stats.declinedLabour, 1);
   assert.deepEqual({ repair: stats.repair, service: stats.service, unclassified: stats.unclassified }, { repair: 1, service: 1, unclassified: 2 });
 });
+
+test('H4 تصمیم ۱: اجرت «امداد ویژه» تعمیر فنی انجام‌شده نیست؛ کارت سرویس سریع با آن فقط تعویض روغن است', () => {
+  const c = classifyCard([{ code: '10165C0', group: QUICK, state: 'نهایی' }, { code: '91117S1', group: QUICK }, { code: '53200C9', group: '530310 - چراغ روشنائی در روز', state: 'امداد ویژه' }], [{ code: '07707016' }], null);
+  assert.deepEqual({ ...job(c), specialAid: c.specialAid }, { oilChange: true, repair: false, quickService: true, declined: 0, specialAid: 1 });
+  const stats = receptionDayStats('2026-11-28', [{ receptionist: 'الف', codes: ['53200C9'], labour: [{ code: '53200C9', state: 'امداد ویژه' }], parts: [], vehicleKey: 'car-1' }], []);
+  assert.deepEqual({ repair: stats.jobs.technicalRepair, none: stats.jobs.none, specialAidLabour: stats.specialAidLabour }, { repair: 0, none: 1, specialAidLabour: 1 });
+});

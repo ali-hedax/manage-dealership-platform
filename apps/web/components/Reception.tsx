@@ -70,6 +70,7 @@ export function ReceptionStats() {
         <span className="m-tag">تعمیراتی {faNum(data.jobs.technicalRepair)}</span>
         <span className="m-tag ok">تعویض روغن {faNum(data.jobs.oilChange)}</span>
         {data.jobs.none > 0 && <span className="m-tag mute" title="هنوز اجرت یا قطعهٔ روغنی روی کارت نیست">{RECEPTION_KIND_LABELS.unclassified} {faNum(data.jobs.none)}</span>}
+        {data.specialAidLabour > 0 && <span className="m-tag wait" data-testid="special-aid-labour" title="اجرت‌هایی که منتظر امداد ویژه‌اند؛ تعمیر فنی انجام‌شده حساب نشده‌اند">منتظر امداد ویژه {faNum(data.specialAidLabour)}</span>}
         {data.declinedLabour > 0 && <span className="m-tag wait" data-testid="declined-labour" title="اجرت‌هایی که مشتری انجامشان را نخواست؛ در شمارش کار نیامده‌اند">عدم تمایل به تعمیر {faNum(data.declinedLabour)}</span>}
       </div>
       <DataGaps stats={data} />

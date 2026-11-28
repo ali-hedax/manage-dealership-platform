@@ -127,6 +127,8 @@ export interface ReceptionDayStats extends ReceptionCounts {
   dataGaps: ReceptionDataGaps;
   /** Labour lines the customer refused («عدم تمایل به انجام تعمیر») on these receptions: never counted as work. */
   declinedLabour: number;
+  /** Labour lines waiting for special aid («امداد ویژه»): not counted as technical repair done. */
+  specialAidLabour: number;
 }
 
 export const UNKNOWN_RECEPTIONIST = 'ثبت نشده';
@@ -166,7 +168,7 @@ function countCars(cars: Map<string, CarDay>, into: ReceptionJobCounts, codes: J
 export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow[], serviceCodes: readonly string[], codes: Partial<Omit<JobCodes, 'serviceLabourCodes'>> = {}): ReceptionDayStats {
   const service = new Set(serviceCodes.map(normalizeLaborCode).filter(Boolean));
   const jobCodes: JobCodes = { serviceLabourCodes: [...service], quickServiceGroups: codes.quickServiceGroups ?? DEFAULT_JOB_CODES.quickServiceGroups, oilPartCodes: codes.oilPartCodes ?? DEFAULT_JOB_CODES.oilPartCodes };
-  let declinedLabour = 0;
+  let declinedLabour = 0, specialAidLabour = 0;
   const all = empty();
   const people = new Map<string, ReceptionCounts>();
   const cars = new Map<string, CarDay>();
@@ -178,6 +180,7 @@ export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow
     if (row.labour) {
       const own = classifyCard(row.labour, [], null, jobCodes);
       declinedLabour += own.declined;
+      specialAidLabour += own.specialAid;
       kind = own.repair ? 'repair' : own.oilChange ? 'service' : 'unclassified';
     }
     const name = row.receptionist?.replace(/\s+/g, ' ').trim() || UNKNOWN_RECEPTIONIST;
@@ -206,5 +209,5 @@ export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow
     countCars(p.cars, counts, jobCodes);
     return { name, total: p.total, ...counts };
   }).sort(byName);
-  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0, jobs, jobsByReceptionist, dataGaps, declinedLabour };
+  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0, jobs, jobsByReceptionist, dataGaps, declinedLabour, specialAidLabour };
 }

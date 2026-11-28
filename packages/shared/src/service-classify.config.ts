@@ -39,3 +39,9 @@ export const DEFAULT_JOB_CODES = {
 
 /** Labour state in کسب‌وکار (VDrerStateDesc) that means the customer refused the work: shown apart, never counted as work. */
 export const DECLINED_LABOUR_STATES = ['عدم تمایل به انجام تعمیر'] as const;
+
+/**
+ * Labour state «امداد ویژه»: the work waits for a special-aid part, so it is not technical repair done
+ * (owner, 2026-11-28, H4 decision 1). Counted apart; the car's night-list reason is «منتظر امداد ویژه».
+ */
+export const SPECIAL_AID_LABOUR_STATES = ['امداد ویژه'] as const;

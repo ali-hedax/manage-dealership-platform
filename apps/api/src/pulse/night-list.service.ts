@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import {
-  compareNightRows, daysInShop, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, NIGHT_LIST_KIND_LABELS, NIGHT_LIST_KINDS, nightListLate, nightListTimes, nightListMissing, nightListSheet, normalizeRoles, officialLabourName, shortVehicleName, toPersianDigits,
+  compareNightRows, daysInShop, isSpecialAidLabour, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, NIGHT_LIST_KIND_LABELS, NIGHT_LIST_KINDS, nightListLate, nightListTimes, nightListMissing, nightListSheet, normalizeRoles, officialLabourName, shortVehicleName, toPersianDigits,
   type NightListItemInput, type NightListKind, type NightListPending, type NightListReason, type NightListRow, type NightListStatus, type NightListView, type NightStationOption, type ReceptionDayStats,
 } from '@manage/shared';
 import { AuditService } from '../audit/audit.service';
@@ -16,6 +16,8 @@ import { nightListItems, nightLists, notifications, receptionRepairs, receptions
 import { writeWorkbook } from '../parts/xlsx';
 import { calendarAt } from '../workshop/work-calendar';
 import { realReceptionsOnly } from './demo-data';
+import { officialText } from './kasb-fields';
+import { KASB_LINE_TEXT } from './kasb-protocol';
 import { admissionKey } from './pulse-map';
 import { ReceptionService } from './reception.service';
 
@@ -163,15 +165,22 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       const open = await tx.select({ id: receptions.id, statusCode: receptions.statusCode, statusText: receptions.statusText }).from(receptions)
         .where(and(eq(receptions.tenantId, tenantId), lt(receptions.admittedAt, cutoff), ofKind(kind), ...(await realReceptionsOnly(tx, tenantId)),
           or(eq(receptions.isOpen, true), gte(receptions.releasedAt, endOfDay(day)))));
+      // Reasons known without asking anyone (H4): «آماده تحویل» first (the car is done), then a labour line
+      // still waiting for special aid («امداد ویژه», owner decision 1).
       const ready = new Set(open.filter(readyForCustomer).map((r) => r.id));
+      const openIds = open.map((r) => r.id);
+      const waitingAid = new Set(openIds.length ? (await tx.select({ receptionId: receptionRepairs.receptionId, state: officialText(receptionRepairs.official, KASB_LINE_TEXT.repairState) }).from(receptionRepairs)
+        .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, openIds), isNull(receptionRepairs.removedAt))))
+        .filter((l) => isSpecialAidLabour(l.state)).map((l) => l.receptionId) : []);
+      const autoReason = (id: string): NightListReason | null => (ready.has(id) ? 'ready_customer_absent' : waitingAid.has(id) ? 'waiting_special_aid' : null);
       const items = await tx.select({ id: nightListItems.id, receptionId: nightListItems.receptionId, reason: nightListItems.reason, carried: nightListItems.carried, setBy: nightListItems.setBy, version: nightListItems.version })
         .from(nightListItems).where(eq(nightListItems.listId, list.id));
       const present = new Set(items.map((r) => r.receptionId));
       const missing = open.map((r) => r.id).filter((id) => !present.has(id));
-      // A car that became «آماده تحویل» / «در انتظار مراجعه مشتری»: its reason follows, unless staff chose one today.
-      const nowReady = items.filter((i) => ready.has(i.receptionId) && i.reason !== 'ready_customer_absent' && (!i.reason || i.carried || !i.setBy));
+      // A car whose known reason changed («آماده تحویل», «منتظر امداد ویژه»): the reason follows, unless staff chose one today.
+      const nowReady = items.filter((i) => { const a = autoReason(i.receptionId); return !!a && i.reason !== a && (!i.reason || i.carried || !i.setBy); });
       for (const i of nowReady) {
-        await tx.update(nightListItems).set({ reason: 'ready_customer_absent', reasonNote: null, carried: false, version: i.version + 1 })
+        await tx.update(nightListItems).set({ reason: autoReason(i.receptionId), reasonNote: null, carried: false, version: i.version + 1 })
           .where(and(eq(nightListItems.tenantId, tenantId), eq(nightListItems.id, i.id)));
       }
       if (missing.length) {
@@ -184,7 +193,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
         for (const e of earlier) if (!previous.has(e.receptionId)) previous.set(e.receptionId, e);
         await tx.insert(nightListItems).values(missing.map((receptionId) => {
           const p = previous.get(receptionId);
-          if (ready.has(receptionId)) return { id: newId(), tenantId, listId: list.id, receptionId, reason: 'ready_customer_absent', reasonNote: null, currentStation: p?.currentStation ?? null, nextStations: p?.nextStations ?? null, carried: false, isTest };
+          const auto = autoReason(receptionId);
+          if (auto) return { id: newId(), tenantId, listId: list.id, receptionId, reason: auto, reasonNote: null, currentStation: p?.currentStation ?? null, nextStations: p?.nextStations ?? null, carried: false, isTest };
           return { id: newId(), tenantId, listId: list.id, receptionId, reason: p?.reason ?? null, reasonNote: p?.reasonNote ?? null, currentStation: p?.currentStation ?? null, nextStations: p?.nextStations ?? null, carried: !!p?.reason, isTest };
         })).onConflictDoNothing();
       }
@@ -193,7 +203,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
           .where(and(eq(nightLists.tenantId, tenantId), eq(nightLists.id, list.id)));
       }
       if (created.length || missing.length || nowReady.length) {
-        if (actor) await this.audit.record(tx, actor, { entityType: 'night_list', entityId: list.id, action: 'reception.night_list_generated', after: { day, kind, added: missing.length, readyForCustomer: nowReady.length } });
+        if (actor) await this.audit.record(tx, actor, { entityType: 'night_list', entityId: list.id, action: 'reception.night_list_generated', after: { day, kind, added: missing.length, reasonsFromStatus: nowReady.length } });
       }
       return created.length > 0;
     });
