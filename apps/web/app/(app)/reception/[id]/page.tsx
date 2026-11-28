@@ -52,6 +52,7 @@ export default function ReceptionFolderPage() {
           <span className={`m-tag ${r.isOpen ? 'mute' : 'ok'}`}>{r.statusText ?? r.statusCode ?? (r.isOpen ? 'باز' : 'ترخیص‌شده')}</span>
           {!r.isOpen && r.admission.releasedAt && <span className="small muted">ترخیص {day(r.admission.releasedAt)}</span>}
           {r.case && <Link className="m-tag wait" href={`/cases/${r.case.id}`}>پروندهٔ تصادفی {t(r.case.caseNumber)}</Link>}
+          {r.linkState === 'rejected' && <span className="m-tag mute" title="کسب‌وکار «احتمال تصادفی» زده بود؛ کارشناس تصادفات آن را رد کرد">پیشنهاد تصادفی رد شد</span>}
           {r.linkState === 'ambiguous' && <span className="m-tag stop" title="چند پروندهٔ تصادفی با این پذیرش یا VIN جور شد؛ مدیر سیستم بررسی می‌کند">تطبیق تصادفی نیازمند بررسی</span>}
           <span className="xs muted">آخرین خواندن از کسب‌وکار: {day(r.lastSeenAt)}</span>
         </div>

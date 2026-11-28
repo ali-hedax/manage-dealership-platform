@@ -639,7 +639,8 @@ export class PulseEngine {
       const releasedAt = closed ? v.exitAt ?? old.releasedAt ?? now : null;
       await tx.update(receptions).set({
         ...fields, releasedAt, lastSeenAt: now, updatedAt: now, version: old.version + 1,
-        ...(link ? { caseId: link.state === 'linked' ? link.caseIds[0]! : null, linkState: link.state } : {}),
+        // A suggestion the accident expert rejected stays rejected unless a case now matches exactly (H4 part 6).
+        ...(link ? { caseId: link.state === 'linked' ? link.caseIds[0]! : null, linkState: link.state === 'linked' || old.linkState !== 'rejected' ? link.state : 'rejected' } : {}),
       }).where(eq(receptions.id, old.id));
       if (old.statusCode !== v.statusCode) await this.event(tx, conn, run, old.id, 'status', { from: old.statusText ?? old.statusCode, to: statusText ?? v.statusCode });
       if (old.isOpen && closed) await this.event(tx, conn, run, old.id, 'released', null);

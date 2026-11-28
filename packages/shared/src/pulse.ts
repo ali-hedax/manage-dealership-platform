@@ -490,7 +490,8 @@ export interface ReceptionDetail {
   notes: ReceptionNote[];
   events: ReceptionEvent[];
   case: { id: string; caseNumber: string } | null;
-  linkState: 'none' | 'linked' | 'ambiguous';
+  /** rejected: the accident expert said this flagged card is not an accident case (H4 part 6). */
+  linkState: 'none' | 'linked' | 'ambiguous' | 'rejected';
 }
 
 const contractorRefine = (v: { contractorId?: string | null; contractorName?: string }) => !!v.contractorId || !!v.contractorName?.trim();
@@ -523,3 +524,35 @@ export const receptionInvoiceSchema = z.object({
   dataBase64: z.string().min(1).max(4_200_000).regex(/^[A-Za-z0-9+/]+={0,2}$/),
 }).strict();
 export const receptionNoteSchema = z.object({ text: z.string().trim().min(2, 'یادداشت خالی است').max(2000) }).strict();
+
+/**
+ * «پیشنهاد تصادفی» (H4 part 6, owner 2026-11-28): کسب‌وکار's «احتمال تصادفی» flag is not reliable, so a
+ * flagged open card never becomes a case by itself. It waits on the accident expert's desk: one click
+ * links it to an accident case, one click rejects it.
+ */
+export interface AccidentSuggestionCase {
+  id: string;
+  caseNumber: string;
+  plate: string | null;
+  vehicle: string | null;
+  /** Same VIN, chassis or plate as the card. */
+  matches: boolean;
+}
+export interface AccidentSuggestion {
+  receptionId: string;
+  version: number;
+  admissionNo: string | null;
+  plate: string | null;
+  vehicleName: string | null;
+  customerName: string | null;
+  admittedAt: string | null;
+  daysIn: number | null;
+  statusText: string | null;
+  /** Open cases of the same car first (matches), then the latest open cases. */
+  cases: AccidentSuggestionCase[];
+}
+export const accidentDecisionSchema = z.discriminatedUnion('decision', [
+  z.object({ decision: z.literal('confirm'), caseId: z.uuid(), expectedVersion: z.number().int().min(1) }).strict(),
+  z.object({ decision: z.literal('reject'), reason: z.string().trim().max(300).optional(), expectedVersion: z.number().int().min(1) }).strict(),
+]);
+export type AccidentDecisionInput = z.infer<typeof accidentDecisionSchema>;
