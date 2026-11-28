@@ -32,7 +32,8 @@ const FINGERPRINTS: Record<string, string> = {
   stock_reservations: `to_jsonb(t) - 'special_aid_item_id'`,
   users: `to_jsonb(t) - 'job_titles' - 'access_expires_at'`,
   notifications: `to_jsonb(t) - 'category' - 'urgent' - 'resolved_at' - 'resolved_by'`,
-  cases: 'to_jsonb(t)',
+  // is_demo (0044, H4): set on the cases of a test dealership, which this rehearsal's synthetic tenant is.
+  cases: `to_jsonb(t) - 'is_demo'`,
   part_requests: 'to_jsonb(t)',
   emdad_requests: 'to_jsonb(t)',
   reference_entries: 'to_jsonb(t)',
