@@ -264,6 +264,7 @@ Generated from controller decorators by `node scripts/check-docs.mjs --write`; C
 | POST | `/api/v1/pulse/commands` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/pulse/reception-import/:id/apply` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/pulse/reception-import/preview` | [source](../apps/api/src/pulse/pulse.controller.ts) |
+| POST | `/api/v1/pulse/sources/stoppages/columns` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/pulse/start` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/pulse/stop` | [source](../apps/api/src/pulse/pulse.controller.ts) |
 | POST | `/api/v1/reception/:id/accident-decision` | [source](../apps/api/src/pulse/pulse.controller.ts) |

@@ -105,8 +105,9 @@ export const DATA_SOURCES: Record<DataSourceKey, DataSourceDefinition> = {
     staleAfterMinutes: 2 * 24 * 60,
     guide: [
       'در کسب‌وکار مسیر «بازرگانی ← گزارش ← گزارشات انبار ← گزارش توقف خودرو» را باز کنید.',
-      'بازه را از یک ماه گذشته تا امروز بگذارید و خروجی Excel بگیرید؛ فایل را ویرایش نکنید.',
-      'در منیج «خودروهای متوقف ← بارگذاری گزارش توقف خودرو» فایل را بیندازید، پیش‌نمایش را ببینید و تأیید کنید.',
+      'بازه را از یک ماه گذشته تا امروز بگذارید و خروجی «گزارش جزئی اکسل» بگیرید؛ فایل را ویرایش نکنید.',
+      'در همین صفحه «پیش‌نمایش ستون‌های گزارش توقف» فایل را بیندازید تا ستون‌هایش را ببینید (چیزی ثبت نمی‌شود).',
+      'اگر قالب همان گزارش قبلی باشد، در «خودروهای متوقف ← بارگذاری گزارش توقف خودرو» آن را بیندازید، پیش‌نمایش را ببینید و تأیید کنید.',
     ],
     manualHref: '/reception/stoppage',
   },
@@ -271,4 +272,25 @@ export interface ReceptionImportPreview {
   counts: { new: number; update: number; unchanged: number; error: number; labour: number; parts: number };
   createdAt: string;
   appliedAt: string | null;
+}
+
+/**
+ * «گزارش توقف خودرو» → «گزارش جزئی اکسل» (H4 part 7, owner 2026-11-28): its columns are not known yet,
+ * so the file is only read for its column names — never mapped or stored, and no value is returned.
+ */
+export interface StoppageColumnsPreview {
+  fileName: string;
+  /** xlsx, spreadsheetml (an .xls that is XML) or html_table (an .xls that is a web page). */
+  format: string;
+  sheetName: string | null;
+  /** 1-based row of the column names; null when no row looks like one. */
+  headerRow: number | null;
+  /** Data rows under the column names. */
+  rows: number;
+  /** Each column name with how many data rows have a value in it (never the values). */
+  columns: { header: string; filled: number }[];
+  /** Whether the existing «خودروهای متوقف» import reads this layout as it is. */
+  importer: { readable: boolean; problem: string | null };
+  /** Why the file could not be read at all. */
+  blocked: string | null;
 }

@@ -10,6 +10,7 @@ import type { Actor } from '../auth/auth.types';
 import { CurrentActor, RequirePermissions } from '../auth/decorators';
 import { IdParam } from '../common/params';
 import { ZodPipe } from '../common/zod.pipe';
+import { stoppageColumns } from '../stoppages/stoppage-columns';
 import { AccidentSuggestionsService } from './accident-suggestions.service';
 import { NightListService } from './night-list.service';
 import { PulseService } from './pulse.service';
@@ -27,6 +28,10 @@ export class PulseController {
   sourcesView(@CurrentActor() actor: Actor) { return this.sources.view(actor); }
 
   /** Confirms the column of a repair-card field among the columns Pulse observed (never a typed guess). */
+  /** «گزارش توقف خودرو → گزارش جزئی اکسل» (H4 part 7): column names only; nothing mapped or stored. */
+  @RequirePermissions('integration.manage') @Post('sources/stoppages/columns')
+  stoppageColumns(@Body(new ZodPipe(receptionImportFileSchema)) body: ReceptionImportFileInput) { return stoppageColumns(body.fileName, Buffer.from(body.fileBase64, 'base64')); }
+
   @RequirePermissions('integration.manage') @Put('field-map')
   fieldMap(@CurrentActor() actor: Actor, @Body(new ZodPipe(kasbFieldMapSchema)) body: KasbFieldMapInput) { return this.sources.saveFieldMap(actor, body); }
 
