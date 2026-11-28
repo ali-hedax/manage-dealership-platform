@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
 import {
   compareNightRows, daysInShop, isWorkingDay, NIGHT_LIST_DEADLINE, NIGHT_LIST_GENERATE_AT, NIGHT_LIST_KIND_LABELS, NIGHT_LIST_KINDS, nightListLate, nightListTimes, nightListMissing, nightListSheet, normalizeRoles, officialLabourName, shortVehicleName, toPersianDigits,
   type NightListItemInput, type NightListKind, type NightListPending, type NightListReason, type NightListRow, type NightListStatus, type NightListView, type NightStationOption, type ReceptionDayStats,
@@ -25,7 +25,7 @@ const kindQuery = (kind: NightListKind) => (kind === 'repair' ? '' : `&kind=${ki
 const ofKind = (kind: NightListKind) => (kind === 'accident' ? isNotNull(receptions.caseId) : isNull(receptions.caseId));
 
 function qualified(r: typeof receptions.$inferSelect, cutoff: Date): boolean {
-  return !!r.admittedAt && r.admittedAt < cutoff && (r.isOpen || (!!r.releasedAt && r.releasedAt > cutoff));
+  return !!r.admittedAt && r.admittedAt < cutoff && r.isOpen;
 }
 
 /**
@@ -134,8 +134,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
       if (!list) return false;
       if (list.status !== 'draft') return created.length > 0;
       const open = await tx.select({ id: receptions.id }).from(receptions)
-        .where(and(eq(receptions.tenantId, tenantId), lt(receptions.admittedAt, cutoff), ofKind(kind),
-          or(eq(receptions.isOpen, true), gt(receptions.releasedAt, cutoff))));
+        .where(and(eq(receptions.tenantId, tenantId), lt(receptions.admittedAt, cutoff), ofKind(kind), eq(receptions.isOpen, true)));
       const present = new Set((await tx.select({ receptionId: nightListItems.receptionId }).from(nightListItems).where(eq(nightListItems.listId, list.id))).map((r) => r.receptionId));
       const missing = open.map((r) => r.id).filter((id) => !present.has(id));
       if (missing.length) {

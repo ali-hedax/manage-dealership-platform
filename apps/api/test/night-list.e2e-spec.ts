@@ -112,12 +112,16 @@ describe('Nightly list of the reception module', () => {
   });
 
   it('on a half-day Thursday builds the list at 12:30 and is due at 13:15 (work calendar), not at 18:00', async () => {
+    const releasedAfterBuild = await reception(91, tehranAt(THURSDAY, '09:00'));
     const before = (await reader.post('/reception/night-list', { day: THURSDAY }).expect(201)).body as NightListPending;
     expect(before).toMatchObject({ status: 'not_generated', workingDay: true, generatesAt: tehranAt(THURSDAY, '12:30').toISOString(), previousDay: DAY2 });
     expect((await service.tick(tehranAt(THURSDAY, '12:29'))).generated).toBe(0);
     expect((await service.tick(tehranAt(THURSDAY, '12:30'))).generated).toBeGreaterThanOrEqual(1);
+    await db().update(receptions).set({ isOpen: false, releasedAt: tehranAt(THURSDAY, '12:31') }).where(eq(receptions.id, releasedAfterBuild));
     const list = await view(reader, THURSDAY);
     expect(list).toMatchObject({ status: 'draft', deadline: tehranAt(THURSDAY, '13:15').toISOString(), late: true, previousDay: DAY2, nextDay: null });
+    expect(list.rows.some((r) => r.receptionId === releasedAfterBuild)).toBe(false);
+    expect(list.excluded).toContainEqual(expect.objectContaining({ receptionId: releasedAfterBuild, isOpen: false }));
     const [manager] = await db().select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.username, 'night-manager')));
     expect((await service.tick(tehranAt(THURSDAY, '13:14'))).alerted).toBe(0);
     expect((await service.tick(tehranAt(THURSDAY, '13:16'))).alerted).toBeGreaterThanOrEqual(1);
