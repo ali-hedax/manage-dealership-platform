@@ -252,15 +252,23 @@ export function diffLines<T extends LineBase>(stored: readonly StoredLine[], inc
 // ------------------------------------------------------------ status texts
 
 /** Official texts of the admission status codes from Sec/Code (domain CAR_STATE_REC). */
-export function statusTexts(table: KasbTable): Record<string, string> {
-  const out: Record<string, string> = {};
+/**
+ * Every code domain of the reference answer (Sec/Code): domain → code → official text (H4 part 3). The
+ * same answer Pulse already reads for the status texts; nothing new is asked of کسب‌وکار.
+ */
+export function codeDomains(table: KasbTable): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
   for (const row of table.rows) {
-    if (pickText(row, CODE_DOMAIN_COLUMNS) !== STATUS_DOMAIN) continue;
+    const domain = pickText(row, CODE_DOMAIN_COLUMNS);
     const code = idText(row[CODE_VALUE_COLUMNS.find((c) => row[c] != null) ?? CODE_VALUE_COLUMNS[0]]);
     const text = pickText(row, CODE_TEXT_COLUMNS);
-    if (code && text) out[code] = text;
+    if (domain && code && text) (out[domain] ??= {})[code] = text;
   }
   return out;
+}
+
+export function statusTexts(table: KasbTable): Record<string, string> {
+  return codeDomains(table)[STATUS_DOMAIN] ?? {};
 }
 
 // ------------------------------------------------------------ days and hours (Tehran)

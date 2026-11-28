@@ -203,7 +203,13 @@ export const KASB_LINE_TEXT = {
   repairState: 'VDrerStateDesc',
   /** Part description from the parts catalogue. */
   partName: 'WgdsFarDes',
+  /** State text of the defect line and its group code and title. */
+  defectState: 'VDrefStateDesc',
+  defectGroupCode: 'VCode',
+  defectGroupTitle: 'GtrbDesc',
 } as const;
+/** «احتمال تصادفی» of a card (DrcdAccident): the owner's reading, 2026-11-28 (H4 part 3). */
+export const ACCIDENT_TEXT: Record<string, string> = { 1: 'بله', 2: 'خیر' };
 
 export const DEFECT = {
   line: 'DrefRef',

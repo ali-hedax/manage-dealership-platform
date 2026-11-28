@@ -1,5 +1,5 @@
 import { cleanText, flagOf, idText, kasbInstant, numberOf, parseTable, rowHash, stableJson } from './kasb-table';
-import { admissionKey, composePlate, diffLines, fullVinKey, isClosed, mapCard, mapPart, searchTextOf, statusTexts, withinWorkingHours, dayChunks, jalaliDay, tehranMidnight } from './pulse-map';
+import { admissionKey, codeDomains, composePlate, diffLines, fullVinKey, isClosed, mapCard, mapPart, searchTextOf, statusTexts, withinWorkingHours, dayChunks, jalaliDay, tehranMidnight } from './pulse-map';
 
 // Synthetic rows only (AGENTS.md): TESTVIN… VINs, 0900… phones, invented names.
 const STRUCTURE = ['DrcdRcd', 'DrcdDealerSeq', 'DrcdDocNo', 'DrcdRcptDate', 'DrcdRcptTime', 'DrcdCarSt', 'DrcdGchsChs', 'GchsVin', 'GctpDesc', 'WvmdDes', 'DrcdPlateSec', 'DrcdPlateAlph', 'DrcdPlateThr', 'DrcdPlateReg', 'DrcdCustName', 'DrcdOwnerMob', 'DrcdUpdDte', 'DrcdExtDte', 'DrcdNewColumn'];
@@ -104,6 +104,11 @@ describe('card mapping', () => {
   it('reads official status texts of CAR_STATE_REC only', () => {
     const codes = parseTable({ Structure: ['RvDomain', 'RvLowValue', 'RvMeaning'], Rows: [['CAR_STATE_REC', 3, 'در حال تعمير'], ['CAR_STATE_REC', '9', 'ترخيص'], ['OTHER', 3, 'x']] });
     expect(statusTexts(codes)).toEqual({ '3': 'در حال تعمیر', '9': 'ترخیص' });
+  });
+
+  it('H4 part 3: keeps every domain of the same answer (domain → code → text)', () => {
+    const codes = parseTable({ Structure: ['RvDomain', 'RvLowValue', 'RvMeaning'], Rows: [['CAR_STATE_REC', 3, 'در حال تعمير'], ['SOME_DOMAIN', 1, 'متن یک'], ['SOME_DOMAIN', '2', 'متن دو'], ['EMPTY', 1, null]] });
+    expect(codeDomains(codes)).toEqual({ CAR_STATE_REC: { '3': 'در حال تعمیر' }, SOME_DOMAIN: { '1': 'متن یک', '2': 'متن دو' } });
   });
 });
 

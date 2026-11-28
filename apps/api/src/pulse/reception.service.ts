@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import {
-  DEFAULT_JOB_CODES, daysInShop, isConsumedPart, LABOUR_LETTER_PATTERN, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
+  DEFAULT_JOB_CODES, daysInShop, isConsumedPart, isDeclinedLabour, LABOUR_LETTER_PATTERN, normalizeLaborCode, receptionDayStats, searchKey, shortVehicleName, TEHRAN_OFFSET_MINUTES,
   type JobLabourLine, type JobPartLine, type ReceptionDayStats, type ReceptionSettings, type ReceptionSettingsInput,
   type ReceptionDetail, type ReceptionEvent, type ReceptionEventKind, type ReceptionExternalState, type ReceptionExternalUpdateInput, type ReceptionExternalWork as ExternalWorkView, type ReceptionExternalWorkInput, type ReceptionList, type ReceptionSearchInput,
 } from '@manage/shared';
@@ -15,7 +15,7 @@ import { DATABASE, type DatabaseHandle, type DbOrTx } from '../db/database';
 import { cases, externalContractors, pulseConnections, tenants, receptionDefects, receptionDocuments, receptionEvents, receptionExternalWork, receptionNotes, receptionParts, receptionRepairs, receptions, users } from '../db/schema';
 import { realReceptionsOnly } from './demo-data';
 import { officialText } from './kasb-fields';
-import { CARD, KASB_LINE_TEXT } from './kasb-protocol';
+import { ACCIDENT_TEXT, CARD, KASB_LINE_TEXT } from './kasb-protocol';
 import { cleanText, kasbInstant } from './kasb-table';
 import { cardDescription, tehranMidnight } from './pulse-map';
 
@@ -247,7 +247,7 @@ export class ReceptionService {
         entranceKm: r.entranceKm,
         deliveredOn: cleanText(official[CARD.deliveredOn]),
         goldCard: goldType || goldId ? { type: goldType, id: goldId, expires: goldExpires } : null,
-        accident: cleanText(official[CARD.accident]),
+        accident: ((v) => (v ? ACCIDENT_TEXT[v] ?? v : null))(cleanText(official[CARD.accident])),
       },
       customer: {
         name: r.customerName,
@@ -273,8 +273,17 @@ export class ReceptionService {
         hall: r.hall,
       },
       source: r.source === 'manual' ? 'manual' : 'pulse',
-      defects: defects.map((d) => ({ id: d.id, lineId: d.kasbLineId, customerText: d.customerText, expertText: d.expertText, state: d.state, type: d.type, removedAt: iso(d.removedAt) })),
-      repairs: repairs.map((x) => ({ id: x.id, lineId: x.kasbLineId, code: x.code, description: x.description, name: x.name ?? x.description, technician: x.technician, station: x.station, manual: x.kasbLineId.startsWith('m:'), state: x.state, finalPriceRial: x.finalPriceRial, warranty: x.warranty, removedAt: iso(x.removedAt) })),
+      defects: defects.map((d) => {
+        const o = d.official ?? {};
+        return { id: d.id, lineId: d.kasbLineId, customerText: d.customerText, expertText: d.expertText, state: cleanText(o[KASB_LINE_TEXT.defectState]) ?? d.state, type: d.type,
+          groupCode: cleanText(o[KASB_LINE_TEXT.defectGroupCode]), groupTitle: cleanText(o[KASB_LINE_TEXT.defectGroupTitle]), removedAt: iso(d.removedAt) };
+      }),
+      repairs: repairs.map((x) => {
+        const o = x.official ?? {};
+        const stateText = cleanText(o[KASB_LINE_TEXT.repairState]);
+        return { id: x.id, lineId: x.kasbLineId, code: x.code, description: x.description, name: x.name ?? x.description, technician: x.technician, station: x.station, manual: x.kasbLineId.startsWith('m:'),
+          state: stateText ?? x.state, stateCode: x.state, declined: isDeclinedLabour(stateText), group: cleanText(o[KASB_LINE_TEXT.repairGroup]), finalPriceRial: x.finalPriceRial, warranty: x.warranty, removedAt: iso(x.removedAt) };
+      }),
       parts: parts.map((p) => ({ id: p.id, lineId: p.kasbLineId, name: p.name, code: p.code, qtyRequested: p.qtyRequested, qtyFinal: p.qtyFinal, unitPriceRial: p.unitPriceRial, state: p.state, specialAid: p.specialAid, warranty: p.warranty, rejectReason: p.rejectReason, removedAt: iso(p.removedAt) })),
       externalWork: works.map(({ w, by }) => this.workView(w, by ?? null, docs.filter((d) => d.workId === w.id))),
       notes: notes.map(({ n, by }) => ({ id: n.id, text: n.text, createdAt: n.createdAt.toISOString(), createdByName: by ?? null })),

@@ -117,6 +117,8 @@ export interface PulseCursor {
   codesAt?: string;
   /** Official text of each admission status code (domain CAR_STATE_REC of Sec/Code). */
   statusTexts?: Record<string, string>;
+  /** Every domain of the same reference answer: domain → code → official text (H4 part 3). */
+  codeDomains?: Record<string, Record<string, string>>;
   /** Tehran day of the last staged stock report, and which warehouse it was. */
   stockDay?: string;
   stockTriedAt?: string;
@@ -360,7 +362,13 @@ export interface ReceptionRepair {
   station: string | null;
   /** «دستی»: typed into the manual «پذیرش و ریز کارت» file, not read by Pulse. */
   manual: boolean;
+  /** State as کسب‌وکار writes it («نهایی», «پیش نویس», «امداد ویژه» …; H4 part 3), else its code. */
   state: string | null;
+  stateCode: string | null;
+  /** «عدم تمایل به انجام تعمیر»: shown apart, never counted as work done. */
+  declined: boolean;
+  /** Defect group of the line, e.g. «910100 - سرویس سریع (کوئیک سرویس)». */
+  group: string | null;
   finalPriceRial: number | null;
   warranty: string | null;
   removedAt: string | null;
@@ -370,8 +378,12 @@ export interface ReceptionDefect {
   lineId: string;
   customerText: string | null;
   expertText: string | null;
+  /** State as کسب‌وکار writes it (H4 part 3), else its code. */
   state: string | null;
   type: string | null;
+  /** Defect group code and title (e.g. 910100 · «سرویس سریع (کوئیک سرویس)»). */
+  groupCode: string | null;
+  groupTitle: string | null;
   removedAt: string | null;
 }
 
