@@ -142,11 +142,11 @@ export class ReceptionService {
     const tenantId = actor.user.tenantId;
     const day = date ?? tehranDayKey(new Date());
     const start = tehranDayStart(day);
-    const rows = await this.db.select({ id: receptions.id, receptionist: receptions.receptionist }).from(receptions)
+    const rows = await this.db.select({ id: receptions.id, receptionist: receptions.receptionist, vin: receptions.vin, chassis: receptions.chassis, plate: receptions.plate, hall: receptions.hall, linesReadAt: receptions.linesReadAt }).from(receptions)
       .where(and(eq(receptions.tenantId, tenantId), gte(receptions.admittedAt, start), lt(receptions.admittedAt, new Date(start.getTime() + DAY_MS))));
     const ids = rows.map((r) => r.id);
     const lines = ids.length
-      ? await this.db.select({ receptionId: receptionRepairs.receptionId, code: receptionRepairs.code, description: receptionRepairs.description }).from(receptionRepairs)
+      ? await this.db.select({ receptionId: receptionRepairs.receptionId, code: receptionRepairs.code, name: receptionRepairs.name, description: receptionRepairs.description }).from(receptionRepairs)
         .where(and(eq(receptionRepairs.tenantId, tenantId), inArray(receptionRepairs.receptionId, ids), isNull(receptionRepairs.removedAt)))
       : [];
     // Parts on the card, for «تعویض روغن» (owner, 2026-11-27): only those actually used count (isConsumedPart).
@@ -157,12 +157,28 @@ export class ReceptionService {
     const push = <T>(m: Map<string, T[]>, k: string, v: T) => m.set(k, [...(m.get(k) ?? []), v]);
     const codesOf = new Map<string, (string | null)[]>();
     const labourOf = new Map<string, (string | null)[]>();
-    for (const l of lines) { push(codesOf, l.receptionId, l.code); push(labourOf, l.receptionId, l.description); }
+    const unnamedLabour = new Map<string, number>();
+    const letter = new RegExp(LABOUR_LETTER_PATTERN, 'u');
+    for (const l of lines) {
+      push(codesOf, l.receptionId, l.code);
+      const name = l.name ?? l.description;
+      // A line with only a code in the source is counted as missing data, never classified by guess.
+      if (name && letter.test(name)) push(labourOf, l.receptionId, name);
+      else unnamedLabour.set(l.receptionId, (unnamedLabour.get(l.receptionId) ?? 0) + 1);
+    }
     const partsOf = new Map<string, (string | null)[]>();
-    for (const p of parts) if (isConsumedPart(p)) push(partsOf, p.receptionId, p.name);
+    const unnamedParts = new Map<string, number>();
+    for (const p of parts) {
+      if (!isConsumedPart(p)) continue;
+      if (p.name?.trim()) push(partsOf, p.receptionId, p.name);
+      else unnamedParts.set(p.receptionId, (unnamedParts.get(p.receptionId) ?? 0) + 1);
+    }
     const { serviceLaborCodes } = await this.settings(actor);
     return receptionDayStats(day, rows.map((r) => ({
       receptionist: r.receptionist, codes: codesOf.get(r.id) ?? [], labourNames: labourOf.get(r.id) ?? [], consumedParts: partsOf.get(r.id) ?? [],
+      // The same car twice that day (two cards) is one car in each job count (S09).
+      vehicleKey: r.vin || r.chassis || r.plate || null, hall: r.hall, linesRead: !!r.linesReadAt,
+      labourWithoutName: unnamedLabour.get(r.id) ?? 0, partsWithoutName: unnamedParts.get(r.id) ?? 0,
     })), serviceLaborCodes);
   }
 
@@ -236,9 +252,11 @@ export class ReceptionService {
         warrantyStatus: cleanText(official[CARD.warrantyStatus]),
         costEstimateRial: num(official[CARD.costEstimate]),
         finalCostRial: num(official[CARD.finalCost]),
+        hall: r.hall,
       },
+      source: r.source === 'manual' ? 'manual' : 'pulse',
       defects: defects.map((d) => ({ id: d.id, lineId: d.kasbLineId, customerText: d.customerText, expertText: d.expertText, state: d.state, type: d.type, removedAt: iso(d.removedAt) })),
-      repairs: repairs.map((x) => ({ id: x.id, lineId: x.kasbLineId, code: x.code, description: x.description, state: x.state, finalPriceRial: x.finalPriceRial, warranty: x.warranty, removedAt: iso(x.removedAt) })),
+      repairs: repairs.map((x) => ({ id: x.id, lineId: x.kasbLineId, code: x.code, description: x.description, name: x.name ?? x.description, technician: x.technician, station: x.station, manual: x.kasbLineId.startsWith('m:'), state: x.state, finalPriceRial: x.finalPriceRial, warranty: x.warranty, removedAt: iso(x.removedAt) })),
       parts: parts.map((p) => ({ id: p.id, lineId: p.kasbLineId, name: p.name, code: p.code, qtyRequested: p.qtyRequested, qtyFinal: p.qtyFinal, unitPriceRial: p.unitPriceRial, state: p.state, specialAid: p.specialAid, warranty: p.warranty, rejectReason: p.rejectReason, removedAt: iso(p.removedAt) })),
       externalWork: works.map(({ w, by }) => this.workView(w, by ?? null, docs.filter((d) => d.workId === w.id))),
       notes: notes.map(({ n, by }) => ({ id: n.id, text: n.text, createdAt: n.createdAt.toISOString(), createdByName: by ?? null })),

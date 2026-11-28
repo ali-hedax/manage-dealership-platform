@@ -24,9 +24,17 @@ const kindQuery = (kind: NightListKind) => (kind === 'repair' ? '' : `&kind=${ki
 /** A reception belongs to the accident list when it is linked to an accident case. */
 const ofKind = (kind: NightListKind) => (kind === 'accident' ? isNotNull(receptions.caseId) : isNull(receptions.caseId));
 
-function qualified(r: typeof receptions.$inferSelect, cutoff: Date): boolean {
-  return !!r.admittedAt && r.admittedAt < cutoff && (r.isOpen || (!!r.releasedAt && r.releasedAt > cutoff));
+/**
+ * On the list: admitted before `at` and still in the dealership at `at` — open, or released after it.
+ * `at` is the day's closing time (or now, while the day is still running): a car released before the
+ * dealership closes is not on that night's list, even when the draft was built half an hour earlier
+ * (owner, 2026-11-28, H3). A released card without a release time is not on it either.
+ */
+function qualified(r: typeof receptions.$inferSelect, at: Date): boolean {
+  return !!r.admittedAt && r.admittedAt < at && (r.isOpen || (!!r.releasedAt && r.releasedAt > at));
 }
+/** The moment presence is judged: closing time, or now if the working day has not ended yet. */
+const presenceAt = (now: Date, closeAt: Date) => (now < closeAt ? now : closeAt);
 
 /**
  * «لیست شب» (reconstruction scenario, owner 2026-11-25). Half an hour before the end of the working
@@ -71,13 +79,15 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
    * Working day or not, and the day's build and send-by times from the work calendar in force that
    * day (a half-day Thursday closes earlier, so its list is built earlier).
    */
-  private async schedule(tenantId: string, day: string, db: DbOrTx = this.db): Promise<{ working: boolean; generateAt: Date; deadline: Date; deadlineText: string }> {
+  private async schedule(tenantId: string, day: string, db: DbOrTx = this.db): Promise<{ working: boolean; generateAt: Date; deadline: Date; deadlineText: string; closeAt: Date }> {
     const revision = await calendarAt(db, tenantId, tehranAt(day, '12:00').toISOString());
     const times = nightListTimes(day, revision.calendar);
     const working = isWorkingDay(day, revision.calendar) && !!times;
-    const generateAt = times?.generateAt ?? NIGHT_LIST_GENERATE_AT;
+    const generateAt = tehranAt(day, times?.generateAt ?? NIGHT_LIST_GENERATE_AT);
     const deadlineText = times?.deadline ?? NIGHT_LIST_DEADLINE;
-    return { working, generateAt: tehranAt(day, generateAt), deadline: tehranAt(day, deadlineText), deadlineText };
+    // Without calendar hours the list keeps its default times and the day closes half an hour after the build.
+    const closeAt = times ? tehranAt(day, times.close) : new Date(generateAt.getTime() + 30 * 60_000);
+    return { working, generateAt, deadline: tehranAt(day, deadlineText), deadlineText, closeAt };
   }
 
   /** The nearest earlier and later days that have a list, for browsing past lists. */
@@ -126,7 +136,8 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
   async generate(tenantId: string, day: string, actor: Actor | null, isTest: boolean, now = new Date(), kind: NightListKind = 'repair'): Promise<boolean> {
     const schedule = await this.schedule(tenantId, day);
     if (!schedule.working) return false;
-    const cutoff = now < schedule.generateAt ? now : schedule.generateAt;
+    // A car admitted after the build but before closing stays overnight too: the minute tick adds it.
+    const cutoff = presenceAt(now, schedule.closeAt);
     return this.db.transaction(async (tx) => {
       const listId = newId();
       const created = await tx.insert(nightLists).values({ id: listId, tenantId, day, kind, generatedAt: now, isTest }).onConflictDoNothing().returning({ id: nightLists.id });
@@ -205,7 +216,7 @@ export class NightListService implements OnApplicationBootstrap, OnApplicationSh
 
   private async render(tenantId: string, l: typeof nightLists.$inferSelect, sentByName: string | null, now: Date, db: DbOrTx = this.db): Promise<NightListView> {
     const s = await this.schedule(tenantId, l.day, db);
-    const cutoff = now < s.generateAt ? now : s.generateAt;
+    const cutoff = presenceAt(now, s.closeAt);
     // A list approved before snapshots existed: show what staff recorded on it, but never today's
     // live labour statuses, and label it «داده‌ی تاریخی ناقص».
     const historical = l.status === 'sent' && !l.approvedSnapshot;

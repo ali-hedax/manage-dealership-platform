@@ -42,6 +42,12 @@ export class PulseWorker implements OnApplicationBootstrap, OnApplicationShutdow
         this.idleLogged = true;
         return;
       }
+      // A lock whose connection died quietly is dropped before this beat, never run on (S07).
+      if (this.lock && !(await this.lock.check())) {
+        this.logger.warn('advisory lock lost; acquiring again before the next read');
+        await this.lock.release().catch(() => undefined);
+        this.lock = null;
+      }
       if (!this.lock || this.lock.lost) {
         this.lock = await this.handle.leaderLock(PULSE_LOCK_KEY);
         if (!this.lock) return; // another worker is active

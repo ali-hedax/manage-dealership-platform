@@ -106,7 +106,7 @@ export default function NexusPage() {
 
       {pulseOk && <section className="panel nexus-pulse" aria-labelledby="nx-pulse">
         <div className="panel-head"><div><h2 id="nx-pulse">Manage Pulse · اتصال خودکار</h2><p className="small muted">{pulse ? pulseSentence(pulse) : 'در حال خواندن…'}</p></div>
-          <div className="row no-print"><Link className="btn btn-sm btn-primary" href="/settings/pulse"><AppIcon name="gear" />اتصال و تنظیمات پالس</Link></div></div>
+          <div className="row no-print"><Link className="btn btn-sm btn-primary" href="/settings/pulse"><AppIcon name="gear" />اتصال و تنظیمات پالس</Link><Link className="btn btn-sm" href="/settings/sources"><AppIcon name="layers" />منبع‌ها</Link></div></div>
         {pulse && !pulse.configured && <div className="panel-body"><p className="callout callout-blue small">برای خودکار شدن، در «اتصال و تنظیمات پالس» کد نمایندگی، نام کاربری و کلمه عبور کسب‌وکار را وارد کنید و «شروع» را بزنید. تا آن موقع همهٔ گزارش‌ها دستی وارد می‌شوند.</p></div>}
       </section>}
 

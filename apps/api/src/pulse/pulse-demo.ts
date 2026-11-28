@@ -60,11 +60,11 @@ export async function seedDemoReceptions(tx: DbOrTx, tenantId: string): Promise<
     if (link.state === 'linked') await tx.insert(receptionEvents).values({ id: newId(), tenantId, receptionId: id, kind: 'case_linked', data: { caseId: link.caseIds[0] }, isTest: true });
     if (closed) await tx.insert(receptionEvents).values({ id: newId(), tenantId, receptionId: id, kind: 'released', data: null, isTest: true });
     const lines = LINES[Number(row.DrcdRcd) - 990000]!;
-    for (const p of lines.parts.map(mapPart)) {
+    for (const p of lines.parts.map((row) => mapPart(row))) {
       await tx.insert(receptionParts).values({ id: newId(), tenantId, receptionId: id, kasbLineId: p.lineId, official: p.official, rowHash: p.rowHash, name: p.name, code: p.code, qtyRequested: p.qtyRequested, qtyFinal: p.qtyFinal, unitPriceRial: p.unitPriceRial, state: p.state, specialAid: p.specialAid, warranty: p.warranty, rejectReason: p.rejectReason, repairLineId: p.repairLine, isTest: true });
       await tx.insert(receptionEvents).values({ id: newId(), tenantId, receptionId: id, kind: 'part_added', data: { name: p.name, code: p.code }, isTest: true });
     }
-    for (const r of lines.repairs.map(mapRepair)) await tx.insert(receptionRepairs).values({ id: newId(), tenantId, receptionId: id, kasbLineId: r.lineId, official: r.official, rowHash: r.rowHash, code: r.code, description: r.description, state: r.state, finalPriceRial: r.finalPriceRial, warranty: r.warranty, defectLineId: r.defectLine, isTest: true });
+    for (const r of lines.repairs.map((row) => mapRepair(row))) await tx.insert(receptionRepairs).values({ id: newId(), tenantId, receptionId: id, kasbLineId: r.lineId, official: r.official, rowHash: r.rowHash, code: r.code, description: r.description, name: r.name, technician: r.technician, station: r.station, state: r.state, finalPriceRial: r.finalPriceRial, warranty: r.warranty, defectLineId: r.defectLine, isTest: true });
     for (const d of lines.defects.map(mapDefect)) await tx.insert(receptionDefects).values({ id: newId(), tenantId, receptionId: id, kasbLineId: d.lineId, official: d.official, rowHash: d.rowHash, customerText: d.customerText, expertText: d.expertText, state: d.state, type: d.type, isTest: true });
   }
 }

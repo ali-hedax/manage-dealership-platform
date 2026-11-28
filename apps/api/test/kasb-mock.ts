@@ -14,6 +14,8 @@ export interface MockCard {
   parts?: Row[];
   repairs?: Row[];
   defects?: Row[];
+  /** The site refuses every line read of this card (Success false), as it does for a card it will not show. */
+  linesRefused?: boolean;
 }
 
 const pem = () => generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
@@ -266,6 +268,7 @@ export class KasbMock {
       const lineKind = kinds[api];
       if (lineKind) {
         const card = this.cards.find((c) => String(c.row.DrcdRcd) === String(payload.VarRcd));
+        if (card?.linesRefused) return this.answer(res, { Success: false, Data: null, MessageCode: '50002', MessageDes: 'کارت ساختگی پذیرفته نشد' });
         const rows = card?.[lineKind] ?? [];
         return this.answer(res, { Success: true, Data: rows.length ? this.table(rows) : { Structure: [], Rows: [] } });
       }

@@ -158,7 +158,7 @@ export function backTarget(pathname: string, home: string, canChooseDesk = false
   if (/^\/reception\/(?!open$|released$|night$|stoppage$)[^/]+$/.test(pathname)) return { href: '/reception/open', label: 'بازگشت به پذیرش‌ها' };
   const edit = /^\/cases\/([^/]+)\/edit$/.exec(pathname);
   if (edit) return { href: `/cases/${edit[1]}`, label: 'بازگشت به پرونده' };
-  if (['/users', '/settings/reports', '/settings/pulse', '/settings/nexus', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
+  if (['/users', '/settings/reports', '/settings/pulse', '/settings/nexus', '/settings/sources', '/workshop/settings', '/reference-data', '/daily-reports'].includes(pathname)) return { href: '/settings', label: 'بازگشت به تنظیمات' };
   return { href: home, label: 'بازگشت به میز کار' };
 }
 

@@ -18,6 +18,11 @@ export type DbOrTx = Database | Tx;
 export interface LeaderLock {
   /** True once the connection holding the lock was lost (the lock went with it). */
   readonly lost: boolean;
+  /**
+   * Proves the lock is still held: one cheap query on the holding connection. A connection that died
+   * quietly (no error event) is found here, so a second worker can never run beside this one (S07).
+   */
+  check(): Promise<boolean>;
   release(): Promise<void>;
 }
 
@@ -61,8 +66,20 @@ export function openDatabase(cfg: AppConfig): DatabaseHandle {
         }
         const state = { lost: false, released: false };
         client.on('error', () => { state.lost = true; });
+        client.on('end', () => { state.lost = true; });
         return {
           get lost() { return state.lost; },
+          async check() {
+            if (state.lost || state.released) return false;
+            try {
+              // The lock is ours only while this connection lives and still holds it.
+              const held = await client.query<{ ok: boolean }>("select exists (select 1 from pg_locks where locktype = 'advisory' and pid = pg_backend_pid() and objid::bigint = ($1::bigint % 4294967296) and granted) as ok", [key]);
+              if (!held.rows[0]?.ok) state.lost = true;
+            } catch {
+              state.lost = true;
+            }
+            return !state.lost;
+          },
           async release() {
             if (state.released) return;
             state.released = true;
@@ -90,7 +107,7 @@ export function openDatabase(cfg: AppConfig): DatabaseHandle {
     close: () => client.close(),
     // PGlite is one embedded process: the lock is always granted and never lost.
     async leaderLock() {
-      return { lost: false, async release() { /* nothing to release */ } };
+      return { lost: false, async check() { return true; }, async release() { /* nothing to release */ } };
     },
   };
 }

@@ -1,4 +1,4 @@
-import { formatJalaliDateInput, isWorkingDay, searchKey, TEHRAN_OFFSET_MINUTES, type PulseSettings, type WorkCalendar } from '@manage/shared';
+import { formatJalaliDateInput, isWorkingDay, searchKey, TEHRAN_OFFSET_MINUTES, type KasbFieldMap, type PulseSettings, type WorkCalendar } from '@manage/shared';
 import { idKey, isFullVin, isNonUniqueAdmission } from '../vehicle-import/vehicle-sheet';
 import { CARD, CARD_DESCRIPTION_COLUMNS, CLOSED_STATUS_RE, CODE_DOMAIN_COLUMNS, CODE_TEXT_COLUMNS, CODE_VALUE_COLUMNS, DEFECT, PART, PART_NAME_COLUMNS, REPAIR, STATUS_DOMAIN } from './kasb-protocol';
 import { cleanText, flagOf, idText, intOf, kasbInstant, pickText, quantityText, rowHash, type KasbRow, type KasbTable } from './kasb-table';
@@ -38,9 +38,20 @@ export interface ReceptionValues {
   statusCode: string | null;
   station: string | null;
   receptionist: string | null;
+  /** «سالن تعمیرات»: only from the column the administrator confirmed (KasbFieldMap.cardHall). */
+  hall: string | null;
   searchText: string;
   official: KasbRow;
   rowHash: string;
+}
+
+/**
+ * A column the administrator confirmed in «منبع‌ها» (S08). Unconfirmed: undefined, so the caller keeps
+ * its earlier behaviour or leaves the field empty — a column of کسب‌وکار is never guessed.
+ */
+export function confirmedText(row: KasbRow, column: string | null | undefined): string | null | undefined {
+  if (!column) return undefined;
+  return cleanText(row[column]);
 }
 
 const digits = (v: string | null, length: number) => (v && /^\d+$/.test(v) && v.length <= length ? v.padStart(length, '0') : v);
@@ -70,7 +81,7 @@ export function searchTextOf(values: (string | null | undefined)[]): string {
   return values.filter((v): v is string => !!v).map((v) => searchKey(v).replace(/~/g, '')).filter(Boolean).join('~');
 }
 
-export function mapCard(row: KasbRow): ReceptionValues | null {
+export function mapCard(row: KasbRow, fields: KasbFieldMap = {}): ReceptionValues | null {
   const kasbRcd = idText(row[CARD.rcd]);
   if (!kasbRcd) return null;
   const admissionNo = idText(row[CARD.admissionNo]);
@@ -112,6 +123,7 @@ export function mapCard(row: KasbRow): ReceptionValues | null {
     statusCode: idText(row[CARD.status]),
     station: cleanText(row[CARD.station]),
     receptionist: cleanText(row[CARD.receptionist]),
+    hall: confirmedText(row, fields.cardHall) ?? null,
     official: row,
     rowHash: rowHash(row),
   };
@@ -147,6 +159,11 @@ export interface PartValues extends LineBase {
 export interface RepairValues extends LineBase {
   code: string | null;
   description: string | null;
+  /** Labour name: the confirmed column, else the description (as before S08). */
+  name: string | null;
+  /** Technician and station of the line: only from confirmed columns. */
+  technician: string | null;
+  station: string | null;
   state: string | null;
   finalPriceRial: number | null;
   warranty: string | null;
@@ -165,9 +182,10 @@ function base(row: KasbRow, idColumn: string): LineBase {
   return { lineId: idText(row[idColumn]) ?? `h:${hash.slice(0, 24)}`, official: row, rowHash: hash };
 }
 
-export const mapPart = (row: KasbRow): PartValues => ({
+export const mapPart = (row: KasbRow, fields: KasbFieldMap = {}): PartValues => ({
   ...base(row, PART.line),
-  name: pickText(row, PART_NAME_COLUMNS),
+  // A confirmed column wins (even when empty); before that the earlier candidate columns are used.
+  name: fields.partName ? confirmedText(row, fields.partName) ?? null : pickText(row, PART_NAME_COLUMNS),
   code: idText(row[PART.code]),
   qtyRequested: quantityText(row[PART.qty]),
   qtyFinal: quantityText(row[PART.finalQty]),
@@ -178,10 +196,13 @@ export const mapPart = (row: KasbRow): PartValues => ({
   rejectReason: cleanText(row[PART.rejectReason]),
   repairLine: idText(row[PART.repairLine]),
 });
-export const mapRepair = (row: KasbRow): RepairValues => ({
+export const mapRepair = (row: KasbRow, fields: KasbFieldMap = {}): RepairValues => ({
   ...base(row, REPAIR.line),
   code: idText(row[REPAIR.code]),
   description: cleanText(row[REPAIR.description]),
+  name: fields.repairName ? confirmedText(row, fields.repairName) ?? null : cleanText(row[REPAIR.description]),
+  technician: confirmedText(row, fields.repairTechnician) ?? null,
+  station: confirmedText(row, fields.repairStation) ?? null,
   state: cleanText(row[REPAIR.state]),
   finalPriceRial: intOf(row[REPAIR.finalPrice]),
   warranty: cleanText(row[REPAIR.warranty]),

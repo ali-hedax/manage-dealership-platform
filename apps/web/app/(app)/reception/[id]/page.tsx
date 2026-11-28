@@ -86,7 +86,7 @@ export default function ReceptionFolderPage() {
         <div className="panel-body">
           <Facts rows={[
             ['شماره و زمان پذیرش', <span key="a"><bdi>{t(r.admissionNo)}</bdi> · {day(r.admission.admittedAt)}</span>], ['نحوهٔ ثبت', t(r.admission.recordType)], ['نوع ورود', t(r.admission.entryType)],
-            ['سالن یا جایگاه', t(r.admission.station)], ['پذیرشگر', t(r.admission.receptionist)], ['ترخیص تخمینی', day(r.admission.exitEstimate)],
+            ['سالن یا جایگاه', t(r.admission.station)], ['سالن تعمیرات', t(r.admission.hall)], ['پذیرشگر', t(r.admission.receptionist)], ['ترخیص تخمینی', day(r.admission.exitEstimate)],
             ['وضعیت رسمی', t(r.statusText ?? r.statusCode)], ['وضعیت گارانتی', t(r.admission.warrantyStatus)],
             ['برآورد هزینه', r.admission.costEstimateRial == null ? '—' : rial(r.admission.costEstimateRial)], ['هزینهٔ نهایی مشتری', r.admission.finalCostRial == null ? '—' : rial(r.admission.finalCostRial)],
             ['توضیحات', t(r.admission.description)],
@@ -99,8 +99,8 @@ export default function ReceptionFolderPage() {
         <div className="panel-body stack">
           {!r.defects.length && !r.repairs.length && <p className="m-empty">ایراد یا اجرتی روی کارت ثبت نشده است.</p>}
           {r.defects.length > 0 && <ul className="rcp-lines">{r.defects.map((d) => <li key={d.id} className={d.removedAt ? 'is-removed' : ''}><strong>{d.customerText ?? 'ایراد'}</strong>{d.expertText && <span className="small"> · کارشناس: {d.expertText}</span>}<span className="row xs">{d.state && <span className="m-tag mute">{d.state}</span>}{d.removedAt && <span className="m-tag stop">حذف‌شده در کسب‌وکار</span>}</span></li>)}</ul>}
-          {r.repairs.length > 0 && <div className="table-scroll"><table className="table static"><thead><tr><th scope="col">نام اجرت</th><th scope="col">وضعیت</th><th scope="col">مبلغ نهایی</th><th scope="col">گارانتی</th></tr></thead><tbody>
-            {r.repairs.map((x) => <tr key={x.id} className={x.removedAt ? 'is-removed' : ''}><td>{officialLabourName(x.description, x.code)}{x.removedAt && <span className="m-tag stop"> حذف‌شده در کسب‌وکار</span>}</td><td>{x.state ?? '—'}</td><td>{x.finalPriceRial == null ? '—' : rial(x.finalPriceRial)}</td><td>{t(x.warranty)}</td></tr>)}
+          {r.repairs.length > 0 && <div className="table-scroll"><table className="table static"><thead><tr><th scope="col">نام اجرت</th><th scope="col">کد</th><th scope="col">تعمیرکار</th><th scope="col">جایگاه</th><th scope="col">وضعیت</th><th scope="col">مبلغ نهایی</th><th scope="col">گارانتی</th></tr></thead><tbody>
+            {r.repairs.map((x) => <tr key={x.id} className={x.removedAt ? 'is-removed' : ''}><td>{officialLabourName(x.name ?? x.description, x.code)}{x.manual && <span className="m-tag wait"> دستی</span>}{x.removedAt && <span className="m-tag stop"> {x.manual ? 'جایگزین با دادهٔ پالس' : 'حذف‌شده در کسب‌وکار'}</span>}</td><td><bdi dir="ltr">{t(x.code)}</bdi></td><td>{t(x.technician)}</td><td>{t(x.station)}</td><td>{x.state ?? '—'}</td><td>{x.finalPriceRial == null ? '—' : rial(x.finalPriceRial)}</td><td>{t(x.warranty)}</td></tr>)}
           </tbody></table></div>}
         </div>
       </section>

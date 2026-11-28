@@ -34,9 +34,9 @@ test('the Excel sheet keeps the scenario column order and marks carried reasons'
 });
 
 test('build and send-by times follow the work calendar: full day 18:00/18:45, half-day Thursday 12:30/13:15, Friday none', () => {
-  assert.deepEqual(nightListTimes('2025-04-20', DEFAULT_WORK_CALENDAR), { generateAt: '18:00', deadline: '18:45' }); // Sunday, ends 18:30
-  assert.deepEqual(nightListTimes('2025-04-24', DEFAULT_WORK_CALENDAR), { generateAt: '12:30', deadline: '13:15' }); // Thursday, ends 13:00
+  assert.deepEqual(nightListTimes('2025-04-20', DEFAULT_WORK_CALENDAR), { generateAt: '18:00', deadline: '18:45', close: '18:30' }); // Sunday, ends 18:30
+  assert.deepEqual(nightListTimes('2025-04-24', DEFAULT_WORK_CALENDAR), { generateAt: '12:30', deadline: '13:15', close: '13:00' }); // Thursday, ends 13:00
   assert.equal(nightListTimes('2025-04-25', DEFAULT_WORK_CALENDAR), null); // Friday
   const custom = { ...DEFAULT_WORK_CALENDAR, week: DEFAULT_WORK_CALENDAR.week.map((d, i) => (i === 4 ? [{ start: 480, end: 750 }] : d)) };
-  assert.deepEqual(nightListTimes('2025-04-24', custom), { generateAt: '12:00', deadline: '12:45' }); // Thursday ending 12:30
+  assert.deepEqual(nightListTimes('2025-04-24', custom), { generateAt: '12:00', deadline: '12:45', close: '12:30' }); // Thursday ending 12:30
 });

@@ -16,6 +16,7 @@ import { ExperimentalTag } from './Shell';
 import { EmptyState } from './EmptyState';
 import { JalaliInput } from './JalaliInput';
 import { Plate } from './Plate';
+import { DataGaps } from './DataGaps';
 
 // «لیست شب» (reconstruction scenario, owner 2026-11-25): Manage builds it half an hour before the end
 // of the working day (18:00, or 12:30 on a half-day Thursday) from the open receptions; the
@@ -185,8 +186,9 @@ function PresenceForm({ busy, onSave }: { busy: boolean; onSave: (body: { admiss
 }
 
 /**
- * «گزارش شب»: the day's receptions — total, «تعویض روغن» and «تعمیر فنی» (classifyJob, from labour
- * names and used parts; a car may be in both), and the same per receptionist as written in کسب‌وکار.
+ * «گزارش شب»: the day's receptions — total, «سرویس سریع», «تعویض روغن» and «تعمیر فنی» (classifyJob,
+ * from labour names, used parts and the confirmed «سالن تعمیرات»; a car may be in several, but once in
+ * each), the same per receptionist, and what the counts could not see (never guessed).
  */
 function NightSummary({ stats, tagged }: { stats: ReceptionDayStats; tagged: boolean }) {
   const j = stats.jobs;
@@ -196,16 +198,18 @@ function NightSummary({ stats, tagged }: { stats: ReceptionDayStats; tagged: boo
       <div className="panel-body stack">
         <dl className="night-kpis">
           <div><dt>کل پذیرش</dt><dd>{faNum(stats.total)}</dd></div>
+          <div><dt>سرویس سریع</dt><dd>{faNum(j.quickService)}</dd></div>
           <div><dt>تعویض روغن</dt><dd>{faNum(j.oilChange)}</dd></div>
           <div><dt>تعمیر فنی</dt><dd>{faNum(j.technicalRepair)}</dd></div>
           {j.both > 0 && <div><dt>هر دو</dt><dd>{faNum(j.both)}</dd></div>}
           {j.none > 0 && <div><dt>بدون کار ثبت‌شده</dt><dd>{faNum(j.none)}</dd></div>}
         </dl>
-        <p className="small muted">از روی نام اجرت‌ها و قطعات مصرف‌شدهٔ هر پذیرش؛ خودرویی که هم تعویض روغن و هم تعمیر داشته، در هر دو شمرده می‌شود.</p>
+        <p className="small muted">از روی نام اجرت‌ها و قطعات مصرف‌شدهٔ هر پذیرش؛ هر سرویس (۵۰۰۰، ۱۰۰۰۰، ۲۰۰۰۰، روغن و فیلتر، سرویس سریع) تعویض روغن است. خودرویی که هم تعویض روغن و هم تعمیر داشته در هر دو، ولی در هر دسته فقط یک بار شمرده می‌شود ({faNum(j.vehicles)} خودرو).</p>
+        <DataGaps stats={stats} />
         {stats.jobsByReceptionist.length > 0 && (
           <table className="table static night-people">
-            <thead><tr><th scope="col">پذیرشگر</th><th scope="col">کل</th><th scope="col">تعویض روغن</th><th scope="col">تعمیر فنی</th></tr></thead>
-            <tbody>{stats.jobsByReceptionist.map((p) => <tr key={p.name}><td>{p.name}</td><td>{faNum(p.total)}</td><td>{faNum(p.oilChange)}</td><td>{faNum(p.technicalRepair)}</td></tr>)}</tbody>
+            <thead><tr><th scope="col">پذیرشگر</th><th scope="col">کل</th><th scope="col">سرویس سریع</th><th scope="col">تعویض روغن</th><th scope="col">تعمیر فنی</th></tr></thead>
+            <tbody>{stats.jobsByReceptionist.map((p) => <tr key={p.name}><td>{p.name}</td><td>{faNum(p.total)}</td><td>{faNum(p.quickService)}</td><td>{faNum(p.oilChange)}</td><td>{faNum(p.technicalRepair)}</td></tr>)}</tbody>
           </table>
         )}
       </div>
