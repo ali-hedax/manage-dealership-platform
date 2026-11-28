@@ -70,6 +70,7 @@ export function ReceptionStats() {
         <span className="m-tag">تعمیراتی {faNum(data.jobs.technicalRepair)}</span>
         <span className="m-tag ok">تعویض روغن {faNum(data.jobs.oilChange)}</span>
         {data.jobs.none > 0 && <span className="m-tag mute" title="هنوز اجرت یا قطعهٔ روغنی روی کارت نیست">{RECEPTION_KIND_LABELS.unclassified} {faNum(data.jobs.none)}</span>}
+        {data.declinedLabour > 0 && <span className="m-tag wait" data-testid="declined-labour" title="اجرت‌هایی که مشتری انجامشان را نخواست؛ در شمارش کار نیامده‌اند">عدم تمایل به تعمیر {faNum(data.declinedLabour)}</span>}
       </div>
       <DataGaps stats={data} />
       {data.jobsByReceptionist.length > 0 && (
@@ -88,22 +89,32 @@ export function ReceptionStats() {
   );
 }
 
-/** Owner / system administrator: the labour codes that count as periodic service and oil change. */
+/**
+ * Owner / system administrator: the codes that decide «تعویض روغن» and «سرویس سریع» (H4 part 1) —
+ * labour codes of periodic service and oil change, quick-service defect groups, and oil part codes.
+ */
+const CODE_LISTS = [
+  { key: 'serviceLaborCodes', label: 'کدهای اجرت سرویس ادواری و تعویض روغن', placeholder: '10165C0، 10145C0' },
+  { key: 'quickServiceGroups', label: 'گروه ایراد سرویس سریع (همهٔ اجرت‌های زیر آن سرویس است)', placeholder: '910100' },
+  { key: 'oilPartCodes', label: 'کد قطعه‌های روغن موتور و فیلتر روغن', placeholder: '07707016، 12402027' },
+] as const;
+type CodeListKey = (typeof CODE_LISTS)[number]['key'];
 function ServiceCodesEditor() {
   const { mutate } = useSWRConfig();
   const { data } = useSWR<ReceptionSettings>('/reception/settings', (p: string) => api<ReceptionSettings>(p));
-  const [text, setText] = useState<string | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState('');
-  const value = text ?? (data?.serviceLaborCodes.join('، ') ?? '');
+  const [text, setText] = useState<Partial<Record<CodeListKey, string>>>({}), [busy, setBusy] = useState(false), [message, setMessage] = useState('');
+  const value = (k: CodeListKey) => text[k] ?? (data?.[k].join('، ') ?? '');
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setMessage('');
     try {
-      const saved = await api<ReceptionSettings>('/reception/settings', { method: 'PUT', body: { serviceLaborCodes: parseLaborCodes(value) } });
+      const body = Object.fromEntries(CODE_LISTS.map((l) => [l.key, parseLaborCodes(value(l.key))]));
+      const saved = await api<ReceptionSettings>('/reception/settings', { method: 'PUT', body });
       await mutate('/reception/settings', saved, { revalidate: false });
       await mutate(['/reception/stats', '{}']);
-      setText(null);
-      setMessage(`${faNum(saved.serviceLaborCodes.length)} کد ذخیره شد.`);
+      setText({});
+      setMessage('کدها ذخیره شد.');
     } catch (err) {
       setMessage(errorMessage(err));
     } finally {
@@ -112,12 +123,15 @@ function ServiceCodesEditor() {
   };
   return (
     <details className="rcp-codes">
-      <summary>کدهای اجرت سرویس ادواری و روغن</summary>
+      <summary>کدهای تعویض روغن و سرویس سریع</summary>
       <form onSubmit={save} className="stack">
-        <label className="field">
-          <span>کدهای اجرتی که پذیرش را «سرویس» می‌کنند؛ با ویرگول یا خط تازه جدا کنید.</span>
-          <textarea className="input ltr-input" rows={3} value={value} onChange={(e) => setText(e.target.value)} placeholder="0100، 0200" />
-        </label>
+        {data && !data.saved && <p className="small muted">کدهای پیش‌فرض مالک به کار می‌روند تا فهرست دیگری ذخیره شود.</p>}
+        {CODE_LISTS.map((l) => (
+          <label key={l.key} className="field">
+            <span>{l.label}؛ با ویرگول یا خط تازه جدا کنید.</span>
+            <textarea className="input ltr-input" rows={2} value={value(l.key)} onChange={(e) => setText((t) => ({ ...t, [l.key]: e.target.value }))} placeholder={l.placeholder} />
+          </label>
+        ))}
         <div className="row"><button type="submit" className="btn btn-sm" disabled={busy || !data}>ذخیرهٔ کدها</button>{message && <span className="small" role="status">{message}</span>}</div>
       </form>
     </details>

@@ -1,4 +1,5 @@
-import { classifyJob } from './service-classify';
+import { DEFAULT_JOB_CODES } from './service-classify.config';
+import { classifyCard, type JobCodes, type JobLabourLine, type JobPartLine } from './service-classify';
 import { toLatinDigits } from './text';
 
 // Daily reception statistics of «پذیرش تا ترخیص» (reconstruction scenario, owner 2026-11-25).
@@ -45,6 +46,10 @@ export interface ReceptionStatsRow {
   labourNames?: readonly (string | null | undefined)[];
   /** Names of the parts actually used on the card (see `isConsumedPart`). */
   consumedParts?: readonly (string | null | undefined)[];
+  /** Current labour lines with code, name, defect group and state (H4 part 1: codes first). */
+  labour?: readonly JobLabourLine[];
+  /** Parts actually used, with code and name. */
+  parts?: readonly JobPartLine[];
   /**
    * The physical car (full VIN, else chassis, else plate). Receptions of one car on one day are one car
    * in each job count (owner, 2026-11-28: «یک خودرو در هر دسته فقط یک بار»). Missing: the row is its own car.
@@ -120,6 +125,8 @@ export interface ReceptionDayStats extends ReceptionCounts {
   jobs: ReceptionJobCounts;
   jobsByReceptionist: ReceptionJobPersonStats[];
   dataGaps: ReceptionDataGaps;
+  /** Labour lines the customer refused («عدم تمایل به انجام تعمیر») on these receptions: never counted as work. */
+  declinedLabour: number;
 }
 
 export const UNKNOWN_RECEPTIONIST = 'ثبت نشده';
@@ -127,19 +134,22 @@ export const UNKNOWN_RECEPTIONIST = 'ثبت نشده';
 const empty = (): ReceptionCounts => ({ total: 0, repair: 0, service: 0, unclassified: 0 });
 const emptyJobs = (): ReceptionJobCounts => ({ quickService: 0, oilChange: 0, technicalRepair: 0, both: 0, none: 0, vehicles: 0 });
 
-interface CarDay { labour: string[]; parts: string[]; halls: string[] }
+interface CarDay { labour: JobLabourLine[]; parts: JobPartLine[]; halls: string[] }
+/** The lines of a row: structured lines when given, else the names alone (older callers). */
+const labourOf = (row: ReceptionStatsRow): JobLabourLine[] => (row.labour ? [...row.labour] : clean(row.labourNames).map((name) => ({ name })));
+const partsOf = (row: ReceptionStatsRow): JobPartLine[] => (row.parts ? [...row.parts] : clean(row.consumedParts).map((name) => ({ name })));
 const addCar = (cars: Map<string, CarDay>, key: string, row: ReceptionStatsRow) => {
   const car = cars.get(key) ?? { labour: [], parts: [], halls: [] };
-  car.labour.push(...clean(row.labourNames));
-  car.parts.push(...clean(row.consumedParts));
+  car.labour.push(...labourOf(row));
+  car.parts.push(...partsOf(row));
   if (row.hall?.trim()) car.halls.push(row.hall);
   cars.set(key, car);
 };
-function countCars(cars: Map<string, CarDay>, into: ReceptionJobCounts) {
+function countCars(cars: Map<string, CarDay>, into: ReceptionJobCounts, codes: JobCodes) {
   for (const car of cars.values()) {
-    const job = classifyJob(car.labour, car.parts, car.halls.find(Boolean) ?? null);
+    const job = classifyCard(car.labour, car.parts, car.halls.find(Boolean) ?? null, codes);
     // Any of the car's cards in the quick-service hall makes it a quick service.
-    const quick = job.quickService || car.halls.some((h) => classifyJob([], [], h).quickService);
+    const quick = job.quickService || car.halls.some((h) => classifyCard([], [], h, codes).quickService);
     into.vehicles += 1;
     if (quick) into.quickService += 1;
     if (job.oilChange) into.oilChange += 1;
@@ -149,15 +159,27 @@ function countCars(cars: Map<string, CarDay>, into: ReceptionJobCounts) {
   }
 }
 
-export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow[], serviceCodes: readonly string[]): ReceptionDayStats {
+/**
+ * `serviceCodes`: labour codes of periodic service and oil change; `codes`: the quick-service defect
+ * groups and oil part codes (defaults in DEFAULT_JOB_CODES).
+ */
+export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow[], serviceCodes: readonly string[], codes: Partial<Omit<JobCodes, 'serviceLabourCodes'>> = {}): ReceptionDayStats {
   const service = new Set(serviceCodes.map(normalizeLaborCode).filter(Boolean));
+  const jobCodes: JobCodes = { serviceLabourCodes: [...service], quickServiceGroups: codes.quickServiceGroups ?? DEFAULT_JOB_CODES.quickServiceGroups, oilPartCodes: codes.oilPartCodes ?? DEFAULT_JOB_CODES.oilPartCodes };
+  let declinedLabour = 0;
   const all = empty();
   const people = new Map<string, ReceptionCounts>();
   const cars = new Map<string, CarDay>();
   const personCars = new Map<string, { total: number; cars: Map<string, CarDay> }>();
   const dataGaps: ReceptionDataGaps = { linesNotRead: 0, labourWithoutName: 0, partsWithoutName: 0 };
   rows.forEach((row, index) => {
-    const kind = receptionKind(row.codes, service);
+    // Cards with structured lines: kind from the same rule as the job counts (codes, groups, refused lines left out).
+    let kind = receptionKind(row.codes, service);
+    if (row.labour) {
+      const own = classifyCard(row.labour, [], null, jobCodes);
+      declinedLabour += own.declined;
+      kind = own.repair ? 'repair' : own.oilChange ? 'service' : 'unclassified';
+    }
     const name = row.receptionist?.replace(/\s+/g, ' ').trim() || UNKNOWN_RECEPTIONIST;
     const person = people.get(name) ?? empty();
     for (const c of [all, person]) {
@@ -176,13 +198,13 @@ export function receptionDayStats(date: string, rows: readonly ReceptionStatsRow
     dataGaps.partsWithoutName += row.partsWithoutName ?? 0;
   });
   const jobs = emptyJobs();
-  countCars(cars, jobs);
+  countCars(cars, jobs, jobCodes);
   const byName = <T extends { name: string; total: number }>(a: T, b: T) => b.total - a.total || a.name.localeCompare(b.name, 'fa');
   const byReceptionist = [...people.entries()].map(([name, c]) => ({ name, ...c })).sort(byName);
   const jobsByReceptionist = [...personCars.entries()].map(([name, p]) => {
     const counts = emptyJobs();
-    countCars(p.cars, counts);
+    countCars(p.cars, counts, jobCodes);
     return { name, total: p.total, ...counts };
   }).sort(byName);
-  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0, jobs, jobsByReceptionist, dataGaps };
+  return { date, ...all, byReceptionist, serviceCodesConfigured: service.size > 0, jobs, jobsByReceptionist, dataGaps, declinedLabour };
 }

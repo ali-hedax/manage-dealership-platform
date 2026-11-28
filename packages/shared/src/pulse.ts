@@ -282,12 +282,24 @@ export const receptionSearchSchema = z.object({
 export type ReceptionSearchInput = z.infer<typeof receptionSearchSchema>;
 /** Daily statistics of one Tehran day (today when omitted). */
 export const receptionStatsQuerySchema = z.object({ date: receptionDay.optional() }).strict();
-/** Labour codes of periodic service and oil change (owner or system administrator). */
+/**
+ * Codes that decide «تعویض روغن» / «سرویس سریع» (owner or system administrator; H4 part 1): labour codes of
+ * periodic service and oil change, quick-service defect groups, and oil part codes. A list left out keeps its saved value.
+ */
+const codeList = z.array(z.string().trim().min(1).max(32)).max(500);
 export const receptionSettingsSchema = z.object({
-  serviceLaborCodes: z.array(z.string().trim().min(1).max(32)).max(500),
+  serviceLaborCodes: codeList,
+  quickServiceGroups: codeList.optional(),
+  oilPartCodes: codeList.optional(),
 }).strict();
 export type ReceptionSettingsInput = z.infer<typeof receptionSettingsSchema>;
-export interface ReceptionSettings { serviceLaborCodes: string[] }
+export interface ReceptionSettings {
+  serviceLaborCodes: string[];
+  quickServiceGroups: string[];
+  oilPartCodes: string[];
+  /** False while a list was never saved and the defaults apply. */
+  saved: boolean;
+}
 
 /** «لیست شب» (scenario 2026-11-25): the list of one Tehran day (today when omitted). */
 export const nightListQuerySchema = z.object({ day: receptionDay.optional(), kind: z.enum(NIGHT_LIST_KINDS).optional() }).strict();

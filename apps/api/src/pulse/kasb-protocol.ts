@@ -190,6 +190,21 @@ export const REPAIR = {
   defectLine: 'DrerDrefRef',
 } as const;
 
+/**
+ * Text columns that come with every line in the real answers (seen by Pulse on staging, 2026-11-28; H4).
+ * The stored code columns above stay; these carry the Persian text کسب‌وکار shows beside them.
+ */
+export const KASB_LINE_TEXT = {
+  /** Labour name from the labour catalogue (e.g. «تعویض روغن موتور»). */
+  repairName: 'GrprDesc',
+  /** Defect group of the labour line: «910100 - سرویس سریع (کوئیک سرویس)». */
+  repairGroup: 'VDesc',
+  /** State text of the labour line: «نهایی», «پیش نویس», «امداد ویژه», «عدم تمایل به انجام تعمیر» … */
+  repairState: 'VDrerStateDesc',
+  /** Part description from the parts catalogue. */
+  partName: 'WgdsFarDes',
+} as const;
+
 export const DEFECT = {
   line: 'DrefRef',
   customer: 'DrefCustomerExp',

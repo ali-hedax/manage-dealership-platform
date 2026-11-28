@@ -294,12 +294,12 @@ describe('Nightly list of the reception module', () => {
     // A second card of the same car that day (same VIN): one car in each count.
     await db().update(receptions).set({ vin: 'TESTVIN7777777763' }).where(eq(receptions.id, sameCarAgain));
     await db().update(receptionRepairs).set({ description: 'تعویض لنت جلو' }).where(eq(receptionRepairs.receptionId, sameCarAgain));
-    // Only a code in the source: counted as missing data, never classified by guess.
+    // Only a code in the source: still work by its code (H4 part 1: «اجرت بی‌نام بدون کار نیست»); the missing name is a data gap.
     await db().update(receptionRepairs).set({ description: '۷۷۷۷' }).where(eq(receptionRepairs.receptionId, onlyCode));
     await db().update(receptions).set({ linesReadAt: tehranAt(day, '11:30') }).where(inArray(receptions.id, [service10k, quick, oilAndRepair, sameCarAgain, onlyCode]));
     const stats = (await reader.post('/reception/stats', { date: day }).expect(201)).body as ReceptionDayStats;
     expect(stats.total).toBe(5);
-    expect(stats.jobs).toEqual({ quickService: 1, oilChange: 3, technicalRepair: 1, both: 1, none: 1, vehicles: 4 });
+    expect(stats.jobs).toEqual({ quickService: 1, oilChange: 3, technicalRepair: 2, both: 1, none: 0, vehicles: 4 });
     expect(stats.dataGaps).toEqual({ linesNotRead: 0, labourWithoutName: 1, partsWithoutName: 0 });
     // The night report of that Thursday shows the same counts.
     await service.tick(tehranAt(day, '12:30'));
