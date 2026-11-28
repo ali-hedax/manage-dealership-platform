@@ -42,6 +42,14 @@ jobs:
       - run: pnpm -r lint
       - run: pnpm -r typecheck
       - run: pnpm test
+      # H3 (owner, 2026-11-28): the night list and active-vehicle suites must stay green run after run,
+      # not only once. Three more runs each, on the same build, fail the job on any red run.
+      - name: Night list and active vehicle, three more runs (stability)
+        run: |
+          cd apps/api
+          for i in 1 2 3; do
+            node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testRegex 'test/(night-list|active-vehicle)\.e2e-spec\.ts$' || exit 1
+          done
       - run: pnpm build
       - uses: actions/upload-artifact@v4
         with:

@@ -207,10 +207,10 @@ function NightSummary({ stats, tagged }: { stats: ReceptionDayStats; tagged: boo
         <p className="small muted">از روی نام اجرت‌ها و قطعات مصرف‌شدهٔ هر پذیرش؛ هر سرویس (۵۰۰۰، ۱۰۰۰۰، ۲۰۰۰۰، روغن و فیلتر، سرویس سریع) تعویض روغن است. خودرویی که هم تعویض روغن و هم تعمیر داشته در هر دو، ولی در هر دسته فقط یک بار شمرده می‌شود ({faNum(j.vehicles)} خودرو).</p>
         <DataGaps stats={stats} />
         {stats.jobsByReceptionist.length > 0 && (
-          <table className="table static night-people">
+          <div className="table-scroll"><table className="table static night-people">
             <thead><tr><th scope="col">پذیرشگر</th><th scope="col">کل</th><th scope="col">سرویس سریع</th><th scope="col">تعویض روغن</th><th scope="col">تعمیر فنی</th></tr></thead>
             <tbody>{stats.jobsByReceptionist.map((p) => <tr key={p.name}><td>{p.name}</td><td>{faNum(p.total)}</td><td>{faNum(p.quickService)}</td><td>{faNum(p.oilChange)}</td><td>{faNum(p.technicalRepair)}</td></tr>)}</tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </section>
